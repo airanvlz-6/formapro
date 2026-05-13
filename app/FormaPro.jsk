@@ -109,7 +109,7 @@ const FORMULARIOS = {
 };
 
 // ─── SYSTEM PROMPTS CON PERIODIZACIÓN CIENTÍFICA ─────────────────────────────
-const buildPrompt = (cat: any, perfil: any) => { perfil) => {
+const buildPrompt = (cat: any, perfil: any) => {
   const perfilStr = Object.entries(perfil)
     .map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
     .join("\n");

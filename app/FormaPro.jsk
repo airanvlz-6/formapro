@@ -1,0 +1,607 @@
+import { useState, useRef, useEffect } from "react";
+
+// ─── PALETA ───────────────────────────────────────────────────────────────────
+const C = {
+  bg: "#F6F4F0",
+  card: "#FFFFFF",
+  ink: "#1A1A1A",
+  muted: "#6B6B6B",
+  border: "#E5E0D8",
+  accent: "#1A3C5E",
+  accentLight: "#E8EEF4",
+  accentHover: "#0F2438",
+  warm: "#D4622A",
+  warmLight: "#FDF0EB",
+  tag: "#EDEAE4",
+};
+
+// ─── CATEGORÍAS ───────────────────────────────────────────────────────────────
+const CATEGORIAS = [
+  {
+    id: "carrera",
+    emoji: "🏃",
+    titulo: "Carrera",
+    subtitulo: "Running & Trail",
+    desc: "Para amantes del running o quienes se inician en la disciplina. Desde tu primer kilómetro hasta tu mejor marca.",
+    color: "#1A3C5E",
+    colorLight: "#E8EEF4",
+  },
+  {
+    id: "funcional",
+    emoji: "⚡",
+    titulo: "Funcional",
+    subtitulo: "Fitness & Bienestar",
+    desc: "Dinámico y adaptable. Ideal para mantenerse en forma, bajar de peso o simplemente sentirse mejor cada día.",
+    color: "#2D6A4F",
+    colorLight: "#D8F3DC",
+  },
+  {
+    id: "hibrido",
+    emoji: "🔄",
+    titulo: "Híbrido",
+    subtitulo: "Resistencia + Fuerza",
+    desc: "Para atletas que buscan mejorar simultáneamente en resistencia y fuerza/potencia. Lo mejor de dos mundos.",
+    color: "#6B3FA0",
+    colorLight: "#EDE7F6",
+  },
+  {
+    id: "fuerza",
+    emoji: "🏋️",
+    titulo: "Fuerza",
+    subtitulo: "Powerlifting & Olímpico",
+    desc: "Para quienes buscan aumentar marcas en levantamientos olímpicos o powerlifting con programación seria.",
+    color: "#B5300B",
+    colorLight: "#FDECEA",
+  },
+];
+
+// ─── FORMULARIOS POR CATEGORÍA ────────────────────────────────────────────────
+const FORMULARIOS = {
+  carrera: [
+    { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20–30", "31–40", "41–50", "Más de 50"] },
+    { id: "sexo", label: "¿Con qué género te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
+    { id: "nivel", label: "¿Cuál es tu experiencia en carrera?", tipo: "opciones", opciones: ["Inicio ahora (0–3 meses)", "Principiante (3–12 meses)", "Intermedio (1–3 años)", "Avanzado (+3 años)"] },
+    { id: "distancia_objetivo", label: "¿Cuál es tu distancia objetivo?", tipo: "opciones", opciones: ["5K", "10K", "Media maratón (21K)", "Maratón (42K)", "Trail / Ultra", "Sin distancia fija, quiero correr más"] },
+    { id: "marca_actual", label: "¿Tienes alguna marca o tiempo de referencia?", tipo: "texto", placeholder: "Ej: corro 5K en 30 min, o nunca he corrido en carrera organizada" },
+    { id: "dias", label: "¿Cuántos días por semana puedes entrenar?", tipo: "opciones", opciones: ["2 días", "3 días", "4 días", "5 días", "6 días"] },
+    { id: "duracion", label: "¿Cuánto tiempo disponible por sesión?", tipo: "opciones", opciones: ["30 min", "45 min", "1 hora", "1h 30min", "Más de 1h 30min"] },
+    { id: "superficie", label: "¿Dónde sueles entrenar?", tipo: "multi", opciones: ["Asfalto / ciudad", "Pista de atletismo", "Trail / montaña", "Cinta de correr", "Campo de hierba"] },
+    { id: "lesiones", label: "¿Tienes lesiones o molestias actuales o recurrentes?", tipo: "texto", placeholder: "Ej: periostitis tibial, fascitis plantar, rodilla, o ninguna" },
+    { id: "objetivo_detalle", label: "¿Qué quieres conseguir exactamente?", tipo: "texto", placeholder: "Ej: completar mi primer 10K en junio, bajar de 45 min en 10K, correr sin lesionarme..." },
+  ],
+  funcional: [
+    { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20–30", "31–40", "41–50", "Más de 50"] },
+    { id: "sexo", label: "¿Con qué género te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
+    { id: "nivel", label: "¿Cuál es tu nivel de experiencia haciendo ejercicio?", tipo: "opciones", opciones: ["Sedentario / Empiezo de cero", "Algo activo (ejercicio ocasional)", "Moderado (1–2 años constante)", "Avanzado (+2 años)"] },
+    { id: "objetivo_principal", label: "¿Cuál es tu objetivo principal?", tipo: "opciones", opciones: ["Perder peso / reducir grasa", "Tonificar y definir", "Ganar energía y bienestar", "Mejorar movilidad y flexibilidad", "Mantenerme en forma"] },
+    { id: "dias", label: "¿Cuántos días por semana puedes entrenar?", tipo: "opciones", opciones: ["2 días", "3 días", "4 días", "5 días"] },
+    { id: "duracion", label: "¿Cuánto tiempo por sesión?", tipo: "opciones", opciones: ["20–30 min", "30–45 min", "45–60 min", "Más de 1 hora"] },
+    { id: "material", label: "¿Con qué equipamiento cuentas?", tipo: "multi", opciones: ["Solo mi cuerpo (casa / parque)", "Mancuernas", "Bandas elásticas", "Kettlebells", "Máquinas de gimnasio", "Caja pliométrica", "Barra de dominadas"] },
+    { id: "restricciones", label: "¿Tienes alguna limitación física, lesión o condición médica?", tipo: "texto", placeholder: "Ej: dolor lumbar, rodilla operada, embarazo, hipertensión... o ninguna" },
+    { id: "objetivo_detalle", label: "Cuéntame un poco más sobre tu situación y objetivo", tipo: "texto", placeholder: "Ej: tengo 15 kg de más, entreno solo por las mañanas, me aburro con rutinas repetitivas..." },
+  ],
+  hibrido: [
+    { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20–30", "31–40", "41–50", "Más de 50"] },
+    { id: "sexo", label: "¿Con qué género te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
+    { id: "experiencia_fuerza", label: "¿Cuánta experiencia tienes en entrenamiento de fuerza?", tipo: "opciones", opciones: ["Poca o ninguna", "1–2 años", "2–4 años", "Más de 4 años"] },
+    { id: "experiencia_cardio", label: "¿Y en resistencia / cardio / carrera?", tipo: "opciones", opciones: ["Poca o ninguna", "1–2 años", "2–4 años", "Más de 4 años"] },
+    { id: "prioridad", label: "¿Qué quieres priorizar en este ciclo?", tipo: "opciones", opciones: ["50/50 equilibrado", "Más fuerza que resistencia", "Más resistencia que fuerza", "Potencia explosiva"] },
+    { id: "marcas_actuales", label: "¿Cuáles son tus marcas actuales de referencia?", tipo: "texto", placeholder: "Ej: peso muerto 100kg, sentadilla 80kg, corro 10K en 50min, nado 1km..." },
+    { id: "dias", label: "¿Cuántos días por semana puedes entrenar?", tipo: "opciones", opciones: ["3 días", "4 días", "5 días", "6 días"] },
+    { id: "duracion", label: "¿Cuánto tiempo por sesión?", tipo: "opciones", opciones: ["45 min", "1 hora", "1h 30min", "Más de 1h 30min"] },
+    { id: "material", label: "¿Con qué equipamiento cuentas?", tipo: "multi", opciones: ["Gimnasio completo", "Barras y discos", "Mancuernas", "Kettlebells", "Máquina de remo", "Cinta / Pista", "Bicicleta / Cicloergómetro"] },
+    { id: "lesiones", label: "¿Lesiones actuales o historial de lesiones relevante?", tipo: "texto", placeholder: "Ej: hombro derecho limitado, lumbar recurrente, o ninguna" },
+    { id: "objetivo_detalle", label: "¿Qué quieres lograr en los próximos 3–6 meses?", tipo: "texto", placeholder: "Ej: hacer un triatlón sprint, aumentar mi peso muerto y correr 10K en menos de 50min..." },
+  ],
+  fuerza: [
+    { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20–30", "31–40", "41–50", "Más de 50"] },
+    { id: "sexo", label: "¿Con qué género te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
+    { id: "modalidad", label: "¿En qué modalidad te especializas o quieres especializarte?", tipo: "opciones", opciones: ["Powerlifting (SQ / BP / DL)", "Halterofilia (Arrancada / 2T)", "Strongman / Fuerza general", "Estoy empezando, aún no lo sé"] },
+    { id: "nivel", label: "¿Cuántos años llevas entrenando fuerza con programación?", tipo: "opciones", opciones: ["Menos de 1 año", "1–2 años", "2–4 años", "Más de 4 años", "Tengo técnica sólida y quiero mejorar marcas"] },
+    { id: "marcas", label: "¿Cuáles son tus marcas actuales (1RM real o estimado)?", tipo: "texto", placeholder: "Ej: SQ 120kg / BP 90kg / DL 150kg, o Arrancada 60kg / 2T 80kg" },
+    { id: "competicion", label: "¿Tienes competición o fecha objetivo?", tipo: "opciones", opciones: ["Sí, en menos de 3 meses", "Sí, en 3–6 meses", "Sí, en más de 6 meses", "No compito, quiero mejorar marcas"] },
+    { id: "dias", label: "¿Cuántos días por semana puedes entrenar fuerza?", tipo: "opciones", opciones: ["3 días", "4 días", "5 días", "6 días"] },
+    { id: "duracion", label: "¿Cuánto tiempo por sesión?", tipo: "opciones", opciones: ["1 hora", "1h 30min", "2 horas", "Más de 2 horas"] },
+    { id: "puntos_debiles", label: "¿Cuál es tu eslabón más débil técnico o de fuerza?", tipo: "texto", placeholder: "Ej: el cajón bajo en sentadilla, el lockout en press banca, la primera tirada en peso muerto..." },
+    { id: "lesiones", label: "¿Lesiones o limitaciones que debamos tener en cuenta?", tipo: "texto", placeholder: "Ej: muñecas limitadas, lumbar sensible, hombro derecho, o ninguna" },
+    { id: "objetivo_detalle", label: "¿Qué quieres lograr exactamente?", tipo: "texto", placeholder: "Ej: romper mi 1RM en sentadilla, clasificarme para campeonato, aprender la arrancada técnicamente..." },
+  ],
+};
+
+// ─── SYSTEM PROMPTS CON PERIODIZACIÓN CIENTÍFICA ─────────────────────────────
+const buildPrompt = (cat, perfil) => {
+  const perfilStr = Object.entries(perfil)
+    .map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+    .join("\n");
+
+  const base = `Eres el coach de FormaPro, un sistema de asesoramiento de entrenamiento con personalizado de alto nivel.
+Tu filosofía: la programación debe adaptarse al deportista, no al revés.
+Hablas en español con un tono cercano, directo y motivador. Evitas respuestas genéricas.
+
+PERFIL COMPLETO DEL USUARIO:
+${perfilStr}
+
+PRINCIPIOS CIENTÍFICOS QUE SIEMPRE APLICAS:
+- Periodización: usas periodización lineal para principiantes, ondulada (DUP) para intermedios, y por bloques (acumulación / intensificación / realización) para avanzados.
+- Principio de sobrecarga progresiva: cada semana debe haber un estímulo mayor al anterior (volumen, intensidad o densidad).
+- Gestión de la fatiga: integras días de descarga (deload) cada 3–4 semanas según el nivel.
+- Especificidad: el entrenamiento siempre apunta al objetivo declarado del usuario.
+- Individualización: adaptas TODO a lesiones, limitaciones, disponibilidad y equipamiento del usuario.
+- Si el usuario tiene lesiones, siempre propones alternativas seguras y lo alertas sobre señales de alarma.
+
+FORMATO DE RESPUESTAS:
+- Máximo 400 palabras salvo que pidan la rutina completa.
+- Cuando des una rutina semanal: usa estructura clara con DÍA / BLOQUE / EJERCICIO / SERIES x REPS (% o RPE) / DESCANSO.
+- Usa **negrita** para encabezados de día o bloque.
+- Si el usuario pide cambios (menos días, lesión nueva, más tiempo, etc.), ajusta inmediatamente la programación y explica el por qué.
+- Al final de cada respuesta con rutina, pregunta si hay algo que ajustar.`;
+
+  const especifico = {
+    carrera: `
+ESPECIALIDAD: CARRERA Y RUNNING
+- Periodización: ciclos de 4 semanas (3 semanas de carga + 1 descarga). Progresión de volumen de carrera no más del 10% semanal (regla del 10%).
+- Zonas de entrenamiento: usa zonas por FC o pace (Z1 recuperación, Z2 base aeróbica, Z3 umbral, Z4 VO2max, Z5 velocidad). Explica brevemente la zona de cada sesión.
+- Incluye: rodaje largo semanal, series/intervalos, rodaje suave de recuperación y trabajo de fuerza complementaria (2x/semana mínimo).
+- Para principiantes: método run/walk (Galloway si necesario), construir base aeróbica antes de velocidad.
+- Para intermedios/avanzados: trabajo de umbral de lactato, economía de carrera, cargas específicas de competición.
+- Siempre incluye calentamiento dinámico y vuelta a la calma con estiramientos específicos.`,
+
+    funcional: `
+ESPECIALIDAD: ENTRENAMIENTO FUNCIONAL
+- Periodización: bloques de 4–6 semanas alternando foco (fuerza funcional → potencia → resistencia metabólica).
+- Estructura de sesión: movilidad (5 min) → activación (5 min) → bloque principal → finisher metabólico → vuelta a la calma.
+- Patrones de movimiento: empuje, tirón, bisagra, sentadilla, carga unilateral, rotación, core anti-rotación.
+- Herramientas: adapta al material disponible. Sin equipo: bodyweight con progresiones (push-up → archer → one arm). Con equipo: kettlebell flows, barbell complexes.
+- Para pérdida de grasa: circuitos de alta densidad, AMRAP, EMOM. Déficit calórico orientativo si lo pide.
+- Para mantenimiento/bienestar: equilibra fuerza y cardio sin sobrecarga. Prioriza adherencia y disfrute.`,
+
+    hibrido: `
+ESPECIALIDAD: ENTRENAMIENTO HÍBRIDO (RESISTENCIA + FUERZA)
+- Periodización por bloques: alterna ciclos de énfasis (4 sem fuerza + 4 sem resistencia) o usa DUP con distribución semanal (días de fuerza / días de cardio / días mixtos).
+- Gestión de interferencia: minimiza el efecto de interferencia (no cardio intenso el mismo día que piernas pesadas; separa sesiones por 6h mínimo si es doble sesión).
+- Fuerza: 3–5 series, 3–6 reps al 80–90% 1RM para los días de fuerza máxima. Hipertrofia complementaria 8–12 reps.
+- Resistencia: integra rodaje Z2, sesiones de umbral, VO2max según el ciclo. Incluye distancia semanal objetivo.
+- Nutrición: orienta sobre timing (carbohidratos peri-entrenamiento en sesiones dobles o largas).
+- KPIs: sugiere métricas de seguimiento (ritmo/km, 1RM estimado, HRV si tiene dispositivo).`,
+
+    fuerza: `
+ESPECIALIDAD: FUERZA MÁXIMA Y LEVANTAMIENTOS
+- Periodización: para principiantes usa progresión lineal (SL, Texas Method). Para intermedios: DUP o 5/3/1 Wendler. Para avanzados: bloques de acumulación (altas reps, volumen) → intensificación (bajada de reps, sube intensidad) → realización/peaking (1–3 reps, máxima intensidad) → deload.
+- Intensidad: trabaja siempre con % de 1RM o RPE (escala Borg modificada 1–10). Explica el RPE al usuario si no lo conoce.
+- Movimientos principales: sentadilla, press de banca, peso muerto (powerlifting) o arrancada, dos tiempos (halterofilia). Siempre incluye trabajo de asistencia específico al eslabón débil del usuario.
+- Halterofilia: integra trabajo técnico con pesos submáximos (60–75% 1RM), series de potencia y trabajo de fuerza básica (sentadilla frontal/trasera, tirón).
+- Antes de competición: reduce volumen total un 40–60%, mantén o sube intensidad. La última semana: activación con intentos de apertura.
+- Siempre incluye: calentamiento específico por articulaciones, trabajo de movilidad de cadera y tobillo.`,
+  };
+
+  return base + (especifico[cat.id] || "");
+};
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+const Progreso = ({ actual, total, color }) => (
+  <div style={{ width: "100%", height: 3, background: C.border, borderRadius: 10, marginBottom: 28 }}>
+    <div style={{ height: 3, borderRadius: 10, background: color, width: `${(actual / total) * 100}%`, transition: "width 0.4s ease" }} />
+  </div>
+);
+
+const Chip = ({ active, onClick, children, color }) => (
+  <button onClick={onClick} style={{
+    padding: "9px 16px", borderRadius: 100, fontSize: 13.5, cursor: "pointer",
+    border: active ? `2px solid ${color}` : `2px solid ${C.border}`,
+    background: active ? color + "18" : C.card,
+    color: active ? color : C.ink,
+    fontWeight: active ? 600 : 400,
+    transition: "all 0.15s", fontFamily: "inherit",
+  }}>{children}</button>
+);
+
+const MensajeTexto = ({ texto }) => (
+  <div style={{ fontSize: 14, lineHeight: 1.8, color: C.ink }}>
+    {texto.split("\n").map((linea, i) => {
+      if (!linea.trim()) return <div key={i} style={{ height: 6 }} />;
+      const html = linea
+        .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+        .replace(/\*(.*?)\*/g, "<em>$1</em>");
+      if (linea.startsWith("### ")) return <div key={i} style={{ fontWeight: 700, fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1.5, marginTop: 14, marginBottom: 2 }} dangerouslySetInnerHTML={{ __html: html.replace(/^###\s*/, "") }} />;
+      if (linea.startsWith("## ")) return <div key={i} style={{ fontWeight: 700, fontSize: 15, marginTop: 16, marginBottom: 4 }} dangerouslySetInnerHTML={{ __html: html.replace(/^##\s*/, "") }} />;
+      if (linea.match(/^[-•]\s/)) return <div key={i} style={{ paddingLeft: 16, position: "relative", marginBottom: 2 }}><span style={{ position: "absolute", left: 4, color: C.muted }}>·</span><span dangerouslySetInnerHTML={{ __html: html.replace(/^[-•]\s*/, "") }} /></div>;
+      return <div key={i} dangerouslySetInnerHTML={{ __html: html }} />;
+    })}
+  </div>
+);
+
+// ─── SUGERENCIAS RÁPIDAS POR CATEGORÍA ───────────────────────────────────────
+const SUGERENCIAS = {
+  carrera: ["Ajusta el volumen", "¿Cómo mejoro el ritmo?", "Tengo una carrera en 3 semanas", "Me duele la rodilla"],
+  funcional: ["Tengo menos tiempo esta semana", "¿Qué como si quiero perder grasa?", "Cambia el entrenamiento de hoy", "Estoy muy cansado"],
+  hibrido: ["Prioriza más fuerza este mes", "¿Cómo gestiono dos sesiones al día?", "Tengo competición próximamente", "Mi VO2max está estancado"],
+  fuerza: ["Sube la intensidad", "¿Cómo peako para competición?", "Mi sentadilla está estancada", "Explícame el RPE"],
+};
+
+const FREE_LIMIT = 16;
+
+// ─── APP ──────────────────────────────────────────────────────────────────────
+export default function FormaPro() {
+  const [pantalla, setPantalla] = useState("inicio");
+  const [categoria, setCategoria] = useState(null);
+  const [pregIdx, setPregIdx] = useState(0);
+  const [respuestas, setRespuestas] = useState({});
+  const [selMulti, setSelMulti] = useState([]);
+  const [textoTemp, setTextoTemp] = useState("");
+  const [mensajes, setMensajes] = useState([]);
+  const [historial, setHistorial] = useState([]);
+  const [input, setInput] = useState("");
+  const [cargando, setCargando] = useState(false);
+  const [generando, setGenerando] = useState(false);
+  const [msgCount, setMsgCount] = useState(0);
+  const bottomRef = useRef(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [mensajes, cargando, generando]);
+
+  const cat = categoria ? CATEGORIAS.find(c => c.id === categoria) : null;
+  const preguntas = categoria ? FORMULARIOS[categoria] : [];
+  const pregActual = preguntas[pregIdx];
+  const bloqueado = msgCount >= FREE_LIMIT;
+  const accentColor = cat?.color || C.accent;
+
+  const irACategoria = (catId) => {
+    setCategoria(catId);
+    setPregIdx(0);
+    setRespuestas({});
+    setSelMulti([]);
+    setTextoTemp("");
+    setPantalla("formulario");
+  };
+
+  const avanzar = () => {
+    const val = pregActual.tipo === "multi" ? selMulti
+      : pregActual.tipo === "texto" ? textoTemp
+      : respuestas[pregActual.id];
+    if (!val || (Array.isArray(val) && val.length === 0) || (typeof val === "string" && !val.trim())) return;
+    const nuevas = { ...respuestas, [pregActual.id]: val };
+    setRespuestas(nuevas);
+    setSelMulti([]);
+    setTextoTemp("");
+    if (pregIdx < preguntas.length - 1) {
+      setPregIdx(pregIdx + 1);
+    } else {
+      iniciarChat(nuevas);
+    }
+  };
+
+  const toggleMulti = (op) => setSelMulti(prev => prev.includes(op) ? prev.filter(x => x !== op) : [...prev, op]);
+
+  const iniciarChat = async (perfil) => {
+    setPantalla("chat");
+    setGenerando(true);
+    const catObj = CATEGORIAS.find(c => c.id === categoria);
+    const prompt = `Hola! Acabo de completar mi perfil en FormaPro.
+Por favor:
+1. Dame una bienvenida breve y muestra que has entendido mi situación (máx. 3 líneas).
+2. Genera mi programación semanal completa con base científica y periodización, adaptada a mis ${perfil.dias || "días disponibles"}.
+3. Explica brevemente la lógica de periodización que usarás conmigo.
+4. Pregúntame si quiero ajustar algo antes de empezar.`;
+
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          system: buildPrompt(catObj, perfil),
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+      const data = await res.json();
+      const texto = data.content?.map(b => b.text || "").join("") || "Error al conectar.";
+      setMensajes([{ role: "assistant", content: texto }]);
+      setHistorial([{ role: "user", content: prompt }, { role: "assistant", content: texto }]);
+      setMsgCount(1);
+    } catch {
+      setMensajes([{ role: "assistant", content: "⚠️ Error de conexión. Por favor recarga e inténtalo de nuevo." }]);
+    } finally {
+      setGenerando(false);
+      setTimeout(() => inputRef.current?.focus(), 300);
+    }
+  };
+
+  const enviar = async (texto = input) => {
+    if (!texto.trim() || cargando || bloqueado) return;
+    const userMsg = { role: "user", content: texto.trim() };
+    const nuevoHist = [...historial, { role: "user", content: texto.trim() }];
+    setMensajes(prev => [...prev, userMsg]);
+    setInput("");
+    setCargando(true);
+    setMsgCount(c => c + 1);
+    const catObj = CATEGORIAS.find(c => c.id === categoria);
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          system: buildPrompt(catObj, respuestas),
+          messages: nuevoHist,
+        }),
+      });
+      const data = await res.json();
+      const respText = data.content?.map(b => b.text || "").join("") || "Error.";
+      setMensajes(prev => [...prev, { role: "assistant", content: respText }]);
+      setHistorial([...nuevoHist, { role: "assistant", content: respText }]);
+    } catch {
+      setMensajes(prev => [...prev, { role: "assistant", content: "⚠️ Error. Inténtalo de nuevo." }]);
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  const handleKey = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviar(); } };
+  const restantes = FREE_LIMIT - msgCount;
+
+  // ─── RENDERS ─────────────────────────────────────────────────────────────────
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'DM Sans', sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:wght@700;800&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        h1,h2,h3 { font-family: 'Playfair Display', Georgia, serif; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: ${C.border}; border-radius: 4px; }
+        .cat-card { transition: all 0.2s; cursor: pointer; }
+        .cat-card:hover { transform: translateY(-3px); }
+        .btn-main { transition: all 0.15s; }
+        .btn-main:hover { filter: brightness(0.9); }
+        .btn-main:active { transform: scale(0.97); }
+        @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+        .fade-up { animation: fadeUp 0.3s ease forwards; }
+        @keyframes dotPulse { 0%,80%,100%{opacity:0.25;transform:scale(0.8)} 40%{opacity:1;transform:scale(1)} }
+        .dot { width:7px;height:7px;border-radius:50%;animation:dotPulse 1.3s infinite; }
+        textarea { resize:none; }
+        textarea:focus { outline:none; }
+        .chip-hover:hover { opacity:0.85; }
+        .sugg:hover { border-color: var(--accent) !important; color: var(--accent) !important; }
+      `}</style>
+
+      {/* ══ INICIO ══════════════════════════════════════════════════════════════ */}
+      {pantalla === "inicio" && (
+        <div className="fade-up" style={{ maxWidth: 520, width: "100%", textAlign: "center" }}>
+          <div style={{ fontSize: 44, marginBottom: 16 }}>🏅</div>
+          <h1 style={{ fontSize: "clamp(36px,8vw,54px)", color: C.ink, lineHeight: 1.1, marginBottom: 14 }}>
+            FormaPro
+          </h1>
+          <p style={{ color: C.muted, fontSize: 17, lineHeight: 1.65, marginBottom: 6, maxWidth: 400, margin: "0 auto 8px" }}>
+            Programación de entrenamiento con IA. Dinámica, con base científica y periodización real.
+          </p>
+          <p style={{ color: C.muted, fontSize: 14, marginBottom: 36 }}>
+            Se adapta a ti — no tú a ella.
+          </p>
+
+          <button className="btn-main" onClick={() => setPantalla("categoria")} style={{
+            background: C.ink, color: "#fff", border: "none", borderRadius: 14,
+            padding: "16px 40px", fontSize: 16, fontWeight: 600, cursor: "pointer", width: "100%", maxWidth: 360,
+          }}>
+            Crear mi programa →
+          </button>
+          <p style={{ color: C.muted, fontSize: 12, marginTop: 12 }}>{FREE_LIMIT} consultas gratuitas · Sin registro</p>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginTop: 32 }}>
+            {["Periodización científica", "Adaptable a lesiones", "4 disciplinas", "Ajustes en tiempo real"].map(t => (
+              <span key={t} style={{ background: C.tag, color: C.muted, borderRadius: 100, padding: "5px 14px", fontSize: 12 }}>{t}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ══ SELECTOR CATEGORÍA ═══════════════════════════════════════════════════ */}
+      {pantalla === "categoria" && (
+        <div className="fade-up" style={{ maxWidth: 580, width: "100%" }}>
+          <button onClick={() => setPantalla("inicio")} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, marginBottom: 28 }}>← Volver</button>
+          <h2 style={{ fontSize: "clamp(22px,5vw,30px)", color: C.ink, marginBottom: 8 }}>¿Cuál es tu disciplina?</h2>
+          <p style={{ color: C.muted, fontSize: 14, marginBottom: 28 }}>Tu programa se construirá desde cero según lo que elijas.</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
+            {CATEGORIAS.map(c => (
+              <div key={c.id} className="cat-card" onClick={() => irACategoria(c.id)}
+                style={{ background: C.card, border: `2px solid ${C.border}`, borderRadius: 20, padding: "24px 22px" }}>
+                <div style={{ fontSize: 34, marginBottom: 12 }}>{c.emoji}</div>
+                <div style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: 18, color: C.ink, marginBottom: 2 }}>{c.titulo}</div>
+                <div style={{ color: c.color, fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>{c.subtitulo}</div>
+                <div style={{ color: C.muted, fontSize: 13, lineHeight: 1.55 }}>{c.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ══ FORMULARIO ══════════════════════════════════════════════════════════ */}
+      {pantalla === "formulario" && pregActual && (
+        <div className="fade-up" style={{ maxWidth: 500, width: "100%" }}>
+          <div style={{ display: "flex", alignItems: "center", marginBottom: 20 }}>
+            <button onClick={() => { if (pregIdx === 0) setPantalla("categoria"); else { setPregIdx(pregIdx - 1); setSelMulti([]); setTextoTemp(""); } }}
+              style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 14 }}>← Atrás</button>
+            <span style={{ marginLeft: "auto", color: C.muted, fontSize: 13 }}>{pregIdx + 1} / {preguntas.length}</span>
+          </div>
+
+          <Progreso actual={pregIdx + 1} total={preguntas.length} color={accentColor} />
+
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: cat.colorLight, borderRadius: 100, padding: "5px 14px", marginBottom: 20 }}>
+            <span style={{ fontSize: 15 }}>{cat.emoji}</span>
+            <span style={{ color: accentColor, fontSize: 12, fontWeight: 600 }}>{cat.titulo}</span>
+          </div>
+
+          <h2 style={{ fontSize: "clamp(17px,4vw,23px)", color: C.ink, marginBottom: 22, lineHeight: 1.4 }}>
+            {pregActual.label}
+          </h2>
+
+          {pregActual.tipo === "opciones" && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 9, marginBottom: 28 }}>
+              {pregActual.opciones.map(op => (
+                <Chip key={op} active={respuestas[pregActual.id] === op} color={accentColor}
+                  onClick={() => setRespuestas(p => ({ ...p, [pregActual.id]: op }))}>{op}</Chip>
+              ))}
+            </div>
+          )}
+
+          {pregActual.tipo === "multi" && (
+            <>
+              <p style={{ color: C.muted, fontSize: 12, marginBottom: 10 }}>Selecciona todos los que apliquen</p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 9, marginBottom: 28 }}>
+                {pregActual.opciones.map(op => (
+                  <Chip key={op} active={selMulti.includes(op)} color={accentColor} onClick={() => toggleMulti(op)}>{op}</Chip>
+                ))}
+              </div>
+            </>
+          )}
+
+          {pregActual.tipo === "texto" && (
+            <textarea value={textoTemp} onChange={e => setTextoTemp(e.target.value)} rows={3}
+              placeholder={pregActual.placeholder}
+              style={{ width: "100%", border: `2px solid ${C.border}`, borderRadius: 14, padding: "13px 15px", fontSize: 14, color: C.ink, background: C.card, lineHeight: 1.65, marginBottom: 28, transition: "border-color 0.15s" }}
+              onFocus={e => e.target.style.borderColor = accentColor}
+              onBlur={e => e.target.style.borderColor = C.border}
+            />
+          )}
+
+          <button className="btn-main" onClick={avanzar}
+            disabled={
+              (pregActual.tipo === "opciones" && !respuestas[pregActual.id]) ||
+              (pregActual.tipo === "multi" && selMulti.length === 0) ||
+              (pregActual.tipo === "texto" && !textoTemp.trim())
+            }
+            style={{
+              width: "100%", background: accentColor, color: "#fff", border: "none",
+              borderRadius: 14, padding: "15px", fontSize: 15, fontWeight: 600, cursor: "pointer",
+              opacity: (
+                (pregActual.tipo === "opciones" && !respuestas[pregActual.id]) ||
+                (pregActual.tipo === "multi" && selMulti.length === 0) ||
+                (pregActual.tipo === "texto" && !textoTemp.trim())
+              ) ? 0.35 : 1,
+            }}>
+            {pregIdx < preguntas.length - 1 ? "Siguiente →" : "Generar mi programa ✨"}
+          </button>
+        </div>
+      )}
+
+      {/* ══ CHAT ════════════════════════════════════════════════════════════════ */}
+      {pantalla === "chat" && (
+        <div style={{ width: "100%", maxWidth: 700, display: "flex", flexDirection: "column", height: "93vh", maxHeight: 860 }}>
+          {/* Header */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+            <button onClick={() => { setPantalla("categoria"); setMensajes([]); setHistorial([]); setMsgCount(0); }}
+              style={{ background: C.card, border: `1px solid ${C.border}`, color: C.muted, cursor: "pointer", borderRadius: 10, padding: "8px 14px", fontSize: 13 }}>← Cambiar</button>
+            <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 12, background: cat.colorLight, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{cat.emoji}</div>
+              <div>
+                <div style={{ fontFamily: "'Playfair Display', serif", fontWeight: 700, fontSize: 15, color: C.ink }}>FormaPro Coach</div>
+                <div style={{ color: accentColor, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8 }}>{cat.titulo} · {cat.subtitulo}</div>
+              </div>
+            </div>
+            <div style={{
+              background: restantes <= 2 ? "#FFF3CD" : cat.colorLight,
+              color: restantes <= 2 ? "#856404" : accentColor,
+              borderRadius: 100, padding: "5px 12px", fontSize: 12, fontWeight: 500,
+            }}>
+              {restantes > 0 ? `${restantes} consultas libres` : "Límite alcanzado"}
+            </div>
+          </div>
+
+          {/* Mensajes */}
+          <div style={{ flex: 1, overflowY: "auto", background: C.card, borderRadius: 20, border: `1px solid ${C.border}`, padding: "20px 18px", display: "flex", flexDirection: "column", gap: 18 }}>
+            {generando && (
+              <div style={{ display: "flex", gap: 12 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 12, background: cat.colorLight, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{cat.emoji}</div>
+                <div style={{ background: C.bg, borderRadius: "4px 16px 16px 16px", padding: "16px 18px" }}>
+                  <p style={{ color: C.muted, fontSize: 13, marginBottom: 10 }}>Analizando tu perfil y generando tu programa...</p>
+                  <div style={{ display: "flex", gap: 5 }}>
+                    {[0, 1, 2].map(j => <div key={j} className="dot" style={{ background: accentColor, animationDelay: `${j * 0.2}s` }} />)}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {mensajes.map((msg, i) => (
+              <div key={i} className="fade-up" style={{ display: "flex", justifyContent: msg.role === "user" ? "flex-end" : "flex-start", gap: 10, alignItems: "flex-start" }}>
+                {msg.role === "assistant" && (
+                  <div style={{ width: 36, height: 36, borderRadius: 12, background: cat.colorLight, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{cat.emoji}</div>
+                )}
+                <div style={{
+                  maxWidth: "80%", padding: "13px 17px",
+                  borderRadius: msg.role === "user" ? "16px 4px 16px 16px" : "4px 16px 16px 16px",
+                  background: msg.role === "user" ? accentColor : C.bg,
+                  color: msg.role === "user" ? "#fff" : C.ink,
+                }}>
+                  {msg.role === "assistant"
+                    ? <MensajeTexto texto={msg.content} />
+                    : <p style={{ fontSize: 14, lineHeight: 1.6 }}>{msg.content}</p>}
+                </div>
+              </div>
+            ))}
+
+            {cargando && (
+              <div style={{ display: "flex", gap: 12 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 12, background: cat.colorLight, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{cat.emoji}</div>
+                <div style={{ background: C.bg, borderRadius: "4px 16px 16px 16px", padding: "14px 18px", display: "flex", gap: 5, alignItems: "center" }}>
+                  {[0, 1, 2].map(j => <div key={j} className="dot" style={{ background: accentColor, animationDelay: `${j * 0.2}s` }} />)}
+                </div>
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Paywall */}
+          {bloqueado && (
+            <div style={{ marginTop: 12, background: C.warmLight, border: `1px solid #F5C2A0`, borderRadius: 16, padding: "18px 22px" }}>
+              <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, color: C.ink, marginBottom: 6 }}>Consultas gratuitas agotadas 🔒</div>
+              <p style={{ color: C.muted, fontSize: 13, marginBottom: 14, lineHeight: 1.6 }}>
+                Actualiza a FormaPro Premium para consultas ilimitadas, ajustes semanales, seguimiento de progreso y planificación de ciclos completos.
+              </p>
+              <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                <button className="btn-main" style={{ background: C.warm, color: "#fff", border: "none", borderRadius: 12, padding: "13px 26px", fontSize: 15, fontWeight: 600, cursor: "pointer" }}>
+                  Obtener Premium — $19/mes
+                </button>
+                <span style={{ color: C.muted, fontSize: 12 }}>Cancela cuando quieras</span>
+              </div>
+            </div>
+          )}
+
+          {/* Input */}
+          {!bloqueado && (
+            <>
+              <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "flex-end" }}>
+                <div style={{ flex: 1, background: C.card, border: `2px solid ${C.border}`, borderRadius: 16, padding: "11px 15px", display: "flex", alignItems: "flex-end" }}>
+                  <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
+                    placeholder="Pregunta, pide ajustes o cuéntame cambios en tu disponibilidad..."
+                    rows={1} disabled={cargando}
+                    style={{ flex: 1, background: "transparent", border: "none", color: C.ink, fontSize: 14, lineHeight: 1.6, maxHeight: 100, overflow: "auto", padding: 0, fontFamily: "inherit" }}
+                    onInput={e => { e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
+                  />
+                </div>
+                <button onClick={() => enviar()} disabled={cargando || !input.trim()}
+                  style={{ background: input.trim() && !cargando ? accentColor : C.border, border: "none", borderRadius: 13, width: 48, height: 48, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.2s" }}>
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+                    <path d="M22 2L11 13" stroke={input.trim() && !cargando ? "#fff" : C.muted} strokeWidth="2.5" strokeLinecap="round" />
+                    <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke={input.trim() && !cargando ? "#fff" : C.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Sugerencias rápidas */}
+              {mensajes.length > 0 && !cargando && (
+                <div style={{ display: "flex", gap: 7, marginTop: 8, flexWrap: "wrap" }}>
+                  {(SUGERENCIAS[categoria] || []).map(s => (
+                    <button key={s} className="sugg" onClick={() => enviar(s)}
+                      style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 100, padding: "5px 13px", fontSize: 12, color: C.muted, cursor: "pointer", transition: "all 0.15s", "--accent": accentColor }}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

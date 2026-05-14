@@ -69,7 +69,7 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
 const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "") => {
   const perfilStr = Object.entries(perfil).map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join("\n");
   const marcasStr = marcas.length > 0 ? marcas.map(m => `- ${m.fecha}: ${m.valor}`).join("\n") : "Sin registros aun";
-  return `Eres el coach de FormaPro, sistema de asesoramiento de entrenamiento con IA.
+  return `Eres el coach de FormaPro, sistema de asesoramiento de entrenamiento personalizado.
 Tu filosofia: la programacion se adapta al deportista, no al reves.
 Hablas en espanol, tono cercano, directo y motivador.
 
@@ -271,8 +271,8 @@ export default function FormaPro() {
         <div className="fade-up" style={{maxWidth:520,width:"100%",textAlign:"center"}}>
           <div style={{fontSize:44,marginBottom:16}}>🏅</div>
           <h1 style={{fontSize:"clamp(36px,8vw,54px)",color:C.ink,lineHeight:1.1,marginBottom:14}}>FormaPro</h1>
-          <p style={{color:C.muted,fontSize:17,lineHeight:1.65,marginBottom:8}}>Programacion de entrenamiento con IA. Dinamica, con base cientifica y periodizacion real.</p>
-          <p style={{color:C.muted,fontSize:14,marginBottom:32}}>Se adapta a ti, no tu a ella.</p>
+          <p style={{color:C.muted,fontSize:17,lineHeight:1.65,marginBottom:8}}>Coach de entrenamiento personal. Siempre disponible, seguimiento de progreso y adaptado a tu vida.</p>
+          <p style={{color:C.muted,fontSize:14,marginBottom:32}}>Tu programa evoluciona contigo cada semana.</p>
           <button className="btn-main" onClick={()=>setPantalla("categoria")} style={{background:C.ink,color:"#fff",border:"none",borderRadius:14,padding:"16px 40px",fontSize:16,fontWeight:600,cursor:"pointer",width:"100%",maxWidth:360,marginBottom:20}}>
             Crear mi programa
           </button>
@@ -291,7 +291,7 @@ export default function FormaPro() {
           </div>
           <p style={{color:C.muted,fontSize:12,marginTop:20}}>{FREE_LIMIT} consultas gratuitas - Sin registro</p>
           <div style={{display:"flex",flexWrap:"wrap",gap:8,justifyContent:"center",marginTop:24}}>
-            {["Periodizacion cientifica","Adaptable a lesiones","4 disciplinas","Recuerda tu progreso"].map(t=>(
+            {["Basado en ciencia","Adaptado a tu día a día","Múltiples disciplinas","Recuerda tu progreso"].map(t=>(
               <span key={t} style={{background:C.tag,color:C.muted,borderRadius:100,padding:"5px 14px",fontSize:12}}>{t}</span>
             ))}
           </div>

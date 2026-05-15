@@ -143,6 +143,7 @@ export default function FormaPro() {
   const [mostrarMarcas,setMostrarMarcas]=useState(false);
   const [nuevaMarca,setNuevaMarca]=useState("");
   const [codigoGuardado,setCodigoGuardado]=useState("");
+const [errorCodigo,setErrorCodigo]=useState("");
 const [email,setEmail]=useState("");
 const [emailInput,setEmailInput]=useState("");
 const [mostrarRecuperar,setMostrarRecuperar]=useState(false);

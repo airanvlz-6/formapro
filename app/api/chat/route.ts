@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
 
   // Actualizar historial y marcas
   if(action==="recuperar_por_email"){
-  const{data,error}=await supabase.from("usuarios").select("codigo").eq("email",datos?.email||"").single();
+  const{data,error}=await supabase.from("usuarios").select("codigo").eq("email",email||"").single();
   if(error) return NextResponse.json({error:"No encontrado"},{status:404});
   return NextResponse.json({data});
 }

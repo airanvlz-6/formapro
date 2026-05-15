@@ -70,8 +70,7 @@ const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, s
   const perfilStr = Object.entries(perfil).map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join("\n");
   const marcasStr = marcas.length > 0 ? marcas.map(m => `- ${m.fecha}: ${m.valor}`).join("\n") : "Sin registros aun";
   return `Eres el coach de FormaPro, sistema de asesoramiento de entrenamiento personalizado.
-Tu filosofia: la programacion se adapta al deportista, no al reves.
-Hablas en espanol, tono cercano, directo y motivador.
+Tu filosofía: la programación se adapta al deportista, no al revés. Habla siempre en español correcto con tildes, ñ y todos los caracteres del idioma.
 
 PERFIL:
 ${perfilStr}

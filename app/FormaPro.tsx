@@ -167,7 +167,7 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
   const recuperarPorEmail=async()=>{
   if(!emailInput.trim()) return;
   setMensajeRecuperar("");
-  const data=await apiCall({action:"recuperar_por_email",email:emailInput.trim().toLowerCase()});
+  const data=await apiCall({action:"recuperar_por_email",email:emailInput.trim().toLowerCase(),codigo:"",datos:{}});
   if(data.error||!data.data){setMensajeRecuperar("No encontramos ninguna cuenta con ese email.");return;}
   setMensajeRecuperar(`Tu código es: ${data.data.codigo}`);
 };
@@ -299,7 +299,7 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
               </button>
             </div>
             {errorCodigo&&<p style={{color:C.warm,fontSize:12,marginTop:8}}>{errorCodigo}</p>}
-<button onClick={()=>setMostrarRecuperar(!mostrarRecuperar)} style={{background:"none",border:"none",color:C.muted,fontSize:12,cursor:"pointer",marginTop:8,textDecoration:"underline"}}>
+<button onClick={(e)=>{e.stopPropagation();setMostrarRecuperar(!mostrarRecuperar);}} style={{background:"none",border:"none",color:C.muted,fontSize:12,cursor:"pointer",marginTop:8,textDecoration:"underline"}}>
   He perdido mi código
 </button>
 {mostrarRecuperar&&(
@@ -310,7 +310,7 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
         style={{flex:1,border:`2px solid ${C.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:C.ink,background:C.bg}}
         onKeyDown={e=>e.key==="Enter"&&recuperarPorEmail()}
       />
-      <button onClick={recuperarPorEmail} style={{background:C.accent,color:"#fff",border:"none",borderRadius:10,padding:"9px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+      <button onClick={(e)=>{e.stopPropagation();recuperarPorEmail();}} style={{background:C.accent,color:"#fff",border:"none",borderRadius:10,padding:"9px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
         Buscar
       </button>
     </div>

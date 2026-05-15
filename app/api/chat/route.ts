@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "API key not found" }, { status: 500 });
   }
 
-  const { messages, system, model, max_tokens, action, codigo, datos } = await req.json();
+  const { messages, system, model, max_tokens, action, codigo, datos, email } = await req.json();
 
   // Guardar usuario nuevo
   if (action === "guardar_usuario") {

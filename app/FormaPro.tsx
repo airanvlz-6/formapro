@@ -159,9 +159,17 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
   const bloqueado=msgCount>=FREE_LIMIT;
   const accentColor=cat?.color||C.accent;
 
-  const apiCall=async(body:Record<string,unknown>)=>{
-    const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-    return res.json();
+  const apiCall=async(body:Record<string,unknown>):Promise<any>=>{
+    let intentos=0;
+    while(intentos<3){
+      try{
+        const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+        if(res.ok) return res.json();
+        intentos++;
+        await new Promise(r=>setTimeout(r,1000));
+      }catch{intentos++;}
+    }
+    return {error:"Error de conexion tras 3 intentos"};
   };
 
   const recuperarPorEmail=async()=>{

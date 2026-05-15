@@ -222,7 +222,8 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
       const texto=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error al conectar.";
       const hist=[{role:"user",content:prompt},{role:"assistant",content:texto}];
       setMensajes([{role:"assistant",content:texto}]);setHistorial(hist);setMsgCount(1);setCodigoUsuario(codigo);
-      await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:texto,historial:hist,marcas:[],email:email||null}});
+      console.log("Guardando usuario con email:", email);
+await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:texto,historial:hist,marcas:[],email:email||null}});
     }catch{setMensajes([{role:"assistant",content:"Error de conexion. Por favor recarga."}]);}
     finally{setGenerando(false);setTimeout(()=>inputRef.current?.focus(),300);}
   };

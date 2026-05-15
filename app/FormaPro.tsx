@@ -144,6 +144,9 @@ export default function FormaPro() {
   const [nuevaMarca,setNuevaMarca]=useState("");
   const [codigoGuardado,setCodigoGuardado]=useState("");
 const [errorCodigo,setErrorCodigo]=useState("");
+const [emailGuardado,setEmailGuardado]=useState(false);
+const [emailBanner,setEmailBanner]=useState("");
+const [bannerEnviado,setBannerEnviado]=useState(false);
 const [email,setEmail]=useState("");
 const [emailInput,setEmailInput]=useState("");
 const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
@@ -189,6 +192,7 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
     setMarcas(u.marcas||[]);setHistorial(u.historial||[]);
     setMensajes(u.historial?.filter((m:{role:string})=>m.role==="assistant").slice(-1)||[]);
     setMsgCount(1);setPantalla("chat");
+    setEmailGuardado(!!u.email);
     setTimeout(()=>reanudarSesion(u),300);
   };
 
@@ -412,6 +416,28 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
               <span style={{color:C.muted,fontSize:11}}>Guardalo para volver</span>
             </div>
           )}
+          {!emailGuardado&&!bannerEnviado&&pantalla==="chat"&&(
+  <div style={{background:"#FFF9E6",border:"1px solid #F0D060",borderRadius:12,padding:"10px 16px",marginBottom:10,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+    <span style={{fontSize:16}}>📧</span>
+    <span style={{color:"#7A6000",fontSize:13,flex:1}}>Guarda tu email para no perder tu código</span>
+    <input value={emailBanner} onChange={e=>setEmailBanner(e.target.value)} placeholder="tu@email.com"
+      style={{border:"1px solid #F0D060",borderRadius:8,padding:"6px 10px",fontSize:13,color:"#1A1A1A",background:"#fff",fontFamily:"inherit",width:180}}
+    />
+    <button onClick={async()=>{
+      if(!emailBanner.trim()) return;
+      await apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{email:emailBanner.trim().toLowerCase()}});
+      setEmailGuardado(true);setBannerEnviado(true);
+    }} style={{background:"#7A6000",color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+      Guardar
+    </button>
+  </div>
+)}
+{bannerEnviado&&(
+  <div style={{background:"#D8F3DC",border:"1px solid #2D6A4F",borderRadius:12,padding:"10px 16px",marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
+    <span>✅</span>
+    <span style={{color:"#1E5C3A",fontSize:13,fontWeight:600}}>Email guardado. Ya puedes recuperar tu código si lo pierdes.</span>
+  </div>
+)}
 
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
             <button onClick={()=>{setPantalla("inicio");setMensajes([]);setHistorial([]);setMsgCount(0);setCodigoGuardado("");}} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"8px 14px",fontSize:13}}>Salir</button>

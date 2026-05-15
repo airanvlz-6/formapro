@@ -143,7 +143,10 @@ export default function FormaPro() {
   const [mostrarMarcas,setMostrarMarcas]=useState(false);
   const [nuevaMarca,setNuevaMarca]=useState("");
   const [codigoGuardado,setCodigoGuardado]=useState("");
-  const [errorCodigo,setErrorCodigo]=useState("");
+const [email,setEmail]=useState("");
+const [emailInput,setEmailInput]=useState("");
+const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
+const [mensajeRecuperar,setMensajeRecuperar]=useState("");
   const bottomRef=useRef<HTMLDivElement>(null);
   const inputRef=useRef<HTMLTextAreaElement>(null);
 
@@ -160,6 +163,13 @@ export default function FormaPro() {
     return res.json();
   };
 
+  const recuperarPorEmail=async()=>{
+  if(!emailInput.trim()) return;
+  setMensajeRecuperar("");
+  const data=await apiCall({action:"recuperar_por_email",email:emailInput.trim().toLowerCase()});
+  if(data.error||!data.data){setMensajeRecuperar("No encontramos ninguna cuenta con ese email.");return;}
+  setMensajeRecuperar(`Tu código es: ${data.data.codigo}`);
+};
   const recuperarUsuario=async()=>{
     if(!codigoInput.trim()) return;
     setErrorCodigo("");
@@ -211,7 +221,7 @@ export default function FormaPro() {
       const texto=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error al conectar.";
       const hist=[{role:"user",content:prompt},{role:"assistant",content:texto}];
       setMensajes([{role:"assistant",content:texto}]);setHistorial(hist);setMsgCount(1);setCodigoUsuario(codigo);
-      await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:texto,historial:hist,marcas:[]}});
+      await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:texto,historial:hist,marcas:[],email:email||null}});
     }catch{setMensajes([{role:"assistant",content:"Error de conexion. Por favor recarga."}]);}
     finally{setGenerando(false);setTimeout(()=>inputRef.current?.focus(),300);}
   };
@@ -288,6 +298,24 @@ export default function FormaPro() {
               </button>
             </div>
             {errorCodigo&&<p style={{color:C.warm,fontSize:12,marginTop:8}}>{errorCodigo}</p>}
+<button onClick={()=>setMostrarRecuperar(!mostrarRecuperar)} style={{background:"none",border:"none",color:C.muted,fontSize:12,cursor:"pointer",marginTop:8,textDecoration:"underline"}}>
+  He perdido mi código
+</button>
+{mostrarRecuperar&&(
+  <div style={{marginTop:12,padding:"16px",background:C.card,borderRadius:14,border:`1px solid ${C.border}`}}>
+    <p style={{color:C.muted,fontSize:13,marginBottom:10}}>Introduce el email con el que te registraste:</p>
+    <div style={{display:"flex",gap:8}}>
+      <input value={emailInput} onChange={e=>setEmailInput(e.target.value)} placeholder="tu@email.com"
+        style={{flex:1,border:`2px solid ${C.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:C.ink,background:C.bg}}
+        onKeyDown={e=>e.key==="Enter"&&recuperarPorEmail()}
+      />
+      <button onClick={recuperarPorEmail} style={{background:C.accent,color:"#fff",border:"none",borderRadius:10,padding:"9px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+        Buscar
+      </button>
+    </div>
+    {mensajeRecuperar&&<p style={{color:C.success,fontSize:13,marginTop:8,fontWeight:600}}>{mensajeRecuperar}</p>}
+  </div>
+)}
           </div>
           <p style={{color:C.muted,fontSize:12,marginTop:20}}>{FREE_LIMIT} consultas gratuitas - Sin registro</p>
           <div style={{display:"flex",flexWrap:"wrap",gap:8,justifyContent:"center",marginTop:24}}>
@@ -348,6 +376,15 @@ export default function FormaPro() {
           <button className="btn-main" onClick={avanzar}
             disabled={(pregActual.tipo==="opciones"&&!respuestas[pregActual.id])||(pregActual.tipo==="multi"&&selMulti.length===0)||(pregActual.tipo==="texto"&&!textoTemp.trim())}
             style={{width:"100%",background:accentColor,color:"#fff",border:"none",borderRadius:14,padding:"15px",fontSize:15,fontWeight:600,cursor:"pointer",opacity:((pregActual.tipo==="opciones"&&!respuestas[pregActual.id])||(pregActual.tipo==="multi"&&selMulti.length===0)||(pregActual.tipo==="texto"&&!textoTemp.trim()))?0.35:1}}>
+           {pregIdx===preguntas.length-1&&(
+  <div style={{marginBottom:16}}>
+    <p style={{color:C.muted,fontSize:13,marginBottom:8}}>Email opcional — para recuperar tu código si lo pierdes:</p>
+    <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="tu@email.com"
+      style={{width:"100%",border:`2px solid ${C.border}`,borderRadius:12,padding:"11px 14px",fontSize:14,color:C.ink,background:C.card,fontFamily:"inherit"}}
+      onFocus={e=>(e.target.style.borderColor=accentColor)} onBlur={e=>(e.target.style.borderColor=C.border)}
+    />
+  </div>
+)}
             {pregIdx<preguntas.length-1?"Siguiente":"Generar mi programa"}
           </button>
         </div>

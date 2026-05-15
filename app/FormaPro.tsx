@@ -81,7 +81,8 @@ ${marcasStr}
 ${historialResumen ? `SESIONES ANTERIORES:\n${historialResumen}` : ""}
 
 PRINCIPIOS: Periodizacion cientifica (lineal/DUP/bloques segun nivel), sobrecarga progresiva, deload cada 3-4 semanas, especificidad al objetivo, adaptacion a lesiones y equipamiento.
-FORMATO: Max 400 palabras salvo rutina. Rutina: DIA/EJERCICIO/SERIES x REPS/DESCANSO. Ajusta cambios inmediatamente con justificacion.
+- FECHA HOY: ${new Date().toLocaleDateString("es-ES", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+- FORMATO: Max 400 palabras salvo rutina. Rutina: DIA/EJERCICIO/SERIES x REPS/DESCANSO. Ajusta cambios inmediatamente con justificacion.
 ${({carrera:`CARRERA: Ciclos 4sem, progresion vol max 10%/sem, zonas Z1-Z5, rodaje largo+series+fuerza complementaria.`,funcional:`FUNCIONAL: Bloques 4-6sem, movilidad+activacion+principal+finisher, patrones empuje/tiron/bisagra/sentadilla/core.`,hibrido:`HIBRIDO: Bloques, minimiza interferencia, fuerza 80-90% 1RM + resistencia Z2/umbral/VO2max.`,fuerza:`FUERZA: Lineal (principiantes), DUP/5-3-1 (intermedios), bloques acumulacion/intensificacion/realizacion (avanzados), % 1RM o RPE.`}[cat.id]||"")}`;
 };
 

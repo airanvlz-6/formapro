@@ -205,7 +205,7 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
   useEffect(()=>{bottomRef.current?.scrollIntoView({behavior:"smooth"});},[mensajes,cargando,generando]);
 
   const cat=categoria?CATEGORIAS.find((c:Categoria)=>c.id===categoria):null;
-  const preguntas:Pregunta[]=categoria?FORMULARIOS[categoria]:[];
+  const preguntas:Pregunta[]=(espKey?FORMULARIOS[espKey]:null)||(categoria?FORMULARIOS[categoria]:[])||[];
   const pregActual=preguntas[pregIdx];
   const bloqueado=msgCount>=FREE_LIMIT;
   const accentColor=cat?.color||C.accent;

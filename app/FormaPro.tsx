@@ -507,15 +507,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
             disabled={(pregActual.tipo==="opciones"&&!respuestas[pregActual.id])||(pregActual.tipo==="multi"&&selMulti.length===0)||(pregActual.tipo==="texto"&&!textoTemp.trim())}
             style={{width:"100%",background:accentColor,color:"#fff",border:"none",borderRadius:14,padding:"15px",fontSize:15,fontWeight:600,cursor:"pointer",opacity:((pregActual.tipo==="opciones"&&!respuestas[pregActual.id])||(pregActual.tipo==="multi"&&selMulti.length===0)||(pregActual.tipo==="texto"&&!textoTemp.trim()))?0.35:1}}>
            
-{errorCodigoPersonal&&<p style={{color:C.warm,fontSize:12,marginBottom:8}}>{errorCodigoPersonal}</p>}
-<p style={{color:C.muted,fontSize:13,marginBottom:8}}>Email opcional — para recuperar tu código si lo pierdes:</p>
-    <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="tu@email.com"
-      style={{width:"100%",border:`2px solid ${C.border}`,borderRadius:12,padding:"11px 14px",fontSize:14,color:C.ink,background:C.card,fontFamily:"inherit"}}
-      onFocus={e=>(e.target.style.borderColor=accentColor)} onBlur={e=>(e.target.style.borderColor=C.border)}
-    />
-  </div>
-          )}
-            {pregIdx<preguntas.length-1?"Siguiente":"Generar mi programa"}
+{pregIdx<preguntas.length-1?"Siguiente":"Generar mi programa"}
           </button>
         </div>
       )}

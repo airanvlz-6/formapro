@@ -278,7 +278,10 @@ const elegirEspecialidad=(label:string)=>{const key=ESPECIALIDAD_KEY[categoria!]
   const iniciarChat=async(perfil:Record<string,string|string[]>)=>{
     setPantalla("chat");setGenerando(true);
     const catObj=CATEGORIAS.find((c:Categoria)=>c.id===categoria)!;
-    const codigo=generarCodigo();setCodigoGuardado(codigo);
+    let codigo=codigoPersonal.trim().length>=5?codigoPersonal.trim():generarCodigo();
+    const dataVerify=await apiCall({action:"recuperar_usuario",codigo});
+    if(!dataVerify.error&&codigoPersonal.trim().length>=5){setErrorCodigoPersonal("Este código ya existe, elige otro.");setGenerando(false);return;}
+    setErrorCodigoPersonal("");setCodigoGuardado(codigo);
     const prompt="Hola! Acabo de completar mi perfil. Por favor: 1) Dame la bienvenida breve mostrando que entiendes mi situacion. 2) Genera mi programacion semanal completa con base cientifica y periodizacion. 3) Explica la logica de periodizacion que usaras. 4) Preguntame si quiero ajustar algo.";
     try{
       const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:2000,system:buildPrompt(catObj,perfil),messages:[{role:"user",content:prompt}]});
@@ -466,11 +469,18 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
             style={{width:"100%",background:accentColor,color:"#fff",border:"none",borderRadius:14,padding:"15px",fontSize:15,fontWeight:600,cursor:"pointer",opacity:((pregActual.tipo==="opciones"&&!respuestas[pregActual.id])||(pregActual.tipo==="multi"&&selMulti.length===0)||(pregActual.tipo==="texto"&&!textoTemp.trim()))?0.35:1}}>
            {pregIdx===preguntas.length-1&&(
   <div style={{marginBottom:16}}>
-    <p style={{color:C.muted,fontSize:13,marginBottom:8}}>Email opcional — para recuperar tu código si lo pierdes:</p>
+    <p style={{color:C.muted,fontSize:13,marginBottom:8}}>Crea tu código de acceso personalizado (mínimo 5 caracteres):</p>
+<input value={codigoPersonal} onChange={e=>setCodigoPersonal(e.target.value.toUpperCase().replace(/\s/g,""))} placeholder="Ej: MARIA2025, RUNNER10..."
+  style={{width:"100%",border:`2px solid ${errorCodigoPersonal?C.warm:C.border}`,borderRadius:12,padding:"11px 14px",fontSize:14,color:C.ink,background:C.card,fontFamily:"inherit",marginBottom:8,letterSpacing:1}}
+  onFocus={e=>(e.target.style.borderColor=accentColor)} onBlur={e=>(e.target.style.borderColor=C.border)}
+  onKeyDown={e=>{e.stopPropagation();if(e.key==="Enter")e.preventDefault();}}
+/>
+{errorCodigoPersonal&&<p style={{color:C.warm,fontSize:12,marginBottom:8}}>{errorCodigoPersonal}</p>}
+<p style={{color:C.muted,fontSize:13,marginBottom:8}}>Email opcional — para recuperar tu código si lo pierdes:</p>
     <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="tu@email.com"
       style={{width:"100%",border:`2px solid ${C.border}`,borderRadius:12,padding:"11px 14px",fontSize:14,color:C.ink,background:C.card,fontFamily:"inherit"}}
       onFocus={e=>(e.target.style.borderColor=accentColor)} onBlur={e=>(e.target.style.borderColor=C.border)}
-      onKeyDown={e=>{if(e.key==="Enter")e.preventDefault();}}
+      onKeyDown={e=>{e.stopPropagation();if(e.key==="Enter")e.preventDefault();}}
     />
   </div>
 )}

@@ -4,30 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FormaPro — Tu coach de entrenamiento personal</title>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,400;0,700;0,900;1,300;1,700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,400;0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --ink: #0F0F0F;
-    --bg: #F5F2ED;
-    --card: #FFFFFF;
-    --muted: #6B6560;
-    --border: #E2DDD7;
-    --green: #1E5C3A;
-    --green-light: #D6EDE1;
-    --orange: #C84B11;
-    --orange-light: #FAEAE2;
-    --cream: #EDE8DF;
+    --ink: #0F0F0F; --bg: #F5F2ED; --card: #FFFFFF;
+    --muted: #6B6560; --border: #E2DDD7; --cream: #EDE8DF;
+    --green: #1E5C3A; --green-light: #D6EDE1;
+    --orange: #C84B11; --orange-light: #FAEAE2;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; }
   body { background: var(--bg); color: var(--ink); font-family: 'DM Sans', sans-serif; overflow-x: hidden; }
 
-  /* NAV */
   nav {
     position: fixed; top: 0; left: 0; right: 0; z-index: 100;
     display: flex; align-items: center; justify-content: space-between;
-    padding: 20px 40px; background: var(--bg);
-    border-bottom: 1px solid transparent;
+    padding: 20px 40px; background: var(--bg); border-bottom: 1px solid transparent;
     transition: border-color 0.3s, background 0.3s;
   }
   nav.scrolled { border-color: var(--border); background: rgba(245,242,237,0.95); backdrop-filter: blur(8px); }
@@ -39,81 +31,61 @@
   .nav-cta { background: var(--ink); color: #fff; border: none; border-radius: 100px; padding: 10px 22px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; transition: all 0.2s; font-family: inherit; }
   .nav-cta:hover { background: var(--green); }
 
-  /* HERO */
-  .hero {
-    min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    text-align: center; padding: 120px 24px 80px; position: relative; overflow: hidden;
-  }
-  .hero-badge {
-    display: inline-flex; align-items: center; gap: 8px;
-    background: var(--green-light); color: var(--green); border-radius: 100px;
-    padding: 7px 16px; font-size: 13px; font-weight: 600; margin-bottom: 32px;
-    animation: fadeUp 0.6s ease forwards;
-  }
+  .hero { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 120px 24px 80px; }
+  .hero-badge { display: inline-flex; align-items: center; gap: 8px; background: var(--green-light); color: var(--green); border-radius: 100px; padding: 7px 16px; font-size: 13px; font-weight: 600; margin-bottom: 32px; animation: fadeUp 0.6s ease forwards; }
   .hero-badge::before { content: "●"; font-size: 8px; animation: pulse 2s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
-  h1.hero-title {
-    font-family: 'Fraunces', serif; font-size: clamp(48px, 8vw, 88px);
-    font-weight: 900; line-height: 1.0; letter-spacing: -2px;
-    color: var(--ink); margin-bottom: 24px; max-width: 800px;
-    animation: fadeUp 0.6s 0.1s ease both;
-  }
+  h1.hero-title { font-family: 'Fraunces', serif; font-size: clamp(48px, 8vw, 88px); font-weight: 900; line-height: 1.0; letter-spacing: -2px; color: var(--ink); margin-bottom: 24px; max-width: 800px; animation: fadeUp 0.6s 0.1s ease both; }
   h1.hero-title em { color: var(--green); font-style: italic; }
-  .hero-sub {
-    color: var(--muted); font-size: clamp(16px, 2.5vw, 20px); line-height: 1.65;
-    max-width: 520px; margin-bottom: 40px;
-    animation: fadeUp 0.6s 0.2s ease both;
-  }
+  .hero-sub { color: var(--muted); font-size: clamp(16px, 2.5vw, 20px); line-height: 1.65; max-width: 520px; margin-bottom: 40px; animation: fadeUp 0.6s 0.2s ease both; }
   .hero-ctas { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; animation: fadeUp 0.6s 0.3s ease both; }
-  .btn-primary {
-    background: var(--green); color: #fff; border: none; border-radius: 100px;
-    padding: 16px 36px; font-size: 16px; font-weight: 600; cursor: pointer;
-    text-decoration: none; transition: all 0.2s; font-family: inherit;
-    display: inline-flex; align-items: center; gap: 8px;
-  }
+  .btn-primary { background: var(--green); color: #fff; border: none; border-radius: 100px; padding: 16px 36px; font-size: 16px; font-weight: 600; cursor: pointer; text-decoration: none; transition: all 0.2s; font-family: inherit; display: inline-flex; align-items: center; gap: 8px; }
   .btn-primary:hover { background: #164D30; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(30,92,58,0.3); }
-  .btn-secondary {
-    background: transparent; color: var(--ink); border: 2px solid var(--border);
-    border-radius: 100px; padding: 16px 36px; font-size: 16px; font-weight: 600;
-    cursor: pointer; text-decoration: none; transition: all 0.2s; font-family: inherit;
-  }
+  .btn-secondary { background: transparent; color: var(--ink); border: 2px solid var(--border); border-radius: 100px; padding: 16px 36px; font-size: 16px; font-weight: 600; cursor: pointer; text-decoration: none; transition: all 0.2s; font-family: inherit; }
   .btn-secondary:hover { border-color: var(--ink); }
-
-  .hero-social-proof {
-    margin-top: 64px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap; justify-content: center;
-    animation: fadeUp 0.6s 0.4s ease both;
-  }
-  .proof-item { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
+  .hero-social-proof { margin-top: 64px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: center; animation: fadeUp 0.6s 0.4s ease both; }
+  .proof-item { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
   .proof-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--border); }
 
-  /* DISCIPLINAS */
   .section { padding: 100px 24px; max-width: 1100px; margin: 0 auto; }
   .section-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 3px; color: var(--green); margin-bottom: 16px; }
   .section-title { font-family: 'Fraunces', serif; font-size: clamp(32px, 5vw, 52px); font-weight: 700; color: var(--ink); margin-bottom: 16px; line-height: 1.15; }
   .section-sub { color: var(--muted); font-size: 17px; line-height: 1.65; max-width: 520px; margin-bottom: 56px; }
 
-  .disciplinas-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
-  .disciplina-card {
-    background: var(--card); border: 1px solid var(--border); border-radius: 24px;
-    padding: 32px 28px; transition: all 0.25s; cursor: default;
-    position: relative; overflow: hidden;
-  }
-  .disciplina-card::before {
-    content: ""; position: absolute; inset: 0; opacity: 0;
-    transition: opacity 0.25s;
-  }
-  .disciplina-card:hover { transform: translateY(-4px); box-shadow: 0 16px 48px rgba(0,0,0,0.08); }
-  .disciplina-card:hover::before { opacity: 1; }
-  .card-emoji { font-size: 40px; margin-bottom: 16px; display: block; }
-  .card-titulo { font-family: 'Fraunces', serif; font-size: 22px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
-  .card-sub { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px; }
-  .card-desc { color: var(--muted); font-size: 14px; line-height: 1.6; }
+  /* CATEGORÍAS CON ESPECIALIDADES */
+  .categorias-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(480px, 1fr)); gap: 20px; }
+  .categoria-card { background: var(--card); border: 1px solid var(--border); border-radius: 24px; padding: 32px; transition: all 0.25s; }
+  .categoria-card:hover { transform: translateY(-3px); box-shadow: 0 16px 48px rgba(0,0,0,0.07); }
+  .cat-header { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
+  .cat-emoji-wrap { width: 56px; height: 56px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 28px; flex-shrink: 0; }
+  .cat-titulo { font-family: 'Fraunces', serif; font-size: 22px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
+  .cat-sub { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; }
+  .cat-desc { color: var(--muted); font-size: 14px; line-height: 1.6; margin-top: 6px; }
+  .especialidades-list { display: flex; flex-direction: column; gap: 8px; }
+  .esp-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); }
+  .esp-bullet { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .esp-nombre { font-size: 14px; color: var(--ink); font-weight: 500; }
 
-  .card-carrera .card-sub { color: #1A3C5E; }
-  .card-funcional .card-sub { color: #2D6A4F; }
-  .card-hibrido .card-sub { color: #6B3FA0; }
-  .card-fuerza .card-sub { color: #B5300B; }
+  .cat-carrera .cat-emoji-wrap { background: #E8EEF4; }
+  .cat-carrera .cat-sub { color: #1A3C5E; }
+  .cat-carrera .esp-bullet { background: #1A3C5E; }
+  .cat-carrera .esp-item:hover { border-color: #1A3C5E; }
+
+  .cat-funcional .cat-emoji-wrap { background: #D8F3DC; }
+  .cat-funcional .cat-sub { color: #2D6A4F; }
+  .cat-funcional .esp-bullet { background: #2D6A4F; }
+  .cat-funcional .esp-item:hover { border-color: #2D6A4F; }
+
+  .cat-hibrido .cat-emoji-wrap { background: #EDE7F6; }
+  .cat-hibrido .cat-sub { color: #6B3FA0; }
+  .cat-hibrido .esp-bullet { background: #6B3FA0; }
+  .cat-hibrido .esp-item:hover { border-color: #6B3FA0; }
+
+  .cat-fuerza .cat-emoji-wrap { background: #FDECEA; }
+  .cat-fuerza .cat-sub { color: #B5300B; }
+  .cat-fuerza .esp-bullet { background: #B5300B; }
+  .cat-fuerza .esp-item:hover { border-color: #B5300B; }
 
   /* COMO FUNCIONA */
   .como-funciona { background: var(--ink); padding: 100px 24px; }
@@ -121,12 +93,8 @@
   .como-funciona .section-label { color: #8fbe9f; }
   .como-funciona .section-title { color: #fff; }
   .como-funciona .section-sub { color: #999; }
-
   .pasos { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 2px; margin-top: 56px; }
-  .paso {
-    background: #1A1A1A; padding: 36px 28px; position: relative;
-    transition: background 0.2s;
-  }
+  .paso { background: #1A1A1A; padding: 36px 28px; transition: background 0.2s; }
   .paso:first-child { border-radius: 20px 0 0 20px; }
   .paso:last-child { border-radius: 0 20px 20px 0; }
   .paso:hover { background: #222; }
@@ -137,17 +105,13 @@
   /* DIFERENCIADORES */
   .diferenciadores { padding: 100px 24px; background: var(--cream); }
   .dif-inner { max-width: 1100px; margin: 0 auto; }
-  .dif-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; }
+  .dif-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; }
   .dif-lista { display: flex; flex-direction: column; gap: 24px; }
   .dif-item { display: flex; gap: 16px; align-items: flex-start; }
   .dif-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--green-light); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
   .dif-texto h4 { font-family: 'Fraunces', serif; font-size: 18px; font-weight: 700; color: var(--ink); margin-bottom: 4px; }
   .dif-texto p { color: var(--muted); font-size: 14px; line-height: 1.6; }
-
-  .dif-visual {
-    background: var(--card); border-radius: 24px; padding: 32px;
-    border: 1px solid var(--border); box-shadow: 0 24px 64px rgba(0,0,0,0.06);
-  }
+  .dif-visual { background: var(--card); border-radius: 24px; padding: 32px; border: 1px solid var(--border); box-shadow: 0 24px 64px rgba(0,0,0,0.06); }
   .mock-header { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
   .mock-avatar { width: 36px; height: 36px; border-radius: 10px; background: var(--green-light); display: flex; align-items: center; justify-content: center; font-size: 18px; }
   .mock-name { font-family: 'Fraunces', serif; font-weight: 700; font-size: 15px; }
@@ -155,15 +119,14 @@
   .mock-msg { border-radius: 4px 16px 16px 16px; background: var(--cream); padding: 14px 16px; font-size: 13px; line-height: 1.7; color: var(--ink); margin-bottom: 12px; }
   .mock-msg strong { color: var(--green); }
   .mock-chips { display: flex; gap: 8px; flex-wrap: wrap; }
-  .mock-chip { background: var(--card); border: 1px solid var(--border); border-radius: 100px; padding: 6px 14px; font-size: 12px; color: var(--muted); cursor: pointer; transition: all 0.15s; }
-  .mock-chip:hover { border-color: var(--green); color: var(--green); }
+  .mock-chip { background: var(--card); border: 1px solid var(--border); border-radius: 100px; padding: 6px 14px; font-size: 12px; color: var(--muted); }
 
   /* PRECIOS */
   .precios { padding: 100px 24px; max-width: 1100px; margin: 0 auto; }
   .precios-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 720px; margin: 0 auto; }
   .precio-card { background: var(--card); border: 1px solid var(--border); border-radius: 24px; padding: 40px 36px; }
   .precio-card.destacado { background: var(--green); border-color: var(--green); color: #fff; position: relative; overflow: hidden; }
-  .precio-card.destacado::before { content: "MAS POPULAR"; position: absolute; top: 20px; right: -28px; background: var(--orange); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 2px; padding: 5px 40px; transform: rotate(35deg); }
+  .precio-card.destacado::before { content: "MÁS POPULAR"; position: absolute; top: 20px; right: -28px; background: var(--orange); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 2px; padding: 5px 40px; transform: rotate(35deg); }
   .precio-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; opacity: 0.7; }
   .precio-nombre { font-family: 'Fraunces', serif; font-size: 28px; font-weight: 700; margin-bottom: 8px; }
   .precio-amount { font-family: 'Fraunces', serif; font-size: 52px; font-weight: 900; line-height: 1; margin-bottom: 4px; }
@@ -173,11 +136,7 @@
   .precio-features li::before { content: "✓"; font-weight: 700; flex-shrink: 0; }
   .precio-card.destacado .precio-features li::before { color: #8fbe9f; }
   .precio-card:not(.destacado) .precio-features li::before { color: var(--green); }
-  .btn-precio {
-    width: 100%; padding: 14px; border-radius: 100px; font-size: 15px; font-weight: 600;
-    cursor: pointer; border: none; font-family: inherit; transition: all 0.2s; text-align: center;
-    display: block; text-decoration: none;
-  }
+  .btn-precio { width: 100%; padding: 14px; border-radius: 100px; font-size: 15px; font-weight: 600; cursor: pointer; border: none; font-family: inherit; transition: all 0.2s; text-align: center; display: block; text-decoration: none; }
   .precio-card.destacado .btn-precio { background: #fff; color: var(--green); }
   .precio-card.destacado .btn-precio:hover { background: var(--green-light); }
   .precio-card:not(.destacado) .btn-precio { background: var(--ink); color: #fff; }
@@ -194,21 +153,13 @@
   .faq-item.open .faq-icon { transform: rotate(45deg); }
 
   /* CTA FINAL */
-  .cta-final {
-    padding: 100px 24px; text-align: center;
-    background: linear-gradient(135deg, var(--green) 0%, #164D30 100%);
-    position: relative; overflow: hidden;
-  }
-  .cta-final::before {
-    content: ""; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
-    background: radial-gradient(ellipse at center, rgba(255,255,255,0.05) 0%, transparent 70%);
-  }
+  .cta-final { padding: 100px 24px; text-align: center; background: linear-gradient(135deg, var(--green) 0%, #164D30 100%); position: relative; overflow: hidden; }
+  .cta-final::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(255,255,255,0.05) 0%, transparent 70%); }
   .cta-final h2 { font-family: 'Fraunces', serif; font-size: clamp(36px, 6vw, 64px); font-weight: 900; color: #fff; margin-bottom: 16px; line-height: 1.1; position: relative; }
   .cta-final p { color: rgba(255,255,255,0.7); font-size: 18px; margin-bottom: 40px; position: relative; }
   .btn-white { background: #fff; color: var(--green); border: none; border-radius: 100px; padding: 18px 44px; font-size: 17px; font-weight: 700; cursor: pointer; font-family: inherit; transition: all 0.2s; text-decoration: none; display: inline-block; position: relative; }
   .btn-white:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(0,0,0,0.2); }
 
-  /* FOOTER */
   footer { background: var(--ink); padding: 40px 24px; text-align: center; }
   .footer-logo { font-family: 'Fraunces', serif; font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 8px; }
   .footer-logo span { color: #8fbe9f; }
@@ -219,6 +170,7 @@
   @media (max-width: 768px) {
     nav { padding: 16px 20px; }
     .nav-links { display: none; }
+    .categorias-grid { grid-template-columns: 1fr; }
     .dif-grid { grid-template-columns: 1fr; }
     .precios-grid { grid-template-columns: 1fr; }
     .pasos { grid-template-columns: 1fr; gap: 2px; }
@@ -230,12 +182,11 @@
 </head>
 <body>
 
-<!-- NAV -->
 <nav id="nav">
   <a href="#" class="nav-logo">Forma<span>Pro</span></a>
   <div class="nav-links">
     <a href="#disciplinas">Disciplinas</a>
-    <a href="#como-funciona">Como funciona</a>
+    <a href="#como-funciona">Cómo funciona</a>
     <a href="#precios">Precios</a>
     <a href="#faq">FAQ</a>
   </div>
@@ -246,17 +197,17 @@
 <section class="hero">
   <div class="hero-badge">Coach personal disponible 24/7</div>
   <h1 class="hero-title">Tu entrenamiento,<br><em>adaptado a ti.</em></h1>
-  <p class="hero-sub">Programacion con base cientifica y periodizacion real. Se ajusta a tu día a día.</p>
+  <p class="hero-sub">Programación con base científica y periodización real. Se adapta a tu día a día.</p>
   <div class="hero-ctas">
     <a href="https://formapro-olive.vercel.app" class="btn-primary">Crear mi programa gratis →</a>
-    <a href="#como-funciona" class="btn-secondary">Como funciona</a>
+    <a href="#como-funciona" class="btn-secondary">Cómo funciona</a>
   </div>
   <div class="hero-social-proof">
     <div class="proof-item">🏃 Carrera</div>
     <div class="proof-dot"></div>
     <div class="proof-item">⚡ Funcional</div>
     <div class="proof-dot"></div>
-    <div class="proof-item">🔄 Hibrido</div>
+    <div class="proof-item">🔄 Híbrido</div>
     <div class="proof-dot"></div>
     <div class="proof-item">🏋️ Fuerza</div>
   </div>
@@ -265,33 +216,81 @@
 <!-- DISCIPLINAS -->
 <section class="section" id="disciplinas">
   <div class="section-label">Para cada deportista</div>
-  <h2 class="section-title">4 disciplinas.<br>Un solo coach.</h2>
-  <p class="section-sub">Elige tu disciplina y recibe un programa personalizado desde el primer dia, adaptado a tu nivel y objetivo real.</p>
-  <div class="disciplinas-grid">
-    <div class="disciplina-card card-carrera">
-      <span class="card-emoji">🏃</span>
-      <div class="card-titulo">Carrera</div>
-      <div class="card-sub">Running & Trail</div>
-      <div class="card-desc">Desde tu primer kilometro hasta tu mejor marca. Periodizacion por zonas, progresion de volumen y fuerza complementaria.</div>
+  <h2 class="section-title">4 categorías.<br>8 especialidades.</h2>
+  <p class="section-sub">Elige tu disciplina y especialidad. Tu programa se construye desde cero adaptado a lo que practicas.</p>
+
+  <div class="categorias-grid">
+
+    <!-- CARRERA -->
+    <div class="categoria-card cat-carrera">
+      <div class="cat-header">
+        <div class="cat-emoji-wrap">🏃</div>
+        <div>
+          <div class="cat-titulo">Carrera</div>
+          <div class="cat-sub" style="color:#1A3C5E">Running & Trail</div>
+          <div class="cat-desc">Desde tu primer kilómetro hasta tu mejor marca. Periodización por zonas, progresión de volumen y fuerza complementaria.</div>
+        </div>
+      </div>
+      <div class="especialidades-list">
+        <div class="esp-item"><div class="esp-bullet" style="background:#1A3C5E"></div><span class="esp-nombre">Running (asfalto / ciudad)</span></div>
+        <div class="esp-item"><div class="esp-bullet" style="background:#1A3C5E"></div><span class="esp-nombre">Trail Running / Montaña</span></div>
+        <div class="esp-item"><div class="esp-bullet" style="background:#1A3C5E"></div><span class="esp-nombre">Maratón / Media maratón</span></div>
+        <div class="esp-item"><div class="esp-bullet" style="background:#1A3C5E"></div><span class="esp-nombre">Atletismo en pista</span></div>
+      </div>
     </div>
-    <div class="disciplina-card card-funcional">
-      <span class="card-emoji">⚡</span>
-      <div class="card-titulo">Funcional</div>
-      <div class="card-sub">Fitness & Bienestar</div>
-      <div class="card-desc">Dinamico y adaptable. Para mantenerse en forma, perder peso o ganar energia. Con o sin equipamiento.</div>
+
+    <!-- FUNCIONAL -->
+    <div class="categoria-card cat-funcional">
+      <div class="cat-header">
+        <div class="cat-emoji-wrap">⚡</div>
+        <div>
+          <div class="cat-titulo">Funcional</div>
+          <div class="cat-sub" style="color:#2D6A4F">Fitness, CrossFit & Calistenia</div>
+          <div class="cat-desc">Dinámico y adaptable. Fitness general, programación WOD con halterofilia y accesorios gimnásticos, o calistenia y skills.</div>
+        </div>
+      </div>
+      <div class="especialidades-list">
+        <div class="esp-item"><div class="esp-bullet" style="background:#2D6A4F"></div><span class="esp-nombre">Fitness general / Bienestar</span></div>
+        <div class="esp-item"><div class="esp-bullet" style="background:#2D6A4F"></div><span class="esp-nombre">CrossFit / WOD</span></div>
+        <div class="esp-item"><div class="esp-bullet" style="background:#2D6A4F"></div><span class="esp-nombre">Calistenia / Movimiento</span></div>
+      </div>
     </div>
-    <div class="disciplina-card card-hibrido">
-      <span class="card-emoji">🔄</span>
-      <div class="card-titulo">Hibrido</div>
-      <div class="card-sub">Resistencia + Fuerza</div>
-      <div class="card-desc">Para atletas que quieren mejorar en fuerza y resistencia al mismo tiempo. Gestion de interferencia incluida.</div>
+
+    <!-- HÍBRIDO -->
+    <div class="categoria-card cat-hibrido">
+      <div class="cat-header">
+        <div class="cat-emoji-wrap">🔄</div>
+        <div>
+          <div class="cat-titulo">Híbrido</div>
+          <div class="cat-sub" style="color:#6B3FA0">Hyrox, Triatlón & Resistencia+Fuerza</div>
+          <div class="cat-desc">Para atletas que combinan resistencia y fuerza. Gestión de interferencia, periodización por bloques y entrenamiento específico por evento.</div>
+        </div>
+      </div>
+      <div class="especialidades-list">
+        <div class="esp-item"><div class="esp-bullet" style="background:#6B3FA0"></div><span class="esp-nombre">Híbrido general (fuerza + cardio)</span></div>
+        <div class="esp-item"><div class="esp-bullet" style="background:#6B3FA0"></div><span class="esp-nombre">Hyrox</span></div>
+        <div class="esp-item"><div class="esp-bullet" style="background:#6B3FA0"></div><span class="esp-nombre">Triatlón / Duatlón</span></div>
+        <div class="esp-item"><div class="esp-bullet" style="background:#6B3FA0"></div><span class="esp-nombre">OCR / Obstáculos</span></div>
+      </div>
     </div>
-    <div class="disciplina-card card-fuerza">
-      <span class="card-emoji">🏋️</span>
-      <div class="card-titulo">Fuerza</div>
-      <div class="card-sub">Powerlifting & Olimpico</div>
-      <div class="card-desc">Programacion seria para aumentar marcas. Periodizacion por bloques, RPE y trabajo de eslabon debil.</div>
+
+    <!-- FUERZA -->
+    <div class="categoria-card cat-fuerza">
+      <div class="cat-header">
+        <div class="cat-emoji-wrap">🏋️</div>
+        <div>
+          <div class="cat-titulo">Fuerza</div>
+          <div class="cat-sub" style="color:#B5300B">Powerlifting, Halterofilia & Strongman</div>
+          <div class="cat-desc">Programación seria para aumentar marcas. Periodización por bloques, trabajo con % 1RM o RPE y asistencia específica al eslabón débil.</div>
+        </div>
+      </div>
+      <div class="especialidades-list">
+        <div class="esp-item"><div class="esp-bullet" style="background:#B5300B"></div><span class="esp-nombre">Powerlifting (SQ / BP / DL)</span></div>
+        <div class="esp-item"><div class="esp-bullet" style="background:#B5300B"></div><span class="esp-nombre">Halterofilia (Arrancada / 2T)</span></div>
+        <div class="esp-item"><div class="esp-bullet" style="background:#B5300B"></div><span class="esp-nombre">Strongman / Fuerza general</span></div>
+      </div>
     </div>
+
   </div>
 </section>
 
@@ -300,22 +299,22 @@
   <div class="como-inner">
     <div class="section-label">El proceso</div>
     <h2 class="section-title" style="color:#fff">De cero a tu programa<br>en 5 minutos.</h2>
-    <p class="section-sub">Sin complicaciones. Sin necesitar saber de entrenamiento. Solo cuéntanos sobre ti.</p>
+    <p class="section-sub">Sin complicaciones. Solo cuéntanos sobre ti.</p>
     <div class="pasos">
       <div class="paso">
         <div class="paso-num">01</div>
-        <div class="paso-titulo">Elige tu disciplina</div>
-        <div class="paso-desc">Carrera, funcional, hibrido o fuerza. Tu programa parte desde tu especialidad.</div>
+        <div class="paso-titulo">Elige tu especialidad</div>
+        <div class="paso-desc">Selecciona tu categoría y especialidad concreta. Tu programa parte desde lo que realmente practicas.</div>
       </div>
       <div class="paso">
         <div class="paso-num">02</div>
         <div class="paso-titulo">Completa tu perfil</div>
-        <div class="paso-desc">Edad, nivel, disponibilidad, equipamiento y lesiones. 10 preguntas rapidas.</div>
+        <div class="paso-desc">Edad, nivel, disponibilidad, equipamiento y lesiones. Preguntas específicas a tu disciplina.</div>
       </div>
       <div class="paso">
         <div class="paso-num">03</div>
-        <div class="paso-titulo">Recibe tu programa</div>
-        <div class="paso-desc">Tu coach genera una programacion semanal con periodizacion real adaptada a ti.</div>
+        <div class="paso-titulo">Crea tu código</div>
+        <div class="paso-desc">Elige un código personalizado para acceder siempre a tu programa y progreso.</div>
       </div>
       <div class="paso">
         <div class="paso-num">04</div>
@@ -329,61 +328,61 @@
 <!-- DIFERENCIADORES -->
 <section class="diferenciadores" id="diferenciadores">
   <div class="dif-inner">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:center">
+    <div class="dif-grid">
       <div>
-        <div class="section-label">Por que FormaPro</div>
+        <div class="section-label">Por qué FormaPro</div>
         <h2 class="section-title">No es una app de rutinas.<br>Es tu coach.</h2>
-        <p class="section-sub" style="margin-bottom:40px">La diferencia entre seguir una rutina generica y tener un programa que realmente funciona para ti.</p>
+        <p class="section-sub" style="margin-bottom:40px">La diferencia entre seguir una rutina genérica y tener un programa que realmente funciona para ti.</p>
         <div class="dif-lista">
           <div class="dif-item">
             <div class="dif-icon">🧠</div>
             <div class="dif-texto">
-              <h4>Periodizacion cientifica</h4>
-              <p>No inventamos ejercicios. Aplicamos metodologia probada: progresion lineal, DUP, bloques de intensificacion segun tu nivel.</p>
+              <h4>Periodización científica</h4>
+              <p>No inventamos ejercicios. Aplicamos metodología probada: progresión lineal, DUP, bloques de intensificación según tu nivel y especialidad.</p>
             </div>
           </div>
           <div class="dif-item">
             <div class="dif-icon">💾</div>
             <div class="dif-texto">
               <h4>Memoria real entre sesiones</h4>
-              <p>Tu codigo de acceso guarda tu historial, rutina y progreso. Cuando vuelves, el coach sabe exactamente donde lo dejaste.</p>
+              <p>Tu código de acceso guarda tu historial, rutina y progreso. Cuando vuelves, el coach sabe exactamente donde lo dejaste.</p>
             </div>
           </div>
           <div class="dif-item">
             <div class="dif-icon">📊</div>
             <div class="dif-texto">
               <h4>Seguimiento de progreso</h4>
-              <p>Registra tus marcas y tiempos. El coach analiza tu evolucion y ajusta la programacion cuando es necesario.</p>
+              <p>Registra tus marcas y tiempos. El coach analiza tu evolución y ajusta la programación cuando es necesario.</p>
             </div>
           </div>
           <div class="dif-item">
             <div class="dif-icon">⚡</div>
             <div class="dif-texto">
               <h4>Adaptable en tiempo real</h4>
-              <p>Lesion nueva, menos tiempo esta semana, viaje. Pide el cambio y el coach lo ajusta manteniendo la logica cientifica.</p>
+              <p>Lesión nueva, menos tiempo, viaje. Pide el cambio y el coach lo ajusta manteniendo la lógica científica.</p>
             </div>
           </div>
         </div>
       </div>
       <div class="dif-visual">
         <div class="mock-header">
-          <div class="mock-avatar">🏃</div>
+          <div class="mock-avatar">⚡</div>
           <div>
             <div class="mock-name">FormaPro Coach</div>
-            <div class="mock-sub">Carrera · Running & Trail</div>
+            <div class="mock-sub">CrossFit / WOD</div>
           </div>
         </div>
         <div class="mock-msg">
-          Bienvenido de nuevo! Esta semana toca <strong>Semana 3 de carga</strong>. Basandome en tu marca del jueves (5K en 24:45) veo que estas progresando bien. Hoy te propongo:<br><br>
-          <strong>Martes</strong> — Rodaje Z2 · 45 min<br>
-          <strong>Jueves</strong> — Series 6x800m · RPE 8<br>
-          <strong>Sabado</strong> — Rodaje largo Z1 · 75 min<br><br>
-          Quieres ajustar algo?
+          Bienvenido de nuevo! Esta semana toca <strong>Semana 3 de acumulación</strong>. Basándome en tu progreso del jueves (conseguiste el butterfly pull-up) te propongo:<br><br>
+          <strong>Martes</strong> — Snatch técnico 70% + Back squat 5x5 · WOD: Fran<br>
+          <strong>Jueves</strong> — EMOM Muscle-up progresión · WOD: For Time 21-15-9<br>
+          <strong>Sábado</strong> — Clean & Jerk + WOD largo Z2<br><br>
+          ¿Quieres ajustar algo?
         </div>
         <div class="mock-chips">
           <div class="mock-chip">Ajusta el volumen</div>
           <div class="mock-chip">Registro nueva marca</div>
-          <div class="mock-chip">Me duele la rodilla</div>
+          <div class="mock-chip">Tengo competición</div>
         </div>
       </div>
     </div>
@@ -405,9 +404,9 @@
       <div class="precio-period">para siempre</div>
       <ul class="precio-features">
         <li>20 consultas gratuitas</li>
-        <li>Las 4 disciplinas</li>
-        <li>Formulario de perfil completo</li>
-        <li>Codigo de acceso personal</li>
+        <li>Las 4 categorías y 8 especialidades</li>
+        <li>Formulario de perfil específico</li>
+        <li>Código de acceso personalizado</li>
         <li>Registro de progreso</li>
       </ul>
       <a href="https://formapro-olive.vercel.app" class="btn-precio">Empezar gratis</a>
@@ -421,8 +420,8 @@
         <li>Consultas ilimitadas</li>
         <li>Historial completo guardado</li>
         <li>Ajustes semanales de rutina</li>
-        <li>Analisis de progreso avanzado</li>
-        <li>Planificacion de ciclos completos</li>
+        <li>Análisis de progreso avanzado</li>
+        <li>Planificación de ciclos completos</li>
         <li>Soporte prioritario</li>
       </ul>
       <a href="https://formapro-olive.vercel.app" class="btn-precio">Obtener Premium</a>
@@ -438,28 +437,28 @@
       <h2 class="section-title">Resolvemos tus dudas.</h2>
     </div>
     <div class="faq-item" onclick="toggleFaq(this)">
-      <div class="faq-q">Necesito saber de entrenamiento para usar FormaPro? <span class="faq-icon">+</span></div>
-      <div class="faq-a">No. El formulario inicial esta disenado para que cualquier persona, sin conocimientos previos, pueda obtener un programa adaptado a su nivel. El coach explica cada decision de forma clara.</div>
+      <div class="faq-q">¿Necesito saber de entrenamiento para usar FormaPro? <span class="faq-icon">+</span></div>
+      <div class="faq-a">No. El formulario inicial está diseñado para que cualquier persona, sin conocimientos previos, pueda obtener un programa adaptado a su nivel. El coach explica cada decisión de forma clara.</div>
     </div>
     <div class="faq-item" onclick="toggleFaq(this)">
-      <div class="faq-q">Que pasa si me lesiono o cambio mi disponibilidad? <span class="faq-icon">+</span></div>
-      <div class="faq-a">Simplemente se lo dices al coach en el chat. Ajusta la programacion inmediatamente teniendo en cuenta la lesion o el cambio, manteniendo siempre la logica cientifica del entrenamiento.</div>
+      <div class="faq-q">¿Qué pasa si me lesiono o cambio mi disponibilidad? <span class="faq-icon">+</span></div>
+      <div class="faq-a">Simplemente se lo dices al coach en el chat. Ajusta la programación inmediatamente teniendo en cuenta la lesión o el cambio, manteniendo siempre la lógica científica del entrenamiento.</div>
     </div>
     <div class="faq-item" onclick="toggleFaq(this)">
-      <div class="faq-q">Es lo mismo que preguntarle a ChatGPT? <span class="faq-icon">+</span></div>
-      <div class="faq-a">No. FormaPro esta especializado en entrenamiento con periodizacion cientifica, recuerda tu historial completo entre sesiones, registra tu progreso y adapta el programa semana a semana. ChatGPT no tiene memoria ni especializacion deportiva real.</div>
+      <div class="faq-q">¿Es lo mismo que preguntarle a ChatGPT? <span class="faq-icon">+</span></div>
+      <div class="faq-a">No. FormaPro está especializado en entrenamiento con periodización científica por disciplina, recuerda tu historial entre sesiones, registra tu progreso y adapta el programa semana a semana. ChatGPT no tiene memoria ni especialización deportiva real.</div>
     </div>
     <div class="faq-item" onclick="toggleFaq(this)">
-      <div class="faq-q">Necesito equipamiento de gimnasio? <span class="faq-icon">+</span></div>
-      <div class="faq-a">No. Durante el formulario indicas con que equipamiento cuentas, desde cero equipamiento (entreno en casa o parque) hasta gimnasio completo. El programa se adapta a lo que tienes disponible.</div>
+      <div class="faq-q">¿Necesito equipamiento de gimnasio? <span class="faq-icon">+</span></div>
+      <div class="faq-a">No. Durante el formulario indicas con qué equipamiento cuentas, desde cero equipamiento hasta gimnasio completo o box CrossFit. El programa se adapta a lo que tienes disponible.</div>
     </div>
     <div class="faq-item" onclick="toggleFaq(this)">
-      <div class="faq-q">Como funciona el codigo de acceso? <span class="faq-icon">+</span></div>
-      <div class="faq-a">Al terminar el formulario recibes un codigo unico tipo FP-XXXXX. Guardalo en tu movil. Cada vez que vuelvas a FormaPro introduces ese codigo y el coach recupera todo tu historial, rutina y progreso registrado.</div>
+      <div class="faq-q">¿Cómo funciona el código de acceso? <span class="faq-icon">+</span></div>
+      <div class="faq-a">Al terminar el formulario creas tu propio código personalizado (por ejemplo MARIA2025). Guárdalo en tu móvil. Cada vez que vuelvas a FormaPro introduces ese código y el coach recupera todo tu historial, rutina y progreso.</div>
     </div>
     <div class="faq-item" onclick="toggleFaq(this)">
-      <div class="faq-q">Puedo cambiar de disciplina? <span class="faq-icon">+</span></div>
-      <div class="faq-a">Si, en cualquier momento puedes volver al inicio y empezar un nuevo programa en otra disciplina. Se generara un nuevo codigo para ese perfil.</div>
+      <div class="faq-q">¿Puedo cambiar de especialidad? <span class="faq-icon">+</span></div>
+      <div class="faq-a">Sí, en cualquier momento puedes volver al inicio y empezar un nuevo programa en otra especialidad con un código diferente.</div>
     </div>
   </div>
 </section>
@@ -467,11 +466,10 @@
 <!-- CTA FINAL -->
 <section class="cta-final">
   <h2>Empieza hoy.<br>Gratis.</h2>
-  <p>Tu primer programa listo en 5 minutos. Sin tarjeta de credito.</p>
+  <p>Tu primer programa listo en 5 minutos. Sin tarjeta de crédito.</p>
   <a href="https://formapro-olive.vercel.app" class="btn-white">Crear mi programa →</a>
 </section>
 
-<!-- FOOTER -->
 <footer>
   <div class="footer-logo">Forma<span>Pro</span></div>
   <p style="margin-top:8px">Tu coach de entrenamiento personal · Siempre disponible</p>
@@ -479,24 +477,18 @@
 </footer>
 
 <script>
-  // Nav scroll
   window.addEventListener('scroll', () => {
     document.getElementById('nav').classList.toggle('scrolled', window.scrollY > 40);
   });
-
-  // FAQ
   function toggleFaq(el) {
     const isOpen = el.classList.contains('open');
     document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
     if (!isOpen) el.classList.add('open');
   }
-
-  // Scroll reveal
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(e => { if(e.isIntersecting) { e.target.style.opacity='1'; e.target.style.transform='translateY(0)'; } });
   }, { threshold: 0.1 });
-
-  document.querySelectorAll('.disciplina-card, .paso, .dif-item, .precio-card').forEach(el => {
+  document.querySelectorAll('.categoria-card, .paso, .dif-item, .precio-card').forEach(el => {
     el.style.opacity='0'; el.style.transform='translateY(20px)'; el.style.transition='opacity 0.5s ease, transform 0.5s ease';
     observer.observe(el);
   });

@@ -512,11 +512,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
     <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="tu@email.com"
       style={{width:"100%",border:`2px solid ${C.border}`,borderRadius:12,padding:"11px 14px",fontSize:14,color:C.ink,background:C.card,fontFamily:"inherit"}}
       onFocus={e=>(e.target.style.borderColor=accentColor)} onBlur={e=>(e.target.style.borderColor=C.border)}
-      onKeyDown={e=>{e.stopPropagation();if(e.key==="Enter")e.preventDefault();}}
-    />
-  </div>
-)}
-            {pregIdx<preguntas.length-1?"Siguiente":"Generar mi programa"}
+      {pregIdx<preguntas.length-1?"Siguiente":"Generar mi programa"}
           </button>
         </div>
       )}

@@ -514,7 +514,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
       onFocus={e=>(e.target.style.borderColor=accentColor)} onBlur={e=>(e.target.style.borderColor=C.border)}
     />
   </div>
-)}
+          )}
             {pregIdx<preguntas.length-1?"Siguiente":"Generar mi programa"}
           </button>
         </div>

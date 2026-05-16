@@ -86,6 +86,38 @@ PRINCIPIOS: Periodizacion cientifica (lineal/DUP/bloques segun nivel), sobrecarg
 ${({carrera:`CARRERA: Ciclos 4sem, progresion vol max 10%/sem, zonas Z1-Z5, rodaje largo+series+fuerza complementaria.`,funcional:`FUNCIONAL: Bloques 4-6sem, movilidad+activacion+principal+finisher, patrones empuje/tiron/bisagra/sentadilla/core.`,hibrido:`HIBRIDO: Bloques, minimiza interferencia, fuerza 80-90% 1RM + resistencia Z2/umbral/VO2max.`,fuerza:`FUERZA: Lineal (principiantes), DUP/5-3-1 (intermedios), bloques acumulacion/intensificacion/realizacion (avanzados), % 1RM o RPE.`}[cat.id]||"")}`;
 };
 
+const ESPECIALIDADES: Record<string, string[]> = {
+  carrera: ["Running (asfalto / ciudad)", "Trail Running / Montana", "Maraton / Media maraton", "Atletismo en pista"],
+  funcional: ["Fitness general / Bienestar", "CrossFit / WOD", "Calistenia / Movimiento"],
+  hibrido: ["Hibrido general (fuerza + cardio)", "Hyrox", "Triatlon / Duatlon", "OCR / Obstaculos"],
+  fuerza: ["Powerlifting (SQ / BP / DL)", "Halterofilia (Arrancada / 2T)", "Strongman / Fuerza general"],
+};
+
+const ESPECIALIDAD_KEY: Record<string, Record<string, string>> = {
+  carrera: {
+    "Running (asfalto / ciudad)": "carrera",
+    "Trail Running / Montana": "carrera",
+    "Maraton / Media maraton": "carrera",
+    "Atletismo en pista": "carrera",
+  },
+  funcional: {
+    "Fitness general / Bienestar": "funcional_fitness",
+    "CrossFit / WOD": "funcional_crossfit",
+    "Calistenia / Movimiento": "funcional_calistenia",
+  },
+  hibrido: {
+    "Hibrido general (fuerza + cardio)": "hibrido_general",
+    "Hyrox": "hibrido_hyrox",
+    "Triatlon / Duatlon": "hibrido_triatlon",
+    "OCR / Obstaculos": "hibrido_general",
+  },
+  fuerza: {
+    "Powerlifting (SQ / BP / DL)": "fuerza_powerlifting",
+    "Halterofilia (Arrancada / 2T)": "fuerza_halterofilia",
+    "Strongman / Fuerza general": "fuerza_strongman",
+  },
+};
+
 const SUGERENCIAS: Record<string, string[]> = {
   carrera: ["Ajusta el volumen", "Registro nueva marca", "Tengo carrera en 3 semanas", "Me duele la rodilla"],
   funcional: ["Tengo menos tiempo", "Registro mi peso actual", "Cambia el entreno de hoy", "Estoy muy cansado"],
@@ -144,6 +176,8 @@ export default function FormaPro() {
   const [nuevaMarca,setNuevaMarca]=useState("");
   const [codigoGuardado,setCodigoGuardado]=useState("");
 const [errorCodigo,setErrorCodigo]=useState("");
+const [espLabel,setEspLabel]=useState<string|null>(null);
+const [espKey,setEspKey]=useState<string|null>(null);
 const [emailGuardado,setEmailGuardado]=useState(false);
 const [emailBanner,setEmailBanner]=useState("");
 const [bannerEnviado,setBannerEnviado]=useState(false);
@@ -212,7 +246,8 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
     finally{setGenerando(false);}
   };
 
-  const irACategoria=(catId:string)=>{setCategoria(catId);setPregIdx(0);setRespuestas({});setSelMulti([]);setTextoTemp("");setPantalla("formulario");};
+  const irACategoria=(catId:string)=>{setCategoria(catId);setEspKey(null);setEspLabel(null);setPregIdx(0);setRespuestas({});setSelMulti([]);setTextoTemp("");setPantalla("especialidad");};
+const elegirEspecialidad=(label:string)=>{const key=ESPECIALIDAD_KEY[categoria!]?.[label]||categoria!;setEspKey(key);setEspLabel(label);setRespuestas({especialidad:label});setPregIdx(0);setPantalla("formulario");};
 
   const avanzar=()=>{
     const val=pregActual.tipo==="multi"?selMulti:pregActual.tipo==="texto"?textoTemp:respuestas[pregActual.id];
@@ -358,10 +393,33 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
         </div>
       )}
 
+      {pantalla==="especialidad"&&cat&&(
+        <div className="fade-up" style={{maxWidth:500,width:"100%"}}>
+          <button onClick={()=>setPantalla("categoria")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14,marginBottom:28}}>Volver</button>
+          <div style={{display:"inline-flex",alignItems:"center",gap:6,background:cat.colorLight,borderRadius:100,padding:"5px 14px",marginBottom:20}}>
+            <span style={{fontSize:15}}>{cat.emoji}</span>
+            <span style={{color:accentColor,fontSize:12,fontWeight:600}}>{cat.titulo}</span>
+          </div>
+          <h2 style={{fontSize:"clamp(20px,4vw,28px)",color:C.ink,marginBottom:8,lineHeight:1.3}}>Cual es tu especialidad?</h2>
+          <p style={{color:C.muted,fontSize:14,marginBottom:24}}>Tu programa se adaptara especificamente a tu disciplina.</p>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {ESPECIALIDADES[cat.id]?.map(esp=>(
+              <div key={esp} onClick={()=>elegirEspecialidad(esp)}
+                style={{background:C.card,border:`2px solid ${C.border}`,borderRadius:14,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",transition:"all 0.2s"}}
+                onMouseEnter={e=>(e.currentTarget.style.borderColor=accentColor)}
+                onMouseLeave={e=>(e.currentTarget.style.borderColor=C.border)}>
+                <span style={{fontSize:15,color:C.ink,fontWeight:500}}>{esp}</span>
+                <span style={{color:accentColor,fontSize:18}}>→</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {pantalla==="formulario"&&pregActual&&cat&&(
         <div className="fade-up" style={{maxWidth:500,width:"100%"}}>
           <div style={{display:"flex",alignItems:"center",marginBottom:20}}>
-            <button onClick={()=>{if(pregIdx===0)setPantalla("categoria");else{setPregIdx(pregIdx-1);setSelMulti([]);setTextoTemp("");}}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>Atras</button>
+            <button onClick={()=>{if(pregIdx===0)setPantalla("especialidad");else{setPregIdx(pregIdx-1);setSelMulti([]);setTextoTemp("");}}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>Atras</button>
             <span style={{marginLeft:"auto",color:C.muted,fontSize:13}}>{pregIdx+1} / {preguntas.length}</span>
           </div>
           <Progreso actual={pregIdx+1} total={preguntas.length} color={accentColor}/>

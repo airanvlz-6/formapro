@@ -506,14 +506,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
           <button className="btn-main" onClick={avanzar}
             disabled={(pregActual.tipo==="opciones"&&!respuestas[pregActual.id])||(pregActual.tipo==="multi"&&selMulti.length===0)||(pregActual.tipo==="texto"&&!textoTemp.trim())}
             style={{width:"100%",background:accentColor,color:"#fff",border:"none",borderRadius:14,padding:"15px",fontSize:15,fontWeight:600,cursor:"pointer",opacity:((pregActual.tipo==="opciones"&&!respuestas[pregActual.id])||(pregActual.tipo==="multi"&&selMulti.length===0)||(pregActual.tipo==="texto"&&!textoTemp.trim()))?0.35:1}}>
-           {pregIdx===preguntas.length-1&&(
-  <div style={{marginBottom:16}} onKeyDown={e=>e.stopPropagation()}>
-    <p style={{color:C.muted,fontSize:13,marginBottom:8}}>Crea tu código de acceso personalizado (mínimo 5 caracteres):</p>
-<input value={codigoPersonal} onChange={e=>setCodigoPersonal(e.target.value.toUpperCase().replace(/\s/g,""))} placeholder="Ej: MARIA2025, RUNNER10..."
-  style={{width:"100%",border:`2px solid ${errorCodigoPersonal?C.warm:C.border}`,borderRadius:12,padding:"11px 14px",fontSize:14,color:C.ink,background:C.card,fontFamily:"inherit",marginBottom:8,letterSpacing:1}}
-  onFocus={e=>(e.target.style.borderColor=accentColor)} onBlur={e=>(e.target.style.borderColor=C.border)}
-  onKeyDown={e=>{e.stopPropagation();if(e.key==="Enter")e.preventDefault();}}
-/>
+           
 {errorCodigoPersonal&&<p style={{color:C.warm,fontSize:12,marginBottom:8}}>{errorCodigoPersonal}</p>}
 <p style={{color:C.muted,fontSize:13,marginBottom:8}}>Email opcional — para recuperar tu código si lo pierdes:</p>
     <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="tu@email.com"
@@ -540,7 +533,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
               <span style={{color:C.muted,fontSize:11}}>Guardalo para volver</span>
             </div>
           )}
-          {!emailGuardado&&!bannerEnviado&&pantalla==="chat"&&(
+          {!emailGuardado&&!bannerEnviado&&!email&&pantalla==="chat"&&(
   <div style={{background:"#FFF9E6",border:"1px solid #F0D060",borderRadius:12,padding:"10px 16px",marginBottom:10,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
     <span style={{fontSize:16}}>📧</span>
     <span style={{color:"#7A6000",fontSize:13,flex:1}}>Guarda tu email para no perder tu código</span>

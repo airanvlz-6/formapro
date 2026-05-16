@@ -9,59 +9,73 @@ const C = {
 
 const CATEGORIAS = [
   { id: "carrera", emoji: "🏃", titulo: "Carrera", subtitulo: "Running & Trail", desc: "Para amantes del running o quienes se inician. Desde tu primer km hasta tu mejor marca.", color: "#1A3C5E", colorLight: "#E8EEF4" },
-  { id: "funcional", emoji: "⚡", titulo: "Funcional", subtitulo: "Fitness & Bienestar", desc: "Dinamico y adaptable. Ideal para mantenerse en forma, bajar de peso o sentirse mejor.", color: "#2D6A4F", colorLight: "#D8F3DC" },
-  { id: "hibrido", emoji: "🔄", titulo: "Híbrido", subtitulo: "Resistencia + Fuerza", desc: "Para atletas que buscan mejorar en resistencia y fuerza/potencia simultaneamente.", color: "#6B3FA0", colorLight: "#EDE7F6" },
+  { id: "funcional", emoji: "⚡", titulo: "Funcional", subtitulo: "Fitness & Bienestar", desc: "Dinámico y adaptable. Ideal para mantenerse en forma, bajar de peso o sentirse mejor.", color: "#2D6A4F", colorLight: "#D8F3DC" },
+  { id: "hibrido", emoji: "🔄", titulo: "Hibrido", subtitulo: "Resistencia + Fuerza", desc: "Para atletas que buscan mejorar en resistencia y fuerza/potencia simultaneamente.", color: "#6B3FA0", colorLight: "#EDE7F6" },
   { id: "fuerza", emoji: "🏋️", titulo: "Fuerza", subtitulo: "Powerlifting & Olimpico", desc: "Para quienes buscan aumentar marcas en levantamientos olímpicos o powerlifting.", color: "#B5300B", colorLight: "#FDECEA" },
 ];
 
 const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string; opciones?: string[]; placeholder?: string}>> = {
   carrera: [
     { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Mas de 50"] },
-    { id: "sexo", label: "¿Con qué género te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
-    { id: "nivel", label: "¿Cuál es tu experiencia en carrera?", tipo: "opciones", opciones: ["Inicio ahora (0-3 meses)", "Principiante (3-12 meses)", "Intermedio (1-3 años)", "Avanzado (+3 años)"] },
-    { id: "distancia_objetivo", label: "¿Cuál es tu distancia objetivo?", tipo: "opciones", opciones: ["5K", "10K", "Media maraton (21K)", "Maratón (42K)", "Trail / Ultra", "Sin distancia fija"] },
+    { id: "sexo", label: "¿Con que género te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
+    { id: "nivel", label: "¿Cual es tu experiencia en carrera?", tipo: "opciones", opciones: ["Inicio ahora (0-3 meses)", "Principiante (3-12 meses)", "Intermedio (1-3 años)", "Avanzado (+3 años)"] },
+    { id: "distancia_objetivo", label: "¿Cual es tu distancia objetivo?", tipo: "opciones", opciones: ["5K", "10K", "Media maratón (21K)", "Maratón (42K)", "Trail / Ultra", "Sin distancia fija"] },
     { id: "marca_actual", label: "¿Tienes alguna marca de referencia?", tipo: "texto", placeholder: "Ej: corro 5K en 30 min, o nunca he corrido en carrera organizada" },
     { id: "dias", label: "¿Cuántos días por semana puedes entrenar?", tipo: "opciones", opciones: ["2 dias", "3 dias", "4 dias", "5 dias", "6 dias"] },
-    { id: "duracion", label: "¿Cuánto tiempo disponible por sesión?", tipo: "opciones", opciones: ["30 min", "45 min", "1 hora", "1h 30min", "Mas de 1h 30min"] },
-    { id: "superficie", label: "¿Dónde sueles entrenar?", tipo: "multi", opciones: ["Asfalto / ciudad", "Pista de atletismo", "Trail / montana", "Cinta de correr", "Campo de hierba"] },
-    { id: "lesiones", label: "¿¿Tienes lesiones o molestias?", tipo: "texto", placeholder: "Ej: periostitis, fascitis, rodilla... o ninguna" },
+    { id: "duracion", label: "¿Cuánto tiempo disponible por sesión?", tipo: "opciones", opciones: ["30 min", "45 min", "1 hora", "1h 30min", "Más de 1h 30min"] },
+    { id: "superficie", label: "¿Donde sueles entrenar?", tipo: "multi", opciones: ["Asfalto / ciudad", "Pista de atletismo", "Trail / montaña", "Cinta de correr", "Campo de hierba"] },
+    { id: "lesiones", label: "¿Tienes lesiones o molestias?", tipo: "texto", placeholder: "Ej: periostitis, fascitis, rodilla... o ninguna" },
     { id: "objetivo_detalle", label: "¿Qué quieres conseguir exactamente?", tipo: "texto", placeholder: "Ej: completar mi primer 10K en junio, bajar de 45 min..." },
   ],
   funcional: [
-    { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Mas de 50"] },
+    { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Más de 50"] },
     { id: "sexo", label: "¿Con qué género te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
     { id: "nivel", label: "¿Cuál es tu nivel de experiencia?", tipo: "opciones", opciones: ["Sedentario / Empiezo de cero", "Algo activo (ejercicio ocasional)", "Moderado (1-2 años)", "Avanzado (+2 años)"] },
-    { id: "objetivo_principal", label: "¿Cuál es tu objetivo principal?", tipo: "opciones", opciones: ["Perder peso / reducir grasa", "Tonificar y definir", "Ganar energia y bienestar", "Mejorar movilidad", "Mantenerme en forma"] },
-    { id: "dias", label: "¿Cuántos días por semana puedes entrenar?", tipo: "opciones", opciones: ["2 dias", "3 dias", "4 dias", "5 dias"] },
-    { id: "duracion", label: "¿Cuánto tiempo por sesión?", tipo: "opciones", opciones: ["20-30 min", "30-45 min", "45-60 min", "Mas de 1 hora"] },
-    { id: "material", label: "¿Con qué equipamiento cuentas?", tipo: "multi", opciones: ["Solo mi cuerpo (casa / parque)", "Mancuernas", "Bandas elasticas", "Kettlebells", "Maquinas de gimnasio", "Barra de dominadas"] },
-    { id: "restricciones", label: "¿Tienes alguna limitacion fisica o lesion?", tipo: "texto", placeholder: "Ej: dolor lumbar, rodilla operada, hipertension... o ninguna" },
-    { id: "objetivo_detalle", label: "Cuéntame tu situacion y objetivo", tipo: "texto", placeholder: "Ej: tengo 15 kg de mas, entreno por las mananas..." },
+    { id: "objetivo_principal", label: "¿Cuál es tu objetivo principal?", tipo: "opciones", opciones: ["Perder peso / reducir grasa", "Tonificar y definir", "Ganar energía y bienestar", "Mejorar movilidad", "Mantenerme en forma"] },
+    { id: "dias", label: "¿Cuántos días por semana puedes entrenar?", tipo: "opciones", opciones: ["2 días", "3 días", "4 días", "5 días"] },
+    { id: "duracion", label: "¿Cuánto tiempo por sesión?", tipo: "opciones", opciones: ["20-30 min", "30-45 min", "45-60 min", "Más de 1 hora"] },
+    { id: "material", label: "¿Con qué equipamiento cuentas?", tipo: "multi", opciones: ["Solo mi cuerpo (casa / parque)", "Mancuernas", "Bandas elásticas", "Kettlebells", "Máquinas de gimnasio", "Barra de dominadas"] },
+    { id: "lesiones", label: "¿Tienes alguna limitación física o lesión?", tipo: "texto", placeholder: "Ej: dolor lumbar, rodilla operada... o ninguna" },
+    { id: "objetivo_detalle", label: "Cuéntame tu situación y objetivo", tipo: "texto", placeholder: "Ej: tengo 15 kg de más, entreno por las mañanas..." },
+  ],
+  funcional_crossfit: [
+    { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Más de 50"] },
+    { id: "sexo", label: "¿Con qué género te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
+    { id: "nivel_cf", label: "¿Cuál es tu nivel en CrossFit?", tipo: "opciones", opciones: ["Principiante (0-1 año)", "Intermedio (1-3 años)", "Avanzado (+3 años)", "Competidor"] },
+    { id: "nivel_olimpico", label: "¿Cómo es tu nivel en movimientos olímpicos?", tipo: "opciones", opciones: ["Ninguno / muy básico", "Básico (técnica en proceso)", "Competente (buena técnica)", "Avanzado (cargas altas)"] },
+    { id: "gimnasticos", label: "¿Qué movimientos gimnásticos dominas?", tipo: "multi", opciones: ["Pull-ups / Chin-ups", "Toes to bar", "Handstand / HSPU", "Muscle-up en barra", "Muscle-up en anillas", "Double unders", "Ninguno aún"] },
+    { id: "objetivo_cf", label: "¿Cuál es tu objetivo principal en CrossFit?", tipo: "opciones", opciones: ["Mejorar mi rendimiento general en el box", "Conseguir nuevos skills gimnásticos", "Mejorar técnica y carga en halterofilia", "Prepararme para competir en Open", "Mejorar movilidad y movimiento funcional"] },
+    { id: "dias", label: "¿Cuántos días por semana puedes entrenar?", tipo: "opciones", opciones: ["3 días", "4 días", "5 días", "6 días"] },
+    { id: "duracion", label: "¿Cuánto tiempo por sesión?", tipo: "opciones", opciones: ["45 min", "1 hora", "1h 30min", "Más de 1h 30min"] },
+    { id: "lugar_entreno", label: "¿Dónde entrenas habitualmente?", tipo: "opciones", opciones: ["Box CrossFit (equipamiento completo)", "Gimnasio convencional adaptado", "En casa con equipamiento básico", "Mixto (box + casa)"] },
+    { id: "punto_debil", label: "¿Cuál es tu mayor punto débil?", tipo: "opciones", opciones: ["Cardio / resistencia metabólica", "Fuerza máxima", "Técnica olímpica", "Movimientos gimnásticos", "Todos por igual"] },
+    { id: "lesiones", label: "¿Lesiones o limitaciones actuales?", tipo: "texto", placeholder: "Ej: hombro, muñecas, lumbar... o ninguna" },
+    { id: "objetivo_detalle", label: "¿Qué quieres conseguir?", tipo: "texto", placeholder: "Ej: mejorar mi Fran, conseguir el muscle-up, competir en Open..." },
   ],
   hibrido: [
-    { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Mas de 50"] },
-    { id: "sexo", label: "¿Con qué género te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
-    { id: "experiencia_fuerza", label: "Cuanta experiencia tienes en fuerza?", tipo: "opciones", opciones: ["Poca o ninguna", "1-2 años", "2-4 años", "Mas de 4 años"] },
-    { id: "experiencia_cardio", label: "Y en resistencia / cardio?", tipo: "opciones", opciones: ["Poca o ninguna", "1-2 años", "2-4 años", "Mas de 4 años"] },
-    { id: "prioridad", label: "¿Qué quieres priorizar?", tipo: "opciones", opciones: ["50/50 equilibrado", "Mas fuerza que resistencia", "Mas resistencia que fuerza", "Potencia explosiva"] },
-    { id: "marcas_actuales", label: "¿Cuáles son tus marcas de referencia?", tipo: "texto", placeholder: "Ej: peso muerto 100kg, corro 10K en 50min..." },
-    { id: "dias", label: "¿Cuántos días por semana puedes entrenar?", tipo: "opciones", opciones: ["3 dias", "4 dias", "5 dias", "6 dias"] },
-    { id: "duracion", label: "¿Cuánto tiempo por sesión?", tipo: "opciones", opciones: ["45 min", "1 hora", "1h 30min", "Mas de 1h 30min"] },
-    { id: "material", label: "¿Con qué equipamiento cuentas?", tipo: "multi", opciones: ["Gimnasio completo", "Barras y discos", "Mancuernas", "Kettlebells", "Cinta / Pista", "Bicicleta / Cicloergometro"] },
+    { id: "edad", label: "Cuantos anos tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Mas de 50"] },
+    { id: "sexo", label: "Con que genero te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
+    { id: "experiencia_fuerza", label: "Cuanta experiencia tienes en fuerza?", tipo: "opciones", opciones: ["Poca o ninguna", "1-2 anos", "2-4 anos", "Mas de 4 anos"] },
+    { id: "experiencia_cardio", label: "Y en resistencia / cardio?", tipo: "opciones", opciones: ["Poca o ninguna", "1-2 anos", "2-4 anos", "Mas de 4 anos"] },
+    { id: "prioridad", label: "Que quieres priorizar?", tipo: "opciones", opciones: ["50/50 equilibrado", "Mas fuerza que resistencia", "Mas resistencia que fuerza", "Potencia explosiva"] },
+    { id: "marcas_actuales", label: "Cuales son tus marcas de referencia?", tipo: "texto", placeholder: "Ej: peso muerto 100kg, corro 10K en 50min..." },
+    { id: "dias", label: "Cuantos dias por semana puedes entrenar?", tipo: "opciones", opciones: ["3 dias", "4 dias", "5 dias", "6 dias"] },
+    { id: "duracion", label: "Cuanto tiempo por sesion?", tipo: "opciones", opciones: ["45 min", "1 hora", "1h 30min", "Mas de 1h 30min"] },
+    { id: "material", label: "Con que equipamiento cuentas?", tipo: "multi", opciones: ["Gimnasio completo", "Barras y discos", "Mancuernas", "Kettlebells", "Cinta / Pista", "Bicicleta / Cicloergometro"] },
     { id: "lesiones", label: "Lesiones o limitaciones relevantes?", tipo: "texto", placeholder: "Ej: hombro derecho limitado, lumbar recurrente, o ninguna" },
-    { id: "objetivo_detalle", label: "¿Qué quieres lograr en los proximos 3-6 meses?", tipo: "texto", placeholder: "Ej: triatlon sprint, aumentar peso muerto y correr 10K..." },
+    { id: "objetivo_detalle", label: "Que quieres lograr en los proximos 3-6 meses?", tipo: "texto", placeholder: "Ej: triatlon sprint, aumentar peso muerto y correr 10K..." },
   ],
   fuerza: [
-    { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Mas de 50"] },
-    { id: "sexo", label: "¿Con qué género te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
-    { id: "modalidad", label: "En que modalidad te especializas?", tipo: "opciones", opciones: ["Powerlifting (SQ / BP / DL)", "Halterofilia (Arrancada / 2T)", "Strongman / Fuerza general", "Estoy empezando"] },
-    { id: "nivel", label: "¿Cuántos años llevas entrenando fuerza?", tipo: "opciones", opciones: ["Menos de 1 ano", "1-2 años", "2-4 años", "Mas de 4 años"] },
+    { id: "edad", label: "¿Cuántos anos tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Mas de 50"] },
+    { id: "sexo", label: "¿Con qué genero te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
+    
+    { id: "nivel", label: "¿Cuántos anos llevas entrenando fuerza?", tipo: "opciones", opciones: ["Menos de 1 ano", "1-2 anos", "2-4 anos", "Mas de 4 anos"] },
     { id: "marcas", label: "¿Cuáles son tus marcas actuales (1RM)?", tipo: "texto", placeholder: "Ej: SQ 120kg / BP 90kg / DL 150kg" },
-    { id: "competicion", label: "¿Tienes competicion o fecha objetivo?", tipo: "opciones", opciones: ["Si, en menos de 3 meses", "Si, en 3-6 meses", "Si, en mas de 6 meses", "No compito"] },
+    { id: "competicion", label: "¿Tienes competición o fecha objetivo?", tipo: "opciones", opciones: ["Si, en menos de 3 meses", "Si, en 3-6 meses", "Si, en mas de 6 meses", "No compito"] },
     { id: "dias", label: "¿Cuántos días puedes entrenar fuerza?", tipo: "opciones", opciones: ["3 dias", "4 dias", "5 dias", "6 dias"] },
     { id: "duracion", label: "¿Cuánto tiempo por sesión?", tipo: "opciones", opciones: ["1 hora", "1h 30min", "2 horas", "Mas de 2 horas"] },
-    { id: "puntos_débiles", label: "¿Cuál es tu eslabon mas débil?", tipo: "texto", placeholder: "Ej: cajon bajo en sentadilla, lockout en press banca..." },
-    { id: "lesiones", label: "Lesiones o limitaciones?", tipo: "texto", placeholder: "Ej: munecas limitadas, lumbar sensible, o ninguna" },
+    { id: "puntos_debiles", label: "¿Cuál es tu eslabón más débil?", tipo: "texto", placeholder: "Ej: cajon bajo en sentadilla, lockout en press banca..." },
+    { id: "lesiones", label: "¿Lesiones o limitaciones?", tipo: "texto", placeholder: "Ej: muñecas limitadas, lumbar sensible, o ninguna" },
     { id: "objetivo_detalle", label: "¿Qué quieres lograr exactamente?", tipo: "texto", placeholder: "Ej: romper 1RM en sentadilla, clasificarme para campeonato..." },
   ],
 };
@@ -80,24 +94,24 @@ ${marcasStr}
 
 ${historialResumen ? `SESIONES ANTERIORES:\n${historialResumen}` : ""}
 
-PRINCIPIOS: Periodizacion cientifica (lineal/DUP/bloques segun nivel), sobrecarga progresiva, deload cada 3-4 semanas, especificidad al objetivo, adaptación a lesiones y equipamiento.
+PRINCIPIOS: Periodizacion cientifica (lineal/DUP/bloques segun nivel), sobrecarga progresiva, deload cada 3-4 semanas, especificidad al objetivo, adaptacion a lesiones y equipamiento.
 - FECHA HOY: ${new Date().toLocaleDateString("es-ES", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
 - FORMATO: Max 400 palabras salvo rutina. Rutina: DIA/EJERCICIO/SERIES x REPS/DESCANSO. Ajusta cambios inmediatamente con justificacion.
 ${({carrera:`CARRERA: Ciclos 4sem, progresion vol max 10%/sem, zonas Z1-Z5, rodaje largo+series+fuerza complementaria.`,funcional:`FUNCIONAL: Bloques 4-6sem, movilidad+activacion+principal+finisher, patrones empuje/tiron/bisagra/sentadilla/core.`,hibrido:`HIBRIDO: Bloques, minimiza interferencia, fuerza 80-90% 1RM + resistencia Z2/umbral/VO2max.`,fuerza:`FUERZA: Lineal (principiantes), DUP/5-3-1 (intermedios), bloques acumulacion/intensificacion/realizacion (avanzados), % 1RM o RPE.`}[cat.id]||"")}`;
 };
 
 const ESPECIALIDADES: Record<string, string[]> = {
-  carrera: ["Running (asfalto / ciudad)", "Trail Running / Montaña", "Maratón / Media maraton", "Atletismo en pista"],
+  carrera: ["Running (asfalto / ciudad)", "Trail Running / Montana", "Maraton / Media maraton", "Atletismo en pista"],
   funcional: ["Fitness general / Bienestar", "CrossFit / WOD", "Calistenia / Movimiento"],
-  hibrido: ["Híbrido general (fuerza + cardio)", "Hyrox", "Triatlón / Duatlón", "OCR / Obstaculos"],
+  hibrido: ["Hibrido general (fuerza + cardio)", "Hyrox", "Triatlon / Duatlon", "OCR / Obstaculos"],
   fuerza: ["Powerlifting (SQ / BP / DL)", "Halterofilia (Arrancada / 2T)", "Strongman / Fuerza general"],
 };
 
 const ESPECIALIDAD_KEY: Record<string, Record<string, string>> = {
   carrera: {
     "Running (asfalto / ciudad)": "carrera",
-    "Trail Running / Montaña": "carrera",
-    "Maratón / Media maraton": "carrera",
+    "Trail Running / Montana": "carrera",
+    "Maraton / Media maraton": "carrera",
     "Atletismo en pista": "carrera",
   },
   funcional: {
@@ -106,9 +120,9 @@ const ESPECIALIDAD_KEY: Record<string, Record<string, string>> = {
     "Calistenia / Movimiento": "funcional_calistenia",
   },
   hibrido: {
-    "Híbrido general (fuerza + cardio)": "hibrido_general",
+    "Hibrido general (fuerza + cardio)": "hibrido_general",
     "Hyrox": "hibrido_hyrox",
-    "Triatlón / Duatlón": "hibrido_triatlon",
+    "Triatlon / Duatlon": "hibrido_triatlon",
     "OCR / Obstaculos": "hibrido_general",
   },
   fuerza: {
@@ -242,7 +256,7 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
       const hist=[...nuevoHist,{role:"assistant",content:texto}];
       setMensajes([{role:"assistant",content:texto}]);setHistorial(hist);
       await apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{historial:hist}});
-    }catch{setMensajes([{role:"assistant",content:"Error al reanudar sesión."}]);}
+    }catch{setMensajes([{role:"assistant",content:"Error al reanudar sesion."}]);}
     finally{setGenerando(false);}
   };
 
@@ -263,7 +277,7 @@ const elegirEspecialidad=(label:string)=>{const key=ESPECIALIDAD_KEY[categoria!]
     setPantalla("chat");setGenerando(true);
     const catObj=CATEGORIAS.find((c:Categoria)=>c.id===categoria)!;
     const codigo=generarCodigo();setCodigoGuardado(codigo);
-    const prompt="Hola! Acabo de completar mi perfil. Por favor: 1) Dame la bienvenida breve mostrando que entiendes mi situacion. 2) Genera mi programación semanal completa con base cientifica y periodización. 3) Explica la logica de periodización que usaras. 4) Preguntame si quiero ajustar algo.";
+    const prompt="Hola! Acabo de completar mi perfil. Por favor: 1) Dame la bienvenida breve mostrando que entiendes mi situacion. 2) Genera mi programacion semanal completa con base cientifica y periodizacion. 3) Explica la logica de periodizacion que usaras. 4) Preguntame si quiero ajustar algo.";
     try{
       const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:2000,system:buildPrompt(catObj,perfil),messages:[{role:"user",content:prompt}]});
       const texto=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error al conectar.";
@@ -298,7 +312,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
     const nuevasMarcas=[...marcas,nueva];
     setMarcas(nuevasMarcas);setNuevaMarca("");setMostrarMarcas(false);
     if(codigoUsuario) await apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{marcas:nuevasMarcas}});
-    enviar(`He registrado una nueva marca: ${nueva.valor}. Analiza este progreso y ajusta mi programación si es necesario.`);
+    enviar(`He registrado una nueva marca: ${nueva.valor}. Analiza este progreso y ajusta mi programacion si es necesario.`);
   };
 
   const handleKey=(e:React.KeyboardEvent)=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();enviar();}};
@@ -378,7 +392,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
       {pantalla==="categoria"&&(
         <div className="fade-up" style={{maxWidth:580,width:"100%"}}>
           <button onClick={()=>setPantalla("inicio")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14,marginBottom:28}}>Volver</button>
-          <h2 style={{fontSize:"clamp(22px,5vw,30px)",color:C.ink,marginBottom:8}}>¿Cuál es tu disciplina?</h2>
+          <h2 style={{fontSize:"clamp(22px,5vw,30px)",color:C.ink,marginBottom:8}}>Cual es tu disciplina?</h2>
           <p style={{color:C.muted,fontSize:14,marginBottom:28}}>Tu programa se construira desde cero segun lo que elijas.</p>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(240px, 1fr))",gap:14}}>
             {CATEGORIAS.map((c:Categoria)=>(
@@ -400,7 +414,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
             <span style={{fontSize:15}}>{cat.emoji}</span>
             <span style={{color:accentColor,fontSize:12,fontWeight:600}}>{cat.titulo}</span>
           </div>
-          <h2 style={{fontSize:"clamp(20px,4vw,28px)",color:C.ink,marginBottom:8,lineHeight:1.3}}>¿Cuál es tu especialidad?</h2>
+          <h2 style={{fontSize:"clamp(20px,4vw,28px)",color:C.ink,marginBottom:8,lineHeight:1.3}}>Cual es tu especialidad?</h2>
           <p style={{color:C.muted,fontSize:14,marginBottom:24}}>Tu programa se adaptara especificamente a tu disciplina.</p>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {ESPECIALIDADES[cat.id]?.map(esp=>(
@@ -518,7 +532,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:10}}>
               <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:16,color:C.ink,marginBottom:12}}>Registro de progreso</div>
               {marcas.length===0?(
-                <p style={{color:C.muted,fontSize:13,marginBottom:12}}>Sin registros aún. Anade tu primera marca o tiempo.</p>
+                <p style={{color:C.muted,fontSize:13,marginBottom:12}}>Sin registros aun. Anade tu primera marca o tiempo.</p>
               ):(
                 <div style={{marginBottom:12,maxHeight:120,overflowY:"auto"}}>
                   {marcas.map((m,i)=>(
@@ -546,7 +560,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
               <div style={{display:"flex",gap:12}}>
                 <div style={{width:36,height:36,borderRadius:12,background:cat.colorLight,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{cat.emoji}</div>
                 <div style={{background:C.bg,borderRadius:"4px 16px 16px 16px",padding:"16px 18px"}}>
-                  <p style={{color:C.muted,fontSize:13,marginBottom:10}}>Preparando tu sesión...</p>
+                  <p style={{color:C.muted,fontSize:13,marginBottom:10}}>Preparando tu sesion...</p>
                   <div style={{display:"flex",gap:5}}>{[0,1,2].map(j=><div key={j} className="dot" style={{background:accentColor,animationDelay:`${j*0.2}s`}}/>)}</div>
                 </div>
               </div>

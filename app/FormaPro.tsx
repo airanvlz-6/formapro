@@ -279,8 +279,10 @@ const elegirEspecialidad=(label:string)=>{const key=ESPECIALIDAD_KEY[categoria!]
     setPantalla("chat");setGenerando(true);
     const catObj=CATEGORIAS.find((c:Categoria)=>c.id===categoria)!;
     let codigo=codigoPersonal.trim().length>=5?codigoPersonal.trim():generarCodigo();
-    const dataVerify=await apiCall({action:"recuperar_usuario",codigo});
-    if(!dataVerify.error&&codigoPersonal.trim().length>=5){setErrorCodigoPersonal("Este código ya existe, elige otro.");setGenerando(false);return;}
+    if(codigoPersonal.trim().length>=5){
+      const dataVerify=await apiCall({action:"recuperar_usuario",codigo});
+      if(!dataVerify.error){setErrorCodigoPersonal("Este código ya existe, elige otro.");setGenerando(false);setPantalla("final");return;}
+    }
     setErrorCodigoPersonal("");setCodigoGuardado(codigo);
     const prompt="Hola! Acabo de completar mi perfil. Por favor: 1) Dame la bienvenida breve mostrando que entiendes mi situacion. 2) Genera mi programacion semanal completa con base cientifica y periodizacion. 3) Explica la logica de periodizacion que usaras. 4) Preguntame si quiero ajustar algo.";
     try{

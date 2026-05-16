@@ -196,6 +196,8 @@ const [emailGuardado,setEmailGuardado]=useState(false);
 const [emailBanner,setEmailBanner]=useState("");
 const [bannerEnviado,setBannerEnviado]=useState(false);
 const [email,setEmail]=useState("");
+const [codigoPersonal,setCodigoPersonal]=useState("");
+const [errorCodigoPersonal,setErrorCodigoPersonal]=useState("");
 const [emailInput,setEmailInput]=useState("");
 const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
 const [mensajeRecuperar,setMensajeRecuperar]=useState("");
@@ -282,7 +284,7 @@ const elegirEspecialidad=(label:string)=>{const key=ESPECIALIDAD_KEY[categoria!]
       const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:2000,system:buildPrompt(catObj,perfil),messages:[{role:"user",content:prompt}]});
       const texto=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error al conectar.";
       const hist=[{role:"user",content:prompt},{role:"assistant",content:texto}];
-      setMensajes([{role:"assistant",content:texto}]);setHistorial(hist);setMsgCount(1);setCodigoUsuario(codigo);
+      setMensajes([{role:"assistant",content:texto}]);setHistorial(hist);setMsgCount(1);setCodigoUsuario(codigo);setEmailGuardado(!!email);
       console.log("Guardando usuario con email:", email);
 await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:texto,historial:hist,marcas:[],email:email||null}});
     }catch{setMensajes([{role:"assistant",content:"Error de conexion. Por favor recarga."}]);}
@@ -468,6 +470,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
     <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="tu@email.com"
       style={{width:"100%",border:`2px solid ${C.border}`,borderRadius:12,padding:"11px 14px",fontSize:14,color:C.ink,background:C.card,fontFamily:"inherit"}}
       onFocus={e=>(e.target.style.borderColor=accentColor)} onBlur={e=>(e.target.style.borderColor=C.border)}
+      onKeyDown={e=>{if(e.key==="Enter")e.preventDefault();}}
     />
   </div>
 )}

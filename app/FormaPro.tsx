@@ -270,7 +270,7 @@ const elegirEspecialidad=(label:string)=>{const key=ESPECIALIDAD_KEY[categoria!]
     if(!val||(Array.isArray(val)&&val.length===0)||(typeof val==="string"&&!val.trim())) return;
     const nuevas={...respuestas,[pregActual.id]:val};
     setRespuestas(nuevas);setSelMulti([]);setTextoTemp("");
-    if(pregIdx<preguntas.length-1){setPregIdx(pregIdx+1);}else{iniciarChat(nuevas);}
+    if(pregIdx<preguntas.length-1){setPregIdx(pregIdx+1);}else{setRespuestas(nuevas);setPantalla("final");}
   };
 
   const toggleMulti=(op:string)=>setSelMulti(prev=>prev.includes(op)?prev.filter(x=>x!==op):[...prev,op]);
@@ -432,6 +432,45 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {pantalla==="final"&&cat&&(
+        <div className="fade-up" style={{maxWidth:500,width:"100%"}}>
+          <div style={{display:"inline-flex",alignItems:"center",gap:6,background:cat.colorLight,borderRadius:100,padding:"5px 14px",marginBottom:20}}>
+            <span style={{fontSize:15}}>{cat.emoji}</span>
+            <span style={{color:accentColor,fontSize:12,fontWeight:600}}>{espLabel||cat.titulo}</span>
+          </div>
+          <h2 style={{fontSize:"clamp(20px,4vw,28px)",color:C.ink,marginBottom:8,lineHeight:1.3}}>Casi listo</h2>
+          <p style={{color:C.muted,fontSize:14,marginBottom:28}}>Personaliza tu acceso antes de generar tu programa.</p>
+          <div style={{display:"flex",flexDirection:"column",gap:16}}>
+            <div>
+              <p style={{color:C.ink,fontSize:14,fontWeight:600,marginBottom:6}}>Crea tu código de acceso</p>
+              <p style={{color:C.muted,fontSize:12,marginBottom:8}}>Mínimo 5 caracteres. Elige algo que recuerdes fácilmente.</p>
+              <input value={codigoPersonal} onChange={e=>setCodigoPersonal(e.target.value.toUpperCase().replace(/\s/g,""))}
+                placeholder="Ej: MARIA2025, RUNNER10, CROSSFIT..."
+                style={{width:"100%",border:`2px solid ${errorCodigoPersonal?C.warm:C.border}`,borderRadius:12,padding:"12px 14px",fontSize:15,color:C.ink,background:C.card,letterSpacing:1,fontFamily:"inherit"}}
+                onFocus={e=>(e.target.style.borderColor=accentColor)} onBlur={e=>(e.target.style.borderColor=C.border)}
+              />
+              {errorCodigoPersonal&&<p style={{color:C.warm,fontSize:12,marginTop:6}}>{errorCodigoPersonal}</p>}
+            </div>
+            <div>
+              <p style={{color:C.ink,fontSize:14,fontWeight:600,marginBottom:6}}>Email opcional</p>
+              <p style={{color:C.muted,fontSize:12,marginBottom:8}}>Para recuperar tu código si lo pierdes.</p>
+              <input value={email} onChange={e=>setEmail(e.target.value)}
+                placeholder="tu@email.com"
+                style={{width:"100%",border:`2px solid ${C.border}`,borderRadius:12,padding:"12px 14px",fontSize:15,color:C.ink,background:C.card,fontFamily:"inherit"}}
+                onFocus={e=>(e.target.style.borderColor=accentColor)} onBlur={e=>(e.target.style.borderColor=C.border)}
+              />
+            </div>
+          </div>
+          <button className="btn-main" onClick={()=>{if(codigoPersonal.trim().length>0&&codigoPersonal.trim().length<5){setErrorCodigoPersonal("El código debe tener al menos 5 caracteres.");return;}iniciarChat(respuestas);}}
+            style={{width:"100%",background:accentColor,color:"#fff",border:"none",borderRadius:14,padding:"15px",fontSize:15,fontWeight:600,cursor:"pointer",marginTop:24}}>
+            Generar mi programa ✨
+          </button>
+          <button onClick={()=>{setPregIdx(preguntas.length-1);setPantalla("formulario");}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:13,marginTop:12,width:"100%"}}>
+            ← Volver al formulario
+          </button>
         </div>
       )}
 

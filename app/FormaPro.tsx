@@ -317,12 +317,14 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
     const catObj=CATEGORIAS.find((c:Categoria)=>c.id===u.categoria)!;
     const resumen=u.historial?.slice(-6).map((m:{role:string;content:string})=>`${m.role==="user"?"Usuario":"Coach"}: ${m.content.substring(0,150)}...`).join("\n")||"";
     const prompt="Hola de nuevo! Estoy de vuelta. Recuerdame brevemente en que punto estabamos, como va mi progreso y que toca esta semana.";
+    const consultasActuales=Math.floor((u.historial?.length||0)/2);
     const nuevoHist=[...(u.historial||[]),{role:"user",content:prompt}];
     try{
       const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,u.perfil,u.marcas||[],resumen),messages:nuevoHist});
       const texto=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
       const hist=[...nuevoHist,{role:"assistant",content:texto}];
       setMensajes([{role:"assistant",content:texto}]);setHistorial(hist);
+      setMsgCount(consultasActuales);
       await apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{historial:hist}});
     }catch{setMensajes([{role:"assistant",content:"Error al reanudar sesion."}]);}
     finally{setGenerando(false);}

@@ -342,7 +342,7 @@ const elegirEspecialidad=(label:string)=>{const key=ESPECIALIDAD_KEY[categoria!]
       if(!dataVerify.error){setErrorCodigoPersonal("Este código ya existe, elige otro.");setGenerando(false);setPantalla("final");return;}
     }
     setErrorCodigoPersonal("");setCodigoGuardado(codigo);
-    const prompt="Hola! Acabo de completar mi perfil. Por favor: 1) Dame la bienvenida breve mostrando que entiendes mi situacion. 2) Genera mi programacion semanal completa con base cientifica y periodizacion. 3) Explica la logica de periodizacion que usaras. 4) Preguntame si quiero ajustar algo.";
+const prompt = "¡Hola! Acabo de completar mi perfil. Por favor: 1) Dame la bienvenida breve demostrando que entiendes mi situación, especialidad y objetivo concreto. 2) Explica en 3-4 líneas la metodología y periodización que vas a aplicar conmigo y por qué. 3) Muéstrame solo los primeros 2-3 días de entrenamiento con todos los detalles (ejercicios, series, reps, descansos). 4) Pregúntame si esto se ajusta a lo que busco o si quiero cambiar algo antes de que desarrolles el resto de la semana.";
     try{
       const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,perfil),messages:[{role:"user",content:prompt}]});
       const texto=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error al conectar.";

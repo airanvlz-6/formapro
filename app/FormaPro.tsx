@@ -141,7 +141,7 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
 const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "") => {
   const perfilStr = Object.entries(perfil).map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join("\n");
   const marcasStr = marcas.length > 0 ? marcas.map(m => `- ${m.fecha}: ${m.valor}`).join("\n") : "Sin registros aún";
-  return `Eres el coach de FormaPro, sistema de asesoramiento de entrenamiento personalizado.
+  return `Eres el coach de Forge, sistema de asesoramiento de entrenamiento personalizado.
 Tu filosofía: la programación se adapta al deportista, no al revés. Habla siempre en español correcto con tildes, ñ y todos los caracteres del idioma.
 
 PERFIL:
@@ -203,7 +203,7 @@ const generarCodigo = () => { const c = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let 
 type Categoria = typeof CATEGORIAS[0];
 type Pregunta = {id: string; label: string; tipo: string; opciones?: string[]; placeholder?: string};
 type Marca = {fecha: string; valor: string};
-type UsuarioData = {codigo: string; categoria: string; perfil: Record<string, string | string[]>; rutina: string; historial: {role: string; content: string}[]; marcas: Marca[]};
+type UsuarioData = {codigo: string; categoria: string; especialidad: string; perfil: Record<string, string | string[]>; rutina: string; historial: {role: string; content: string}[]; marcas: Marca[]; email?: string; [key: string]: unknown};
 
 const Progreso = ({actual,total,color}:{actual:number;total:number;color:string}) => (
   <div style={{width:"100%",height:3,background:C.border,borderRadius:10,marginBottom:28}}>
@@ -228,7 +228,7 @@ const MensajeTexto = ({texto}:{texto:string}) => (
   </div>
 );
 
-export default function FormaPro() {
+export default function Forge() {
   const [pantalla,setPantalla]=useState("inicio");
   const [categoria,setCategoria]=useState<string|null>(null);
   const [pregIdx,setPregIdx]=useState(0);
@@ -435,7 +435,7 @@ const registrarMarca=async()=>{
       {pantalla==="inicio"&&(
         <div className="fade-up" style={{maxWidth:520,width:"100%",textAlign:"center"}}>
           <div style={{fontSize:44,marginBottom:16}}>🏅</div>
-          <h1 style={{fontSize:"clamp(36px,8vw,54px)",color:C.ink,lineHeight:1.1,marginBottom:14}}>FormaPro</h1>
+          <h1 style={{fontSize:"clamp(36px,8vw,54px)",color:C.ink,lineHeight:1.1,marginBottom:14}}>Forge</h1>
           <p style={{color:C.muted,fontSize:17,lineHeight:1.65,marginBottom:8}}>Coach de entrenamiento personal. Siempre disponible, seguimiento de progreso y adaptado a tu vida.</p>
           <p style={{color:C.muted,fontSize:14,marginBottom:32}}>Tu programa evoluciona contigo cada semana.</p>
           <button className="btn-main" onClick={()=>setPantalla("categoria")} style={{background:C.ink,color:"#fff",border:"none",borderRadius:14,padding:"16px 40px",fontSize:16,fontWeight:600,cursor:"pointer",width:"100%",maxWidth:360,marginBottom:20}}>
@@ -639,7 +639,7 @@ const registrarMarca=async()=>{
             <div style={{flex:1,display:"flex",alignItems:"center",gap:10}}>
               <div style={{width:38,height:38,borderRadius:12,background:cat.colorLight,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{cat.emoji}</div>
               <div>
-                <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:15,color:C.ink}}>FormaPro Coach</div>
+                <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:15,color:C.ink}}>Forge Coach</div>
                 <div style={{color:accentColor,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:0.8}}>{cat.titulo} - {cat.subtitulo}</div>
               </div>
             </div>
@@ -809,7 +809,7 @@ const registrarMarca=async()=>{
           {bloqueado&&(
             <div style={{marginTop:12,background:C.warmLight,border:`1px solid #F5C2A0`,borderRadius:16,padding:"18px 22px"}}>
               <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,color:C.ink,marginBottom:6}}>Consultas gratuitas agotadas</div>
-              <p style={{color:C.muted,fontSize:13,marginBottom:14,lineHeight:1.6}}>Actualiza a FormaPro Premium para consultas ilimitadas y seguimiento continuo.</p>
+              <p style={{color:C.muted,fontSize:13,marginBottom:14,lineHeight:1.6}}>Actualiza a Forge Premium para consultas ilimitadas y seguimiento continuo.</p>
               <button className="btn-main" style={{background:C.warm,color:"#fff",border:"none",borderRadius:12,padding:"13px 26px",fontSize:15,fontWeight:600,cursor:"pointer"}}>
                 Obtener Premium
               </button>

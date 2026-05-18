@@ -253,6 +253,11 @@ const [espKey,setEspKey]=useState<string|null>(null);
 const [emailGuardado,setEmailGuardado]=useState(false);
 const [emailBanner,setEmailBanner]=useState("");
 const [bannerEnviado,setBannerEnviado]=useState(false);
+const [mostrarPerfil,setMostrarPerfil]=useState(false);
+const [nuevoCodigo,setNuevoCodigo]=useState("");
+const [nuevoEmail,setNuevoEmail]=useState("");
+const [mensajePerfil,setMensajePerfil]=useState("");
+const [errorPerfil,setErrorPerfil]=useState("");
 const [email,setEmail]=useState("");
 const [codigoPersonal,setCodigoPersonal]=useState("");
 const [errorCodigoPersonal,setErrorCodigoPersonal]=useState("");
@@ -371,7 +376,26 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
     finally{setCargando(false);}
   };
 
-  const registrarMarca=async()=>{
+  const actualizarPerfil=async()=>{
+    setMensajePerfil(""); setErrorPerfil("");
+    if(nuevoCodigo.trim().length>0&&nuevoCodigo.trim().length<5){setErrorPerfil("El código debe tener al menos 5 caracteres.");return;}
+    if(nuevoCodigo.trim().length>=5){
+      const verify=await apiCall({action:"recuperar_usuario",codigo:nuevoCodigo.trim().toUpperCase()});
+      if(!verify.error){setErrorPerfil("Ese código ya existe, elige otro.");return;}
+    }
+    const datos: Record<string,string>={};
+    if(nuevoCodigo.trim().length>=5) datos.codigo=nuevoCodigo.trim().toUpperCase();
+    if(nuevoEmail.trim()) datos.email=nuevoEmail.trim().toLowerCase();
+    if(Object.keys(datos).length===0){setErrorPerfil("Introduce al menos un cambio.");return;}
+    await apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos});
+    if(datos.codigo){setCodigoUsuario(datos.codigo);setCodigoGuardado(datos.codigo);}
+    if(datos.email) setEmailGuardado(true);
+    setNuevoCodigo(""); setNuevoEmail("");
+    setMensajePerfil("Perfil actualizado correctamente.");
+    setTimeout(()=>setMensajePerfil(""),3000);
+  };
+
+const registrarMarca=async()=>{
     if(!nuevaMarca.trim()) return;
     const nueva:Marca={fecha:new Date().toLocaleDateString("es-ES"),valor:nuevaMarca.trim()};
     const nuevasMarcas=[...marcas,nueva];
@@ -616,7 +640,8 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
                 <div style={{color:accentColor,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:0.8}}>{cat.titulo} - {cat.subtitulo}</div>
               </div>
             </div>
-            <button onClick={()=>setMostrarMarcas(!mostrarMarcas)} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"7px 12px",fontSize:12,color:accentColor,cursor:"pointer",fontWeight:600}}>
+            <button onClick={()=>{setMostrarMarcas(!mostrarMarcas);setMostrarPerfil(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"7px 12px",fontSize:12,color:accentColor,cursor:"pointer",fontWeight:600}}>📊 Progreso</button>
+<button onClick={()=>{setMostrarPerfil(!mostrarPerfil);setMostrarMarcas(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"7px 12px",fontSize:12,color:accentColor,cursor:"pointer",fontWeight:600}}>👤 Perfil</button>
               📊 Progreso
             </button>
             <div style={{background:restantes<=5?"#FFF3CD":cat.colorLight,color:restantes<=5?"#856404":accentColor,borderRadius:100,padding:"5px 12px",fontSize:12,fontWeight:500}}>
@@ -624,7 +649,40 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
             </div>
           </div>
 
-          {mostrarMarcas&&(
+          {mostrarPerfil&&(
+        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:10}}>
+          <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:16,color:C.ink,marginBottom:16}}>Mi perfil</div>
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            <div>
+              <p style={{color:C.ink,fontSize:13,fontWeight:600,marginBottom:4}}>Código de acceso actual</p>
+              <p style={{color:accentColor,fontSize:15,fontWeight:700,letterSpacing:2}}>{codigoUsuario}</p>
+            </div>
+            <div>
+              <p style={{color:C.ink,fontSize:13,fontWeight:600,marginBottom:6}}>Cambiar código de acceso</p>
+              <input value={nuevoCodigo} onChange={e=>setNuevoCodigo(e.target.value.toUpperCase().replace(/\s/g,""))}
+                placeholder="Nuevo código (mínimo 5 caracteres)"
+                style={{width:"100%",border:`2px solid ${C.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:C.ink,background:C.bg,fontFamily:"inherit",letterSpacing:1}}
+                onFocus={e=>(e.target.style.borderColor=accentColor)} onBlur={e=>(e.target.style.borderColor=C.border)}
+              />
+            </div>
+            <div>
+              <p style={{color:C.ink,fontSize:13,fontWeight:600,marginBottom:6}}>Actualizar email</p>
+              <input value={nuevoEmail} onChange={e=>setNuevoEmail(e.target.value)}
+                placeholder="tu@email.com"
+                style={{width:"100%",border:`2px solid ${C.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:C.ink,background:C.bg,fontFamily:"inherit"}}
+                onFocus={e=>(e.target.style.borderColor=accentColor)} onBlur={e=>(e.target.style.borderColor=C.border)}
+              />
+            </div>
+            {errorPerfil&&<p style={{color:C.warm,fontSize:12}}>{errorPerfil}</p>}
+            {mensajePerfil&&<p style={{color:C.success,fontSize:12,fontWeight:600}}>{mensajePerfil}</p>}
+            <button onClick={actualizarPerfil} style={{background:accentColor,color:"#fff",border:"none",borderRadius:10,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+              Guardar cambios
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mostrarMarcas&&(
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:10}}>
               <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:16,color:C.ink,marginBottom:12}}>Registro de progreso</div>
               {marcas.length===0?(

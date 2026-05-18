@@ -258,6 +258,8 @@ const [nuevoCodigo,setNuevoCodigo]=useState("");
 const [nuevoEmail,setNuevoEmail]=useState("");
 const [mensajePerfil,setMensajePerfil]=useState("");
 const [errorPerfil,setErrorPerfil]=useState("");
+const [editandoPerfil,setEditandoPerfil]=useState(false);
+const [perfilEdit,setPerfilEdit]=useState<Record<string,string>>({});
 const [email,setEmail]=useState("");
 const [codigoPersonal,setCodigoPersonal]=useState("");
 const [errorCodigoPersonal,setErrorCodigoPersonal]=useState("");
@@ -648,21 +650,24 @@ const registrarMarca=async()=>{
           </div>
 
           {mostrarPerfil&&(
-        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:10}}>
+        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:10,maxHeight:400,overflowY:"auto"}}>
           <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:16,color:C.ink,marginBottom:16}}>Mi perfil</div>
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
-            <div>
-              <p style={{color:C.ink,fontSize:13,fontWeight:600,marginBottom:4}}>Código de acceso actual</p>
+
+            <div style={{background:C.bg,borderRadius:12,padding:"10px 14px"}}>
+              <p style={{color:C.muted,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Código de acceso</p>
               <p style={{color:accentColor,fontSize:15,fontWeight:700,letterSpacing:2}}>{codigoUsuario}</p>
             </div>
+
             <div>
-              <p style={{color:C.ink,fontSize:13,fontWeight:600,marginBottom:6}}>Cambiar código de acceso</p>
+              <p style={{color:C.ink,fontSize:13,fontWeight:600,marginBottom:6}}>Cambiar código</p>
               <input value={nuevoCodigo} onChange={e=>setNuevoCodigo(e.target.value.toUpperCase().replace(/\s/g,""))}
                 placeholder="Nuevo código (mínimo 5 caracteres)"
                 style={{width:"100%",border:`2px solid ${C.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:C.ink,background:C.bg,fontFamily:"inherit",letterSpacing:1}}
                 onFocus={e=>(e.target.style.borderColor=accentColor)} onBlur={e=>(e.target.style.borderColor=C.border)}
               />
             </div>
+
             <div>
               <p style={{color:C.ink,fontSize:13,fontWeight:600,marginBottom:6}}>Actualizar email</p>
               <input value={nuevoEmail} onChange={e=>setNuevoEmail(e.target.value)}
@@ -671,10 +676,74 @@ const registrarMarca=async()=>{
                 onFocus={e=>(e.target.style.borderColor=accentColor)} onBlur={e=>(e.target.style.borderColor=C.border)}
               />
             </div>
+
+            <div style={{borderTop:`1px solid ${C.border}`,paddingTop:12}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <p style={{color:C.ink,fontSize:13,fontWeight:600}}>Datos del perfil</p>
+                <button onClick={()=>{setEditandoPerfil(!editandoPerfil);setPerfilEdit({...respuestas as Record<string,string>});}} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,padding:"4px 10px",fontSize:12,color:C.muted,cursor:"pointer"}}>
+                  {editandoPerfil?"Cancelar":"Editar"}
+                </button>
+              </div>
+              {!editandoPerfil?(
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {[["Edad",respuestas.edad],["Días disponibles",respuestas.dias],["Duración sesión",respuestas.duracion],["Lesiones",respuestas.lesiones],["Objetivo",respuestas.objetivo_detalle]].map(([label,val])=>val?(
+                    <div key={label as string} style={{display:"flex",gap:8,fontSize:13}}>
+                      <span style={{color:C.muted,minWidth:120}}>{label as string}:</span>
+                      <span style={{color:C.ink,fontWeight:500}}>{val as string}</span>
+                    </div>
+                  ):null)}
+                </div>
+              ):(
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  {[
+                    {key:"dias",label:"Días disponibles",opciones:["2 días","3 días","4 días","5 días","6 días"]},
+                    {key:"duracion",label:"Duración por sesión",opciones:["30 min","45 min","1 hora","1h 30min","Más de 1h 30min"]},
+                  ].map(campo=>(
+                    <div key={campo.key}>
+                      <p style={{color:C.muted,fontSize:12,marginBottom:6}}>{campo.label}</p>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                        {campo.opciones.map(op=>(
+                          <button key={op} onClick={()=>setPerfilEdit(p=>({...p,[campo.key]:op}))}
+                            style={{padding:"6px 12px",borderRadius:100,fontSize:12,cursor:"pointer",border:`2px solid ${perfilEdit[campo.key]===op?accentColor:C.border}`,background:perfilEdit[campo.key]===op?accentColor+"18":C.card,color:perfilEdit[campo.key]===op?accentColor:C.ink,fontFamily:"inherit"}}>
+                            {op}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  <div>
+                    <p style={{color:C.muted,fontSize:12,marginBottom:6}}>Lesiones / limitaciones actuales</p>
+                    <textarea value={perfilEdit.lesiones||""} onChange={e=>setPerfilEdit(p=>({...p,lesiones:e.target.value}))} rows={2}
+                      placeholder="Ej: rodilla derecha, lumbar... o ninguna"
+                      style={{width:"100%",border:`2px solid ${C.border}`,borderRadius:10,padding:"8px 12px",fontSize:13,color:C.ink,background:C.bg,fontFamily:"inherit",resize:"none"}}
+                    />
+                  </div>
+                  <div>
+                    <p style={{color:C.muted,fontSize:12,marginBottom:6}}>Objetivo actual</p>
+                    <textarea value={perfilEdit.objetivo_detalle||""} onChange={e=>setPerfilEdit(p=>({...p,objetivo_detalle:e.target.value}))} rows={2}
+                      placeholder="Ej: correr 10K en menos de 50 min..."
+                      style={{width:"100%",border:`2px solid ${C.border}`,borderRadius:10,padding:"8px 12px",fontSize:13,color:C.ink,background:C.bg,fontFamily:"inherit",resize:"none"}}
+                    />
+                  </div>
+                  <button onClick={async()=>{
+                    const nuevosPerfil={...respuestas,...perfilEdit};
+                    setRespuestas(nuevosPerfil);
+                    await apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{perfil:nuevosPerfil}});
+                    setEditandoPerfil(false);
+                    setMensajePerfil("Perfil actualizado. El coach tendrá en cuenta los cambios.");
+                    setTimeout(()=>setMensajePerfil(""),3000);
+                  }} style={{background:accentColor,color:"#fff",border:"none",borderRadius:10,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                    Guardar cambios del perfil
+                  </button>
+                </div>
+              )}
+            </div>
+
             {errorPerfil&&<p style={{color:C.warm,fontSize:12}}>{errorPerfil}</p>}
             {mensajePerfil&&<p style={{color:C.success,fontSize:12,fontWeight:600}}>{mensajePerfil}</p>}
+
             <button onClick={actualizarPerfil} style={{background:accentColor,color:"#fff",border:"none",borderRadius:10,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-              Guardar cambios
+              Guardar código y email
             </button>
           </div>
         </div>

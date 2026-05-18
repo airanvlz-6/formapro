@@ -573,7 +573,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
       )}
 
       {pantalla==="chat"&&cat&&(
-        <div style={{width:"100%",maxWidth:700,display:"flex",flexDirection:"column",height:"93vh",maxHeight:860}}>
+        <div style={{width:"100%",maxWidth:700,display:"flex",flexDirection:"column",height:"100dvh",maxHeight:"100dvh"}}>
           {codigoGuardado&&(
             <div style={{background:C.successLight,border:`1px solid ${C.success}33`,borderRadius:12,padding:"10px 16px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
               <span style={{fontSize:16}}>🔑</span>

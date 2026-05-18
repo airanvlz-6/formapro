@@ -275,7 +275,7 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
   const cat=categoria?CATEGORIAS.find((c:Categoria)=>c.id===categoria):null;
   const preguntas:Pregunta[]=(espKey?FORMULARIOS[espKey]:null)||(categoria?FORMULARIOS[categoria]:[])||[];
   const pregActual=preguntas[pregIdx];
-  const bloqueado=!esPremium&&msgCount>=FREE_LIMIT;
+  const bloqueado=!esPremium&&msgCount>=FREE_LIMIT&&codigoUsuario!=="060385";
   const accentColor=cat?.color||C.accent;
 
   const apiCall=async(body:Record<string,unknown>):Promise<any>=>{

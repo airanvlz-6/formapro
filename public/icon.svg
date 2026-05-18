@@ -1,9 +1,33 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="100" fill="#1E5C3A"/>
-  <!-- Cabeza martillo -->
-  <rect x="120" y="140" width="270" height="120" rx="24" fill="#ffffff"/>
-  <!-- Mango -->
-  <rect x="220" y="255" width="70" height="160" rx="20" fill="#ffffff"/>
-  <!-- Letra F encima -->
-  <text x="256" y="230" font-family="Georgia, serif" font-size="110" font-weight="900" fill="#1E5C3A" text-anchor="middle">F</text>
+  <rect width="512" height="512" rx="80" fill="#1A4D2E"/>
+  
+  <!-- Sombra/resplandor exterior -->
+  <polygon points="310,60 180,280 240,280 200,450 340,210 275,210" 
+    fill="none" stroke="#FFD700" stroke-width="8" opacity="0.3"
+    filter="url(#glow-outer)"/>
+  
+  <!-- Resplandor medio -->
+  <polygon points="310,60 180,280 240,280 200,450 340,210 275,210" 
+    fill="none" stroke="#FFE44D" stroke-width="5" opacity="0.6"
+    filter="url(#glow-mid)"/>
+  
+  <!-- Rayo principal -->
+  <polygon points="310,60 180,280 240,280 200,450 340,210 275,210" 
+    fill="#FFFFFF" stroke="#FFD700" stroke-width="2"
+    filter="url(#glow)"/>
+
+  <defs>
+    <filter id="glow-outer" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="18" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="blur"/></feMerge>
+    </filter>
+    <filter id="glow-mid" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
 </svg>

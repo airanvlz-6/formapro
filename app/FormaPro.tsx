@@ -251,6 +251,7 @@ const [errorCodigo,setErrorCodigo]=useState("");
 const [espLabel,setEspLabel]=useState<string|null>(null);
 const [espKey,setEspKey]=useState<string|null>(null);
 const [emailGuardado,setEmailGuardado]=useState(false);
+const [esPremium,setEsPremium]=useState(false);
 const [emailBanner,setEmailBanner]=useState("");
 const [bannerEnviado,setBannerEnviado]=useState(false);
 const [mostrarPerfil,setMostrarPerfil]=useState(false);
@@ -274,7 +275,7 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
   const cat=categoria?CATEGORIAS.find((c:Categoria)=>c.id===categoria):null;
   const preguntas:Pregunta[]=(espKey?FORMULARIOS[espKey]:null)||(categoria?FORMULARIOS[categoria]:[])||[];
   const pregActual=preguntas[pregIdx];
-  const bloqueado=msgCount>=FREE_LIMIT;
+  const bloqueado=!esPremium&&msgCount>=FREE_LIMIT;
   const accentColor=cat?.color||C.accent;
 
   const apiCall=async(body:Record<string,unknown>):Promise<any>=>{
@@ -309,6 +310,7 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
     const consultasUsadas=Math.floor((u.historial?.length||0)/2);
     setMsgCount(consultasUsadas);setPantalla("chat");
     setEmailGuardado(!!u.email);
+    setEsPremium(!!(u as any).premium);
     setTimeout(()=>reanudarSesion(u),300);
   };
 
@@ -322,12 +324,12 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
     try{
       const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,u.perfil,u.marcas||[],resumen),messages:nuevoHist});
       const texto=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
-      
+      const hist=[...nuevoHist,{role:"assistant",content:texto}];
       setMensajes([{role:"assistant",content:texto}]);setHistorial(hist);
       setMsgCount(consultasActuales);
       await apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{historial:hist}});
     }catch{setMensajes([{role:"assistant",content:"Error al reanudar sesion."}]);}
-    const hist=[...nuevoHist,{role:"assistant",content:texto}];
+    finally{setGenerando(false);}
   };
 
   const irACategoria=(catId:string)=>{setCategoria(catId);setEspKey(null);setEspLabel(null);setPregIdx(0);setRespuestas({});setSelMulti([]);setTextoTemp("");setPantalla("especialidad");};

@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function Success() {
+function SuccessContent() {
   const searchParams = useSearchParams();
   const codigo = searchParams.get("codigo");
   const [segundos, setSegundos] = useState(5);
@@ -31,12 +31,18 @@ export default function Success() {
           Tu código de acceso: <strong style={{ letterSpacing: 2 }}>{codigo}</strong>
         </p>
       )}
-      <p style={{ color: "#6B6560", fontSize: 14 }}>
-        Volviendo a la app en {segundos} segundos...
-      </p>
+      <p style={{ color: "#6B6560", fontSize: 14 }}>Volviendo a la app en {segundos} segundos...</p>
       <button onClick={() => window.location.href = "/"} style={{ marginTop: 24, background: "#1E5C3A", color: "#fff", border: "none", borderRadius: 100, padding: "14px 32px", fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
         Ir a Forge ahora
       </button>
     </div>
+  );
+}
+
+export default function Success() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>Cargando...</div>}>
+      <SuccessContent />
+    </Suspense>
   );
 }

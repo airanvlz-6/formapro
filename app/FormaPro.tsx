@@ -311,7 +311,7 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
     const prompt="Hola de nuevo! Estoy de vuelta. Recuerdame brevemente en que punto estabamos, como va mi progreso y que toca esta semana.";
     const nuevoHist=[...(u.historial||[]),{role:"user",content:prompt}];
     try{
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:2000,system:buildPrompt(catObj,u.perfil,u.marcas||[],resumen),messages:nuevoHist});
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,u.perfil,u.marcas||[],resumen),messages:nuevoHist});
       const texto=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
       const hist=[...nuevoHist,{role:"assistant",content:texto}];
       setMensajes([{role:"assistant",content:texto}]);setHistorial(hist);
@@ -344,7 +344,7 @@ const elegirEspecialidad=(label:string)=>{const key=ESPECIALIDAD_KEY[categoria!]
     setErrorCodigoPersonal("");setCodigoGuardado(codigo);
     const prompt="Hola! Acabo de completar mi perfil. Por favor: 1) Dame la bienvenida breve mostrando que entiendes mi situacion. 2) Genera mi programacion semanal completa con base cientifica y periodizacion. 3) Explica la logica de periodizacion que usaras. 4) Preguntame si quiero ajustar algo.";
     try{
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:2000,system:buildPrompt(catObj,perfil),messages:[{role:"user",content:prompt}]});
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,perfil),messages:[{role:"user",content:prompt}]});
       const texto=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error al conectar.";
       const hist=[{role:"user",content:prompt},{role:"assistant",content:texto}];
       setMensajes([{role:"assistant",content:texto}]);setHistorial(hist);setMsgCount(1);setCodigoUsuario(codigo);setEmailGuardado(!!email);
@@ -362,7 +362,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
     const catObj=CATEGORIAS.find((c:Categoria)=>c.id===categoria)!;
     try{
       const resumen=historial.slice(-6).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${m.content.substring(0,150)}...`).join("\n");
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:2000,system:buildPrompt(catObj,respuestas,marcas,resumen),messages:nuevoHist});
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas,resumen),messages:nuevoHist});
       const respText=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);setHistorial(hist);

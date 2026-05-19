@@ -372,21 +372,25 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
   };
 
   const enviar=async(texto:string=input)=>{
-    if((!texto.trim()&&!imagenAdjunta)||cargando||bloqueado) return;
+    if((!texto.trim()&&imagenesAdjuntas.length===0)||cargando||bloqueado) return;
     const textoEnvio=texto.trim()||"Analiza esta imagen o archivo y dame feedback en base a mi programacion.";
     let contenidoUsuario:any=textoEnvio;
-    if(imagenAdjunta){
-      const base64Data=imagenAdjunta.base64.split(",")[1];
-      if(imagenAdjunta.tipo==="application/pdf"){
-        contenidoUsuario=[{type:"document",source:{type:"base64",media_type:"application/pdf",data:base64Data}},{type:"text",text:textoEnvio}];
-      }else{
-        contenidoUsuario=[{type:"image",source:{type:"base64",media_type:imagenAdjunta.tipo,data:base64Data}},{type:"text",text:textoEnvio}];
-      }
+    if(imagenesAdjuntas.length>0){
+      const contenido:any[]=imagenesAdjuntas.map(img=>{
+        const base64Data=img.base64.split(",")[1];
+        if(img.tipo==="application/pdf"){
+          return {type:"document",source:{type:"base64",media_type:"application/pdf",data:base64Data}};
+        }else{
+          return {type:"image",source:{type:"base64",media_type:img.tipo,data:base64Data}};
+        }
+      });
+      contenido.push({type:"text",text:textoEnvio});
+      contenidoUsuario=contenido;
     }
     const nuevoHist=[...historial,{role:"user",content:contenidoUsuario}];
     const mensajeDisplay=imagenAdjunta?`📎 ${imagenAdjunta.nombre}\n${textoEnvio}`:textoEnvio;
     setMensajes(prev=>[...prev,{role:"user",content:mensajeDisplay}]);
-    setInput("");setImagenAdjunta(null);setImagenPreview(null);
+    setInput("");setImagenAdjunta(null);setImagenPreview(null);setImagenesAdjuntas([]);
     setCargando(true);setMsgCount(c=>c+1);
     const catObj=CATEGORIAS.find((c:Categoria)=>c.id===categoria)!;
     try{

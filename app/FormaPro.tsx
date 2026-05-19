@@ -876,13 +876,11 @@ const registrarMarca=async()=>{
                         }
                       }}/>
                     </label>
-                    {imagenPreview&&(
-                      <div style={{position:"relative",display:"inline-block"}}>
-                        {imagenPreview.startsWith("data:image")?
-                          <img src={imagenPreview} style={{height:40,borderRadius:6,objectFit:"cover"}} alt="preview"/>:
-                          <span style={{fontSize:12,color:C.muted,background:C.bg,padding:"4px 8px",borderRadius:6}}>📄 {imagenAdjunta?.nombre}</span>
-                        }
-                        <button onClick={()=>{setImagenAdjunta(null);setImagenPreview(null);}} style={{position:"absolute",top:-4,right:-4,background:C.warm,color:"#fff",border:"none",borderRadius:"50%",width:16,height:16,fontSize:10,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+                    {imagenesAdjuntas.length>0&&(
+                      <div style={{display:"flex",alignItems:"center",gap:6,background:C.bg,borderRadius:8,padding:"4px 10px"}}>
+                        <span style={{fontSize:13}}>📎</span>
+                        <span style={{fontSize:12,color:accentColor,fontWeight:600}}>{imagenesAdjuntas.length} archivo{imagenesAdjuntas.length>1?"s":""} adjunto{imagenesAdjuntas.length>1?"s":""}</span>
+                        <button onClick={()=>{setImagenesAdjuntas([]);setImagenAdjunta(null);setImagenPreview(null);}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14,lineHeight:1}}>×</button>
                       </div>
                     )}
                   </div>

@@ -438,7 +438,7 @@ const registrarMarca=async()=>{
   const restantes=FREE_LIMIT-msgCount;
 
   return (
-    <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'DM Sans', sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 16px"}}>
+    <div style={{minHeight:"100dvh",background:C.bg,fontFamily:"'DM Sans', sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 16px",paddingTop:"max(24px, env(safe-area-inset-top))"}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@700;800&display=swap');
         *{box-sizing:border-box;margin:0;padding:0;}
@@ -627,7 +627,7 @@ const registrarMarca=async()=>{
       )}
 
       {pantalla==="chat"&&cat&&(
-        <div style={{width:"100%",maxWidth:700,display:"flex",flexDirection:"column",height:"100dvh",maxHeight:"100dvh"}}>
+        <div style={{width:"100%",maxWidth:700,display:"flex",flexDirection:"column",height:"100dvh",maxHeight:"100dvh",paddingTop:"env(safe-area-inset-top)"}}>
           {codigoGuardado&&(
             <div style={{background:C.successLight,border:`1px solid ${C.success}33`,borderRadius:12,padding:"10px 16px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
               <span style={{fontSize:16}}>🔑</span>

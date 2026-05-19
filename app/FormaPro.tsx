@@ -388,7 +388,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
       contenidoUsuario=contenido;
     }
     const nuevoHist=[...historial,{role:"user",content:contenidoUsuario}];
-    const mensajeDisplay=imagenAdjunta?`📎 ${imagenAdjunta.nombre}\n${textoEnvio}`:textoEnvio;
+    const mensajeDisplay=imagenesAdjuntas.length>0?`📎 ${imagenesAdjuntas.length} archivo${imagenesAdjuntas.length>1?"s":""} adjunto${imagenesAdjuntas.length>1?"s":""}\n${textoEnvio}`:textoEnvio;
     setMensajes(prev=>[...prev,{role:"user",content:mensajeDisplay}]);
     setInput("");setImagenAdjunta(null);setImagenPreview(null);setImagenesAdjuntas([]);
     setCargando(true);setMsgCount(c=>c+1);

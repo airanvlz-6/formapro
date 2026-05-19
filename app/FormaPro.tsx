@@ -838,9 +838,7 @@ const registrarMarca=async()=>{
               <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,color:C.ink,marginBottom:6}}>Consultas gratuitas agotadas</div>
               <p style={{color:C.muted,fontSize:13,marginBottom:14,lineHeight:1.6}}>Actualiza a Forge Premium para consultas ilimitadas y seguimiento continuo.</p>
               <button className="btn-main" onClick={async()=>{
-                const res=await fetch("/api/stripe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"crear_sesion",email:"",codigo:codigoUsuario})});
-                const data=await res.json();
-                if(data.url) window.location.href=data.url;
+                window.location.href="https://buy.stripe.com/28EdR9bbAfg3c1gbXB0VO00";
               }} style={{background:C.warm,color:"#fff",border:"none",borderRadius:12,padding:"13px 26px",fontSize:15,fontWeight:600,cursor:"pointer"}}>
                 Obtener Premium — 14€/mes
               </button>

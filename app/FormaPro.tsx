@@ -652,7 +652,7 @@ const registrarMarca=async()=>{
             <button onClick={()=>{setMostrarMarcas(!mostrarMarcas);setMostrarPerfil(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"7px 12px",fontSize:12,color:accentColor,cursor:"pointer",fontWeight:600}}>📊 Progreso</button>
 <button onClick={()=>{setMostrarPerfil(!mostrarPerfil);setMostrarMarcas(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"7px 12px",fontSize:12,color:accentColor,cursor:"pointer",fontWeight:600}}>👤 Perfil</button>
             <div style={{background:restantes<=5?"#FFF3CD":cat.colorLight,color:restantes<=5?"#856404":accentColor,borderRadius:100,padding:"5px 12px",fontSize:12,fontWeight:500}}>
-              {restantes>0?`${restantes} libres`:"Limite"}
+              {esAdmin?"👑 Admin":esPremium?"⭐ Premium":restantes>0?`${restantes} libres`:"Actualizar"}
             </div>
           </div>
 

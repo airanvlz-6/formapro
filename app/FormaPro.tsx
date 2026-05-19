@@ -199,7 +199,7 @@ const SUGERENCIAS: Record<string, string[]> = {
   fuerza: ["Sube la intensidad", "Registro nuevo 1RM", "Mi sentadilla esta estancada", "Resumen de progreso"],
 };
 
-const FREE_LIMIT = 0;
+const FREE_LIMIT = 20;
 const generarCodigo = () => { const c = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let r = "FP-"; for(let i=0;i<5;i++) r+=c[Math.floor(Math.random()*c.length)]; return r; };
 
 type Categoria = typeof CATEGORIAS[0];

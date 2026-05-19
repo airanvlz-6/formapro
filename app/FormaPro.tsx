@@ -253,6 +253,7 @@ const [espKey,setEspKey]=useState<string|null>(null);
 const [emailGuardado,setEmailGuardado]=useState(false);
 const [esPremium,setEsPremium]=useState(false);
 const [esAdmin,setEsAdmin]=useState(false);
+const [imagenesAdjuntas,setImagenesAdjuntas]=useState<{base64:string;tipo:string;nombre:string}[]>([]);
 const [imagenAdjunta,setImagenAdjunta]=useState<{base64:string;tipo:string;nombre:string}|null>(null);
 const [imagenPreview,setImagenPreview]=useState<string|null>(null);
 const [emailBanner,setEmailBanner]=useState("");
@@ -847,16 +848,28 @@ const registrarMarca=async()=>{
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:imagenPreview?8:0}}>
                     <label style={{cursor:"pointer",color:C.muted,fontSize:18,flexShrink:0}} title="Subir imagen o PDF">
                       📎
-                      <input type="file" accept="image/*,.pdf" style={{display:"none"}} onChange={async(e)=>{
+                      <input type="file" accept="image/*,.pdf" multiple style={{display:"none"}} onChange={async(e)=>{
                         const file=e.target.files?.[0];
                         if(!file) return;
                         const reader=new FileReader();
                         reader.onload=()=>{
                           const base64=reader.result as string;
+                          setImagenesAdjuntas(prev=>[...prev,{base64,tipo:file.type,nombre:file.name}]);
                           setImagenAdjunta({base64,tipo:file.type,nombre:file.name});
                           setImagenPreview(base64);
                         };
                         reader.readAsDataURL(file);
+                        const files=e.target.files;
+                        if(files&&files.length>1){
+                          Array.from(files).slice(1).forEach(f=>{
+                            const r=new FileReader();
+                            r.onload=()=>{
+                              const b64=r.result as string;
+                              setImagenesAdjuntas(prev=>[...prev,{base64:b64,tipo:f.type,nombre:f.name}]);
+                            };
+                            r.readAsDataURL(f);
+                          });
+                        }
                       }}/>
                     </label>
                     {imagenPreview&&(

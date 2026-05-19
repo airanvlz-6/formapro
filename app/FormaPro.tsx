@@ -252,6 +252,7 @@ const [espLabel,setEspLabel]=useState<string|null>(null);
 const [espKey,setEspKey]=useState<string|null>(null);
 const [emailGuardado,setEmailGuardado]=useState(false);
 const [esPremium,setEsPremium]=useState(false);
+const [esAdmin,setEsAdmin]=useState(false);
 const [emailBanner,setEmailBanner]=useState("");
 const [bannerEnviado,setBannerEnviado]=useState(false);
 const [mostrarPerfil,setMostrarPerfil]=useState(false);
@@ -275,7 +276,7 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
   const cat=categoria?CATEGORIAS.find((c:Categoria)=>c.id===categoria):null;
   const preguntas:Pregunta[]=(espKey?FORMULARIOS[espKey]:null)||(categoria?FORMULARIOS[categoria]:[])||[];
   const pregActual=preguntas[pregIdx];
-  const bloqueado=!esPremium&&msgCount>=FREE_LIMIT&&codigoUsuario!=="060385";
+  const bloqueado=!esPremium&&!esAdmin&&msgCount>=FREE_LIMIT;
   const accentColor=cat?.color||C.accent;
 
   const apiCall=async(body:Record<string,unknown>):Promise<any>=>{
@@ -311,6 +312,7 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
     setMsgCount(consultasUsadas);setPantalla("chat");
     setEmailGuardado(!!u.email);
     setEsPremium(!!(u as any).premium);
+    setEsAdmin(!!(u as any).admin);
     setTimeout(()=>reanudarSesion(u),300);
   };
 

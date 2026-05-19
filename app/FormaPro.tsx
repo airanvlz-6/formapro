@@ -661,19 +661,19 @@ const registrarMarca=async()=>{
   </div>
 )}
 
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-            <button onClick={()=>{setPantalla("inicio");setMensajes([]);setHistorial([]);setMsgCount(0);setCodigoGuardado("");}} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"8px 14px",fontSize:13}}>Salir</button>
-            <div style={{flex:1,display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:38,height:38,borderRadius:12,background:cat.colorLight,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>{cat.emoji}</div>
-              <div>
-                <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:15,color:C.ink}}>Forge Coach</div>
-                <div style={{color:accentColor,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:0.8}}>{cat.titulo} - {cat.subtitulo}</div>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:12}}>
+            <button onClick={()=>{setPantalla("inicio");setMensajes([]);setHistorial([]);setMsgCount(0);setCodigoGuardado("");}} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"7px 10px",fontSize:12,flexShrink:0}}>←</button>
+            <div style={{flex:1,display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+              <div style={{width:32,height:32,borderRadius:10,background:cat.colorLight,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{cat.emoji}</div>
+              <div style={{minWidth:0,overflow:"hidden"}}>
+                <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:13,color:C.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Forge Coach</div>
+                <div style={{color:accentColor,fontSize:10,fontWeight:600,textTransform:"uppercase",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{espLabel||cat.titulo}</div>
               </div>
             </div>
-            <button onClick={()=>{setMostrarMarcas(!mostrarMarcas);setMostrarPerfil(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"7px 12px",fontSize:12,color:accentColor,cursor:"pointer",fontWeight:600}}>📊 Progreso</button>
-<button onClick={()=>{setMostrarPerfil(!mostrarPerfil);setMostrarMarcas(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"7px 12px",fontSize:12,color:accentColor,cursor:"pointer",fontWeight:600}}>👤 Perfil</button>
-            <div style={{background:restantes<=5?"#FFF3CD":cat.colorLight,color:restantes<=5?"#856404":accentColor,borderRadius:100,padding:"5px 12px",fontSize:12,fontWeight:500}}>
-              {esAdmin?"👑 Admin":esPremium?"⭐ Premium":restantes>0?`${restantes} libres`:"Actualizar"}
+            <button onClick={()=>{setMostrarMarcas(!mostrarMarcas);setMostrarPerfil(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:accentColor,cursor:"pointer",flexShrink:0}}>📊</button>
+            <button onClick={()=>{setMostrarPerfil(!mostrarPerfil);setMostrarMarcas(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:accentColor,cursor:"pointer",flexShrink:0}}>👤</button>
+            <div style={{background:restantes<=5?"#FFF3CD":cat.colorLight,color:restantes<=5?"#856404":accentColor,borderRadius:100,padding:"5px 9px",fontSize:11,fontWeight:600,flexShrink:0,whiteSpace:"nowrap"}}>
+              {esAdmin?"👑 Admin":esPremium?"⭐ Premium":restantes>0?`${restantes}`:"-"}
             </div>
           </div>
 

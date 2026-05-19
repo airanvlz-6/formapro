@@ -253,6 +253,8 @@ const [espKey,setEspKey]=useState<string|null>(null);
 const [emailGuardado,setEmailGuardado]=useState(false);
 const [esPremium,setEsPremium]=useState(false);
 const [esAdmin,setEsAdmin]=useState(false);
+const [imagenAdjunta,setImagenAdjunta]=useState<{base64:string;tipo:string;nombre:string}|null>(null);
+const [imagenPreview,setImagenPreview]=useState<string|null>(null);
 const [emailBanner,setEmailBanner]=useState("");
 const [bannerEnviado,setBannerEnviado]=useState(false);
 const [mostrarPerfil,setMostrarPerfil]=useState(false);
@@ -369,13 +371,25 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
   };
 
   const enviar=async(texto:string=input)=>{
-    if(!texto.trim()||cargando||bloqueado) return;
-    const nuevoHist=[...historial,{role:"user",content:texto.trim()}];
-    setMensajes(prev=>[...prev,{role:"user",content:texto.trim()}]);
-    setInput("");setCargando(true);setMsgCount(c=>c+1);
+    if((!texto.trim()&&!imagenAdjunta)||cargando||bloqueado) return;
+    const textoEnvio=texto.trim()||"Analiza esta imagen o archivo y dame feedback en base a mi programacion.";
+    let contenidoUsuario:any=textoEnvio;
+    if(imagenAdjunta){
+      const base64Data=imagenAdjunta.base64.split(",")[1];
+      if(imagenAdjunta.tipo==="application/pdf"){
+        contenidoUsuario=[{type:"document",source:{type:"base64",media_type:"application/pdf",data:base64Data}},{type:"text",text:textoEnvio}];
+      }else{
+        contenidoUsuario=[{type:"image",source:{type:"base64",media_type:imagenAdjunta.tipo,data:base64Data}},{type:"text",text:textoEnvio}];
+      }
+    }
+    const nuevoHist=[...historial,{role:"user",content:contenidoUsuario}];
+    const mensajeDisplay=imagenAdjunta?`📎 ${imagenAdjunta.nombre}\n${textoEnvio}`:textoEnvio;
+    setMensajes(prev=>[...prev,{role:"user",content:mensajeDisplay}]);
+    setInput("");setImagenAdjunta(null);setImagenPreview(null);
+    setCargando(true);setMsgCount(c=>c+1);
     const catObj=CATEGORIAS.find((c:Categoria)=>c.id===categoria)!;
     try{
-      const resumen=historial.slice(-6).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${m.content.substring(0,150)}...`).join("\n");
+      const resumen=historial.slice(-6).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[imagen/archivo]"}...`).join("\n");
       const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas,resumen),messages:nuevoHist});
       const respText=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
@@ -830,6 +844,31 @@ const registrarMarca=async()=>{
             <>
               <div style={{marginTop:10,display:"flex",gap:8,alignItems:"flex-end"}}>
                 <div style={{flex:1,background:C.card,border:`2px solid ${C.border}`,borderRadius:16,padding:"11px 15px"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:imagenPreview?8:0}}>
+                    <label style={{cursor:"pointer",color:C.muted,fontSize:18,flexShrink:0}} title="Subir imagen o PDF">
+                      📎
+                      <input type="file" accept="image/*,.pdf" style={{display:"none"}} onChange={async(e)=>{
+                        const file=e.target.files?.[0];
+                        if(!file) return;
+                        const reader=new FileReader();
+                        reader.onload=()=>{
+                          const base64=reader.result as string;
+                          setImagenAdjunta({base64,tipo:file.type,nombre:file.name});
+                          setImagenPreview(base64);
+                        };
+                        reader.readAsDataURL(file);
+                      }}/>
+                    </label>
+                    {imagenPreview&&(
+                      <div style={{position:"relative",display:"inline-block"}}>
+                        {imagenPreview.startsWith("data:image")?
+                          <img src={imagenPreview} style={{height:40,borderRadius:6,objectFit:"cover"}} alt="preview"/>:
+                          <span style={{fontSize:12,color:C.muted,background:C.bg,padding:"4px 8px",borderRadius:6}}>📄 {imagenAdjunta?.nombre}</span>
+                        }
+                        <button onClick={()=>{setImagenAdjunta(null);setImagenPreview(null);}} style={{position:"absolute",top:-4,right:-4,background:C.warm,color:"#fff",border:"none",borderRadius:"50%",width:16,height:16,fontSize:10,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+                      </div>
+                    )}
+                  </div>
                   <textarea ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={handleKey}
                     placeholder="Pregunta, pide ajustes o cuentame cambios..."
                     rows={1} disabled={cargando}

@@ -325,9 +325,9 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
       const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,u.perfil,u.marcas||[],resumen),messages:nuevoHist});
       const texto=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
       const hist=[...nuevoHist,{role:"assistant",content:texto}];
-      setMensajes([{role:"assistant",content:texto}]);setHistorial(hist);
+      setMensajes([{role:"assistant",content:texto}]);
+      setHistorial(u.historial||[]);
       setMsgCount(consultasActuales);
-      await apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{historial:hist}});
     }catch{setMensajes([{role:"assistant",content:"Error al reanudar sesion."}]);}
     finally{setGenerando(false);}
   };

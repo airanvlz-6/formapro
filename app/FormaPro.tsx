@@ -324,7 +324,7 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
   const reanudarSesion=async(u:UsuarioData)=>{
     setGenerando(true);
     const catObj=CATEGORIAS.find((c:Categoria)=>c.id===u.categoria)!;
-    const resumen=u.historial?.slice(-6).map((m:{role:string;content:string})=>`${m.role==="user"?"Usuario":"Coach"}: ${m.content.substring(0,150)}...`).join("\n")||"";
+    const resumen=u.historial?.slice(-6).map((m:{role:string;content:any})=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[imagen/archivo]"}...`).join("\n")||"";
     const prompt="Hola de nuevo! Estoy de vuelta. Recuerdame brevemente en que punto estabamos, como va mi progreso y que toca esta semana.";
     const consultasActuales=Math.floor((u.historial?.length||0)/2);
     const nuevoHist=[...(u.historial||[]),{role:"user",content:prompt}];

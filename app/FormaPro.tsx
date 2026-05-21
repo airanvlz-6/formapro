@@ -393,6 +393,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
     const mensajeDisplay=imagenesAdjuntas.length>0?`📎 ${imagenesAdjuntas.length} archivo${imagenesAdjuntas.length>1?"s":""} adjunto${imagenesAdjuntas.length>1?"s":""}\n${textoEnvio}`:textoEnvio;
     setMensajes(prev=>[...prev,{role:"user",content:mensajeDisplay}]);
     setInput("");setImagenAdjunta(null);setImagenPreview(null);setImagenesAdjuntas([]);
+    if(inputRef.current){inputRef.current.style.height="auto";}
     setCargando(true);setMsgCount(c=>c+1);
     const catObj=CATEGORIAS.find((c:Categoria)=>c.id===categoria)!;
     try{

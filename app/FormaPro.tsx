@@ -12,6 +12,7 @@ const CATEGORIAS = [
   { id: "funcional", emoji: "⚡", titulo: "Funcional", subtitulo: "Fitness & Bienestar", desc: "Dinámico y adaptable. Ideal para mantenerse en forma, bajar de peso o sentirse mejor.", color: "#2D6A4F", colorLight: "#D8F3DC" },
   { id: "hibrido", emoji: "🔄", titulo: "Hibrido", subtitulo: "Resistencia + Fuerza", desc: "Para atletas que buscan mejorar en resistencia y fuerza/potencia simultaneamente.", color: "#6B3FA0", colorLight: "#EDE7F6" },
   { id: "fuerza", emoji: "🏋️", titulo: "Fuerza", subtitulo: "Powerlifting & Olimpico", desc: "Para quienes buscan aumentar marcas en levantamientos olímpicos o powerlifting.", color: "#B5300B", colorLight: "#FDECEA" },
+  { id: "grupos", emoji: "👥", titulo: "Box & Grupos", subtitulo: "Entrenadores & Coaches", desc: "Para coaches y boxes. Programa sesiones grupales adaptadas al nivel y material de tu grupo.", color: "#0F766E", colorLight: "#CCFBF1" },
 ];
 
 const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string; opciones?: string[]; placeholder?: string}>> = {
@@ -136,6 +137,44 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
     { id: "lesiones", label: "¿Lesiones o limitaciones?", tipo: "texto", placeholder: "Ej: muñecas limitadas, lumbar sensible, o ninguna" },
     { id: "objetivo_detalle", label: "¿Qué quieres lograr exactamente?", tipo: "texto", placeholder: "Ej: romper 1RM en sentadilla, clasificarme para campeonato..." },
   ],
+  grupos_crossfit: [
+    { id: "nombre_box", label: "¿Cómo se llama tu box?", tipo: "texto", placeholder: "Ej: CrossFit Tenerife, Box Canarias..." },
+    { id: "nivel_grupo", label: "¿Cuál es el nivel general de tu grupo?", tipo: "opciones", opciones: ["Mayoría principiantes", "Mayoría intermedios", "Mayoría avanzados", "Nivel mixto"] },
+    { id: "num_personas", label: "¿Cuántas personas hay en las clases?", tipo: "opciones", opciones: ["Menos de 5", "5-10 personas", "10-20 personas", "Más de 20 personas"] },
+    { id: "duracion_clase", label: "¿Cuánto dura cada clase?", tipo: "opciones", opciones: ["45 minutos", "1 hora", "1h 15min", "1h 30min"] },
+    { id: "dias_semana", label: "¿Cuántos días a la semana programas?", tipo: "opciones", opciones: ["3 días", "4 días", "5 días", "6 días"] },
+    { id: "material", label: "¿Con qué material cuenta el box?", tipo: "multi", opciones: ["Barras y discos olímpicos", "Kettlebells", "Remos / SkiErg", "Gymnastic rings", "Pull-up bars", "Assault bike", "Wall balls", "Jump rope"] },
+    { id: "objetivo_programacion", label: "¿Qué quieres conseguir con la programación?", tipo: "opciones", opciones: ["Preparar Open / competición", "Mejorar rendimiento general", "Aumentar la adherencia y diversión", "Ciclo de fuerza + metcons"] },
+    { id: "objetivo_detalle", label: "¿Algo más que el coach deba saber?", tipo: "texto", placeholder: "Ej: hay varios atletas con lesión de hombro, queremos un ciclo de sentadilla..." },
+  ],
+  grupos_fitness: [
+    { id: "tipo_sala", label: "¿Qué tipo de sala o gimnasio tienes?", tipo: "opciones", opciones: ["Sala de pesas completa", "Sala funcional / tubo", "Sala mixta (pesas + cardio)", "Estudio boutique"] },
+    { id: "nivel_grupo", label: "¿Cuál es el nivel general de tus clientes?", tipo: "opciones", opciones: ["Mayoría principiantes", "Mayoría intermedios", "Nivel mixto", "Todos los niveles"] },
+    { id: "duracion_clase", label: "¿Cuánto dura cada sesión?", tipo: "opciones", opciones: ["30 minutos", "45 minutos", "1 hora", "Más de 1 hora"] },
+    { id: "dias_semana", label: "¿Cuántos días a la semana programas?", tipo: "opciones", opciones: ["3 días", "4 días", "5 días", "6 días"] },
+    { id: "material", label: "¿Con qué material cuentas?", tipo: "multi", opciones: ["Mancuernas", "Barras y discos", "Máquinas de gimnasio", "Kettlebells", "Bandas elásticas", "TRX / Suspensión", "Cardio (cintas, bikes)"] },
+    { id: "objetivo_grupo", label: "¿Cuál es el objetivo principal de tus clientes?", tipo: "opciones", opciones: ["Pérdida de grasa", "Tonificación y definición", "Ganancia muscular", "Salud y bienestar general"] },
+    { id: "objetivo_detalle", label: "¿Algo más que el coach deba saber?", tipo: "texto", placeholder: "Ej: clientela mayor de 50 años, muchos con problemas de rodilla..." },
+  ],
+  grupos_funcional: [
+    { id: "tipo_clase", label: "¿Qué tipo de clases impartes?", tipo: "opciones", opciones: ["HIIT / Circuitos", "Functional Training", "GAP / Core", "TRX / Suspensión", "Bootcamp"] },
+    { id: "nivel_grupo", label: "¿Cuál es el nivel general del grupo?", tipo: "opciones", opciones: ["Principiantes", "Intermedios", "Mixto", "Avanzados"] },
+    { id: "num_personas", label: "¿Cuántas personas por clase?", tipo: "opciones", opciones: ["Menos de 5", "5-15 personas", "15-25 personas", "Más de 25 personas"] },
+    { id: "duracion_clase", label: "¿Cuánto dura cada clase?", tipo: "opciones", opciones: ["30 minutos", "45 minutos", "1 hora"] },
+    { id: "dias_semana", label: "¿Cuántos días programas por semana?", tipo: "opciones", opciones: ["3 días", "4 días", "5 días", "6 días"] },
+    { id: "material", label: "¿Con qué material cuentas?", tipo: "multi", opciones: ["Solo peso corporal", "Mancuernas ligeras", "Kettlebells", "Bandas elásticas", "Step / cajón", "TRX", "Balón medicinal"] },
+    { id: "objetivo_detalle", label: "¿Qué quieres conseguir con la programación?", tipo: "texto", placeholder: "Ej: clases dinámicas sin repetir, progresión mensual, evitar lesiones..." },
+  ],
+  grupos_deporte: [
+    { id: "deporte", label: "¿Qué deporte practica el equipo?", tipo: "texto", placeholder: "Ej: fútbol, baloncesto, natación, atletismo..." },
+    { id: "nivel_equipo", label: "¿Cuál es el nivel del equipo?", tipo: "opciones", opciones: ["Escuela / juvenil", "Amateur / recreativo", "Semiprofesional", "Profesional"] },
+    { id: "num_jugadores", label: "¿Cuántos jugadores tiene el equipo?", tipo: "opciones", opciones: ["Menos de 10", "10-20 jugadores", "20-30 jugadores", "Más de 30 jugadores"] },
+    { id: "fase_temporada", label: "¿En qué fase de temporada estáis?", tipo: "opciones", opciones: ["Pretemporada", "Temporada en competición", "Final de temporada", "Fuera de temporada"] },
+    { id: "dias_entreno", label: "¿Cuántos días de entrenamiento físico a la semana?", tipo: "opciones", opciones: ["1-2 días", "3 días", "4 días", "5+ días"] },
+    { id: "objetivo_fisico", label: "¿Cuál es el objetivo físico principal?", tipo: "opciones", opciones: ["Preparación física general", "Fuerza y potencia", "Resistencia específica", "Prevención de lesiones", "Recuperación y descarga"] },
+    { id: "material", label: "¿Con qué material contáis?", tipo: "multi", opciones: ["Gimnasio completo", "Material básico (conos, petos)", "Sala de pesas", "Campo / pista", "Poco material"] },
+    { id: "objetivo_detalle", label: "¿Algo específico que el coach deba saber?", tipo: "texto", placeholder: "Ej: varios jugadores lesionados, partido importante en 3 semanas..." },
+  ],
 };
 
 const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "") => {
@@ -157,7 +196,7 @@ PROXIMOS 14 DIAS: ${Array.from({length:14},(_,i)=>{const d=new Date();d.setDate(
 IMPORTANTE: Usa estas fechas exactas al planificar sesiones. No calcules fechas por tu cuenta. La semana natural empieza el LUNES y termina el DOMINGO. Hoy es ${new Date().toLocaleDateString("es-ES",{weekday:"long"})} por lo que la semana actual empezó el lunes ${new Date(new Date().setDate(new Date().getDate()-(new Date().getDay()||7)+1)).toLocaleDateString("es-ES",{day:"numeric",month:"long"})} y termina el domingo ${new Date(new Date().setDate(new Date().getDate()-(new Date().getDay()||7)+7)).toLocaleDateString("es-ES",{day:"numeric",month:"long"})}.
 PRINCIPIOS: Periodizacion cientifica adaptada al nivel, sobrecarga progresiva, deload cada 3-4 semanas, especificidad al objetivo, adaptacion a lesiones y equipamiento.
 FORMATO: Max 400 palabras salvo rutina completa. Rutina: DIA / BLOQUE / EJERCICIO / SERIES x REPS / DESCANSO. Usa negrita para encabezados. Ajusta cambios justificando el porque. Responde siempre en español correcto con tildes y ñ.
-${({"carrera":`ESPECIALIDAD RUNNING: Ciclos 4sem (3 carga+1 descarga), progresion vol max 10%/sem, zonas Z1-Z5, rodaje largo+series+fuerza complementaria.`,"carrera_trail":`ESPECIALIDAD TRAIL: Trabajo de desnivel, tecnica bajada, fuerza excentrica, progresion desnivel acumulado.`,"funcional":`ESPECIALIDAD FITNESS: Bloques 4-6sem, movilidad+activacion+principal+finisher metabolico, patrones empuje/tiron/bisagra/sentadilla/core.`,"funcional_crossfit":`ESPECIALIDAD CROSSFIT: Halterofilia tecnica (60-80% 1RM) + WOD diario con escalados + accesorios gimnasticos con progresiones especificas + movilidad.`,"funcional_calistenia":`ESPECIALIDAD CALISTENIA: Progresiones por habilidad (planche, front lever, muscle-up, handstand), fuerza empuje/tiron, movilidad especifica.`,"hibrido_general":`ESPECIALIDAD HIBRIDO: Bloques minimizando interferencia, fuerza 80-90% 1RM + resistencia Z2/umbral/VO2max.`,"hibrido_hyrox":`ESPECIALIDAD HYROX: Running especifico + entrenamiento por estaciones (SkiErg, sled, burpees, wall balls, rowing, farmers, sandbag) + simulaciones + fuerza base.`,"hibrido_triatlon":`ESPECIALIDAD TRIATLON: Natacion+ciclismo+carrera equilibrados segun nivel y punto debil, brick workouts, fases base/desarrollo/especifico/taper.`,"hibrido_ocr":`ESPECIALIDAD OCR: Carrera en terreno irregular + obstaculos (agarre, escalada, arrastre) + fuerza funcional + grip especifico.`,"fuerza_powerlifting":`ESPECIALIDAD POWERLIFTING: SQ/BP/DL con progresion lineal (principiantes), DUP/5-3-1 (intermedios), bloques acumulacion/intensificacion/realizacion (avanzados), % 1RM o RPE.`,"fuerza_halterofilia":`ESPECIALIDAD HALTEROFILIA: Arrancada y 2T con trabajo tecnico submaximo (60-75%), series de potencia, fuerza base (sentadilla frontal, tiron, press).`,"fuerza_strongman":`ESPECIALIDAD STRONGMAN: Fuerza base + implementos disponibles (log, yoke, farmer, stones) + acondicionamiento eventos + grip.`}[cat.id]||"")}`;
+${({"carrera":`ESPECIALIDAD RUNNING: Ciclos 4sem (3 carga+1 descarga), progresion vol max 10%/sem, zonas Z1-Z5, rodaje largo+series+fuerza complementaria.`,"carrera_trail":`ESPECIALIDAD TRAIL: Trabajo de desnivel, tecnica bajada, fuerza excentrica, progresion desnivel acumulado.`,"funcional":`ESPECIALIDAD FITNESS: Bloques 4-6sem, movilidad+activacion+principal+finisher metabolico, patrones empuje/tiron/bisagra/sentadilla/core.`,"funcional_crossfit":`ESPECIALIDAD CROSSFIT: Halterofilia tecnica (60-80% 1RM) + WOD diario con escalados + accesorios gimnasticos con progresiones especificas + movilidad.`,"funcional_calistenia":`ESPECIALIDAD CALISTENIA: Progresiones por habilidad (planche, front lever, muscle-up, handstand), fuerza empuje/tiron, movilidad especifica.`,"hibrido_general":`ESPECIALIDAD HIBRIDO: Bloques minimizando interferencia, fuerza 80-90% 1RM + resistencia Z2/umbral/VO2max.`,"hibrido_hyrox":`ESPECIALIDAD HYROX: Running especifico + entrenamiento por estaciones (SkiErg, sled, burpees, wall balls, rowing, farmers, sandbag) + simulaciones + fuerza base.`,"hibrido_triatlon":`ESPECIALIDAD TRIATLON: Natacion+ciclismo+carrera equilibrados segun nivel y punto debil, brick workouts, fases base/desarrollo/especifico/taper.`,"hibrido_ocr":`ESPECIALIDAD OCR: Carrera en terreno irregular + obstaculos (agarre, escalada, arrastre) + fuerza funcional + grip especifico.`,"fuerza_powerlifting":`ESPECIALIDAD POWERLIFTING: SQ/BP/DL con progresion lineal (principiantes), DUP/5-3-1 (intermedios), bloques acumulacion/intensificacion/realizacion (avanzados), % 1RM o RPE.`,"fuerza_halterofilia":`ESPECIALIDAD HALTEROFILIA: Arrancada y 2T con trabajo tecnico submaximo (60-75%), series de potencia, fuerza base (sentadilla frontal, tiron, press).`,"fuerza_strongman":`ESPECIALIDAD STRONGMAN: Fuerza base + implementos disponibles (log, yoke, farmer, stones) + acondicionamiento eventos + grip.`,"grupos_crossfit":`ESPECIALIDAD BOX CROSSFIT: Eres coach de coaches. Genera programaciones de box completas con estructura: calentamiento + fuerza/halterofilia + WOD + vuelta a la calma. Incluye escalados para todos los niveles. Varía estímulos diarios evitando repetición. Usa terminología CrossFit.`,"grupos_fitness":`ESPECIALIDAD SALA FITNESS: Genera sesiones para grupos con estructura clara: calentamiento + bloque principal + vuelta a la calma. Adapta al nivel del grupo y material disponible. Incluye variantes para distintos niveles dentro del mismo grupo.`,"grupos_funcional":`ESPECIALIDAD CLASES GRUPALES: Genera clases dinámicas con variedad de estímulos. Estructura: activación + circuito principal + finisher. Proporciona variantes de cada ejercicio (fácil/difícil) para que el coach pueda adaptar en clase.`,"grupos_deporte":`ESPECIALIDAD EQUIPO DEPORTIVO: Genera programación de preparación física específica al deporte. Incluye fuerza, potencia, resistencia y prevención de lesiones según la fase de temporada. Adapta el volumen a los días disponibles sin interferir con los entrenamientos técnicos.`}[cat.id]||"")}`;
 };
 
 const ESPECIALIDADES: Record<string, string[]> = {
@@ -165,6 +204,7 @@ const ESPECIALIDADES: Record<string, string[]> = {
   funcional: ["Fitness general / Bienestar", "CrossFit / WOD", "Calistenia / Movimiento"],
   hibrido: ["Hibrido general (fuerza + cardio)", "Hyrox", "Triatlon / Duatlon", "OCR / Obstaculos"],
   fuerza: ["Powerlifting (SQ / BP / DL)", "Halterofilia (Arrancada / 2T)", "Strongman / Fuerza general"],
+  grupos: ["Box CrossFit", "Sala de fitness / Gym", "Clases grupales funcionales", "Equipo deportivo"],
 };
 
 const ESPECIALIDAD_KEY: Record<string, Record<string, string>> = {
@@ -189,6 +229,12 @@ const ESPECIALIDAD_KEY: Record<string, Record<string, string>> = {
     "Powerlifting (SQ / BP / DL)": "fuerza_powerlifting",
     "Halterofilia (Arrancada / 2T)": "fuerza_halterofilia",
     "Strongman / Fuerza general": "fuerza_strongman",
+  },
+  grupos: {
+    "Box CrossFit": "grupos_crossfit",
+    "Sala de fitness / Gym": "grupos_fitness",
+    "Clases grupales funcionales": "grupos_funcional",
+    "Equipo deportivo": "grupos_deporte",
   },
 };
 

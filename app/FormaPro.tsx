@@ -364,7 +364,7 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
     setEmailGuardado(!!u.email);
     setEsPremium(!!(u as any).premium);
     setEsAdmin(!!(u as any).admin);
-    setTimeout(()=>reanudarSesion(u),300);
+    // reanudarSesion eliminada para reducir consumo de tokens
   };
 
   const reanudarSesion=async(u:UsuarioData)=>{

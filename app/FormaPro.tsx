@@ -446,7 +446,8 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
     try{
       const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[imagen/archivo]"}...`).join("\n");
       const esProgramacion=texto.toLowerCase().includes("programacion")||texto.toLowerCase().includes("rutina")||texto.toLowerCase().includes("semana")||texto.toLowerCase().includes("plan");
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?3000:1500,system:buildPrompt(catObj,esp,respuestas,marcas,resumen),messages:nuevoHist.slice(-4)});
+      const mensajesContexto=esProgramacion?-6:-4;
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?3000:1500,system:buildPrompt(catObj,esp,respuestas,marcas,resumen),messages:nuevoHist.slice(mensajesContexto)});
       const respText=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);setHistorial(hist);

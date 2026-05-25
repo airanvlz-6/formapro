@@ -971,6 +971,30 @@ const registrarMarca=async()=>{
                 <button onClick={registrarMarca} style={{background:accentColor,color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>+</button>
               </div>
               <p style={{color:C.muted,fontSize:11,marginTop:8}}>💡 También puedes decirle al coach tu nueva marca y la añadirá automáticamente.</p>
+              <div style={{marginTop:16,borderTop:`1px solid ${C.border}`,paddingTop:12,display:"flex",flexDirection:"column",gap:10}}>
+                <p style={{color:C.ink,fontSize:13,fontWeight:600,marginBottom:4}}>Contexto para el coach</p>
+                <div>
+                  <p style={{color:C.muted,fontSize:11,marginBottom:4}}>🤕 Lesiones o molestias actuales</p>
+                  <textarea value={memoriaCoach.lesiones||""} onChange={e=>setMemoriaCoach(prev=>({...prev,lesiones:e.target.value}))}
+                    onBlur={async()=>{if(codigoUsuario) await apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{lesiones_actuales:memoriaCoach.lesiones}});}}
+                    placeholder="Ej: rodilla derecha molesta, hombro limitado... o ninguna"
+                    rows={2} style={{width:"100%",border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 10px",fontSize:12,color:C.ink,background:C.bg,fontFamily:"inherit",resize:"none"}}/>
+                </div>
+                <div>
+                  <p style={{color:C.muted,fontSize:11,marginBottom:4}}>📅 Disponibilidad esta semana</p>
+                  <textarea value={memoriaCoach.plan||""} onChange={e=>setMemoriaCoach(prev=>({...prev,plan:e.target.value}))}
+                    onBlur={async()=>{if(codigoUsuario) await apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{plan_proxima_semana:memoriaCoach.plan}});}}
+                    placeholder="Ej: esta semana solo puedo lunes, miércoles y viernes por la tarde"
+                    rows={2} style={{width:"100%",border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 10px",fontSize:12,color:C.ink,background:C.bg,fontFamily:"inherit",resize:"none"}}/>
+                </div>
+                <div>
+                  <p style={{color:C.muted,fontSize:11,marginBottom:4}}>📝 Notas para el coach</p>
+                  <textarea value={memoriaCoach.notas||""} onChange={e=>setMemoriaCoach(prev=>({...prev,notas:e.target.value}))}
+                    onBlur={async()=>{if(codigoUsuario) await apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{notas_coach:memoriaCoach.notas}});}}
+                    placeholder="Ej: tengo competición el 15 de junio, prefiero entrenar por las mañanas..."
+                    rows={2} style={{width:"100%",border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 10px",fontSize:12,color:C.ink,background:C.bg,fontFamily:"inherit",resize:"none"}}/>
+                </div>
+              </div>
               {(CAMPOS_MARCAS[espKey||""]||CAMPOS_MARCAS[categoria||""])&&(
                 <div style={{marginTop:16,borderTop:`1px solid ${C.border}`,paddingTop:12}}>
                   <p style={{color:C.ink,fontSize:13,fontWeight:600,marginBottom:10}}>Marcas por disciplina</p>

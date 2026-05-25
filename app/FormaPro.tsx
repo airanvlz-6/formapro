@@ -244,6 +244,21 @@ const ESPECIALIDAD_KEY: Record<string, Record<string, string>> = {
   },
 };
 
+const CAMPOS_MARCAS: Record<string, {id:string; label:string; placeholder:string}[]> = {
+  carrera: [{id:"5k",label:"5K",placeholder:"Ej: 24:30"},{id:"10k",label:"10K",placeholder:"Ej: 51:00"},{id:"21k",label:"Media maratón",placeholder:"Ej: 1:52:00"},{id:"42k",label:"Maratón",placeholder:"Ej: 4:10:00"}],
+  carrera_trail: [{id:"trail_corto",label:"Trail corto (-21K)",placeholder:"Ej: 2:15:00"},{id:"trail_medio",label:"Trail medio (21-42K)",placeholder:"Ej: 4:30:00"},{id:"desnivel",label:"Desnivel máx sesión",placeholder:"Ej: 1200m"}],
+  funcional_crossfit: [{id:"fran",label:"Fran",placeholder:"Ej: 4:30"},{id:"snatch",label:"Arrancada",placeholder:"Ej: 70kg"},{id:"clean_jerk",label:"Dos tiempos",placeholder:"Ej: 90kg"},{id:"back_squat",label:"Back squat",placeholder:"Ej: 120kg"},{id:"pullups",label:"Pull-ups máx",placeholder:"Ej: 20"}],
+  funcional_calistenia: [{id:"pullups",label:"Pull-ups máx",placeholder:"Ej: 15"},{id:"muscle_up",label:"Muscle-ups",placeholder:"Ej: 5"},{id:"front_lever",label:"Front lever",placeholder:"Ej: 10 seg"},{id:"handstand",label:"Handstand",placeholder:"Ej: 30 seg"}],
+  funcional_fitness: [{id:"peso",label:"Peso corporal",placeholder:"Ej: 78kg"},{id:"grasa",label:"% grasa",placeholder:"Ej: 22%"}],
+  hibrido_hyrox: [{id:"hyrox_tiempo",label:"Tiempo Hyrox",placeholder:"Ej: 1:24:00"},{id:"ski_erg",label:"SkiErg 1000m",placeholder:"Ej: 4:10"},{id:"row",label:"Remo 1000m",placeholder:"Ej: 3:55"}],
+  hibrido_triatlon: [{id:"natacion",label:"Natación 1500m",placeholder:"Ej: 28:00"},{id:"ciclismo",label:"Ciclismo 40K",placeholder:"Ej: 1:05:00"},{id:"carrera_tri",label:"Carrera 10K",placeholder:"Ej: 48:00"}],
+  hibrido_ocr: [{id:"spartan_tiempo",label:"Tiempo OCR",placeholder:"Ej: 1:45:00"},{id:"pullups",label:"Pull-ups máx",placeholder:"Ej: 12"}],
+  hibrido_general: [{id:"peso_muerto",label:"Peso muerto",placeholder:"Ej: 140kg"},{id:"5k",label:"5K",placeholder:"Ej: 26:00"}],
+  fuerza_powerlifting: [{id:"squat",label:"Sentadilla",placeholder:"Ej: 140kg"},{id:"bench",label:"Press banca",placeholder:"Ej: 100kg"},{id:"deadlift",label:"Peso muerto",placeholder:"Ej: 180kg"},{id:"total",label:"Total",placeholder:"Ej: 420kg"}],
+  fuerza_halterofilia: [{id:"snatch",label:"Arrancada",placeholder:"Ej: 80kg"},{id:"clean_jerk",label:"Dos tiempos",placeholder:"Ej: 100kg"},{id:"total",label:"Total",placeholder:"Ej: 180kg"}],
+  fuerza_strongman: [{id:"peso_muerto",label:"Peso muerto",placeholder:"Ej: 220kg"},{id:"log_press",label:"Log press",placeholder:"Ej: 110kg"},{id:"farmer",label:"Farmer carry (x/mano)",placeholder:"Ej: 100kg"}],
+};
+
 const SUGERENCIAS: Record<string, string[]> = {
   carrera: ["Ajusta el volumen", "Registro nueva marca", "Tengo carrera en 3 semanas", "Me duele la rodilla"],
   funcional: ["Tengo menos tiempo", "Registro mi peso actual", "Cambia el entreno de hoy", "Estoy muy cansado"],
@@ -300,6 +315,7 @@ export default function Forge() {
   const [marcas,setMarcas]=useState<Marca[]>([]);
   const [mostrarMarcas,setMostrarMarcas]=useState(false);
   const [nuevaMarca,setNuevaMarca]=useState("");
+const [marcasEspecificas,setMarcasEspecificas]=useState<Record<string,string>>({});
   const [codigoGuardado,setCodigoGuardado]=useState("");
 const [errorCodigo,setErrorCodigo]=useState("");
 const [espLabel,setEspLabel]=useState<string|null>(null);
@@ -381,6 +397,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
       plan:(u as any).plan_proxima_semana||"",
       notas:(u as any).notas_coach||""
     });
+    setMarcasEspecificas((u as any).marcas_especificas||{});
     // reanudarSesion eliminada para reducir consumo de tokens
   };
 
@@ -905,6 +922,27 @@ const registrarMarca=async()=>{
                 <button onClick={registrarMarca} style={{background:accentColor,color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>+</button>
               </div>
               <p style={{color:C.muted,fontSize:11,marginTop:8}}>💡 También puedes decirle al coach tu nueva marca y la añadirá automáticamente.</p>
+              {(CAMPOS_MARCAS[espKey||""]||CAMPOS_MARCAS[categoria||""])&&(
+                <div style={{marginTop:16,borderTop:`1px solid ${C.border}`,paddingTop:12}}>
+                  <p style={{color:C.ink,fontSize:13,fontWeight:600,marginBottom:10}}>Marcas por disciplina</p>
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    {(CAMPOS_MARCAS[espKey||""]||CAMPOS_MARCAS[categoria||""]).map(campo=>(
+                      <div key={campo.id} style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{color:C.muted,fontSize:12,minWidth:100,flexShrink:0}}>{campo.label}</span>
+                        <input value={marcasEspecificas[campo.id]||""} onChange={e=>{
+                          const nuevo={...marcasEspecificas,[campo.id]:e.target.value};
+                          setMarcasEspecificas(nuevo);
+                        }}
+                        onBlur={async()=>{
+                          if(codigoUsuario) await apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{marcas_especificas:marcasEspecificas}});
+                        }}
+                        placeholder={campo.placeholder}
+                        style={{flex:1,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",fontSize:13,color:C.ink,background:C.bg,fontFamily:"inherit"}}/>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

@@ -367,23 +367,7 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
     // reanudarSesion eliminada para reducir consumo de tokens
   };
 
-  const reanudarSesion=async(u:UsuarioData)=>{
-    setGenerando(true);
-    const catObj=CATEGORIAS.find((c:Categoria)=>c.id===u.categoria)!;
-    const resumen=u.historial?.slice(-6).map((m:{role:string;content:any})=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[imagen/archivo]"}...`).join("\n")||"";
-    const prompt="Hola de nuevo! Estoy de vuelta. Recuerdame brevemente en que punto estabamos, como va mi progreso y que toca esta semana.";
-    const consultasActuales=Math.floor((u.historial?.length||0)/2);
-    const nuevoHist=[...(u.historial||[]),{role:"user",content:prompt}];
-    try{
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,u.perfil,u.marcas||[],resumen),messages:nuevoHist});
-      const texto=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
-      const hist=[...nuevoHist,{role:"assistant",content:texto}];
-      setMensajes([{role:"assistant",content:texto}]);
-      setHistorial(u.historial||[]);
-      setMsgCount(consultasActuales);
-    }catch{setMensajes([{role:"assistant",content:"Error al reanudar sesion."}]);}
-    finally{setGenerando(false);}
-  };
+  
 
   const irACategoria=(catId:string)=>{setCategoria(catId);setEspKey(null);setEspLabel(null);setPregIdx(0);setRespuestas({});setSelMulti([]);setTextoTemp("");setPantalla("especialidad");};
 const elegirEspecialidad=(label:string)=>{const key=ESPECIALIDAD_KEY[categoria!]?.[label]||categoria!;setEspKey(key);setEspLabel(label);setRespuestas({especialidad:label});setPregIdx(0);setPantalla("formulario");};

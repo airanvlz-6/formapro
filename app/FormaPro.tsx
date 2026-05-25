@@ -177,9 +177,14 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
   ],
 };
 
-const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "") => {
+const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "", memoria?: {lesiones?:string; plan?:string; notas?:string}) => {
   const perfilStr = Object.entries(perfil).map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join("\n");
   const marcasStr = marcas.length > 0 ? marcas.map(m => `- ${m.fecha}: ${m.valor}`).join("\n") : "Sin registros aún";
+  const memoriaStr = memoria ? `
+ESTADO ACTUAL DEL ATLETA:
+- Lesiones/limitaciones actuales: ${memoria.lesiones||"Ninguna registrada"}
+- Plan próxima semana: ${memoria.plan||"Sin planificar aún"}
+- Notas del coach: ${memoria.notas||"Sin notas"}` : "";
   return `Eres el coach de Forge, sistema de asesoramiento de entrenamiento personalizado.
 Tu filosofía: la programación se adapta al deportista, no al revés. Habla siempre en español correcto con tildes, ñ y todos los caracteres del idioma.
 
@@ -190,6 +195,7 @@ PROGRESO REGISTRADO:
 ${marcasStr}
 
 ${historialResumen ? `SESIONES ANTERIORES:\n${historialResumen}` : ""}
+${memoriaStr}
 
 FECHA HOY: ${new Date().toLocaleDateString("es-ES", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
 PROXIMOS 14 DIAS: ${Array.from({length:14},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i+1);return d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"});}).join(" | ")}
@@ -301,6 +307,7 @@ const [espKey,setEspKey]=useState<string|null>(null);
 const [emailGuardado,setEmailGuardado]=useState(false);
 const [esPremium,setEsPremium]=useState(false);
 const [esAdmin,setEsAdmin]=useState(false);
+const [memoriaCoach,setMemoriaCoach]=useState<{lesiones?:string;plan?:string;notas?:string}>({});
 const [imagenesAdjuntas,setImagenesAdjuntas]=useState<{base64:string;tipo:string;nombre:string}[]>([]);
 const [imagenAdjunta,setImagenAdjunta]=useState<{base64:string;tipo:string;nombre:string}|null>(null);
 const [imagenPreview,setImagenPreview]=useState<string|null>(null);
@@ -369,6 +376,11 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     setEmailGuardado(!!u.email);
     setEsPremium(!!(u as any).premium);
     setEsAdmin(!!(u as any).admin);
+    setMemoriaCoach({
+      lesiones:(u as any).lesiones_actuales||"",
+      plan:(u as any).plan_proxima_semana||"",
+      notas:(u as any).notas_coach||""
+    });
     // reanudarSesion eliminada para reducir consumo de tokens
   };
 
@@ -454,12 +466,35 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
       const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[imagen/archivo]"}...`).join("\n");
       const esProgramacion=texto.toLowerCase().includes("programacion")||texto.toLowerCase().includes("rutina")||texto.toLowerCase().includes("semana")||texto.toLowerCase().includes("plan");
       const mensajesContexto=esProgramacion?-6:-4;
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?3000:1500,system:buildPrompt(catObj,respuestas,marcas as any,resumen),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?3000:1500,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
       if(data.aborted) return;
       const respText=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);setHistorial(hist);
-      if(codigoUsuario) await apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:hist}});
+      if(codigoUsuario){
+        apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:hist}});
+        const extractarMemoria=async()=>{
+          const extractPrompt=`Basándote en esta conversación, extrae en formato JSON sin markdown:
+{"lesiones":"lesiones o limitaciones actuales mencionadas (o vacío si no hay)","plan":"resumen del plan de entrenamiento para los próximos 7 días (o vacío si no se habló)","notas":"decisiones importantes o contexto clave para el coach (máx 100 palabras)"}
+Solo incluye información nueva o actualizada. Si no hay info relevante, deja el campo vacío.
+Conversación: ${hist.slice(-4).map((m:{role:string;content:any})=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,200):"[archivo]"}`).join("\n")}`;
+          const res=await apiCall({model:"claude-sonnet-4-5",max_tokens:300,system:"Eres un extractor de datos. Responde SOLO con JSON válido sin markdown.",messages:[{role:"user",content:extractPrompt}]});
+          try{
+            const texto=res.content?.map((b:{text?:string})=>b.text||"").join("")||"{}";
+            const clean=texto.replace(/```json|```/g,"").trim();
+            const datos=JSON.parse(clean);
+            const nuevaMemoria:any={};
+            if(datos.lesiones) nuevaMemoria.lesiones_actuales=datos.lesiones;
+            if(datos.plan) nuevaMemoria.plan_proxima_semana=datos.plan;
+            if(datos.notas) nuevaMemoria.notas_coach=datos.notas;
+            if(Object.keys(nuevaMemoria).length>0){
+              apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{...nuevaMemoria,memoria_actualizada:new Date().toISOString()}});
+              setMemoriaCoach(prev=>({...prev,lesiones:datos.lesiones||prev.lesiones,plan:datos.plan||prev.plan,notas:datos.notas||prev.notas}));
+            }
+          }catch{}
+        };
+        extractarMemoria();
+      }
     }catch{setMensajes(prev=>[...prev,{role:"assistant",content:"Error. Intentalo de nuevo."}]);}
     finally{setCargando(false);}
   };

@@ -402,7 +402,12 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     const data=await apiCall({action:"recuperar_usuario",codigo:codigoInput.trim().toUpperCase()});
     if(data.error){setErrorCodigo("Codigo no encontrado. Verifica e intentalo de nuevo.");return;}
     const u:UsuarioData=data.data;
-    setCodigoUsuario(u.codigo);setCategoria(u.categoria);setEspKey((u as any).especialidad||u.categoria);setRespuestas(u.perfil);
+    setCodigoUsuario(u.codigo);setCategoria(u.categoria);
+    const espKeyLoaded=(u as any).especialidad||u.categoria;
+    setEspKey(espKeyLoaded);
+    const espLabelLoaded=Object.entries(ESPECIALIDAD_KEY[u.categoria]||{}).find(([,v])=>v===espKeyLoaded)?.[0]||null;
+    setEspLabel(espLabelLoaded);
+    setRespuestas(u.perfil);
     setMarcas(u.marcas||[]);setHistorial(u.historial||[]);
     setMensajes(u.historial?.filter((m:{role:string})=>m.role==="assistant").slice(-1)||[]);
     const consultasUsadas=Math.floor((u.historial?.length||0)/2);

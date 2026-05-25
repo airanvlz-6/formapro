@@ -414,7 +414,8 @@ const elegirEspecialidad=(label:string)=>{const key=ESPECIALIDAD_KEY[categoria!]
     setErrorCodigoPersonal("");setCodigoGuardado(codigo);
 const prompt = "¡Hola! Acabo de completar mi perfil. Por favor: 1) Dame la bienvenida breve demostrando que entiendes mi situación, especialidad y objetivo concreto. 2) Explica en 3-4 líneas la metodología y periodización que vas a aplicar conmigo y por qué. 3) Muéstrame solo los primeros 2-3 días de entrenamiento con todos los detalles (ejercicios, series, reps, descansos). 4) Pregúntame si esto se ajusta a lo que busco o si quiero cambiar algo antes de que desarrolles el resto de la semana.";
     try{
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:3000,system:buildPrompt(catObj,esp,perfil),messages:[{role:"user",content:prompt}]});
+      const esp=espKey||categoria!;
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:3000,system:buildPrompt(catObj,perfil,[],""),messages:[{role:"user",content:prompt}]});
       const texto=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error al conectar.";
       const hist=[{role:"user",content:prompt},{role:"assistant",content:texto}];
       setMensajes([{role:"assistant",content:texto}]);setHistorial(hist);setMsgCount(1);setCodigoUsuario(codigo);setEmailGuardado(!!email);
@@ -453,7 +454,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
       const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[imagen/archivo]"}...`).join("\n");
       const esProgramacion=texto.toLowerCase().includes("programacion")||texto.toLowerCase().includes("rutina")||texto.toLowerCase().includes("semana")||texto.toLowerCase().includes("plan");
       const mensajesContexto=esProgramacion?-6:-4;
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?3000:1500,system:buildPrompt(catObj,esp,respuestas,marcas,resumen),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?3000:1500,system:buildPrompt(catObj,respuestas,marcas as any,resumen),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
       if(data.aborted) return;
       const respText=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
       const hist=[...nuevoHist,{role:"assistant",content:respText}];

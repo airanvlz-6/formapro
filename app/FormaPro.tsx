@@ -320,6 +320,7 @@ const [emailInput,setEmailInput]=useState("");
 const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
 const [mensajeRecuperar,setMensajeRecuperar]=useState("");
   const bottomRef=useRef<HTMLDivElement>(null);
+const abortControllerRef=useRef<AbortController|null>(null);
   const inputRef=useRef<HTMLTextAreaElement>(null);
 
   useEffect(()=>{bottomRef.current?.scrollIntoView({behavior:"smooth"});},[mensajes,cargando,generando]);
@@ -330,17 +331,21 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
   const bloqueado=!esPremium&&!esAdmin&&msgCount>=FREE_LIMIT;
   const accentColor=cat?.color||C.accent;
 
-  const apiCall=async(body:Record<string,unknown>):Promise<any>=>{
+const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     let intentos=0;
     while(intentos<3){
       try{
-        const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+        const controller=useAbort?abortControllerRef.current:null;
+        const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:controller?.signal});
         if(res.ok) return res.json();
         intentos++;
         await new Promise(r=>setTimeout(r,1000));
-      }catch{intentos++;}
+      }catch(e:any){
+        if(e.name==="AbortError") return {aborted:true};
+        intentos++;
+      }
     }
-    return {error:"Error de conexion tras 3 intentos"};
+    return {error:"Error de conexion"};
   };
 
   const recuperarPorEmail=async()=>{
@@ -367,7 +372,23 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
     // reanudarSesion eliminada para reducir consumo de tokens
   };
 
-  
+  const reanudarSesion=async(u:UsuarioData)=>{
+    setGenerando(true);
+    const catObj=CATEGORIAS.find((c:Categoria)=>c.id===u.categoria)!;
+    const resumen=u.historial?.slice(-6).map((m:{role:string;content:any})=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[imagen/archivo]"}...`).join("\n")||"";
+    const prompt="Hola de nuevo! Estoy de vuelta. Recuerdame brevemente en que punto estabamos, como va mi progreso y que toca esta semana.";
+    const consultasActuales=Math.floor((u.historial?.length||0)/2);
+    const nuevoHist=[...(u.historial||[]),{role:"user",content:prompt}];
+    try{
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,u.perfil,u.marcas||[],resumen),messages:nuevoHist});
+      const texto=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
+      const hist=[...nuevoHist,{role:"assistant",content:texto}];
+      setMensajes([{role:"assistant",content:texto}]);
+      setHistorial(u.historial||[]);
+      setMsgCount(consultasActuales);
+    }catch{setMensajes([{role:"assistant",content:"Error al reanudar sesion."}]);}
+    finally{setGenerando(false);}
+  };
 
   const irACategoria=(catId:string)=>{setCategoria(catId);setEspKey(null);setEspLabel(null);setPregIdx(0);setRespuestas({});setSelMulti([]);setTextoTemp("");setPantalla("especialidad");};
 const elegirEspecialidad=(label:string)=>{const key=ESPECIALIDAD_KEY[categoria!]?.[label]||categoria!;setEspKey(key);setEspLabel(label);setRespuestas({especialidad:label});setPregIdx(0);setPantalla("formulario");};
@@ -424,6 +445,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
     setMensajes(prev=>[...prev,{role:"user",content:mensajeDisplay}]);
     setInput("");setImagenAdjunta(null);setImagenPreview(null);setImagenesAdjuntas([]);
     if(inputRef.current){inputRef.current.style.height="auto";}
+    abortControllerRef.current=new AbortController();
     setCargando(true);setMsgCount(c=>c+1);
     const catObj=CATEGORIAS.find((c:Categoria)=>c.id===categoria)!;
     const esp=espKey||categoria!;
@@ -431,7 +453,8 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
       const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[imagen/archivo]"}...`).join("\n");
       const esProgramacion=texto.toLowerCase().includes("programacion")||texto.toLowerCase().includes("rutina")||texto.toLowerCase().includes("semana")||texto.toLowerCase().includes("plan");
       const mensajesContexto=esProgramacion?-6:-4;
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?3000:1500,system:buildPrompt(catObj,esp,respuestas,marcas,resumen),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))});
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?3000:1500,system:buildPrompt(catObj,esp,respuestas,marcas,resumen),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
+      if(data.aborted) return;
       const respText=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);setHistorial(hist);
@@ -469,6 +492,10 @@ const registrarMarca=async()=>{
   };
 
   const handleKey=(e:React.KeyboardEvent)=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();enviar();}};
+  const stopEnvio=()=>{
+    abortControllerRef.current?.abort();
+    setCargando(false);
+  };
   const restantes=FREE_LIMIT-msgCount;
 
   return (
@@ -925,12 +952,19 @@ const registrarMarca=async()=>{
                     onInput={(e)=>{const t=e.target as HTMLTextAreaElement;t.style.height="auto";t.style.height=t.scrollHeight+"px";}}
                   />
                 </div>
-                <button onClick={()=>enviar()} disabled={cargando||!input.trim()}
-                  style={{background:input.trim()&&!cargando?accentColor:C.border,border:"none",borderRadius:13,width:48,height:48,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s"}}>
-                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
-                    <path d="M22 2L11 13" stroke={input.trim()&&!cargando?"#fff":C.muted} strokeWidth="2.5" strokeLinecap="round"/>
-                    <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke={input.trim()&&!cargando?"#fff":C.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
+                <button onClick={cargando?stopEnvio:()=>enviar()} 
+                  disabled={!cargando&&!input.trim()&&imagenesAdjuntas.length===0}
+                  style={{background:cargando?C.warm:input.trim()&&!cargando?accentColor:C.border,border:"none",borderRadius:13,width:48,height:48,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s"}}>
+                  {cargando?(
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff">
+                      <rect x="4" y="4" width="16" height="16" rx="2"/>
+                    </svg>
+                  ):(
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+                      <path d="M22 2L11 13" stroke={input.trim()?"#fff":C.muted} strokeWidth="2.5" strokeLinecap="round"/>
+                      <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke={input.trim()?"#fff":C.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
                 </button>
               </div>
               {mensajes.length>0&&!cargando&&(

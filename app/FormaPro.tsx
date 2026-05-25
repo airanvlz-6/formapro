@@ -475,7 +475,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,perfil,rutina:te
         apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:hist}});
         const extractarMemoria=async()=>{
           const extractPrompt=`Basándote en esta conversación, extrae en formato JSON sin markdown:
-{"lesiones":"lesiones o limitaciones actuales mencionadas (o vacío si no hay)","plan":"resumen del plan de entrenamiento para los próximos 7 días (o vacío si no se habló)","notas":"decisiones importantes o contexto clave para el coach (máx 100 palabras)"}
+{"lesiones":"lesiones o limitaciones actuales mencionadas (o vacío si no hay)","plan":"resumen del plan de entrenamiento para los próximos 7 días (o vacío si no se habló)","notas":"decisiones importantes o contexto clave para el coach (máx 100 palabras)","nueva_marca":"si el usuario menciona una nueva marca o récord personal, ponla aquí en formato 'ejercicio: valor' (o vacío si no hay)"}
 Solo incluye información nueva o actualizada. Si no hay info relevante, deja el campo vacío.
 Conversación: ${hist.slice(-4).map((m:{role:string;content:any})=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,200):"[archivo]"}`).join("\n")}`;
           const res=await apiCall({model:"claude-sonnet-4-5",max_tokens:300,system:"Eres un extractor de datos. Responde SOLO con JSON válido sin markdown.",messages:[{role:"user",content:extractPrompt}]});
@@ -487,6 +487,12 @@ Conversación: ${hist.slice(-4).map((m:{role:string;content:any})=>`${m.role==="
             if(datos.lesiones) nuevaMemoria.lesiones_actuales=datos.lesiones;
             if(datos.plan) nuevaMemoria.plan_proxima_semana=datos.plan;
             if(datos.notas) nuevaMemoria.notas_coach=datos.notas;
+            if(datos.nueva_marca){
+              const nuevaMarcaAuto:Marca={fecha:new Date().toLocaleDateString("es-ES"),valor:datos.nueva_marca};
+              const marcasActualizadas=[...marcas,nuevaMarcaAuto];
+              setMarcas(marcasActualizadas);
+              nuevaMemoria.marcas=marcasActualizadas;
+            }
             if(Object.keys(nuevaMemoria).length>0){
               apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{...nuevaMemoria,memoria_actualizada:new Date().toISOString()}});
               setMemoriaCoach(prev=>({...prev,lesiones:datos.lesiones||prev.lesiones,plan:datos.plan||prev.plan,notas:datos.notas||prev.notas}));
@@ -875,29 +881,30 @@ const registrarMarca=async()=>{
       )}
 
       {mostrarMarcas&&(
-            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:10}}>
+            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:10,maxHeight:380,overflowY:"auto"}}>
               <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:16,color:C.ink,marginBottom:12}}>Registro de progreso</div>
-              {marcas.length===0?(
-                <p style={{color:C.muted,fontSize:13,marginBottom:12}}>Sin registros aun. Anade tu primera marca o tiempo.</p>
-              ):(
-                <div style={{marginBottom:12,maxHeight:120,overflowY:"auto"}}>
+              {marcas.length===0?<p style={{color:C.muted,fontSize:13,marginBottom:12}}>Sin registros aún. Añade tu primera marca o cuéntasela al coach.</p>:(
+                <div style={{marginBottom:12}}>
                   {marcas.map((m,i)=>(
-                    <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}>
-                      <span style={{color:C.muted}}>{m.fecha}</span>
-                      <span style={{color:C.ink,fontWeight:500}}>{m.valor}</span>
+                    <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 0",borderBottom:`1px solid ${C.border}`,gap:8}}>
+                      <span style={{color:C.muted,fontSize:12,flexShrink:0}}>{m.fecha}</span>
+                      <span style={{color:C.ink,fontWeight:500,fontSize:13,flex:1,textAlign:"center"}}>{m.valor}</span>
+                      <button onClick={async()=>{
+                        const nuevasMarcas=marcas.filter((_,idx)=>idx!==i);
+                        setMarcas(nuevasMarcas);
+                        if(codigoUsuario) await apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{marcas:nuevasMarcas}});
+                      }} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:16,flexShrink:0,padding:"0 4px"}}>×</button>
                     </div>
                   ))}
                 </div>
               )}
-              <div style={{display:"flex",gap:8}}>
+              <div style={{display:"flex",gap:8,marginTop:8}}>
                 <input value={nuevaMarca} onChange={e=>setNuevaMarca(e.target.value)} placeholder="Ej: 5K en 24:30, SQ 125kg, peso 78kg..."
-                  style={{flex:1,border:`2px solid ${C.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:C.ink,background:C.bg}}
-                  onKeyDown={e=>e.key==="Enter"&&registrarMarca()}
-                />
-                <button onClick={registrarMarca} style={{background:accentColor,color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
-                  Guardar
-                </button>
+                  style={{flex:1,border:`2px solid ${C.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:C.ink,background:C.bg,fontFamily:"inherit"}}
+                  onKeyDown={e=>e.key==="Enter"&&registrarMarca()}/>
+                <button onClick={registrarMarca} style={{background:accentColor,color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>+</button>
               </div>
+              <p style={{color:C.muted,fontSize:11,marginTop:8}}>💡 También puedes decirle al coach tu nueva marca y la añadirá automáticamente.</p>
             </div>
           )}
 

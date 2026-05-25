@@ -336,6 +336,7 @@ const [mensajePerfil,setMensajePerfil]=useState("");
 const [errorPerfil,setErrorPerfil]=useState("");
 const [editandoPerfil,setEditandoPerfil]=useState(false);
 const [perfilEdit,setPerfilEdit]=useState<Record<string,string>>({});
+const [editandoEspecialidad,setEditandoEspecialidad]=useState(false);
 const [email,setEmail]=useState("");
 const [codigoPersonal,setCodigoPersonal]=useState("");
 const [errorCodigoPersonal,setErrorCodigoPersonal]=useState("");
@@ -805,6 +806,32 @@ const registrarMarca=async()=>{
             <div style={{background:C.bg,borderRadius:12,padding:"10px 14px"}}>
               <p style={{color:C.muted,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Código de acceso</p>
               <p style={{color:accentColor,fontSize:15,fontWeight:700,letterSpacing:2}}>{codigoUsuario}</p>
+            </div>
+            <div style={{background:C.bg,borderRadius:12,padding:"10px 14px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                <p style={{color:C.muted,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:1}}>Especialidad</p>
+                <button onClick={()=>setEditandoEspecialidad(!editandoEspecialidad)} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,padding:"3px 8px",fontSize:11,color:C.muted,cursor:"pointer"}}>
+                  {editandoEspecialidad?"Cancelar":"Cambiar"}
+                </button>
+              </div>
+              <p style={{color:C.ink,fontSize:13,fontWeight:500}}>{espLabel||categoria}</p>
+              {editandoEspecialidad&&categoria&&(
+                <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:6}}>
+                  {ESPECIALIDADES[categoria]?.map(esp=>(
+                    <button key={esp} onClick={async()=>{
+                      const key=ESPECIALIDAD_KEY[categoria]?.[esp]||categoria;
+                      setEspKey(key);
+                      setEspLabel(esp);
+                      setEditandoEspecialidad(false);
+                      if(codigoUsuario) await apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{especialidad:key}});
+                      setMensajePerfil("Especialidad actualizada correctamente.");
+                      setTimeout(()=>setMensajePerfil(""),3000);
+                    }} style={{background:espKey===ESPECIALIDAD_KEY[categoria]?.[esp]?accentColor+"18":C.card,border:`1px solid ${espKey===ESPECIALIDAD_KEY[categoria]?.[esp]?accentColor:C.border}`,borderRadius:8,padding:"7px 12px",fontSize:13,color:espKey===ESPECIALIDAD_KEY[categoria]?.[esp]?accentColor:C.ink,cursor:"pointer",textAlign:"left",fontFamily:"inherit"}}>
+                      {esp}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div>

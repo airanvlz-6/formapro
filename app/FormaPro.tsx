@@ -947,30 +947,9 @@ const registrarMarca=async()=>{
       )}
 
       {mostrarMarcas&&(
-            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:10,maxHeight:380,overflowY:"auto"}}>
-              <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:16,color:C.ink,marginBottom:12}}>Registro de progreso</div>
-              {marcas.length===0?<p style={{color:C.muted,fontSize:13,marginBottom:12}}>Sin registros aún. Añade tu primera marca o cuéntasela al coach.</p>:(
-                <div style={{marginBottom:12}}>
-                  {marcas.map((m,i)=>(
-                    <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 0",borderBottom:`1px solid ${C.border}`,gap:8}}>
-                      <span style={{color:C.muted,fontSize:12,flexShrink:0}}>{m.fecha}</span>
-                      <span style={{color:C.ink,fontWeight:500,fontSize:13,flex:1,textAlign:"center"}}>{m.valor}</span>
-                      <button onClick={async()=>{
-                        const nuevasMarcas=marcas.filter((_,idx)=>idx!==i);
-                        setMarcas(nuevasMarcas);
-                        if(codigoUsuario) await apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{marcas:nuevasMarcas}});
-                      }} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:16,flexShrink:0,padding:"0 4px"}}>×</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div style={{display:"flex",gap:8,marginTop:8}}>
-                <input value={nuevaMarca} onChange={e=>setNuevaMarca(e.target.value)} placeholder="Ej: 5K en 24:30, SQ 125kg, peso 78kg..."
-                  style={{flex:1,border:`2px solid ${C.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:C.ink,background:C.bg,fontFamily:"inherit"}}
-                  onKeyDown={e=>e.key==="Enter"&&registrarMarca()}/>
-                <button onClick={registrarMarca} style={{background:accentColor,color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>+</button>
-              </div>
-              <p style={{color:C.muted,fontSize:11,marginTop:8}}>💡 También puedes decirle al coach tu nueva marca y la añadirá automáticamente.</p>
+            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:10,maxHeight:420,overflowY:"auto"}}>
+              <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:16,color:C.ink,marginBottom:4}}>Progreso y contexto</div>
+              <p style={{color:C.muted,fontSize:11,marginBottom:12}}>💡 Cuéntale al coach tus nuevas marcas y las añadirá automáticamente.</p>
               <button onClick={async()=>{
                 if(codigoUsuario){
                   await apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{marcas_especificas:marcasEspecificas,lesiones_actuales:memoriaCoach.lesiones,plan_proxima_semana:memoriaCoach.plan,notas_coach:memoriaCoach.notas}});

@@ -334,6 +334,7 @@ export default function Forge() {
     const codigoUrl=params.get("codigo");
     if(codigoUrl&&codigoUrl.length>=5){
       setCodigoInput(codigoUrl);
+      setPantalla("cargando");
       setTimeout(async()=>{
         setErrorCodigo("");
         const data=await apiCall({action:"recuperar_usuario",codigo:codigoUrl.trim().toUpperCase()});
@@ -629,6 +630,13 @@ const registrarMarca=async()=>{
         textarea:focus,input:focus{outline:none;}
         .sugg:hover{opacity:0.75;}
       `}</style>
+
+      {pantalla==="cargando"&&(
+        <div className="fade-up" style={{textAlign:"center"}}>
+          <div style={{fontSize:40,marginBottom:16}}>⚡</div>
+          <p style={{color:C.muted,fontSize:15}}>Cargando tu sesion...</p>
+        </div>
+      )}
 
       {pantalla==="inicio"&&(
         <div className="fade-up" style={{maxWidth:520,width:"100%",textAlign:"center"}}>

@@ -283,7 +283,7 @@ const SUGERENCIAS: Record<string, string[]> = {
   fuerza: ["Sube la intensidad", "Registro nuevo 1RM", "Mi sentadilla esta estancada", "Resumen de progreso"],
 };
 
-const FREE_LIMIT = 20;
+const FREE_LIMIT = 8;
 const generarCodigo = () => { const c = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let r = "FP-"; for(let i=0;i<5;i++) r+=c[Math.floor(Math.random()*c.length)]; return r; };
 
 type Categoria = typeof CATEGORIAS[0];
@@ -355,6 +355,7 @@ export default function Forge() {
         setEsAdmin(!!(u as any).admin);
         setMemoriaCoach({lesiones:(u as any).lesiones_actuales||"",plan:(u as any).plan_proxima_semana||"",notas:(u as any).notas_coach||""});
         setMarcasEspecificas((u as any).marcas_especificas||{});
+    setLimiteConsultas((u as any).limite_consultas||FREE_LIMIT);
       },500);
     }
   },[]);
@@ -369,6 +370,7 @@ const [espKey,setEspKey]=useState<string|null>(null);
 const [emailGuardado,setEmailGuardado]=useState(false);
 const [esPremium,setEsPremium]=useState(false);
 const [esAdmin,setEsAdmin]=useState(false);
+const [limiteConsultas,setLimiteConsultas]=useState(FREE_LIMIT);
 const [memoriaCoach,setMemoriaCoach]=useState<{lesiones?:string;plan?:string;notas?:string}>({});
 const [imagenesAdjuntas,setImagenesAdjuntas]=useState<{base64:string;tipo:string;nombre:string}[]>([]);
 const [imagenAdjunta,setImagenAdjunta]=useState<{base64:string;tipo:string;nombre:string}|null>(null);
@@ -398,7 +400,7 @@ const abortControllerRef=useRef<AbortController|null>(null);
   const cat=categoria?CATEGORIAS.find((c:Categoria)=>c.id===categoria):null;
   const preguntas:Pregunta[]=(espKey?FORMULARIOS[espKey]:null)||(categoria?FORMULARIOS[categoria]:[])||[];
   const pregActual=preguntas[pregIdx];
-  const bloqueado=!esPremium&&!esAdmin&&msgCount>=FREE_LIMIT;
+  const bloqueado=!esPremium&&!esAdmin&&msgCount>=limiteConsultas;
   const accentColor=cat?.color||C.accent;
 
 const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
@@ -450,6 +452,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
       notas:(u as any).notas_coach||""
     });
     setMarcasEspecificas((u as any).marcas_especificas||{});
+    setLimiteConsultas((u as any).limite_consultas||FREE_LIMIT);
     // reanudarSesion eliminada para reducir consumo de tokens
   };
 

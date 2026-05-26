@@ -334,9 +334,26 @@ export default function Forge() {
     const codigoUrl=params.get("codigo");
     if(codigoUrl&&codigoUrl.length>=5){
       setCodigoInput(codigoUrl);
-      setTimeout(()=>{
-        const btn=document.getElementById("btn-entrar");
-        if(btn) btn.click();
+      setTimeout(async()=>{
+        setErrorCodigo("");
+        const data=await apiCall({action:"recuperar_usuario",codigo:codigoUrl.trim().toUpperCase()});
+        if(data.error){setErrorCodigo("Codigo no encontrado.");return;}
+        const u=data.data;
+        setCodigoUsuario(u.codigo);setCategoria(u.categoria);
+        const espKeyLoaded=(u as any).especialidad||u.categoria;
+        setEspKey(espKeyLoaded);
+        const espLabelLoaded=Object.entries(ESPECIALIDAD_KEY[u.categoria]||{}).find(([,v])=>v===espKeyLoaded)?.[0]||null;
+        setEspLabel(espLabelLoaded);
+        setRespuestas(u.perfil);
+        setMarcas(u.marcas||[]);setHistorial(u.historial||[]);
+        setMensajes(u.historial?.filter((m:{role:string})=>m.role==="assistant").slice(-1)||[]);
+        const consultasUsadas=Math.floor((u.historial?.length||0)/2);
+        setMsgCount(consultasUsadas);setPantalla("chat");
+        setEmailGuardado(!!u.email);
+        setEsPremium(!!(u as any).premium);
+        setEsAdmin(!!(u as any).admin);
+        setMemoriaCoach({lesiones:(u as any).lesiones_actuales||"",plan:(u as any).plan_proxima_semana||"",notas:(u as any).notas_coach||""});
+        setMarcasEspecificas((u as any).marcas_especificas||{});
       },500);
     }
   },[]);
@@ -629,7 +646,7 @@ const registrarMarca=async()=>{
                 style={{flex:1,border:`2px solid ${C.border}`,borderRadius:12,padding:"12px 14px",fontSize:15,color:C.ink,background:C.card,letterSpacing:2,textAlign:"center"}}
                 onKeyDown={e=>e.key==="Enter"&&recuperarUsuario()}
               />
-              <button className="btn-main" onClick={recuperarUsuario} style={{background:C.accent,color:"#fff",border:"none",borderRadius:12,padding:"12px 18px",fontSize:14,fontWeight:600,cursor:"pointer"}}>
+              <button id="btn-entrar" className="btn-main" onClick={recuperarUsuario} style={{background:C.accent,color:"#fff",border:"none",borderRadius:12,padding:"12px 18px",fontSize:14,fontWeight:600,cursor:"pointer"}}>
                 Entrar
               </button>
             </div>

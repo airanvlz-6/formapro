@@ -329,6 +329,17 @@ export default function Forge() {
   const [msgCount,setMsgCount]=useState(0);
   const [codigoUsuario,setCodigoUsuario]=useState("");
   const [codigoInput,setCodigoInput]=useState("");
+  useEffect(()=>{
+    const params=new URLSearchParams(window.location.search);
+    const codigoUrl=params.get("codigo");
+    if(codigoUrl&&codigoUrl.length>=5){
+      setCodigoInput(codigoUrl);
+      setTimeout(()=>{
+        const btn=document.getElementById("btn-entrar");
+        if(btn) btn.click();
+      },500);
+    }
+  },[]);
   const [marcas,setMarcas]=useState<Marca[]>([]);
   const [mostrarMarcas,setMostrarMarcas]=useState(false);
   const [nuevaMarca,setNuevaMarca]=useState("");

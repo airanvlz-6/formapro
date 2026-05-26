@@ -1,6 +1,9 @@
 'use client';
-import FormaPro from './FormaPro';
+import { useEffect } from 'react';
 
 export default function Page() {
-  return <FormaPro />;
+  useEffect(() => {
+    window.location.href = '/landing.html';
+  }, []);
+  return null;
 }

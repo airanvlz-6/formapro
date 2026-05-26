@@ -971,6 +971,16 @@ const registrarMarca=async()=>{
                 <button onClick={registrarMarca} style={{background:accentColor,color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>+</button>
               </div>
               <p style={{color:C.muted,fontSize:11,marginTop:8}}>💡 También puedes decirle al coach tu nueva marca y la añadirá automáticamente.</p>
+              <button onClick={async()=>{
+                if(codigoUsuario){
+                  await apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{marcas_especificas:marcasEspecificas,lesiones_actuales:memoriaCoach.lesiones,plan_proxima_semana:memoriaCoach.plan,notas_coach:memoriaCoach.notas}});
+                  setMensajePerfil("Progreso guardado correctamente.");
+                  setTimeout(()=>setMensajePerfil(""),3000);
+                }
+              }} style={{background:accentColor,color:"#fff",border:"none",borderRadius:10,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",width:"100%",marginTop:12}}>
+                💾 Guardar todo
+              </button>
+              {mensajePerfil&&<p style={{color:C.success,fontSize:12,fontWeight:600,marginTop:6}}>{mensajePerfil}</p>}
               <div style={{marginTop:16,borderTop:`1px solid ${C.border}`,paddingTop:12,display:"flex",flexDirection:"column",gap:10}}>
                 <p style={{color:C.ink,fontSize:13,fontWeight:600,marginBottom:4}}>Contexto para el coach</p>
                 <div>

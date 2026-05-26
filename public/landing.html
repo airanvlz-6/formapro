@@ -190,7 +190,17 @@
     <a href="#precios">Precios</a>
     <a href="#faq">FAQ</a>
   </div>
-  <a href="/app" class="nav-cta">Empezar gratis</a>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <input id="codigo-input" placeholder="Tu código FP-XXXXX" style="border:2px solid #E2DDD7;border-radius:100px;padding:8px 16px;font-size:13px;font-family:'DM Sans',sans-serif;color:#0F0F0F;width:160px;outline:none;" onkeydown="if(event.key==='Enter')entrarConCodigo()"/>
+    <button onclick="entrarConCodigo()" style="background:#1E5C3A;color:#fff;border:none;border-radius:100px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">Entrar</button>
+    <a href="/app" class="nav-cta">Empezar gratis</a>
+  </div>
+  <script>
+    function entrarConCodigo(){
+      const codigo=document.getElementById('codigo-input').value.trim().toUpperCase();
+      if(codigo.length>=5) window.location.href='/app?codigo='+codigo;
+    }
+  </script>
 </nav>
 <div style="background:#1E5C3A;color:#fff;text-align:center;padding:10px 20px;font-size:13px;font-family:'DM Sans',sans-serif;position:relative;z-index:99;margin-top:72px;">
   🚀 Estamos creciendo — disculpa las molestias. Añade Forge a tu pantalla de inicio para usarla como app: en iPhone pulsa <strong>Compartir → Añadir a pantalla de inicio</strong>, en Android <strong>Menú → Añadir a pantalla de inicio</strong>.

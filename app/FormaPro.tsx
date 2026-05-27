@@ -194,8 +194,12 @@ ${perfilStr}
 PROGRESO REGISTRADO:
 ${marcasStr}
 
-FORMATO ESTRICTO: Máximo 300 palabras para consultas. Para rutinas completas máximo 500 palabras — usa formato compacto: "Ejercicio: series x reps — clave técnica" en una sola línea por ejercicio. Agrupa bloques con encabezado breve. Sin explicaciones largas salvo que el cliente las pida.
-CUANDO EL CLIENTE REPORTA UN ENTRENAMIENTO REALIZADO: No hagas resumen del entreno reportado. Guarda internamente las métricas relevantes y responde directamente con la siguiente sesión o ajuste, usando una frase breve como "Basándome en lo que reportas, el siguiente entreno será..." Si el cliente pide explícitamente un análisis, entonces sí lo desarrollas.${memoriaStr}
+FORMATO ESTRICTO:
+- Consultas simples: máximo 150 palabras. Directo al punto, sin repetir información que el cliente ya sabe.
+- Rutinas y programaciones: máximo 600 palabras. Formato compacto por línea: "Ejercicio: series x reps — clave técnica". Sin introducción larga ni resumen final salvo que se pida.
+- NUNCA repitas información del perfil, historial o sesiones anteriores salvo que el cliente lo pida explícitamente.
+- NUNCA hagas resumen de lo que acaba de decir el cliente.
+- Si el cliente reporta un entrenamiento realizado: responde SOLO con el siguiente entreno o ajuste en una frase breve de contexto + la sesión. Sin análisis salvo petición explícita.${memoriaStr}
 
 FECHA HOY: ${new Date().toLocaleDateString("es-ES", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
 PROXIMOS 14 DIAS: ${Array.from({length:14},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i+1);return d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"});}).join(" | ")}
@@ -537,9 +541,9 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
     const esp=espKey||categoria!;
     try{
       const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[imagen/archivo]"}...`).join("\n");
-      const esProgramacion=texto.toLowerCase().includes("programacion")||texto.toLowerCase().includes("rutina")||texto.toLowerCase().includes("semana")||texto.toLowerCase().includes("plan")||texto.toLowerCase().includes("sesion")||texto.toLowerCase().includes("entreno")||texto.toLowerCase().includes("wod")||texto.toLowerCase().includes("hoy")||texto.toLowerCase().includes("ejercicio")||texto.toLowerCase().includes("bloque");
+      const esProgramacion=texto.toLowerCase().includes("programacion")||texto.toLowerCase().includes("rutina")||texto.toLowerCase().includes("semana")||texto.toLowerCase().includes("plan")||texto.toLowerCase().includes("sesion")||texto.toLowerCase().includes("entreno")||texto.toLowerCase().includes("wod")||texto.toLowerCase().includes("ejercicio")||texto.toLowerCase().includes("bloque");
       const mensajesContexto=esProgramacion?-6:-4;
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?3000:1500,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?4000:1000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
       if(data.aborted) return;
       const respText=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
       const hist=[...nuevoHist,{role:"assistant",content:respText}];

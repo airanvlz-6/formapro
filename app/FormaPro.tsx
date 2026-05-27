@@ -194,8 +194,8 @@ ${perfilStr}
 PROGRESO REGISTRADO:
 ${marcasStr}
 
-${historialResumen ? `SESIONES ANTERIORES:\n${historialResumen}` : ""}
-${memoriaStr}
+FORMATO ESTRICTO: Máximo 300 palabras para consultas. Para rutinas completas máximo 500 palabras — usa formato compacto: "Ejercicio: series x reps — clave técnica" en una sola línea por ejercicio. Agrupa bloques con encabezado breve. Sin explicaciones largas salvo que el cliente las pida.
+CUANDO EL CLIENTE REPORTA UN ENTRENAMIENTO REALIZADO: No hagas resumen del entreno reportado. Guarda internamente las métricas relevantes y responde directamente con la siguiente sesión o ajuste, usando una frase breve como "Basándome en lo que reportas, el siguiente entreno será..." Si el cliente pide explícitamente un análisis, entonces sí lo desarrollas.${memoriaStr}
 
 FECHA HOY: ${new Date().toLocaleDateString("es-ES", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
 PROXIMOS 14 DIAS: ${Array.from({length:14},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i+1);return d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"});}).join(" | ")}

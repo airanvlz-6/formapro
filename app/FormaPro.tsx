@@ -177,10 +177,19 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
   ],
 };
 
-const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "", memoria?: {lesiones?:string; plan?:string; notas?:string}) => {
+const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "", memoria?: {lesiones?:string; plan?:string; notas?:string}, ciclo?: {bloque?:string; semana?:number; totalSemanas?:number; objetivo?:string}) => {
   const perfilStr = Object.entries(perfil).map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join("\n");
   const marcasStr = marcas.length > 0 ? marcas.map(m => `- ${m.fecha}: ${m.valor}`).join("\n") : "Sin registros aún";
-  const memoriaStr = memoria ? `
+  const cicloStr = ciclo?.bloque ? `
+CICLO DE ENTRENAMIENTO ACTUAL:
+- Bloque: ${ciclo.bloque}
+- Semana: ${ciclo.semana||1} de ${ciclo.totalSemanas||4}
+- Objetivo del bloque: ${ciclo.objetivo||"No especificado"}
+- IMPORTANTE: Mantén coherencia con este punto del ciclo. Progresión acorde a semana ${ciclo.semana||1}.` : `
+CICLO DE ENTRENAMIENTO:
+- No hay ciclo activo. En la primera programación define el bloque, semanas totales y objetivo, y actualiza el ciclo.`;
+
+const memoriaStr = memoria ? `
 ESTADO ACTUAL DEL ATLETA:
 - Lesiones/limitaciones actuales: ${memoria.lesiones||"Ninguna registrada"}
 - Plan próxima semana: ${memoria.plan||"Sin planificar aún"}
@@ -199,7 +208,9 @@ FORMATO ESTRICTO:
 - Rutinas y programaciones: máximo 600 palabras. Formato compacto por línea: "Ejercicio: series x reps — clave técnica". Sin introducción larga ni resumen final salvo que se pida.
 - NUNCA repitas información del perfil, historial o sesiones anteriores salvo que el cliente lo pida explícitamente.
 - NUNCA hagas resumen de lo que acaba de decir el cliente.
-- Si el cliente reporta un entrenamiento realizado: responde SOLO con el siguiente entreno o ajuste en una frase breve de contexto + la sesión. Sin análisis salvo petición explícita.${memoriaStr}
+- Si el cliente reporta un entrenamiento realizado: responde SOLO con el siguiente entreno o ajuste en una frase breve de contexto + la sesión. Sin análisis salvo petición explícita.
+${memoriaStr}
+${cicloStr}
 
 FECHA HOY: ${new Date().toLocaleDateString("es-ES", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
 PROXIMOS 14 DIAS: ${Array.from({length:14},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i+1);return d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"});}).join(" | ")}
@@ -360,7 +371,8 @@ export default function Forge() {
         setEsAdmin(!!(u as any).admin);
         setMemoriaCoach({lesiones:(u as any).lesiones_actuales||"",plan:(u as any).plan_proxima_semana||"",notas:(u as any).notas_coach||""});
         setMarcasEspecificas((u as any).marcas_especificas||{});
-    setLimiteConsultas((u as any).limite_consultas||FREE_LIMIT);
+        setLimiteConsultas((u as any).limite_consultas||FREE_LIMIT);
+        setCicloActual((u as any).ciclo_actual||{});
       },500);
     }
   },[]);
@@ -377,6 +389,7 @@ const [esPremium,setEsPremium]=useState(false);
 const [esAdmin,setEsAdmin]=useState(false);
 const [limiteConsultas,setLimiteConsultas]=useState(FREE_LIMIT);
 const [memoriaCoach,setMemoriaCoach]=useState<{lesiones?:string;plan?:string;notas?:string}>({});
+const [cicloActual,setCicloActual]=useState<{bloque?:string;semana?:number;totalSemanas?:number;objetivo?:string}>({});
 const [imagenesAdjuntas,setImagenesAdjuntas]=useState<{base64:string;tipo:string;nombre:string}[]>([]);
 const [imagenAdjunta,setImagenAdjunta]=useState<{base64:string;tipo:string;nombre:string}|null>(null);
 const [imagenPreview,setImagenPreview]=useState<string|null>(null);
@@ -457,7 +470,9 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
       notas:(u as any).notas_coach||""
     });
     setMarcasEspecificas((u as any).marcas_especificas||{});
-    setLimiteConsultas((u as any).limite_consultas||FREE_LIMIT);
+        setLimiteConsultas((u as any).limite_consultas||FREE_LIMIT);
+        setCicloActual((u as any).ciclo_actual||{});
+    setCicloActual((u as any).ciclo_actual||{});
     // reanudarSesion eliminada para reducir consumo de tokens
   };
 
@@ -543,7 +558,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[imagen/archivo]"}...`).join("\n");
       const esProgramacion=texto.toLowerCase().includes("programacion")||texto.toLowerCase().includes("rutina")||texto.toLowerCase().includes("semana")||texto.toLowerCase().includes("plan")||texto.toLowerCase().includes("sesion")||texto.toLowerCase().includes("entreno")||texto.toLowerCase().includes("wod")||texto.toLowerCase().includes("ejercicio")||texto.toLowerCase().includes("bloque");
       const mensajesContexto=esProgramacion?-6:-4;
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?4000:1000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?4000:1000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
       if(data.aborted) return;
       const respText=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
@@ -552,7 +567,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
         apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:hist}});
         const extractarMemoria=async()=>{
           const extractPrompt=`Basándote en esta conversación, extrae en formato JSON sin markdown:
-{"lesiones":"lesiones o limitaciones actuales mencionadas (o vacío si no hay)","plan":"resumen del plan de entrenamiento para los próximos 7 días (o vacío si no se habló)","notas":"decisiones importantes o contexto clave para el coach (máx 100 palabras)","nueva_marca":"si el usuario menciona una nueva marca o récord personal, ponla aquí en formato 'ejercicio: valor' (o vacío si no hay)"}
+{"lesiones":"lesiones o limitaciones actuales mencionadas (o vacío si no hay)","plan":"resumen del plan de entrenamiento para los próximos 7 días (o vacío si no se habló)","notas":"decisiones importantes o contexto clave para el coach (máx 100 palabras)","nueva_marca":"si el usuario menciona una nueva marca o récord personal, ponla aquí en formato 'ejercicio: valor' (o vacío si no hay)","ciclo":{"bloque":"nombre del bloque actual (acumulación, intensificación, realización, deload) o vacío si no se habló","semana":"número de semana actual del ciclo o null","totalSemanas":"total de semanas del ciclo o null","objetivo":"objetivo del bloque actual o vacío"}}
 Solo incluye información nueva o actualizada. Si no hay info relevante, deja el campo vacío.
 Conversación: ${hist.slice(-4).map((m:{role:string;content:any})=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,200):"[archivo]"}`).join("\n")}`;
           const res=await apiCall({model:"claude-sonnet-4-5",max_tokens:300,system:"Eres un extractor de datos. Responde SOLO con JSON válido sin markdown.",messages:[{role:"user",content:extractPrompt}]});
@@ -564,6 +579,11 @@ Conversación: ${hist.slice(-4).map((m:{role:string;content:any})=>`${m.role==="
             if(datos.lesiones) nuevaMemoria.lesiones_actuales=datos.lesiones;
             if(datos.plan) nuevaMemoria.plan_proxima_semana=datos.plan;
             if(datos.notas) nuevaMemoria.notas_coach=datos.notas;
+            if(datos.ciclo){
+              const nuevoCiclo={...cicloActual,...datos.ciclo};
+              setCicloActual(nuevoCiclo);
+              nuevaMemoria.ciclo_actual=nuevoCiclo;
+            }
             if(datos.nueva_marca){
               const nuevaMarcaAuto:Marca={fecha:new Date().toLocaleDateString("es-ES"),valor:datos.nueva_marca};
               const marcasActualizadas=[...marcas,nuevaMarcaAuto];

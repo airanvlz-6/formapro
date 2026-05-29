@@ -870,6 +870,7 @@ const registrarMarca=async()=>{
 
           <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:12}}>
             <button onClick={()=>{setPantalla("inicio");setMensajes([]);setHistorial([]);setMsgCount(0);setCodigoGuardado("");}} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"7px 10px",fontSize:12,flexShrink:0}}>←</button>
+            <a href="https://t.me/forgeapp_es" target="_blank" rel="noopener noreferrer" style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"7px 10px",fontSize:12,flexShrink:0,textDecoration:"none"}}>💬</a>
             <div style={{flex:1,display:"flex",alignItems:"center",gap:8,minWidth:0}}>
               <div style={{width:32,height:32,borderRadius:10,background:cat.colorLight,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{cat.emoji}</div>
               <div style={{minWidth:0,overflow:"hidden"}}>

@@ -552,7 +552,11 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
     setInput("");setImagenAdjunta(null);setImagenPreview(null);setImagenesAdjuntas([]);
     if(inputRef.current){inputRef.current.style.height="auto";}
     abortControllerRef.current=new AbortController();
-    setCargando(true);setMsgCount(c=>c+1);
+    setCargando(true);setMsgCount(c=>{
+      const nuevo=c+1;
+      if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{consultas_usadas:nuevo}});
+      return nuevo;
+    });
     const catObj=CATEGORIAS.find((c:Categoria)=>c.id===categoria)!;
     const esp=espKey||categoria!;
     try{

@@ -65,11 +65,16 @@ export async function POST(req: NextRequest) {
     const premium = todos.filter((u: any) => u.premium).length;
     const activos = todos.filter((u: any) => u.updated_at && new Date(u.updated_at) > new Date(hace7dias)).length;
     const inactivos = todos.filter((u: any) => !u.updated_at || new Date(u.updated_at) <= new Date(hace7dias)).length;
+    const enLimite = todos.filter((u: any) => {
+      const consultas = Math.floor((u.historial?.length || 0) / 2);
+      const limite = u.limite_consultas || 8;
+      return !u.premium && !u.admin && consultas >= limite;
+    }).length;
     const nuevosHoy = todos.filter((u: any) => u.created_at && new Date(u.created_at) >= hoy).length;
     const nuevosSemana = todos.filter((u: any) => u.created_at && new Date(u.created_at) >= new Date(inicioSemana)).length;
     const ultimos = [...todos].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 10);
 
-    return NextResponse.json({ total, premium, activos, inactivos, nuevosHoy, nuevosSemana, ultimos });
+    return NextResponse.json({ total, premium, activos, inactivos, enLimite, nuevosHoy, nuevosSemana, ultimos });
   }
 
   // Llamada normal a la IA

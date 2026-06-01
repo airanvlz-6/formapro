@@ -80,6 +80,7 @@ export default function AdminPanel() {
                 { label: "Inactivos", value: datos.inactivos, emoji: "💤", color: C.muted },
                 { label: "Nuevos hoy", value: datos.nuevosHoy, emoji: "🆕", color: "#1A3C5E" },
                 { label: "Ingresos est.", value: `${datos.premium * 14}€`, emoji: "💰", color: "#2D6A4F" },
+              { label: "En límite", value: datos.enLimite, emoji: "⚠️", color: C.warm },
               ].map(item => (
                 <div key={item.label} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 14px" }}>
                   <div style={{ fontSize: 22, marginBottom: 6 }}>{item.emoji}</div>

@@ -470,9 +470,9 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
       notas:(u as any).notas_coach||""
     });
     setMarcasEspecificas((u as any).marcas_especificas||{});
-        setLimiteConsultas((u as any).limite_consultas||FREE_LIMIT);
-        setCicloActual((u as any).ciclo_actual||{});
+    setLimiteConsultas((u as any).limite_consultas||FREE_LIMIT);
     setCicloActual((u as any).ciclo_actual||{});
+    apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
     // reanudarSesion eliminada para reducir consumo de tokens
   };
 

@@ -1128,7 +1128,8 @@ const registrarMarca=async()=>{
             <div style={{marginTop:12,background:C.warmLight,border:`1px solid #F5C2A0`,borderRadius:16,padding:"18px 22px"}}>
               <div style={{fontFamily:"'Playfair Display',serif",fontSize:20,color:C.ink,marginBottom:8}}>Has agotado tus consultas gratuitas</div>
               <p style={{color:C.muted,fontSize:13,marginBottom:6,lineHeight:1.6}}>Si Forge te está siendo útil, continúa con Premium — consultas ilimitadas, memoria persistente y seguimiento continuo.</p>
-              <p style={{color:C.muted,fontSize:12,marginBottom:16,lineHeight:1.6}}>Usa el código <strong style={{color:C.warm}}>FUNDADOR</strong> al pagar para obtener un descuento especial de lanzamiento.</p>
+              <p style={{color:C.muted,fontSize:12,marginBottom:6,lineHeight:1.6}}>Usa el código <strong style={{color:C.warm}}>FUNDADOR</strong> al pagar para obtener un descuento especial de lanzamiento.</p>
+<p style={{color:C.muted,fontSize:12,marginBottom:16,lineHeight:1.6}}>Sin permanencia — cancela cuando quieras.</p>
               <button className="btn-main" onClick={()=>{window.location.href="https://buy.stripe.com/bJe6oHa7w0l95CS6Dh0VO01";}}
                 style={{width:"100%",background:C.warm,color:"#fff",border:"none",borderRadius:12,padding:"14px",fontSize:15,fontWeight:600,cursor:"pointer",marginBottom:10}}>
                 Obtener Premium — 14€/mes

@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     const inicioSemana = new Date(ahora.setDate(ahora.getDate() - ahora.getDay() + 1)).toISOString();
     const hoy = new Date(); hoy.setHours(0,0,0,0);
 
-    const { data: todos } = await supabase.from("usuarios").select("codigo,categoria,especialidad,premium,admin,created_at,updated_at");
+    const { data: todos } = await supabase.from("usuarios").select("codigo,categoria,especialidad,premium,admin,created_at,updated_at,limite_consultas,consultas_usadas,total_visitas,ultima_visita");
     if (!todos) return NextResponse.json({ error: "Error" }, { status: 500 });
 
     const total = todos.length;
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     const activos = todos.filter((u: any) => u.updated_at && new Date(u.updated_at) > new Date(hace7dias)).length;
     const inactivos = todos.filter((u: any) => !u.updated_at || new Date(u.updated_at) <= new Date(hace7dias)).length;
     const enLimite = todos.filter((u: any) => {
-      const consultas = Math.floor((u.historial?.length || 0) / 2);
+      const consultas = u.consultas_usadas || 0;
       const limite = u.limite_consultas || 8;
       return !u.premium && !u.admin && consultas >= limite;
     }).length;

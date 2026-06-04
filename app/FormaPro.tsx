@@ -896,7 +896,6 @@ const registrarMarca=async()=>{
 
           <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:12}}>
             <button onClick={()=>{setPantalla("inicio");setMensajes([]);setHistorial([]);setMsgCount(0);setCodigoGuardado("");}} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"7px 10px",fontSize:12,flexShrink:0}}>←</button>
-            <a href="https://t.me/forgeapp_es" target="_blank" rel="noopener noreferrer" style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"7px 10px",fontSize:12,flexShrink:0,textDecoration:"none"}}>💬</a>
             {(esPremium||esAdmin)&&<a href="https://t.me/forgeapp_es" target="_blank" rel="noopener noreferrer" style={{background:"#1E5C3A",border:"none",color:"#fff",cursor:"pointer",borderRadius:10,padding:"7px 10px",fontSize:12,flexShrink:0,textDecoration:"none"}}>👨‍💻 Coach</a>}
             {!esPremium&&!esAdmin&&<a href={`mailto:airanvlz@gmail.com?subject=Consulta Forge - ${codigoUsuario}&body=Hola, tengo una consulta sobre mi programación en Forge.`} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"7px 10px",fontSize:12,flexShrink:0,textDecoration:"none"}}>✉️</a>}
             <div style={{flex:1,display:"flex",alignItems:"center",gap:8,minWidth:0}}>

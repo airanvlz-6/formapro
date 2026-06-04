@@ -1132,7 +1132,12 @@ const registrarMarca=async()=>{
           {bloqueado&&(
             <div style={{marginTop:12,background:C.warmLight,border:`1px solid #F5C2A0`,borderRadius:16,padding:"18px 22px"}}>
               <div style={{fontFamily:"'Playfair Display',serif",fontSize:20,color:C.ink,marginBottom:8}}>Tu período de prueba ha terminado</div>
-              <p style={{color:C.muted,fontSize:13,marginBottom:6,lineHeight:1.6}}>Esperamos que estos 10 días te hayan convencido. Continúa con Premium:</p>
+              <p style={{color:C.muted,fontSize:13,marginBottom:12,lineHeight:1.6}}>¿Te ha sido útil Forge estos 10 días? Tu opinión nos ayuda a seguir mejorando. 🙏</p>
+              <a href={`mailto:airanvlz@gmail.com?subject=Feedback Forge - ${codigoUsuario}&body=Hola, quiero compartir mi experiencia con Forge:%0D%0A%0D%0A¿Qué me ha gustado:%0D%0A%0D%0A¿Qué mejoraría:%0D%0A%0D%0A¿Continuaría con Premium? ¿Por qué?`}
+                style={{display:"block",textAlign:"center",color:"#1E5C3A",fontSize:13,textDecoration:"none",padding:"10px",border:"1px solid #1E5C3A",borderRadius:12,background:"#D8F3DC",marginBottom:12,fontWeight:600}}>
+                ✉️ Enviar mi feedback
+              </a>
+              <p style={{color:C.muted,fontSize:12,marginBottom:6,lineHeight:1.6}}>Si consideras que Forge es una herramienta válida para tu entrenamiento, continúa con Premium:</p>
               <ul style={{color:C.muted,fontSize:12,marginBottom:12,paddingLeft:16,lineHeight:2}}>
                 <li>Consultas ilimitadas con el coach</li>
                 <li>Memoria persistente y consciencia de ciclo</li>

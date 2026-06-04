@@ -373,6 +373,7 @@ export default function Forge() {
         setMarcasEspecificas((u as any).marcas_especificas||{});
         setLimiteConsultas((u as any).limite_consultas||FREE_LIMIT);
         setCicloActual((u as any).ciclo_actual||{});
+        setFechaRegistro((u as any).created_at||null);
         apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
       },500);
     }
@@ -389,6 +390,7 @@ const [emailGuardado,setEmailGuardado]=useState(false);
 const [esPremium,setEsPremium]=useState(false);
 const [esAdmin,setEsAdmin]=useState(false);
 const [limiteConsultas,setLimiteConsultas]=useState(FREE_LIMIT);
+const [fechaRegistro,setFechaRegistro]=useState<string|null>(null);
 const [memoriaCoach,setMemoriaCoach]=useState<{lesiones?:string;plan?:string;notas?:string}>({});
 const [cicloActual,setCicloActual]=useState<{bloque?:string;semana?:number;totalSemanas?:number;objetivo?:string}>({});
 const [imagenesAdjuntas,setImagenesAdjuntas]=useState<{base64:string;tipo:string;nombre:string}[]>([]);
@@ -419,7 +421,8 @@ const abortControllerRef=useRef<AbortController|null>(null);
   const cat=categoria?CATEGORIAS.find((c:Categoria)=>c.id===categoria):null;
   const preguntas:Pregunta[]=(espKey?FORMULARIOS[espKey]:null)||(categoria?FORMULARIOS[categoria]:[])||[];
   const pregActual=preguntas[pregIdx];
-  const bloqueado=!esPremium&&!esAdmin&&msgCount>=limiteConsultas;
+  const diasPrueba=10;
+  const bloqueado=!esPremium&&!esAdmin&&fechaRegistro?((new Date().getTime()-new Date(fechaRegistro).getTime())/(1000*60*60*24))>=diasPrueba:false;
   const accentColor=cat?.color||C.accent;
 
 const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
@@ -473,6 +476,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     setMarcasEspecificas((u as any).marcas_especificas||{});
     setLimiteConsultas((u as any).limite_consultas||FREE_LIMIT);
     setCicloActual((u as any).ciclo_actual||{});
+    setFechaRegistro((u as any).created_at||null);
     apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
     // reanudarSesion eliminada para reducir consumo de tokens
   };
@@ -903,7 +907,7 @@ const registrarMarca=async()=>{
             <button onClick={()=>{setMostrarMarcas(!mostrarMarcas);setMostrarPerfil(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:accentColor,cursor:"pointer",flexShrink:0}}>📊</button>
             <button onClick={()=>{setMostrarPerfil(!mostrarPerfil);setMostrarMarcas(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:accentColor,cursor:"pointer",flexShrink:0}}>👤</button>
             <div style={{background:restantes<=5?"#FFF3CD":cat.colorLight,color:restantes<=5?"#856404":accentColor,borderRadius:100,padding:"5px 9px",fontSize:11,fontWeight:600,flexShrink:0,whiteSpace:"nowrap"}}>
-              {esAdmin?"👑 Admin":esPremium?"⭐ Premium":restantes>0?`${restantes}`:"-"}
+              {esAdmin?"👑 Admin":esPremium?"⭐ Premium":fechaRegistro?`${Math.max(0,diasPrueba-Math.floor((new Date().getTime()-new Date(fechaRegistro).getTime())/(1000*60*60*24)))}d prueba`:"Prueba"}
             </div>
           </div>
 
@@ -1126,8 +1130,8 @@ const registrarMarca=async()=>{
 
           {bloqueado&&(
             <div style={{marginTop:12,background:C.warmLight,border:`1px solid #F5C2A0`,borderRadius:16,padding:"18px 22px"}}>
-              <div style={{fontFamily:"'Playfair Display',serif",fontSize:20,color:C.ink,marginBottom:8}}>Has agotado tus consultas gratuitas</div>
-              <p style={{color:C.muted,fontSize:13,marginBottom:6,lineHeight:1.6}}>Si Forge te está siendo útil, continúa con Premium — consultas ilimitadas, memoria persistente y seguimiento continuo.</p>
+              <div style={{fontFamily:"'Playfair Display',serif",fontSize:20,color:C.ink,marginBottom:8}}>Tu período de prueba ha terminado</div>
+              <p style={{color:C.muted,fontSize:13,marginBottom:6,lineHeight:1.6}}>Esperamos que estos 10 días te hayan convencido. Continúa con Premium — consultas ilimitadas, memoria persistente, supervisión de entrenador certificado y acceso a la comunidad.</p>
               <p style={{color:C.muted,fontSize:12,marginBottom:6,lineHeight:1.6}}>Usa el código <strong style={{color:C.warm}}>FUNDADOR</strong> al pagar para obtener un descuento especial de lanzamiento.</p>
 <p style={{color:C.muted,fontSize:12,marginBottom:16,lineHeight:1.6}}>Sin permanencia — cancela cuando quieras.</p>
               <button className="btn-main" onClick={()=>{window.location.href="https://buy.stripe.com/bJe6oHa7w0l95CS6Dh0VO01";}}

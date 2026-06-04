@@ -897,6 +897,8 @@ const registrarMarca=async()=>{
           <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:12}}>
             <button onClick={()=>{setPantalla("inicio");setMensajes([]);setHistorial([]);setMsgCount(0);setCodigoGuardado("");}} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"7px 10px",fontSize:12,flexShrink:0}}>←</button>
             <a href="https://t.me/forgeapp_es" target="_blank" rel="noopener noreferrer" style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"7px 10px",fontSize:12,flexShrink:0,textDecoration:"none"}}>💬</a>
+            {esPremium&&<a href="https://t.me/forgeapp_es" target="_blank" rel="noopener noreferrer" style={{background:"#1E5C3A",border:"none",color:"#fff",cursor:"pointer",borderRadius:10,padding:"7px 10px",fontSize:12,flexShrink:0,textDecoration:"none"}}>👨‍💻 Coach</a>}
+            {!esPremium&&!esAdmin&&<a href={`mailto:airanvlz@gmail.com?subject=Consulta Forge - ${codigoUsuario}&body=Hola, tengo una consulta sobre mi programación en Forge.`} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"7px 10px",fontSize:12,flexShrink:0,textDecoration:"none"}}>✉️</a>}
             <div style={{flex:1,display:"flex",alignItems:"center",gap:8,minWidth:0}}>
               <div style={{width:32,height:32,borderRadius:10,background:cat.colorLight,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{cat.emoji}</div>
               <div style={{minWidth:0,overflow:"hidden"}}>
@@ -1131,7 +1133,14 @@ const registrarMarca=async()=>{
           {bloqueado&&(
             <div style={{marginTop:12,background:C.warmLight,border:`1px solid #F5C2A0`,borderRadius:16,padding:"18px 22px"}}>
               <div style={{fontFamily:"'Playfair Display',serif",fontSize:20,color:C.ink,marginBottom:8}}>Tu período de prueba ha terminado</div>
-              <p style={{color:C.muted,fontSize:13,marginBottom:6,lineHeight:1.6}}>Esperamos que estos 10 días te hayan convencido. Continúa con Premium — consultas ilimitadas, memoria persistente, supervisión de entrenador certificado y acceso a la comunidad.</p>
+              <p style={{color:C.muted,fontSize:13,marginBottom:6,lineHeight:1.6}}>Esperamos que estos 10 días te hayan convencido. Continúa con Premium:</p>
+              <ul style={{color:C.muted,fontSize:12,marginBottom:12,paddingLeft:16,lineHeight:2}}>
+                <li>Consultas ilimitadas con el coach</li>
+                <li>Memoria persistente y consciencia de ciclo</li>
+                <li>Acceso directo al grupo Telegram de la comunidad</li>
+                <li>Supervisado por entrenador con certificación europea</li>
+                <li>Sin permanencia — cancela cuando quieras</li>
+              </ul>
               <p style={{color:C.muted,fontSize:12,marginBottom:6,lineHeight:1.6}}>Usa el código <strong style={{color:C.warm}}>FUNDADOR</strong> al pagar para obtener un descuento especial de lanzamiento.</p>
 <p style={{color:C.muted,fontSize:12,marginBottom:16,lineHeight:1.6}}>Sin permanencia — cancela cuando quieras.</p>
               <button className="btn-main" onClick={()=>{window.location.href="https://buy.stripe.com/bJe6oHa7w0l95CS6Dh0VO01";}}

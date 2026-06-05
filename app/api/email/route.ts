@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const data = await resend.emails.send({
-      from: "Forge Coach <coach@forgeapp.es>",
+      from: "Forge Coach <coachforgeapp@gmail.com>",
       to,
       subject,
       html,

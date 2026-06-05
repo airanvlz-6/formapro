@@ -897,7 +897,7 @@ const registrarMarca=async()=>{
           <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:12}}>
             <button onClick={()=>{setPantalla("inicio");setMensajes([]);setHistorial([]);setMsgCount(0);setCodigoGuardado("");}} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"7px 10px",fontSize:12,flexShrink:0}}>←</button>
             {(esPremium||esAdmin)&&<a href="https://t.me/forgeapp_es" target="_blank" rel="noopener noreferrer" style={{background:"#1E5C3A",border:"none",color:"#fff",cursor:"pointer",borderRadius:10,padding:"7px 10px",fontSize:12,flexShrink:0,textDecoration:"none"}}>👨‍💻 Coach</a>}
-            {!esPremium&&!esAdmin&&<a href={`mailto:airanvlz@gmail.com?subject=Consulta Forge - ${codigoUsuario}&body=Hola, tengo una consulta sobre mi programación en Forge.`} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"7px 10px",fontSize:12,flexShrink:0,textDecoration:"none"}}>✉️</a>}
+            {!esPremium&&!esAdmin&&<a href={`mailto:coachforgeapp@gmail.com?subject=Consulta Forge - ${codigoUsuario}&body=Hola, tengo una consulta sobre mi programación en Forge.`} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"7px 10px",fontSize:12,flexShrink:0,textDecoration:"none"}}>✉️</a>}
             <div style={{flex:1,display:"flex",alignItems:"center",gap:8,minWidth:0}}>
               <div style={{width:32,height:32,borderRadius:10,background:cat.colorLight,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{cat.emoji}</div>
               <div style={{minWidth:0,overflow:"hidden"}}>
@@ -1133,7 +1133,7 @@ const registrarMarca=async()=>{
             <div style={{marginTop:12,background:C.warmLight,border:`1px solid #F5C2A0`,borderRadius:16,padding:"18px 22px"}}>
               <div style={{fontFamily:"'Playfair Display',serif",fontSize:20,color:C.ink,marginBottom:8}}>Tu período de prueba ha terminado</div>
               <p style={{color:C.muted,fontSize:13,marginBottom:12,lineHeight:1.6}}>¿Te ha sido útil Forge estos 10 días? Tu opinión nos ayuda a seguir mejorando. 🙏</p>
-              <a href={`mailto:airanvlz@gmail.com?subject=Feedback Forge - ${codigoUsuario}&body=Hola, quiero compartir mi experiencia con Forge:%0D%0A%0D%0A¿Qué me ha gustado:%0D%0A%0D%0A¿Qué mejoraría:%0D%0A%0D%0A¿Continuaría con Premium? ¿Por qué?`}
+              <a href={`mailto:coachforgeapp@gmail.com?subject=Feedback Forge - ${codigoUsuario}&body=Hola, quiero compartir mi experiencia con Forge:%0D%0A%0D%0A¿Qué me ha gustado:%0D%0A%0D%0A¿Qué mejoraría:%0D%0A%0D%0A¿Continuaría con Premium? ¿Por qué?`}
                 style={{display:"block",textAlign:"center",color:"#1E5C3A",fontSize:13,textDecoration:"none",padding:"10px",border:"1px solid #1E5C3A",borderRadius:12,background:"#D8F3DC",marginBottom:12,fontWeight:600}}>
                 ✉️ Enviar mi feedback
               </a>

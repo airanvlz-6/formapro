@@ -905,12 +905,16 @@ const registrarMarca=async()=>{
                 {esAdmin?"👑 Admin":esPremium?"⭐ Premium":fechaRegistro?`${Math.max(0,diasPrueba-diasUsados)}d prueba`:"Prueba"}
               </div>
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:6}}>
-              <button onClick={()=>{setPantalla("inicio");setMensajes([]);setHistorial([]);setMsgCount(0);setCodigoGuardado("");}} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"6px 10px",fontSize:12,flexShrink:0}}>←</button>
-              {(esPremium||esAdmin)&&<a href="https://t.me/forgeapp_es" target="_blank" rel="noopener noreferrer" style={{background:"#1E5C3A",border:"none",color:"#fff",cursor:"pointer",borderRadius:10,padding:"6px 9px",fontSize:12,flexShrink:0,textDecoration:"none"}}>👨‍💻</a>}
-              {!esPremium&&!esAdmin&&<a href={`mailto:coachforgeapp@gmail.com?subject=Consulta Forge - ${codigoUsuario}&body=Hola, tengo una consulta sobre mi programación en Forge.`} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"6px 9px",fontSize:12,flexShrink:0,textDecoration:"none"}}>✉️</a>}
-              <button onClick={()=>{setMostrarMarcas(!mostrarMarcas);setMostrarPerfil(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:accentColor,cursor:"pointer",flexShrink:0}}>📊</button>
-              <button onClick={()=>{setMostrarPerfil(!mostrarPerfil);setMostrarMarcas(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:accentColor,cursor:"pointer",flexShrink:0}}>👤</button>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={()=>{setPantalla("inicio");setMensajes([]);setHistorial([]);setMsgCount(0);setCodigoGuardado("");}} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"6px 10px",fontSize:12}}>←</button>
+                {(esPremium||esAdmin)&&<a href="https://t.me/forgeapp_es" target="_blank" rel="noopener noreferrer" style={{background:"#1E5C3A",border:"none",color:"#fff",cursor:"pointer",borderRadius:10,padding:"6px 9px",fontSize:12,textDecoration:"none"}}>👨‍💻</a>}
+                {!esPremium&&!esAdmin&&<a href={`mailto:coachforgeapp@gmail.com?subject=Consulta Forge - ${codigoUsuario}&body=Hola, tengo una consulta sobre mi programación en Forge.`} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"6px 9px",fontSize:12,textDecoration:"none"}}>✉️</a>}
+              </div>
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={()=>{setMostrarMarcas(!mostrarMarcas);setMostrarPerfil(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:accentColor,cursor:"pointer"}}>📊</button>
+                <button onClick={()=>{setMostrarPerfil(!mostrarPerfil);setMostrarMarcas(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:accentColor,cursor:"pointer"}}>👤</button>
+              </div>
             </div>
           </div>
 

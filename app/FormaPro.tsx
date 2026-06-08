@@ -293,10 +293,11 @@ const CAMPOS_MARCAS: Record<string, {id:string; label:string; placeholder:string
 };
 
 const SUGERENCIAS: Record<string, string[]> = {
-  carrera: ["Ajusta el volumen", "Registro nueva marca", "Tengo carrera en 3 semanas", "Me duele la rodilla"],
-  funcional: ["Tengo menos tiempo", "Registro mi peso actual", "Cambia el entreno de hoy", "Estoy muy cansado"],
-  hibrido: ["Prioriza mas fuerza", "Registro mis marcas", "Tengo competicion pronto", "Resumen de mi progreso"],
-  fuerza: ["Sube la intensidad", "Registro nuevo 1RM", "Mi sentadilla esta estancada", "Resumen de progreso"],
+  carrera: ["¿Qué metodología estoy usando?", "Muéstrame mi evolución", "Tengo carrera en 3 semanas", "Me duele la rodilla"],
+  funcional: ["¿Qué metodología estoy usando?", "Muéstrame mi evolución", "Cambia el entreno de hoy", "Estoy muy cansado"],
+  hibrido: ["¿Qué metodología estoy usando?", "Muéstrame mi evolución", "Tengo competición pronto", "Ajusta mi programación"],
+  fuerza: ["¿Qué metodología estoy usando?", "Muéstrame mi evolución", "Registro nuevo 1RM", "Mi punto débil"],
+  grupos: ["¿Qué metodología estoy usando?", "Muéstrame la progresión del grupo", "Cambia el WOD de hoy", "Ajusta la dificultad"],
 };
 
 const FREE_LIMIT = 8;

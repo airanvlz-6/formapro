@@ -422,7 +422,8 @@ const abortControllerRef=useRef<AbortController|null>(null);
   const preguntas:Pregunta[]=(espKey?FORMULARIOS[espKey]:null)||(categoria?FORMULARIOS[categoria]:[])||[];
   const pregActual=preguntas[pregIdx];
   const diasPrueba=10;
-  const bloqueado=!esPremium&&!esAdmin&&fechaRegistro?((new Date().getTime()-new Date(fechaRegistro).getTime())/(1000*60*60*24))>=diasPrueba:false;
+  const diasUsados=fechaRegistro?Math.floor((new Date().getTime()-new Date(fechaRegistro).getTime())/(1000*60*60*24)):0;
+  const bloqueado=!esPremium&&!esAdmin&&fechaRegistro!==null&&diasUsados>=diasPrueba;
   const accentColor=cat?.color||C.accent;
 
 const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
@@ -894,21 +895,22 @@ const registrarMarca=async()=>{
   </div>
 )}
 
-          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:12}}>
-            <button onClick={()=>{setPantalla("inicio");setMensajes([]);setHistorial([]);setMsgCount(0);setCodigoGuardado("");}} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"7px 10px",fontSize:12,flexShrink:0}}>←</button>
-            {(esPremium||esAdmin)&&<a href="https://t.me/forgeapp_es" target="_blank" rel="noopener noreferrer" style={{background:"#1E5C3A",border:"none",color:"#fff",cursor:"pointer",borderRadius:10,padding:"7px 10px",fontSize:12,flexShrink:0,textDecoration:"none"}}>👨‍💻 Coach</a>}
-            {!esPremium&&!esAdmin&&<a href={`mailto:coachforgeapp@gmail.com?subject=Consulta Forge - ${codigoUsuario}&body=Hola, tengo una consulta sobre mi programación en Forge.`} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"7px 10px",fontSize:12,flexShrink:0,textDecoration:"none"}}>✉️</a>}
-            <div style={{flex:1,display:"flex",alignItems:"center",gap:8,minWidth:0}}>
-              <div style={{width:32,height:32,borderRadius:10,background:cat.colorLight,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{cat.emoji}</div>
-              <div style={{minWidth:0,overflow:"hidden"}}>
-                <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:13,color:C.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Forge Coach</div>
-                <div style={{color:accentColor,fontSize:10,fontWeight:600,textTransform:"uppercase",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{espLabel||cat.titulo}</div>
+          <div style={{marginBottom:8}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,padding:"6px 8px",background:cat.colorLight,borderRadius:12}}>
+              <div style={{fontSize:18,flexShrink:0}}>{cat.emoji}</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:13,color:C.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Forge Coach — {espLabel||cat.titulo}</div>
+              </div>
+              <div style={{background:C.card,color:accentColor,borderRadius:100,padding:"3px 8px",fontSize:11,fontWeight:600,flexShrink:0,whiteSpace:"nowrap"}}>
+                {esAdmin?"👑 Admin":esPremium?"⭐ Premium":fechaRegistro?`${Math.max(0,diasPrueba-diasUsados)}d prueba`:"Prueba"}
               </div>
             </div>
-            <button onClick={()=>{setMostrarMarcas(!mostrarMarcas);setMostrarPerfil(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:accentColor,cursor:"pointer",flexShrink:0}}>📊</button>
-            <button onClick={()=>{setMostrarPerfil(!mostrarPerfil);setMostrarMarcas(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:accentColor,cursor:"pointer",flexShrink:0}}>👤</button>
-            <div style={{background:restantes<=5?"#FFF3CD":cat.colorLight,color:restantes<=5?"#856404":accentColor,borderRadius:100,padding:"5px 9px",fontSize:11,fontWeight:600,flexShrink:0,whiteSpace:"nowrap"}}>
-              {esAdmin?"👑 Admin":esPremium?"⭐ Premium":fechaRegistro?`${Math.max(0,diasPrueba-Math.floor((new Date().getTime()-new Date(fechaRegistro).getTime())/(1000*60*60*24)))}d prueba`:"Prueba"}
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <button onClick={()=>{setPantalla("inicio");setMensajes([]);setHistorial([]);setMsgCount(0);setCodigoGuardado("");}} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"6px 10px",fontSize:12,flexShrink:0}}>←</button>
+              {(esPremium||esAdmin)&&<a href="https://t.me/forgeapp_es" target="_blank" rel="noopener noreferrer" style={{background:"#1E5C3A",border:"none",color:"#fff",cursor:"pointer",borderRadius:10,padding:"6px 9px",fontSize:12,flexShrink:0,textDecoration:"none"}}>👨‍💻</a>}
+              {!esPremium&&!esAdmin&&<a href={`mailto:coachforgeapp@gmail.com?subject=Consulta Forge - ${codigoUsuario}&body=Hola, tengo una consulta sobre mi programación en Forge.`} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"6px 9px",fontSize:12,flexShrink:0,textDecoration:"none"}}>✉️</a>}
+              <button onClick={()=>{setMostrarMarcas(!mostrarMarcas);setMostrarPerfil(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:accentColor,cursor:"pointer",flexShrink:0}}>📊</button>
+              <button onClick={()=>{setMostrarPerfil(!mostrarPerfil);setMostrarMarcas(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:accentColor,cursor:"pointer",flexShrink:0}}>👤</button>
             </div>
           </div>
 

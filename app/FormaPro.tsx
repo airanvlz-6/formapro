@@ -642,7 +642,7 @@ const registrarMarca=async()=>{
     enviar(`He registrado una nueva marca: ${nueva.valor}. Analiza este progreso y ajusta mi programacion si es necesario.`);
   };
 
-  const handleKey=(e:React.KeyboardEvent)=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();enviar();}};
+  const handleKey=(e:React.KeyboardEvent)=>{if(e.key==="Enter"&&e.shiftKey){e.preventDefault();enviar();}};
   const stopEnvio=()=>{
     abortControllerRef.current?.abort();
     setCargando(false);

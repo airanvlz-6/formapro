@@ -73,7 +73,11 @@ export async function POST(req: NextRequest) {
     }).length;
     const unaVisita = todos.filter((u: any) => !u.total_visitas || u.total_visitas <= 1).length;
     const recurrentes = todos.filter((u: any) => u.total_visitas > 1).length;
-    const nuevosHoy = todos.filter((u: any) => u.created_at && new Date(u.created_at) >= hoy).length;
+    const nuevosHoy = todos.filter((u: any) => {
+      if(!u.created_at) return false;
+      const fechaCreacion = new Date(u.created_at);
+      return fechaCreacion.toDateString() === new Date().toDateString();
+    }).length;
     const nuevosSemana = todos.filter((u: any) => u.created_at && new Date(u.created_at) >= inicioSemana).length;
     const ultimos = [...todos].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 10);
 

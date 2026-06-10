@@ -56,8 +56,8 @@ export async function POST(req: NextRequest) {
     const ahora = new Date();
     const hace7dias = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const hoy = new Date(); hoy.setHours(0,0,0,0);
-    const inicioSemana = new Date(hoy); inicioSemana.setDate(hoy.getDate() - hoy.getDay() + 1);
-    const inicioSemanaISO = inicioSemana.toISOString();
+    const inicioSemana = new Date(hoy);
+    inicioSemana.setDate(hoy.getDate() - (hoy.getDay()===0?6:hoy.getDay()-1));
 
     const { data: todos } = await supabase.from("usuarios").select("codigo,categoria,especialidad,premium,admin,created_at,updated_at,limite_consultas,consultas_usadas,total_visitas,ultima_visita");
     if (!todos) return NextResponse.json({ error: "Error" }, { status: 500 });

@@ -177,7 +177,7 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
   ],
 };
 
-const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "", memoria?: {lesiones?:string; plan?:string; notas?:string}, ciclo?: {bloque?:string; semana?:number; totalSemanas?:number; objetivo?:string}) => {
+const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "", memoria?: {lesiones?:string; plan?:string; notas?:string}, ciclo?: {bloque?:string; semana?:number; totalSemanas?:number; objetivo?:string}, psicologia?: {arousal?:string; confianza?:string; estres?:string; motivacion?:string; notas_mentales?:string}, premium?: boolean) => {
   const perfilStr = Object.entries(perfil).map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join("\n");
   const marcasStr = marcas.length > 0 ? marcas.map(m => `- ${m.fecha}: ${m.valor}`).join("\n") : "Sin registros aún";
   const cicloStr = ciclo?.bloque ? `
@@ -188,6 +188,24 @@ CICLO DE ENTRENAMIENTO ACTUAL:
 - IMPORTANTE: Mantén coherencia con este punto del ciclo. Progresión acorde a semana ${ciclo.semana||1}.` : `
 CICLO DE ENTRENAMIENTO:
 - No hay ciclo activo. En la primera programación define el bloque, semanas totales y objetivo, y actualiza el ciclo.`;
+
+const psicologiaStr = `
+PERFIL PSICOLÓGICO DEL ATLETA:
+- Nivel de arousal habitual: ${psicologia?.arousal||"No evaluado"}
+- Confianza actual: ${psicologia?.confianza||"No evaluada"}
+- Gestión del estrés: ${psicologia?.estres||"No evaluada"}
+- Motivación: ${psicologia?.motivacion||"No evaluada"}
+- Notas mentales: ${psicologia?.notas_mentales||"Sin notas"}
+
+MÓDULO PSICOLOGÍA DEL ALTO RENDIMIENTO (solo usuarios Premium):
+Analiza cada mensaje del atleta buscando señales psicológicas. Aplica estas herramientas cuando sea necesario:
+- Arousal elevado/nervios pre-competición → Ley de Yerkes-Dodson, técnicas de regulación, respiración
+- Falta de confianza o autoeficacia baja → Reestructuración cognitiva, historial de éxitos, self-talk positivo
+- Bloqueo mental en competición → Rutinas pre-competición, foco en el proceso no el resultado
+- Visualización → Técnica PETTLEP (Physical, Environment, Task, Timing, Learning, Emotion, Perspective)
+- Estrés crónico o fatiga mental → Ajusta volumen e intensidad, técnicas de recuperación mental
+- Diálogo interno negativo → Modelo MAC (Mindfulness, Acceptance, Commitment), self-talk funcional
+Si detectas señales psicológicas relevantes, integra las herramientas de forma natural en tu respuesta sin hacer diagnósticos clínicos. Actualiza el perfil psicológico del atleta con lo que observes.`;
 
 const memoriaStr = memoria ? `
 ESTADO ACTUAL DEL ATLETA:
@@ -211,6 +229,7 @@ FORMATO ESTRICTO:
 - Si el cliente reporta un entrenamiento realizado: responde SOLO con el siguiente entreno o ajuste en una frase breve de contexto + la sesión. Sin análisis salvo petición explícita.
 ${memoriaStr}
 ${cicloStr}
+${premium?psicologiaStr:""}
 
 FECHA HOY: ${new Date().toLocaleDateString("es-ES", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
 PROXIMOS 14 DIAS: ${Array.from({length:14},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i+1);return d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"});}).join(" | ")}
@@ -393,6 +412,7 @@ const [esAdmin,setEsAdmin]=useState(false);
 const [limiteConsultas,setLimiteConsultas]=useState(FREE_LIMIT);
 const [fechaRegistro,setFechaRegistro]=useState<string|null>(null);
 const [memoriaCoach,setMemoriaCoach]=useState<{lesiones?:string;plan?:string;notas?:string}>({});
+const [perfilPsicologico,setPerfilPsicologico]=useState<{arousal?:string;confianza?:string;estres?:string;motivacion?:string;notas_mentales?:string}>({});
 const [cicloActual,setCicloActual]=useState<{bloque?:string;semana?:number;totalSemanas?:number;objetivo?:string}>({});
 const [imagenesAdjuntas,setImagenesAdjuntas]=useState<{base64:string;tipo:string;nombre:string}[]>([]);
 const [imagenAdjunta,setImagenAdjunta]=useState<{base64:string;tipo:string;nombre:string}|null>(null);
@@ -476,8 +496,8 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
       notas:(u as any).notas_coach||""
     });
     setMarcasEspecificas((u as any).marcas_especificas||{});
-    setLimiteConsultas((u as any).limite_consultas||FREE_LIMIT);
     setCicloActual((u as any).ciclo_actual||{});
+    setPerfilPsicologico((u as any).perfil_psicologico||{});
     setFechaRegistro((u as any).created_at||null);
     apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
     // reanudarSesion eliminada para reducir consumo de tokens
@@ -569,7 +589,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[imagen/archivo]"}...`).join("\n");
       const esProgramacion=texto.toLowerCase().includes("programacion")||texto.toLowerCase().includes("rutina")||texto.toLowerCase().includes("semana")||texto.toLowerCase().includes("plan")||texto.toLowerCase().includes("sesion")||texto.toLowerCase().includes("entreno")||texto.toLowerCase().includes("wod")||texto.toLowerCase().includes("ejercicio")||texto.toLowerCase().includes("bloque");
       const mensajesContexto=esProgramacion?-6:-4;
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?4000:1000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?4000:1000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
       if(data.aborted) return;
       const respText=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
@@ -579,7 +599,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
         apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:hist}});
         const extractarMemoria=async()=>{
           const extractPrompt=`Basándote en esta conversación, extrae en formato JSON sin markdown:
-{"lesiones":"lesiones o limitaciones actuales mencionadas (o vacío si no hay)","plan":"resumen del plan de entrenamiento para los próximos 7 días (o vacío si no se habló)","notas":"decisiones importantes o contexto clave para el coach (máx 100 palabras)","nueva_marca":"si el usuario menciona una nueva marca o récord personal, ponla aquí en formato 'ejercicio: valor' (o vacío si no hay)","ciclo":{"bloque":"nombre del bloque actual (acumulación, intensificación, realización, deload) o vacío si no se habló","semana":"número de semana actual del ciclo o null","totalSemanas":"total de semanas del ciclo o null","objetivo":"objetivo del bloque actual o vacío"}}
+{"lesiones":"lesiones o limitaciones actuales mencionadas (o vacío si no hay)","plan":"resumen del plan de entrenamiento para los próximos 7 días (o vacío si no se habló)","notas":"decisiones importantes o contexto clave para el coach (máx 100 palabras)","nueva_marca":"si el usuario menciona una nueva marca o récord personal, ponla aquí en formato 'ejercicio: valor' (o vacío si no hay)","ciclo":{"bloque":"nombre del bloque actual (acumulación, intensificación, realización, deload) o vacío si no se habló","semana":"número de semana actual del ciclo o null","totalSemanas":"total de semanas del ciclo o null","objetivo":"objetivo del bloque actual o vacío"},"psicologia":{"arousal":"nivel de activación observado (bajo/medio/alto/muy alto) o vacío","confianza":"nivel de confianza observado (baja/media/alta) o vacío","estres":"nivel de estrés observado (bajo/medio/alto) o vacío","motivacion":"nivel de motivación observado (baja/media/alta) o vacío","notas_mentales":"observaciones psicológicas relevantes para el coach (máx 50 palabras) o vacío"}}
 Solo incluye información nueva o actualizada. Si no hay info relevante, deja el campo vacío.
 Conversación: ${hist.slice(-4).map((m:{role:string;content:any})=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,200):"[archivo]"}`).join("\n")}`;
           const res=await apiCall({model:"claude-sonnet-4-5",max_tokens:300,system:"Eres un extractor de datos. Responde SOLO con JSON válido sin markdown.",messages:[{role:"user",content:extractPrompt}]});
@@ -595,6 +615,11 @@ Conversación: ${hist.slice(-4).map((m:{role:string;content:any})=>`${m.role==="
               const nuevoCiclo={...cicloActual,...datos.ciclo};
               setCicloActual(nuevoCiclo);
               nuevaMemoria.ciclo_actual=nuevoCiclo;
+            }
+            if(datos.psicologia&&Object.values(datos.psicologia).some(v=>v)){
+              const nuevoPsico={...perfilPsicologico,...datos.psicologia};
+              setPerfilPsicologico(nuevoPsico);
+              nuevaMemoria.perfil_psicologico=nuevoPsico;
             }
             if(datos.nueva_marca){
               const nuevaMarcaAuto:Marca={fecha:new Date().toLocaleDateString("es-ES"),valor:datos.nueva_marca};

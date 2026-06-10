@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     const inicioSemana = new Date(hoy);
     inicioSemana.setDate(hoy.getDate() - (hoy.getDay()===0?6:hoy.getDay()-1));
 
-    const { data: todos } = await supabase.from("usuarios").select("codigo,categoria,especialidad,premium,admin,created_at,updated_at,limite_consultas,consultas_usadas,total_visitas,ultima_visita");
+    const { data: todos } = await supabase.from("usuarios").select("codigo,categoria,especialidad,premium,admin,created_at,updated_at,consultas_usadas,total_visitas,ultima_visita");
     if (!todos) return NextResponse.json({ error: "Error" }, { status: 500 });
 
     const total = todos.length;

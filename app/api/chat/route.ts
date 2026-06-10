@@ -55,8 +55,9 @@ export async function POST(req: NextRequest) {
   if (action === "admin_stats") {
     const ahora = new Date();
     const hace7dias = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const inicioSemana = new Date(ahora.setDate(ahora.getDate() - ahora.getDay() + 1)).toISOString();
     const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const inicioSemana = new Date(hoy); inicioSemana.setDate(hoy.getDate() - hoy.getDay() + 1);
+    const inicioSemanaISO = inicioSemana.toISOString();
 
     const { data: todos } = await supabase.from("usuarios").select("codigo,categoria,especialidad,premium,admin,created_at,updated_at,limite_consultas,consultas_usadas,total_visitas,ultima_visita");
     if (!todos) return NextResponse.json({ error: "Error" }, { status: 500 });
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
     const unaVisita = todos.filter((u: any) => !u.total_visitas || u.total_visitas <= 1).length;
     const recurrentes = todos.filter((u: any) => u.total_visitas > 1).length;
     const nuevosHoy = todos.filter((u: any) => u.created_at && new Date(u.created_at) >= hoy).length;
-    const nuevosSemana = todos.filter((u: any) => u.created_at && new Date(u.created_at) >= new Date(inicioSemana)).length;
+    const nuevosSemana = todos.filter((u: any) => u.created_at && new Date(u.created_at) >= inicioSemana).length;
     const ultimos = [...todos].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 10);
 
     return NextResponse.json({ total, premium, activos, inactivos, enLimite, nuevosHoy, nuevosSemana, ultimos, unaVisita, recurrentes });

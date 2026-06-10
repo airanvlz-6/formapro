@@ -67,9 +67,9 @@ export async function POST(req: NextRequest) {
     const activos = todos.filter((u: any) => u.updated_at && new Date(u.updated_at) > new Date(hace7dias)).length;
     const inactivos = todos.filter((u: any) => !u.updated_at || new Date(u.updated_at) <= new Date(hace7dias)).length;
     const enLimite = todos.filter((u: any) => {
-      const consultas = u.consultas_usadas || 0;
-      const limite = u.limite_consultas || 8;
-      return !u.premium && !u.admin && consultas >= limite;
+      if(!u.created_at || u.premium || u.admin) return false;
+      const diasUsados = Math.floor((new Date().getTime() - new Date(u.created_at).getTime()) / (1000*60*60*24));
+      return diasUsados >= 10;
     }).length;
     const unaVisita = todos.filter((u: any) => !u.total_visitas || u.total_visitas <= 1).length;
     const recurrentes = todos.filter((u: any) => u.total_visitas > 1).length;

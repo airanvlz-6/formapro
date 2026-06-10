@@ -734,7 +734,7 @@ const registrarMarca=async()=>{
   </div>
 )}
           </div>
-          <p style={{color:C.muted,fontSize:12,marginTop:20}}>{FREE_LIMIT} consultas gratuitas - Sin registro</p>
+          <p style={{color:C.muted,fontSize:12,marginTop:20}}>10 días de prueba gratuita · Sin registro</p>
           <div style={{display:"flex",flexWrap:"wrap",gap:8,justifyContent:"center",marginTop:24}}>
             {["Basado en ciencia","Adaptado a tu día a día","Múltiples disciplinas","Recuerda tu progreso"].map(t=>(
               <span key={t} style={{background:C.tag,color:C.muted,borderRadius:100,padding:"5px 14px",fontSize:12}}>{t}</span>

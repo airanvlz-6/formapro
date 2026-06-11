@@ -623,6 +623,25 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
     finally{setGenerando(false);setTimeout(()=>inputRef.current?.focus(),300);}
   };
 
+  const enviarSilencioso=async(texto:string)=>{
+    if(!texto.trim()||cargando) return;
+    const nuevoHist=[...historial,{role:"user",content:texto.trim()}];
+    setCargando(true);setMsgCount(c=>c+1);
+    const catObj=CATEGORIAS.find((c:Categoria)=>c.id===categoria)!;
+    const esp=espKey||categoria!;
+    try{
+      const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[archivo]"}...`).join("\n");
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin),messages:nuevoHist},true);
+      if(data.aborted) return;
+      const respText=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
+      const hist=[...nuevoHist,{role:"assistant",content:respText}];
+      setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);
+      setHistorial(hist);
+      if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:hist}});
+    }catch{}
+    finally{setCargando(false);}
+  };
+
   const enviar=async(texto:string=input)=>{
     if((!texto.trim()&&imagenesAdjuntas.length===0)||cargando||bloqueado) return;
     const textoEnvio=texto.trim()||"Analiza esta imagen o archivo y dame feedback en base a mi programacion.";
@@ -943,13 +962,7 @@ ${testStr}`}]});
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <button className="btn-main" onClick={()=>{
               setPantalla("chat");
-              setTimeout(()=>enviar(`He completado mi Test de Atleta. Estos son mis resultados:
-Nivel: ${resultadoTest?.nivel}
-Puntuaciones: ${Object.entries(resultadoTest?.puntuaciones||{}).map(([k,v])=>`${k}: ${v}%`).join(", ")}
-Fortalezas: ${resultadoTest?.fortalezas?.join(", ")}
-A mejorar: ${resultadoTest?.debilidades?.join(", ")}
-Resumen: ${resultadoTest?.resumen}
-Por favor ajusta mi programación teniendo en cuenta estos datos.`),500);
+              setTimeout(()=>enviarSilencioso("Test completado. Nivel: "+resultadoTest?.nivel+". Puntuaciones: "+Object.entries(resultadoTest?.puntuaciones||{}).map(([k,v])=>k+": "+v+"%").join(", ")+". Fortalezas: "+resultadoTest?.fortalezas?.join(", ")+". A mejorar: "+resultadoTest?.debilidades?.join(", ")+". "+resultadoTest?.resumen+". Ajusta mi programación con estos datos."),500);
             }} style={{background:accentColor,color:"#fff",border:"none",borderRadius:14,padding:"14px",fontSize:15,fontWeight:600,cursor:"pointer"}}>
               ⚡ Ver mi programación ajustada
             </button>

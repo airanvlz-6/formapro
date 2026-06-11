@@ -934,28 +934,30 @@ ${testStr}`}]});
             </div>
             <p style={{color:C.muted,fontSize:13,lineHeight:1.6}}>{resultadoTest.resumen}</p>
           </div>
-          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:20,padding:"20px",marginBottom:16}}>
-            <div style={{fontFamily:"'Playfair Display',serif",fontSize:16,fontWeight:700,color:C.ink,marginBottom:16}}>Análisis de rendimiento</div>
-            {Object.entries(resultadoTest.puntuaciones).map(([key,val])=>(
-              <div key={key} style={{marginBottom:12}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                  <span style={{fontSize:13,color:C.ink,fontWeight:500,textTransform:"capitalize"}}>{key}</span>
-                  <span style={{fontSize:13,color:accentColor,fontWeight:700}}>{val}%</span>
-                </div>
-                <div style={{height:8,background:C.border,borderRadius:100}}>
-                  <div style={{height:8,borderRadius:100,background:accentColor,width:`${val}%`,transition:"width 0.8s ease"}}/>
-                </div>
-              </div>
-            ))}
-          </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-            <div style={{background:"#D8F3DC",borderRadius:14,padding:"14px"}}>
-              <div style={{fontSize:12,fontWeight:700,color:"#2D6A4F",marginBottom:8}}>💪 Fortalezas</div>
-              {resultadoTest.fortalezas.map((f,i)=><div key={i} style={{fontSize:12,color:"#2D6A4F",marginBottom:4}}>✓ {f}</div>)}
+            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px"}}>
+              <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:700,color:C.ink,marginBottom:12}}>Análisis</div>
+              {Object.entries(resultadoTest.puntuaciones).map(([key,val])=>(
+                <div key={key} style={{marginBottom:10}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                    <span style={{fontSize:12,color:C.ink,fontWeight:500,textTransform:"capitalize"}}>{key}</span>
+                    <span style={{fontSize:12,color:accentColor,fontWeight:700}}>{val}%</span>
+                  </div>
+                  <div style={{height:6,background:C.border,borderRadius:100}}>
+                    <div style={{height:6,borderRadius:100,background:accentColor,width:`${val}%`,transition:"width 0.8s ease"}}/>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div style={{background:"#FDF0EB",borderRadius:14,padding:"14px"}}>
-              <div style={{fontSize:12,fontWeight:700,color:C.warm,marginBottom:8}}>🎯 A mejorar</div>
-              {resultadoTest.debilidades.map((d,i)=><div key={i} style={{fontSize:12,color:C.warm,marginBottom:4}}>→ {d}</div>)}
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{background:"#D8F3DC",borderRadius:14,padding:"14px",flex:1}}>
+                <div style={{fontSize:13,fontWeight:700,color:"#2D6A4F",marginBottom:8}}>💪 Fortalezas</div>
+                {resultadoTest.fortalezas.map((f,i)=><div key={i} style={{fontSize:13,color:"#2D6A4F",marginBottom:4}}>✓ {f}</div>)}
+              </div>
+              <div style={{background:"#FDF0EB",borderRadius:14,padding:"14px",flex:1}}>
+                <div style={{fontSize:13,fontWeight:700,color:C.warm,marginBottom:8}}>🎯 A mejorar</div>
+                {resultadoTest.debilidades.map((d,i)=><div key={i} style={{fontSize:13,color:C.warm,marginBottom:4}}>→ {d}</div>)}
+              </div>
             </div>
           </div>
           </div>

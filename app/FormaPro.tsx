@@ -21,7 +21,7 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
     { id: "sexo", label: "¿Con que género te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
     { id: "nivel", label: "¿Cual es tu experiencia en carrera?", tipo: "opciones", opciones: ["Inicio ahora (0-3 meses)", "Principiante (3-12 meses)", "Intermedio (1-3 años)", "Avanzado (+3 años)"] },
     { id: "distancia_objetivo", label: "¿Cual es tu distancia objetivo?", tipo: "opciones", opciones: ["5K", "10K", "Media maratón (21K)", "Maratón (42K)", "Trail / Ultra", "Sin distancia fija"] },
-    { id: "marca_actual", label: "¿Tienes alguna marca de referencia?", tipo: "texto", placeholder: "Ej: corro 5K en 30 min, o nunca he corrido en carrera organizada" },
+    
     { id: "dias", label: "¿Cuántos días por semana puedes entrenar?", tipo: "opciones", opciones: ["2 dias", "3 dias", "4 dias", "5 dias", "6 dias"] },
     { id: "duracion", label: "¿Cuánto tiempo disponible por sesión?", tipo: "opciones", opciones: ["30 min", "45 min", "1 hora", "1h 30min", "Más de 1h 30min"] },
     { id: "superficie", label: "¿Donde sueles entrenar?", tipo: "multi", opciones: ["Asfalto / ciudad", "Pista de atletismo", "Trail / montaña", "Cinta de correr", "Campo de hierba"] },
@@ -43,8 +43,7 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
     { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Más de 50"] },
     { id: "sexo", label: "¿Con qué género te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
     { id: "nivel_cf", label: "¿Cuál es tu nivel en CrossFit?", tipo: "opciones", opciones: ["Principiante (0-1 año)", "Intermedio (1-3 años)", "Avanzado (+3 años)", "Competidor"] },
-    { id: "nivel_olimpico", label: "¿Cómo es tu nivel en movimientos olímpicos?", tipo: "opciones", opciones: ["Ninguno / muy básico", "Básico (técnica en proceso)", "Competente (buena técnica)", "Avanzado (cargas altas)"] },
-    { id: "gimnasticos", label: "¿Qué movimientos gimnásticos dominas?", tipo: "multi", opciones: ["Pull-ups / Chin-ups", "Toes to bar", "Handstand / HSPU", "Muscle-up en barra", "Muscle-up en anillas", "Double unders", "Ninguno aún"] },
+    
     { id: "objetivo_cf", label: "¿Cuál es tu objetivo principal en CrossFit?", tipo: "opciones", opciones: ["Mejorar mi rendimiento general en el box", "Conseguir nuevos skills gimnásticos", "Mejorar técnica y carga en halterofilia", "Prepararme para competir en Open", "Mejorar movilidad y movimiento funcional"] },
     { id: "dias", label: "¿Cuántos días por semana puedes entrenar?", tipo: "opciones", opciones: ["3 días", "4 días", "5 días", "6 días"] },
     { id: "duracion", label: "¿Cuánto tiempo por sesión?", tipo: "opciones", opciones: ["45 min", "1 hora", "1h 30min", "Más de 1h 30min"] },
@@ -57,9 +56,7 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
     { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Más de 50"] },
     { id: "sexo", label: "¿Con qué género te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
     { id: "nivel", label: "¿Cuál es tu nivel en calistenia?", tipo: "opciones", opciones: ["Principiante (0-1 año)", "Intermedio (1-3 años)", "Avanzado (+3 años)"] },
-    { id: "dominadas", label: "¿Cuántas dominadas seguidas puedes hacer?", tipo: "opciones", opciones: ["Ninguna aún", "1-3 dominadas", "4-8 dominadas", "9-15 dominadas", "Más de 15 dominadas"] },
-    { id: "fondos", label: "¿Cuántos fondos en paralelas seguidos?", tipo: "opciones", opciones: ["Ninguno aún", "1-5 fondos", "6-15 fondos", "Más de 15 fondos"] },
-    { id: "habilidades_actuales", label: "¿Qué habilidades dominas actualmente?", tipo: "multi", opciones: ["Pull-ups / Chin-ups", "Dips en paralelas", "Muscle-up en barra", "Muscle-up en anillas", "Front lever", "Back lever", "Planche (cualquier progresión)", "Handstand (parada de manos)", "Ninguna aún"] },
+    
     { id: "objetivo_skill", label: "¿Qué habilidad quieres conseguir o mejorar?", tipo: "texto", placeholder: "Ej: front lever, planche, muscle-up en anillas, handstand push-up..." },
     { id: "dias", label: "¿Cuántos días por semana puedes entrenar?", tipo: "opciones", opciones: ["2 días", "3 días", "4 días", "5 días"] },
     { id: "duracion", label: "¿Cuánto tiempo por sesión?", tipo: "opciones", opciones: ["30 min", "45 min", "1 hora", "Más de 1 hora"] },
@@ -72,8 +69,7 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
     { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Más de 50"] },
     { id: "sexo", label: "¿Con qué género te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
     { id: "nivel_hyrox", label: "¿Cuál es tu experiencia en Hyrox?", tipo: "opciones", opciones: ["Nunca he competido", "1 carrera completada", "2-4 carreras", "Competidor habitual"] },
-    { id: "tiempo_objetivo", label: "¿Cuál es tu tiempo objetivo?", tipo: "texto", placeholder: "Ej: terminar por primera vez, bajar de 1h30, sub 1h..." },
-    { id: "punto_debil_hyrox", label: "¿Cuál es tu mayor punto débil?", tipo: "opciones", opciones: ["La carrera entre estaciones", "SkiErg", "Sled Push/Pull", "Burpees broad jumps", "Wall balls", "Rowing / Farmers carry", "Sandbag / Lunges"] },
+    
     { id: "dias", label: "¿Cuántos días por semana puedes entrenar?", tipo: "opciones", opciones: ["3 días", "4 días", "5 días", "6 días"] },
     { id: "duracion", label: "¿Cuánto tiempo por sesión?", tipo: "opciones", opciones: ["45 min", "1 hora", "1h 30min", "Más de 1h 30min"] },
     { id: "material", label: "¿Tienes acceso al material de Hyrox?", tipo: "multi", opciones: ["SkiErg", "Sled / trineo", "Remo / RowErg", "Kettlebells", "Wall balls", "Sandbag", "Solo equipamiento básico"] },
@@ -87,7 +83,7 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
     { id: "experiencia_fuerza", label: "¿Cuánta experiencia tienes en fuerza?", tipo: "opciones", opciones: ["Poca o ninguna", "1-2 años", "2-4 años", "Más de 4 años"] },
     { id: "experiencia_cardio", label: "Y en resistencia / cardio?", tipo: "opciones", opciones: ["Poca o ninguna", "1-2 anos", "2-4 anos", "Mas de 4 anos"] },
     { id: "prioridad", label: "Que quieres priorizar?", tipo: "opciones", opciones: ["50/50 equilibrado", "Mas fuerza que resistencia", "Mas resistencia que fuerza", "Potencia explosiva"] },
-    { id: "marcas_actuales", label: "Cuales son tus marcas de referencia?", tipo: "texto", placeholder: "Ej: peso muerto 100kg, corro 10K en 50min..." },
+    
     { id: "dias", label: "Cuantos dias por semana puedes entrenar?", tipo: "opciones", opciones: ["3 dias", "4 dias", "5 dias", "6 dias"] },
     { id: "duracion", label: "Cuanto tiempo por sesion?", tipo: "opciones", opciones: ["45 min", "1 hora", "1h 30min", "Mas de 1h 30min"] },
     { id: "material", label: "Con que equipamiento cuentas?", tipo: "multi", opciones: ["Gimnasio completo", "Barras y discos", "Mancuernas", "Kettlebells", "Cinta / Pista", "Bicicleta / Cicloergometro"] },
@@ -113,9 +109,7 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
     { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Más de 50"] },
     { id: "sexo", label: "¿Con qué género te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
     { id: "modalidad_tri", label: "¿Qué distancia te interesa?", tipo: "opciones", opciones: ["Sprint (750m/20K/5K)", "Olímpico (1.5K/40K/10K)", "Half (1.9K/90K/21K)", "Ironman (3.8K/180K/42K)", "Duatlón (carrera+bici)"] },
-    { id: "nivel_natacion", label: "¿Cómo es tu nivel en natación?", tipo: "opciones", opciones: ["No sé nadar / muy básico", "Principiante (técnica en proceso)", "Intermedio (cómodo en agua)", "Avanzado (técnica sólida)"] },
-    { id: "nivel_ciclismo", label: "¿Cómo es tu nivel en ciclismo?", tipo: "opciones", opciones: ["Muy ocasional", "Principiante", "Intermedio", "Avanzado"] },
-    { id: "nivel_carrera", label: "¿Cómo es tu nivel en carrera a pie?", tipo: "opciones", opciones: ["Muy ocasional", "Principiante", "Intermedio", "Avanzado"] },
+    
     { id: "punto_debil", label: "¿Cuál es tu disciplina más débil?", tipo: "opciones", opciones: ["Natación", "Ciclismo", "Carrera a pie", "Las tres por igual"] },
     { id: "dias", label: "¿Cuántos días por semana puedes entrenar?", tipo: "opciones", opciones: ["3 días", "4 días", "5 días", "6 días", "7 días"] },
     { id: "duracion", label: "¿Cuánto tiempo por sesión?", tipo: "opciones", opciones: ["45 min", "1 hora", "1h 30min", "Más de 1h 30min"] },
@@ -129,7 +123,7 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
     { id: "sexo", label: "¿Con qué genero te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
     
     { id: "nivel", label: "¿Cuántos anos llevas entrenando fuerza?", tipo: "opciones", opciones: ["Menos de 1 ano", "1-2 anos", "2-4 anos", "Mas de 4 anos"] },
-    { id: "marcas", label: "¿Cuáles son tus marcas actuales (1RM)?", tipo: "texto", placeholder: "Ej: SQ 120kg / BP 90kg / DL 150kg" },
+    
     { id: "competicion", label: "¿Tienes competición o fecha objetivo?", tipo: "opciones", opciones: ["Si, en menos de 3 meses", "Si, en 3-6 meses", "Si, en mas de 6 meses", "No compito"] },
     { id: "dias", label: "¿Cuántos días puedes entrenar fuerza?", tipo: "opciones", opciones: ["3 dias", "4 dias", "5 dias", "6 dias"] },
     { id: "duracion", label: "¿Cuánto tiempo por sesión?", tipo: "opciones", opciones: ["1 hora", "1h 30min", "2 horas", "Mas de 2 horas"] },

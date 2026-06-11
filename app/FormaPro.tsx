@@ -305,6 +305,75 @@ const CAMPOS_MARCAS: Record<string, {id:string; label:string; placeholder:string
   fuerza_strongman: [{id:"peso_muerto",label:"Peso muerto",placeholder:"Ej: 220kg"},{id:"log_press",label:"Log press",placeholder:"Ej: 110kg"},{id:"farmer",label:"Farmer carry (x/mano)",placeholder:"Ej: 100kg"}],
 };
 
+const TEST_ATLETA: Record<string, {id:string; label:string; tipo:string; opciones?:string[]; placeholder?:string; unidad?:string}[]> = {
+  carrera: [
+    {id:"tiempo_5k", label:"¿Cuál es tu mejor tiempo reciente en 5K?", tipo:"texto", placeholder:"Ej: 24:30 — si no tienes, escribe 'sin marca'"},
+    {id:"tiempo_10k", label:"¿Y en 10K?", tipo:"texto", placeholder:"Ej: 51:00 — si no tienes, escribe 'sin marca'"},
+    {id:"km_semana", label:"¿Cuántos km semanales haces actualmente?", tipo:"opciones", opciones:["Menos de 20km","20-40km","40-60km","60-80km","Más de 80km"]},
+    {id:"ritmo_suave", label:"¿Cuál es tu ritmo de rodaje cómodo (Z2)?", tipo:"texto", placeholder:"Ej: 5:30 min/km"},
+    {id:"fc_suave", label:"¿Sabes tu frecuencia cardíaca en rodaje suave?", tipo:"texto", placeholder:"Ej: 140 ppm — si no sabes, escribe 'no sé'"},
+    {id:"test_cooper", label:"Si no tienes marcas recientes, ¿quieres hacer el test de Cooper? (correr 12 min y anotar la distancia)", tipo:"opciones", opciones:["Sí, lo haré", "No es necesario, tengo marcas"]},
+  ],
+  funcional_crossfit: [
+    {id:"back_squat", label:"Back Squat — ¿Cuál es tu 1RM?", tipo:"texto", placeholder:"Ej: 100kg — si no sabes, escribe 'sin dato'"},
+    {id:"deadlift", label:"Peso muerto — ¿Cuál es tu 1RM?", tipo:"texto", placeholder:"Ej: 140kg"},
+    {id:"clean_jerk", label:"Dos tiempos — ¿Cuál es tu 1RM?", tipo:"texto", placeholder:"Ej: 80kg"},
+    {id:"snatch", label:"Arrancada — ¿Cuál es tu 1RM?", tipo:"texto", placeholder:"Ej: 60kg"},
+    {id:"pullups_max", label:"¿Cuántas dominadas estrictas seguidas puedes hacer?", tipo:"opciones", opciones:["Ninguna aún","1-3","4-8","9-15","Más de 15"]},
+    {id:"skills_gym", label:"¿Qué movimientos gimnásticos tienes?", tipo:"multi", opciones:["Kipping Pull-ups","Chest to Bar","Bar Muscle-up","Ring Muscle-up","HSPU","Handstand Walk","Double Unders","Toes to Bar","Ninguno aún"]},
+    {id:"fran", label:"¿Tienes tiempo en Fran (21-15-9 Thrusters + Pull-ups)?", tipo:"texto", placeholder:"Ej: 4:30 — si no, escribe 'sin dato'"},
+    {id:"row_2k", label:"¿Tienes tiempo en 2K remo?", tipo:"texto", placeholder:"Ej: 7:15 — si no, escribe 'sin dato'"},
+  ],
+  funcional_calistenia: [
+    {id:"dominadas_max", label:"¿Cuántas dominadas estrictas seguidas puedes hacer?", tipo:"opciones", opciones:["Ninguna","1-3","4-8","9-15","Más de 15"]},
+    {id:"fondos_max", label:"¿Cuántos fondos en paralelas seguidos?", tipo:"opciones", opciones:["Ninguno","1-5","6-15","Más de 15"]},
+    {id:"skills_actuales", label:"¿Qué habilidades dominas actualmente?", tipo:"multi", opciones:["Dominadas","Dips","Muscle-up barra","Muscle-up anillas","Front lever","Back lever","Planche (cualquier progresión)","Handstand libre","Ninguna aún"]},
+  ],
+  hibrido_hyrox: [
+    {id:"tiempo_hyrox", label:"¿Tienes tiempo en alguna carrera Hyrox?", tipo:"texto", placeholder:"Ej: 1:24:00 — si no, escribe 'sin dato'"},
+    {id:"tiempo_5k", label:"¿Cuál es tu tiempo en 5K?", tipo:"texto", placeholder:"Ej: 24:00"},
+    {id:"objetivo_tiempo", label:"¿Cuál es tu objetivo de tiempo en Hyrox?", tipo:"multi", opciones:["Sub 1h45","Sub 1h30","Sub 1h20","Sub 1h10","Terminar","Competir en élite"]},
+    {id:"estacion_debil", label:"¿Qué estación te cuesta más?", tipo:"multi", opciones:["SkiErg","Sled Push","Sled Pull","Burpee Broad Jump","Row","Farmers Carry","Sandbag Lunges","Wall Balls"]},
+    {id:"back_squat", label:"Back Squat — ¿Cuál es tu 1RM?", tipo:"texto", placeholder:"Ej: 100kg"},
+    {id:"deadlift", label:"Peso muerto — ¿Cuál es tu 1RM?", tipo:"texto", placeholder:"Ej: 140kg"},
+  ],
+  hibrido_triatlon: [
+    {id:"tiempo_natacion", label:"¿Cuál es tu tiempo en 750m natación?", tipo:"texto", placeholder:"Ej: 16:00 — si no tienes, escribe 'sin dato'"},
+    {id:"tiempo_ciclismo", label:"¿Y en 20K ciclismo?", tipo:"texto", placeholder:"Ej: 38:00"},
+    {id:"tiempo_carrera", label:"¿Y en 5K carrera?", tipo:"texto", placeholder:"Ej: 24:00"},
+    {id:"distancia_objetivo", label:"¿Qué distancia es tu objetivo?", tipo:"opciones", opciones:["Sprint","Olímpico","Half","Ironman","Duatlón"]},
+  ],
+  fuerza_powerlifting: [
+    {id:"peso_corporal", label:"¿Cuál es tu peso corporal?", tipo:"texto", placeholder:"Ej: 80kg"},
+    {id:"squat_1rm", label:"Sentadilla — ¿Cuál es tu 1RM?", tipo:"texto", placeholder:"Ej: 140kg"},
+    {id:"bench_1rm", label:"Press banca — ¿Cuál es tu 1RM?", tipo:"texto", placeholder:"Ej: 100kg"},
+    {id:"deadlift_1rm", label:"Peso muerto — ¿Cuál es tu 1RM?", tipo:"texto", placeholder:"Ej: 180kg"},
+    {id:"eslabon_debil", label:"¿Cuál es tu levantamiento más débil?", tipo:"opciones", opciones:["Sentadilla","Press banca","Peso muerto","Los tres por igual"]},
+  ],
+  fuerza_halterofilia: [
+    {id:"snatch_1rm", label:"Arrancada — ¿Cuál es tu 1RM?", tipo:"texto", placeholder:"Ej: 70kg — si no tienes, escribe 'sin dato'"},
+    {id:"clean_jerk_1rm", label:"Dos tiempos — ¿Cuál es tu 1RM?", tipo:"texto", placeholder:"Ej: 90kg"},
+    {id:"front_squat", label:"Sentadilla frontal — ¿Cuál es tu 1RM?", tipo:"texto", placeholder:"Ej: 100kg"},
+  ],
+  fuerza_strongman: [
+    {id:"peso_corporal", label:"¿Cuál es tu peso corporal?", tipo:"texto", placeholder:"Ej: 95kg"},
+    {id:"deadlift_1rm", label:"Peso muerto — ¿Cuál es tu 1RM?", tipo:"texto", placeholder:"Ej: 220kg"},
+    {id:"log_press", label:"Log press — ¿Cuál es tu 1RM?", tipo:"texto", placeholder:"Ej: 110kg"},
+    {id:"farmer_carry", label:"Farmer carry — ¿Cuánto por mano?", tipo:"texto", placeholder:"Ej: 100kg/mano"},
+  ],
+  hibrido_general: [
+    {id:"deadlift_1rm", label:"Peso muerto — ¿Cuál es tu 1RM?", tipo:"texto", placeholder:"Ej: 120kg — si no tienes, escribe 'sin dato'"},
+    {id:"tiempo_5k", label:"¿Cuál es tu tiempo en 5K?", tipo:"texto", placeholder:"Ej: 26:00"},
+    {id:"prioridad", label:"¿Qué priorizas en tu entrenamiento?", tipo:"opciones", opciones:["Más fuerza","Más resistencia","50/50 equilibrado"]},
+  ],
+  hibrido_ocr: [
+    {id:"tiempo_5k", label:"¿Cuál es tu tiempo en 5K?", tipo:"texto", placeholder:"Ej: 26:00"},
+    {id:"dominadas_max", label:"¿Cuántas dominadas seguidas puedes hacer?", tipo:"opciones", opciones:["Ninguna","1-5","6-10","Más de 10"]},
+    {id:"obstaculos", label:"¿Qué obstáculos dominas?", tipo:"multi", opciones:["Escalada de cuerda","Barras / Monkey bars","Muros altos","Agua / natación","Arrastre de peso","Ninguno aún"]},
+    {id:"tiempo_ocr", label:"¿Tienes tiempo en alguna carrera OCR?", tipo:"texto", placeholder:"Ej: Spartan Sprint 1:45:00 — si no, escribe 'sin dato'"},
+  ],
+};
+
 const SUGERENCIAS: Record<string, string[]> = {
   carrera: ["¿Qué metodología estoy usando?", "Muéstrame mi evolución", "Tengo carrera en 3 semanas", "Me duele la rodilla"],
   funcional: ["¿Qué metodología estoy usando?", "Muéstrame mi evolución", "Cambia el entreno de hoy", "Estoy muy cansado"],
@@ -407,6 +476,10 @@ const [limiteConsultas,setLimiteConsultas]=useState(FREE_LIMIT);
 const [fechaRegistro,setFechaRegistro]=useState<string|null>(null);
 const [memoriaCoach,setMemoriaCoach]=useState<{lesiones?:string;plan?:string;notas?:string}>({});
 const [perfilPsicologico,setPerfilPsicologico]=useState<{arousal?:string;confianza?:string;estres?:string;motivacion?:string;notas_mentales?:string}>({});
+const [testAtleta,setTestAtleta]=useState<Record<string,string|string[]>>({});
+const [testIdx,setTestIdx]=useState(0);
+const [pantallTest,setPantallaTest]=useState(false);
+const [resultadoTest,setResultadoTest]=useState<{nivel:string;puntuaciones:Record<string,number>;fortalezas:string[];debilidades:string[];resumen:string}|null>(null);
 const [cicloActual,setCicloActual]=useState<{bloque?:string;semana?:number;totalSemanas?:number;objetivo?:string}>({});
 const [imagenesAdjuntas,setImagenesAdjuntas]=useState<{base64:string;tipo:string;nombre:string}[]>([]);
 const [imagenAdjunta,setImagenAdjunta]=useState<{base64:string;tipo:string;nombre:string}|null>(null);
@@ -667,6 +740,48 @@ const registrarMarca=async()=>{
     setCargando(false);
   };
 
+  const generarInformeTest=async()=>{
+    setPantalla("informe_test");
+    setGenerando(true);
+    const catObj=CATEGORIAS.find((c:Categoria)=>c.id===categoria)!;
+    const esp=espKey||categoria!;
+    const testStr=Object.entries(testAtleta).map(([k,v])=>`${k}: ${Array.isArray(v)?v.join(", "):v}`).join("\n");
+    try{
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:1500,
+        system:`Eres un analizador de rendimiento deportivo. Analiza los datos del test de atleta y genera un informe JSON estructurado. Responde SOLO con JSON válido sin markdown.
+Disciplina: ${esp}
+Perfil: ${JSON.stringify(respuestas)}`,
+        messages:[{role:"user",content:`Analiza estos datos del test y genera un informe con este formato JSON exacto:
+{
+  "nivel": "Principiante|Intermedio|Avanzado|Élite",
+  "puntuaciones": {
+    "resistencia": 0-100,
+    "fuerza": 0-100,
+    "tecnica": 0-100,
+    "recuperacion": 0-100,
+    "mental": 0-100
+  },
+  "fortalezas": ["fortaleza1", "fortaleza2"],
+  "debilidades": ["debilidad1", "debilidad2"],
+  "resumen": "Resumen en 2-3 frases del perfil del atleta y su potencial"
+}
+
+Datos del test:
+${testStr}`}]});
+      const texto=data.content?.map((b:{text?:string})=>b.text||"").join("")||"{}";
+      const clean=texto.replace(/```json|```/g,"").trim();
+      const informe=JSON.parse(clean);
+      setResultadoTest(informe);
+      if(codigoUsuario){
+        apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{
+          test_atleta:{...testAtleta,informe,fecha:new Date().toISOString()},
+          test_atleta_fecha:new Date().toISOString()
+        }});
+      }
+    }catch{setResultadoTest({nivel:"Intermedio",puntuaciones:{resistencia:50,fuerza:50,tecnica:50,recuperacion:50,mental:50},fortalezas:["Constancia"],debilidades:["Datos insuficientes"],resumen:"No se pudo generar el informe completo."});}
+    finally{setGenerando(false);}
+  };
+
   const compactarHistorial=async(hist:{role:string;content:any}[])=>{
     if(hist.length<10) return;
     try{
@@ -777,6 +892,109 @@ const registrarMarca=async()=>{
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {pantalla==="informe_test"&&cat&&resultadoTest&&(
+        <div className="fade-up" style={{maxWidth:500,width:"100%"}}>
+          <div style={{background:cat.colorLight,borderRadius:20,padding:"24px 20px",marginBottom:16,textAlign:"center"}}>
+            <div style={{fontSize:40,marginBottom:8}}>{cat.emoji}</div>
+            <div style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:700,color:C.ink,marginBottom:4}}>Informe de Atleta</div>
+            <div style={{background:accentColor,color:"#fff",borderRadius:100,padding:"6px 20px",fontSize:14,fontWeight:700,display:"inline-block",marginBottom:8}}>
+              {resultadoTest.nivel}
+            </div>
+            <p style={{color:C.muted,fontSize:13,lineHeight:1.6}}>{resultadoTest.resumen}</p>
+          </div>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:20,padding:"20px",marginBottom:16}}>
+            <div style={{fontFamily:"'Playfair Display',serif",fontSize:16,fontWeight:700,color:C.ink,marginBottom:16}}>Análisis de rendimiento</div>
+            {Object.entries(resultadoTest.puntuaciones).map(([key,val])=>(
+              <div key={key} style={{marginBottom:12}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                  <span style={{fontSize:13,color:C.ink,fontWeight:500,textTransform:"capitalize"}}>{key}</span>
+                  <span style={{fontSize:13,color:accentColor,fontWeight:700}}>{val}%</span>
+                </div>
+                <div style={{height:8,background:C.border,borderRadius:100}}>
+                  <div style={{height:8,borderRadius:100,background:accentColor,width:`${val}%`,transition:"width 0.8s ease"}}/>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+            <div style={{background:"#D8F3DC",borderRadius:14,padding:"14px"}}>
+              <div style={{fontSize:12,fontWeight:700,color:"#2D6A4F",marginBottom:8}}>💪 Fortalezas</div>
+              {resultadoTest.fortalezas.map((f,i)=><div key={i} style={{fontSize:12,color:"#2D6A4F",marginBottom:4}}>✓ {f}</div>)}
+            </div>
+            <div style={{background:"#FDF0EB",borderRadius:14,padding:"14px"}}>
+              <div style={{fontSize:12,fontWeight:700,color:C.warm,marginBottom:8}}>🎯 A mejorar</div>
+              {resultadoTest.debilidades.map((d,i)=><div key={i} style={{fontSize:12,color:C.warm,marginBottom:4}}>→ {d}</div>)}
+            </div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <button className="btn-main" onClick={()=>{
+              setPantalla("chat");
+              setTimeout(()=>enviar("He completado mi test de atleta. Analiza mi informe y ajusta mi programación según mis puntos fuertes y débiles."),500);
+            }} style={{background:accentColor,color:"#fff",border:"none",borderRadius:14,padding:"14px",fontSize:15,fontWeight:600,cursor:"pointer"}}>
+              ⚡ Ver mi programación ajustada
+            </button>
+            <button onClick={()=>setPantalla("chat")} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,borderRadius:14,padding:"12px",fontSize:14,cursor:"pointer"}}>
+              Volver al chat
+            </button>
+          </div>
+        </div>
+      )}
+
+      {pantalla==="test"&&cat&&(
+        <div className="fade-up" style={{maxWidth:500,width:"100%"}}>
+          <div style={{display:"flex",alignItems:"center",marginBottom:20}}>
+            <button onClick={()=>setPantalla("chat")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14}}>← Volver al chat</button>
+            <span style={{marginLeft:"auto",color:C.muted,fontSize:13}}>{testIdx+1} / {(TEST_ATLETA[espKey||""]||[]).length}</span>
+          </div>
+          <Progreso actual={testIdx+1} total={(TEST_ATLETA[espKey||""]||[]).length} color={accentColor}/>
+          <div style={{display:"inline-flex",alignItems:"center",gap:6,background:cat.colorLight,borderRadius:100,padding:"5px 14px",marginBottom:20}}>
+            <span style={{fontSize:15}}>{cat.emoji}</span>
+            <span style={{color:accentColor,fontSize:12,fontWeight:600}}>Test de Atleta</span>
+          </div>
+          {(TEST_ATLETA[espKey||""]||[]).length>0&&(()=>{
+            const pregTest=(TEST_ATLETA[espKey||""]||[])[testIdx];
+            return pregTest?(
+              <>
+                <h2 style={{fontSize:"clamp(17px,4vw,23px)",color:C.ink,marginBottom:22,lineHeight:1.4}}>{pregTest.label}</h2>
+                {pregTest.tipo==="opciones"&&(
+                  <div style={{display:"flex",flexWrap:"wrap",gap:9,marginBottom:28}}>
+                    {pregTest.opciones?.map(op=><Chip key={op} active={testAtleta[pregTest.id]===op} color={accentColor} onClick={()=>setTestAtleta(p=>({...p,[pregTest.id]:op}))}>{op}</Chip>)}
+                  </div>
+                )}
+                {pregTest.tipo==="multi"&&(
+                  <><p style={{color:C.muted,fontSize:12,marginBottom:10}}>Selecciona todos los que apliquen</p>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:9,marginBottom:28}}>
+                    {pregTest.opciones?.map(op=>{
+                      const sel=Array.isArray(testAtleta[pregTest.id])?testAtleta[pregTest.id] as string[]:[];
+                      return <Chip key={op} active={sel.includes(op)} color={accentColor} onClick={()=>{
+                        const curr=Array.isArray(testAtleta[pregTest.id])?[...testAtleta[pregTest.id] as string[]]:[];
+                        setTestAtleta(p=>({...p,[pregTest.id]:curr.includes(op)?curr.filter(x=>x!==op):[...curr,op]}));
+                      }}>{op}</Chip>;
+                    })}
+                  </div></>
+                )}
+                {pregTest.tipo==="texto"&&(
+                  <textarea value={testAtleta[pregTest.id] as string||""} onChange={e=>setTestAtleta(p=>({...p,[pregTest.id]:e.target.value}))} rows={2}
+                    placeholder={pregTest.placeholder}
+                    style={{width:"100%",border:`2px solid ${C.border}`,borderRadius:14,padding:"13px 15px",fontSize:14,color:C.ink,background:C.card,lineHeight:1.65,marginBottom:28}}
+                    onFocus={e=>(e.target.style.borderColor=accentColor)} onBlur={e=>(e.target.style.borderColor=C.border)}/>
+                )}
+                <p style={{color:C.muted,fontSize:12,marginBottom:16}}>💡 Si no tienes este dato puedes escribir "sin dato" y continuar — el diagnóstico se adaptará a la información disponible.</p>
+                <button className="btn-main" onClick={()=>{
+                  if(testIdx<(TEST_ATLETA[espKey||""]||[]).length-1){
+                    setTestIdx(testIdx+1);
+                  } else {
+                    generarInformeTest();
+                  }
+                }} style={{width:"100%",background:accentColor,color:"#fff",border:"none",borderRadius:14,padding:"15px",fontSize:15,fontWeight:600,cursor:"pointer"}}>
+                  {testIdx<(TEST_ATLETA[espKey||""]||[]).length-1?"Siguiente":"Generar mi informe ⚡"}
+                </button>
+              </>
+            ):null;
+          })()}
         </div>
       )}
 

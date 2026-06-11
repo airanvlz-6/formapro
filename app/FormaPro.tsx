@@ -943,7 +943,13 @@ ${testStr}`}]});
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <button className="btn-main" onClick={()=>{
               setPantalla("chat");
-              setTimeout(()=>enviar("He completado mi test de atleta. Analiza mi informe y ajusta mi programación según mis puntos fuertes y débiles."),500);
+              setTimeout(()=>enviar(`He completado mi Test de Atleta. Estos son mis resultados:
+Nivel: ${resultadoTest?.nivel}
+Puntuaciones: ${Object.entries(resultadoTest?.puntuaciones||{}).map(([k,v])=>`${k}: ${v}%`).join(", ")}
+Fortalezas: ${resultadoTest?.fortalezas?.join(", ")}
+A mejorar: ${resultadoTest?.debilidades?.join(", ")}
+Resumen: ${resultadoTest?.resumen}
+Por favor ajusta mi programación teniendo en cuenta estos datos.`),500);
             }} style={{background:accentColor,color:"#fff",border:"none",borderRadius:14,padding:"14px",fontSize:15,fontWeight:600,cursor:"pointer"}}>
               ⚡ Ver mi programación ajustada
             </button>

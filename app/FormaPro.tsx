@@ -1151,6 +1151,7 @@ ${testStr}`}]});
               </div>
               <div style={{display:"flex",gap:6}}>
                 <button onClick={()=>{setMostrarMarcas(!mostrarMarcas);setMostrarPerfil(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:accentColor,cursor:"pointer"}}>📊</button>
+              <button onClick={()=>{setTestIdx(0);setTestAtleta({});setPantalla("test");}} style={{background:accentColor,border:"none",borderRadius:10,padding:"6px 9px",fontSize:12,color:"#fff",cursor:"pointer",fontWeight:600}}>🏆 Test</button>
                 <button onClick={()=>{setMostrarPerfil(!mostrarPerfil);setMostrarMarcas(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:accentColor,cursor:"pointer"}}>👤</button>
               </div>
             </div>

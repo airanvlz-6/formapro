@@ -905,8 +905,8 @@ ${testStr}`}]});
       )}
 
       {pantalla==="informe_test"&&cat&&resultadoTest&&(
-        <div className="fade-up" style={{width:"100%",maxWidth:500,overflowY:"auto"}}>
-          <div id="informe-test" style={{background:C.bg,padding:"16px",borderRadius:20}}>
+        <div className="fade-up" style={{width:"100%",maxWidth:"100%",overflowY:"auto"}}>
+          <div id="informe-test" style={{background:C.bg,padding:"16px",borderRadius:20,width:"100%"}}>
           <div style={{background:cat.colorLight,borderRadius:20,padding:"24px 20px",marginBottom:16,textAlign:"center"}}>
             <div style={{fontSize:40,marginBottom:8}}>{cat.emoji}</div>
             <div style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:700,color:C.ink,marginBottom:4}}>Informe de Atleta</div>
@@ -951,7 +951,7 @@ ${testStr}`}]});
               const html2canvas=(await import("html2canvas")).default;
               const el=document.getElementById("informe-test");
               if(!el) return;
-              const canvas=await html2canvas(el,{backgroundColor:"#F6F4F0",scale:2});
+              const canvas=await html2canvas(el,{backgroundColor:"#F6F4F0",scale:2,width:el.offsetWidth,height:el.offsetHeight,windowWidth:el.offsetWidth});
               const link=document.createElement("a");
               link.download=`forge-informe-${codigoUsuario}.png`;
               link.href=canvas.toDataURL("image/png");

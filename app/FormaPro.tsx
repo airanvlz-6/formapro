@@ -895,9 +895,18 @@ ${testStr}`}]});
         </div>
       )}
 
+      {pantalla==="informe_test"&&cat&&!resultadoTest&&(
+        <div className="fade-up" style={{maxWidth:500,width:"100%",textAlign:"center",padding:"60px 24px"}}>
+          <div style={{fontSize:48,marginBottom:16}}>⚡</div>
+          <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,color:C.ink,marginBottom:8}}>Analizando tu perfil...</div>
+          <p style={{color:C.muted,fontSize:14,marginBottom:24}}>El coach está generando tu informe de atleta personalizado</p>
+          <div style={{display:"flex",gap:5,justifyContent:"center"}}>{[0,1,2].map(j=><div key={j} className="dot" style={{background:accentColor,animationDelay:`${j*0.2}s`}}/>)}</div>
+        </div>
+      )}
+
       {pantalla==="informe_test"&&cat&&resultadoTest&&(
-        <div className="fade-up" style={{maxWidth:500,width:"100%"}}>
-          <div id="informe-test" style={{background:C.bg,padding:"20px",borderRadius:20}}>
+        <div className="fade-up" style={{width:"100%",maxWidth:500,overflowY:"auto"}}>
+          <div id="informe-test" style={{background:C.bg,padding:"16px",borderRadius:20}}>
           <div style={{background:cat.colorLight,borderRadius:20,padding:"24px 20px",marginBottom:16,textAlign:"center"}}>
             <div style={{fontSize:40,marginBottom:8}}>{cat.emoji}</div>
             <div style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:700,color:C.ink,marginBottom:4}}>Informe de Atleta</div>

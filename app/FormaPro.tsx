@@ -897,6 +897,7 @@ ${testStr}`}]});
 
       {pantalla==="informe_test"&&cat&&resultadoTest&&(
         <div className="fade-up" style={{maxWidth:500,width:"100%"}}>
+          <div id="informe-test" style={{background:C.bg,padding:"20px",borderRadius:20}}>
           <div style={{background:cat.colorLight,borderRadius:20,padding:"24px 20px",marginBottom:16,textAlign:"center"}}>
             <div style={{fontSize:40,marginBottom:8}}>{cat.emoji}</div>
             <div style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:700,color:C.ink,marginBottom:4}}>Informe de Atleta</div>
@@ -929,12 +930,25 @@ ${testStr}`}]});
               {resultadoTest.debilidades.map((d,i)=><div key={i} style={{fontSize:12,color:C.warm,marginBottom:4}}>→ {d}</div>)}
             </div>
           </div>
+          </div>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <button className="btn-main" onClick={()=>{
               setPantalla("chat");
               setTimeout(()=>enviar("He completado mi test de atleta. Analiza mi informe y ajusta mi programación según mis puntos fuertes y débiles."),500);
             }} style={{background:accentColor,color:"#fff",border:"none",borderRadius:14,padding:"14px",fontSize:15,fontWeight:600,cursor:"pointer"}}>
               ⚡ Ver mi programación ajustada
+            </button>
+            <button onClick={async()=>{
+              const html2canvas=(await import("html2canvas")).default;
+              const el=document.getElementById("informe-test");
+              if(!el) return;
+              const canvas=await html2canvas(el,{backgroundColor:"#F6F4F0",scale:2});
+              const link=document.createElement("a");
+              link.download=`forge-informe-${codigoUsuario}.png`;
+              link.href=canvas.toDataURL("image/png");
+              link.click();
+            }} style={{background:"#1A1A1A",color:"#fff",border:"none",borderRadius:14,padding:"12px",fontSize:14,fontWeight:600,cursor:"pointer"}}>
+              📥 Descargar informe
             </button>
             <button onClick={()=>setPantalla("chat")} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,borderRadius:14,padding:"12px",fontSize:14,cursor:"pointer"}}>
               Volver al chat

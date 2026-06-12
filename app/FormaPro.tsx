@@ -629,7 +629,10 @@ const elegirEspecialidad=(label:string)=>{const key=ESPECIALIDAD_KEY[categoria!]
       if(!dataVerify.error){setErrorCodigoPersonal("Este código ya existe, elige otro.");setGenerando(false);setPantalla("final");return;}
     }
     setErrorCodigoPersonal("");setCodigoGuardado(codigo);
-const prompt = "¡Hola! Acabo de completar mi perfil. Por favor sigue exactamente esta secuencia: 1) Dame la bienvenida breve y personalizada demostrando que has leído y entendido mi perfil completo — especialidad, nivel, objetivo y limitaciones. 2) Explica qué metodología de periodización vas a aplicar conmigo y POR QUÉ es la más adecuada para mi situación concreta — sé específico, no genérico. 3) Pregúntame si estoy de acuerdo con esta metodología o si quiero explorar alguna alternativa antes de empezar. NO generes ningún entrenamiento todavía — espera mi confirmación.";
+const esRehab=(espKey||categoria)==="rehabilitacion_general";
+    const prompt = esRehab
+      ? "¡Hola! Acabo de completar mi perfil de rehabilitación. Por favor: 1) Incluye PRIMERO el disclaimer obligatorio completo. 2) Da la bienvenida breve demostrando que entiendes mi zona afectada, tipo de molestia y fase actual. 3) Explica el enfoque y las fases de rehabilitación que vas a aplicar y por qué. 4) Pregúntame si estoy de acuerdo antes de generar el primer protocolo de ejercicios."
+      : "¡Hola! Acabo de completar mi perfil. Por favor sigue exactamente esta secuencia: 1) Dame la bienvenida breve y personalizada demostrando que has leído y entendido mi perfil completo — especialidad, nivel, objetivo y limitaciones. 2) Explica qué metodología de periodización vas a aplicar conmigo y POR QUÉ es la más adecuada para mi situación concreta — sé específico, no genérico. 3) Pregúntame si estoy de acuerdo con esta metodología o si quiero explorar alguna alternativa antes de empezar. NO generes ningún entrenamiento todavía — espera mi confirmación.";
     try{
       const esp=espKey||categoria!;
       const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:3000,system:buildPrompt(catObj,perfil,[],""),messages:[{role:"user",content:prompt}]});

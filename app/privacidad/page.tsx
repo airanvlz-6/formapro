@@ -1,6 +1,6 @@
 export default function Privacidad() {
   return (
-    <div style={{maxWidth:720,margin:"0 auto",padding:"60px 24px",fontFamily:"'DM Sans',sans-serif",color:"#1A1A1A",lineHeight:1.75,background:"#F6F4F0",minHeight:"100vh"}}>
+    <div style={{maxWidth:720,margin:"0 auto",padding:"60px 24px",fontFamily:"'DM Sans',sans-serif",color:"#3D3935",lineHeight:1.75,background:"#F6F4F0",minHeight:"100vh"}}>
       <h1 style={{fontFamily:"Georgia,serif",fontSize:36,marginBottom:8}}>Política de Privacidad</h1>
       <p style={{color:"#6B6560",marginBottom:32}}>Última actualización: junio 2026</p>
 

@@ -173,7 +173,7 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
   rehabilitacion_general: [
     { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Más de 50"] },
     { id: "sexo", label: "¿Con qué género te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
-    { id: "zona", label: "¿Qué zona te molesta o has lesionado?", tipo: "opciones", opciones: ["Hombro", "Codo / muñeca", "Lumbar / espalda baja", "Cadera", "Rodilla", "Tobillo / pie", "Cervical / cuello", "Otra zona"] },
+    { id: "zona", label: "¿Qué zona te molesta o has lesionado?", tipo: "multi", opciones: ["Hombro", "Codo / muñeca", "Lumbar / espalda baja", "Cadera", "Rodilla", "Tobillo / pie", "Cervical / cuello", "Otra zona"] },
     { id: "tipo_molestia", label: "¿Qué tipo de molestia es?", tipo: "opciones", opciones: ["Dolor agudo reciente (días)", "Molestia crónica (semanas/meses)", "Sobrecarga por entrenamiento", "Post-cirugía / post-inmovilización", "Prevención (sin dolor actual)"] },
     { id: "diagnostico", label: "¿Tienes diagnóstico médico?", tipo: "texto", placeholder: "Ej: tendinopatía rotuliana, hernia discal L4-L5, o 'sin diagnóstico'" },
     { id: "fase", label: "¿En qué fase te encuentras?", tipo: "opciones", opciones: ["Dolor presente, evito moverlo", "El dolor ha mejorado, puedo moverlo con cuidado", "Sin dolor, quiero recuperar fuerza", "Sin dolor, quiero volver a entrenar normal"] },
@@ -631,7 +631,7 @@ const elegirEspecialidad=(label:string)=>{const key=ESPECIALIDAD_KEY[categoria!]
     setErrorCodigoPersonal("");setCodigoGuardado(codigo);
 const esRehab=(espKey||categoria)==="rehabilitacion_general";
     const prompt = esRehab
-      ? "¡Hola! Acabo de completar mi perfil de rehabilitación. Por favor: 1) Incluye PRIMERO el disclaimer obligatorio completo. 2) Da la bienvenida breve demostrando que entiendes mi zona afectada, tipo de molestia y fase actual. 3) Explica el enfoque y las fases de rehabilitación que vas a aplicar y por qué. 4) Pregúntame si estoy de acuerdo antes de generar el primer protocolo de ejercicios."
+      ? "¡Hola! Acabo de completar mi perfil de rehabilitación. Por favor: 1) Incluye PRIMERO el disclaimer obligatorio completo. 2) Da la bienvenida breve demostrando que entiendes mi zona afectada, tipo de molestia y fase actual. 3) Explica el enfoque y las fases de rehabilitación que vas a aplicar y por qué. 4) Termina preguntando si estoy de acuerdo, indicando explícitamente que al confirmar para empezar la Fase 1 confirmo que he comprendido la información, que esto no sustituye valoración profesional, y que asumo la responsabilidad de detener cualquier ejercicio que cause dolor y consultar con un profesional si es necesario."
       : "¡Hola! Acabo de completar mi perfil. Por favor sigue exactamente esta secuencia: 1) Dame la bienvenida breve y personalizada demostrando que has leído y entendido mi perfil completo — especialidad, nivel, objetivo y limitaciones. 2) Explica qué metodología de periodización vas a aplicar conmigo y POR QUÉ es la más adecuada para mi situación concreta — sé específico, no genérico. 3) Pregúntame si estoy de acuerdo con esta metodología o si quiero explorar alguna alternativa antes de empezar. NO generes ningún entrenamiento todavía — espera mi confirmación.";
     try{
       const esp=espKey||categoria!;

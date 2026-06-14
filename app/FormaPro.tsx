@@ -197,22 +197,21 @@ CICLO DE ENTRENAMIENTO ACTUAL:
 CICLO DE ENTRENAMIENTO:
 - No hay ciclo activo. En la primera programación define el bloque, semanas totales y objetivo, y actualiza el ciclo.`;
 
-const athleteStateStr = athleteState && Object.keys(athleteState).length > 0 ? `
-ESTADO ACTUAL DEL ATLETA (fuente de verdad — usa esto, no inferas del historial):
+const athleteStateStr = `
+ESTADO ACTUAL DEL ATLETA:
+${athleteState && Object.keys(athleteState).length > 0 ? `
 - Macrociclo: ${athleteState.macro_cycle||"No definido"}
 - Mesociclo: ${athleteState.meso_cycle||"No definido"}
 - Bloque: ${athleteState.block||"No definido"}
 - Semana: ${athleteState.week||"?"} de ${athleteState.total_weeks||"?"}
-- Día del ciclo: ${athleteState.day||"?"}
-- Fatiga acumulada: ${athleteState.fatigue||"No evaluada"}
+- Día: ${athleteState.day||"?"}
+- Fatiga: ${athleteState.fatigue||"No evaluada"}
 - Última sesión: ${athleteState.last_session||"No registrada"}
-- Próxima sesión planificada: ${athleteState.next_session||"No planificada"}
-- Actualizado: ${athleteState.updated_at||""}
+- Próxima sesión: ${athleteState.next_session||"No planificada"}` : "Sin estado definido aún — debes crearlo ahora."}
 
-INSTRUCCIÓN CRÍTICA: Al responder, SIEMPRE incluye al final un bloque JSON con este formato exacto:
-[STATE_UPDATE]{"macro_cycle":"...","meso_cycle":"...","block":"...","week":N,"total_weeks":N,"day":N,"fatigue":"baja|media|alta","last_session":"...","next_session":"..."}[/STATE_UPDATE]
-Actualiza solo los campos que cambien. Mantén los demás igual.` : `
-ESTADO DEL ATLETA: No hay estado definido aún. En tu primera respuesta de programación, define el macrociclo, mesociclo, bloque y semana, e incluye el bloque [STATE_UPDATE]...[/STATE_UPDATE] al final.`;
+⚠️ REGLA OBLIGATORIA SIN EXCEPCIÓN: En TODAS tus respuestas, incluye SIEMPRE al final este bloque exacto con los valores actualizados:
+[STATE_UPDATE]{"macro_cycle":"nombre del macrociclo","meso_cycle":"nombre del mesociclo","block":"acumulacion|intensificacion|realizacion|deload","week":N,"total_weeks":N,"day":N,"fatigue":"baja|media|alta","last_session":"tipo de ultima sesion","next_session":"tipo de proxima sesion"}[/STATE_UPDATE]
+Si no hay estado previo, créalo basándote en el perfil y el entreno actual. NUNCA omitas este bloque.`;
 
 const psicologiaStr = `
 PERFIL PSICOLÓGICO DEL ATLETA:

@@ -1249,7 +1249,10 @@ ${testStr}`}]});
 
           <div style={{marginBottom:8}}>
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,padding:"6px 8px",background:"#1A1A1A",borderRadius:12,border:"1px solid #FF6B00"}}>
-              <div style={{fontSize:18,flexShrink:0}}>{cat.emoji}</div>
+              <svg width="24" height="28" viewBox="0 0 56 64" fill="none" xmlns="http://www.w3.org/2000/svg" style={{flexShrink:0}}>
+                <path d="M28 2L54 14V36C54 50 28 62 28 62C28 62 2 50 2 36V14L28 2Z" fill="#FF6B00"/>
+                <text x="50%" y="56%" dominantBaseline="middle" textAnchor="middle" fill="white" fontSize="28" fontWeight="900" fontFamily="DM Sans, sans-serif">F</text>
+              </svg>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:13,color:C.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Forge Coach — {espLabel||cat.titulo}</div>
               </div>

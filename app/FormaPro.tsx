@@ -925,14 +925,14 @@ ${testStr}`}]});
           </div>
           <p style={{color:C.muted,fontSize:17,lineHeight:1.65,marginBottom:8}}>Coach de entrenamiento personal. Siempre disponible, seguimiento de progreso y adaptado a tu vida.</p>
           <p style={{color:C.muted,fontSize:14,marginBottom:32}}>Tu programa evoluciona contigo cada semana.</p>
-          <button className="btn-main" onClick={()=>setPantalla("categoria")} style={{background:C.ink,color:"#fff",border:"none",borderRadius:14,padding:"16px 40px",fontSize:16,fontWeight:600,cursor:"pointer",width:"100%",maxWidth:360,marginBottom:20}}>
+          <button className="btn-main" onClick={()=>setPantalla("categoria")} style={{background:"#FF6B00",color:"#fff",border:"none",borderRadius:14,padding:"16px 40px",fontSize:16,fontWeight:600,cursor:"pointer",width:"100%",maxWidth:360,marginBottom:20}}>
             Crear mi programa
           </button>
           <div style={{maxWidth:360,margin:"0 auto"}}>
             <p style={{color:C.muted,fontSize:13,marginBottom:10}}>Ya tienes un programa? Introduce tu codigo:</p>
             <div style={{display:"flex",gap:8}}>
               <input value={codigoInput} onChange={e=>setCodigoInput(e.target.value.toUpperCase())} placeholder="FP-XXXXX"
-                style={{flex:1,border:`2px solid ${C.border}`,borderRadius:12,padding:"12px 14px",fontSize:15,color:C.ink,background:C.card,letterSpacing:2,textAlign:"center"}}
+                style={{flex:1,border:"2px solid #FF6B00",borderRadius:12,padding:"12px 14px",fontSize:15,color:"#F0EDE8",background:"#1A1A1A",letterSpacing:2,textAlign:"center"}}
                 onKeyDown={e=>e.key==="Enter"&&recuperarUsuario()}
               />
               <button id="btn-entrar" className="btn-main" onClick={recuperarUsuario} style={{background:C.accent,color:"#fff",border:"none",borderRadius:12,padding:"12px 18px",fontSize:14,fontWeight:600,cursor:"pointer"}}>

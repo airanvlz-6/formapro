@@ -721,9 +721,16 @@ Conversación: ${hist.slice(-4).map((m:{role:string;content:any})=>`${m.role==="
             if(datos.plan) nuevaMemoria.plan_proxima_semana=datos.plan;
             if(datos.notas) nuevaMemoria.notas_coach=datos.notas;
             if(datos.ciclo){
-              const nuevoCiclo={...cicloActual,...datos.ciclo};
-              setCicloActual(nuevoCiclo);
-              nuevaMemoria.ciclo_actual=nuevoCiclo;
+              const nuevoCiclo={
+                bloque: datos.ciclo.bloque||cicloActual.bloque||"",
+                semana: datos.ciclo.semana||cicloActual.semana||null,
+                totalSemanas: datos.ciclo.totalSemanas||cicloActual.totalSemanas||null,
+                objetivo: datos.ciclo.objetivo||cicloActual.objetivo||""
+              };
+              if(nuevoCiclo.bloque||nuevoCiclo.semana){
+                setCicloActual(nuevoCiclo);
+                nuevaMemoria.ciclo_actual=nuevoCiclo;
+              }
             }
             if(datos.psicologia&&Object.values(datos.psicologia).some(v=>v)){
               const nuevoPsico={...perfilPsicologico,...datos.psicologia};

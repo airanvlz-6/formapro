@@ -137,8 +137,9 @@
   /* PRECIOS */
   .precios { padding: 100px 24px; max-width: 1100px; margin: 0 auto; }
   .precios-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 720px; margin: 0 auto; }
-  .precio-card { background: var(--card); border: 1px solid var(--border); border-radius: 24px; padding: 40px 36px; }
-  .precio-card.destacado { background: var(--green); border-color: var(--green); color: #fff; position: relative; overflow: hidden; }
+  .precio-card { background: var(--gray-2); border: 1px solid var(--gray-4); border-radius: 24px; padding: 40px 36px; transition: border-color 0.2s; }
+  .precio-card:hover { border-color: var(--orange); }
+  .precio-card.destacado { background: var(--gray-1); border-color: var(--orange); color: #fff; position: relative; overflow: hidden; }
   .precio-card.destacado::before { content: "MÁS POPULAR"; position: absolute; top: 20px; right: -28px; background: var(--orange); color: #fff; font-size: 10px; font-weight: 700; letter-spacing: 2px; padding: 5px 40px; transform: rotate(35deg); }
   .precio-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px; opacity: 0.7; }
   .precio-nombre { font-family: 'Fraunces', serif; font-size: 28px; font-weight: 700; margin-bottom: 8px; }
@@ -150,10 +151,10 @@
   .precio-card.destacado .precio-features li::before { color: #8fbe9f; }
   .precio-card:not(.destacado) .precio-features li::before { color: var(--green); }
   .btn-precio { width: 100%; padding: 14px; border-radius: 100px; font-size: 15px; font-weight: 600; cursor: pointer; border: none; font-family: inherit; transition: all 0.2s; text-align: center; display: block; text-decoration: none; }
-  .precio-card.destacado .btn-precio { background: #fff; color: var(--green); }
-  .precio-card.destacado .btn-precio:hover { background: var(--green-light); }
-  .precio-card:not(.destacado) .btn-precio { background: var(--ink); color: #fff; }
-  .precio-card:not(.destacado) .btn-precio:hover { background: #333; }
+  .precio-card.destacado .btn-precio { background: var(--orange); color: #fff; }
+  .precio-card.destacado .btn-precio:hover { background: var(--orange-dim); }
+  .precio-card:not(.destacado) .btn-precio { background: var(--gray-4); color: var(--ink); border: 1px solid var(--gray-4); }
+  .precio-card:not(.destacado) .btn-precio:hover { border-color: var(--orange); color: var(--orange); }
 
   /* FAQ */
   .faq { padding: 100px 24px; background: var(--cream); }

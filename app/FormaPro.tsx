@@ -707,13 +707,37 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       if(codigoUsuario){
         apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:hist}});
         const extractarMemoria=async()=>{
-          const extractPrompt=`Basándote en esta conversación, extrae en formato JSON sin markdown:
-{"lesiones":"lesiones o limitaciones actuales mencionadas (o vacío si no hay)","plan":"resumen del plan de entrenamiento para los próximos 7 días (o vacío si no se habló)","notas":"decisiones importantes o contexto clave para el coach (máx 100 palabras)","nueva_marca":"si el usuario menciona una nueva marca o récord personal, ponla aquí en formato 'ejercicio: valor' (o vacío si no hay)","ciclo":{"bloque":"extrae el nombre del bloque del formato 📅 CICLO en la respuesta del coach (acumulación, intensificación, realización, deload) o vacío si no aparece","semana":"extrae el número de semana actual del formato 📅 CICLO o null","totalSemanas":"extrae el total de semanas del formato 📅 CICLO o null","objetivo":"extrae el objetivo del formato 📅 CICLO o vacío"},"psicologia":{"arousal":"nivel de activación observado (bajo/medio/alto/muy alto) o vacío","confianza":"nivel de confianza observado (baja/media/alta) o vacío","estres":"nivel de estrés observado (bajo/medio/alto) o vacío","motivacion":"nivel de motivación observado (baja/media/alta) o vacío","notas_mentales":"observaciones psicológicas relevantes para el coach (máx 50 palabras) o vacío"}}
-Solo incluye información nueva o actualizada. Si no hay info relevante, deja el campo vacío.
-Conversación reciente: ${hist.slice(-6).map((m:{role:string;content:any})=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,200):"[archivo]"}`).join("\n")}
-Ciclo actual en memoria: ${JSON.stringify(cicloActual)}
-Notas del coach: ${memoriaCoach.notas||""}`;
-          const res=await apiCall({model:"claude-sonnet-4-5",max_tokens:300,system:"Eres un extractor de datos. Responde SOLO con JSON válido sin markdown.",messages:[{role:"user",content:extractPrompt}]});
+          const cicloStr=cicloActual.bloque?`Ciclo en memoria: Bloque ${cicloActual.bloque}, Semana ${cicloActual.semana||"?"} de ${cicloActual.totalSemanas||"?"}, Objetivo: ${cicloActual.objetivo||"?"}`:"Sin ciclo definido aún";
+          const extractPrompt=`Analiza esta conversación entre un atleta y su coach de entrenamiento y extrae datos en JSON.
+
+CONTEXTO ACTUAL:
+${cicloStr}
+Notas previas: ${memoriaCoach.notas||"ninguna"}
+
+ÚLTIMOS MENSAJES:
+${hist.slice(-6).map((m:{role:string;content:any})=>`${m.role==="user"?"ATLETA":"COACH"}: ${typeof m.content==="string"?m.content.substring(0,300):"[archivo]"}`).join("\n\n")}
+
+Extrae SOLO lo que puedas determinar con certeza. Responde SOLO con este JSON:
+{
+  "lesiones": "lesiones/molestias mencionadas o vacío",
+  "plan": "sesiones planificadas próximos 7 días o vacío",
+  "notas": "decisiones importantes del coach máx 80 palabras o vacío",
+  "nueva_marca": "nueva marca en formato ejercicio:valor o vacío",
+  "ciclo": {
+    "bloque": "acumulación|intensificación|realización|deload según el tipo de entrenos — si son de volumen bajo intensidad=acumulación, alta intensidad=intensificación, competición=realización, descanso=deload. Mantén el ciclo actual si no hay cambio claro: ${cicloActual.bloque||"vacío"}",
+    "semana": ${cicloActual.semana||"null"},
+    "totalSemanas": ${cicloActual.totalSemanas||"null"},
+    "objetivo": "${cicloActual.objetivo||"vacío"}"
+  },
+  "psicologia": {
+    "arousal": "bajo|medio|alto|muy alto o vacío",
+    "confianza": "baja|media|alta o vacío",
+    "estres": "bajo|medio|alto o vacío",
+    "motivacion": "baja|media|alta o vacío",
+    "notas_mentales": "observación psicológica relevante o vacío"
+  }
+}`;
+          const res=await apiCall({model:"claude-sonnet-4-5",max_tokens:500,system:"Eres un extractor de datos deportivos. Responde SOLO con JSON válido sin markdown ni texto adicional.",messages:[{role:"user",content:extractPrompt}]});
           try{
             const texto=res.content?.map((b:{text?:string})=>b.text||"").join("")||"{}";
             const clean=texto.replace(/```json|```/g,"").trim();

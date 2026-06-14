@@ -906,9 +906,22 @@ ${testStr}`}]});
 
       {pantalla==="inicio"&&(
         <div className="fade-up" style={{maxWidth:520,width:"100%",textAlign:"center"}}>
-          <div style={{marginBottom:16}}>
-            <span style={{fontSize:"clamp(48px,10vw,72px)",fontWeight:900,color:"#FF6B00",fontFamily:"'DM Sans',sans-serif",letterSpacing:"-2px"}}>F</span>
-            <span style={{fontSize:"clamp(36px,8vw,54px)",fontWeight:700,color:C.ink,fontFamily:"'DM Sans',sans-serif",letterSpacing:"-1px"}}>ORGE</span>
+          <div style={{marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
+            <svg width="56" height="64" viewBox="0 0 56 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M28 2L54 14V36C54 50 28 62 28 62C28 62 2 50 2 36V14L28 2Z" fill="#FF6B00"/>
+              <path d="M28 2L54 14V36C54 50 28 62 28 62C28 62 2 50 2 36V14L28 2Z" fill="url(#shieldGrad)"/>
+              <text x="50%" y="56%" dominantBaseline="middle" textAnchor="middle" fill="white" fontSize="28" fontWeight="900" fontFamily="DM Sans, sans-serif">F</text>
+              <defs>
+                <linearGradient id="shieldGrad" x1="28" y1="2" x2="28" y2="62" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#FF8C00"/>
+                  <stop offset="100%" stopColor="#CC4400"/>
+                </linearGradient>
+              </defs>
+            </svg>
+            <div style={{textAlign:"left"}}>
+              <div style={{fontSize:"clamp(28px,6vw,42px)",fontWeight:900,color:"#F0EDE8",fontFamily:"'DM Sans',sans-serif",letterSpacing:"-1px",lineHeight:1}}>FORGE</div>
+              <div style={{fontSize:"clamp(10px,2vw,13px)",fontWeight:500,color:"#FF6B00",fontFamily:"'DM Sans',sans-serif",letterSpacing:"3px",textTransform:"uppercase"}}>AI Training Coach</div>
+            </div>
           </div>
           <p style={{color:C.muted,fontSize:17,lineHeight:1.65,marginBottom:8}}>Coach de entrenamiento personal. Siempre disponible, seguimiento de progreso y adaptado a tu vida.</p>
           <p style={{color:C.muted,fontSize:14,marginBottom:32}}>Tu programa evoluciona contigo cada semana.</p>

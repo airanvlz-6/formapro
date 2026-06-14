@@ -5,6 +5,7 @@ const C = {
   bg: "#0D0D0D", card: "#1A1A1A", ink: "#F0EDE8", muted: "#9A9590",
   border: "#2A2A2A", accent: "#FF6B00", accentLight: "#2A1A0D",
   warm: "#FF6B00", warmLight: "#2A1A0D", tag: "#222222", success: "#4CAF50", successLight: "#1A2A1A",
+  orange: "#FF6B00", orangeLight: "#2A1A0D",
 };
 
 const CATEGORIAS = [
@@ -1234,7 +1235,7 @@ ${testStr}`}]});
 )}
 
           <div style={{marginBottom:8}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,padding:"6px 8px",background:cat.colorLight,borderRadius:12}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,padding:"6px 8px",background:"#1A1A1A",borderRadius:12,border:"1px solid #FF6B00"}}>
               <div style={{fontSize:18,flexShrink:0}}>{cat.emoji}</div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:13,color:C.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Forge Coach — {espLabel||cat.titulo}</div>
@@ -1250,9 +1251,9 @@ ${testStr}`}]});
                 {!esPremium&&!esAdmin&&<a href={`mailto:coachforgeapp@gmail.com?subject=Consulta Forge - ${codigoUsuario}&body=Hola, tengo una consulta sobre mi programación en Forge.`} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"6px 9px",fontSize:12,textDecoration:"none"}}>✉️</a>}
               </div>
               <div style={{display:"flex",gap:6}}>
-                <button onClick={()=>{setMostrarMarcas(!mostrarMarcas);setMostrarPerfil(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:accentColor,cursor:"pointer"}}>📊</button>
-              <button onClick={()=>{setTestIdx(0);setTestAtleta({});setPantalla("test");}} style={{background:accentColor,border:"none",borderRadius:10,padding:"6px 9px",fontSize:12,color:"#fff",cursor:"pointer",fontWeight:600}}>🏆 Test</button>
-                <button onClick={()=>{setMostrarPerfil(!mostrarPerfil);setMostrarMarcas(false);}} style={{background:cat.colorLight,border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:accentColor,cursor:"pointer"}}>👤</button>
+                <button onClick={()=>{setMostrarMarcas(!mostrarMarcas);setMostrarPerfil(false);}} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:"#fff",cursor:"pointer"}}>📊</button>
+              <button onClick={()=>{setTestIdx(0);setTestAtleta({});setPantalla("test");}} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 9px",fontSize:12,color:"#fff",cursor:"pointer",fontWeight:600}}>🏆 Test</button>
+                <button onClick={()=>{setMostrarPerfil(!mostrarPerfil);setMostrarMarcas(false);}} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:"#fff",cursor:"pointer"}}>👤</button>
               </div>
             </div>
           </div>

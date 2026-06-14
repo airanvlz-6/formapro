@@ -22,14 +22,14 @@
     padding: 20px 40px; background: var(--bg); border-bottom: 1px solid transparent;
     transition: border-color 0.3s, background 0.3s;
   }
-  nav.scrolled { border-color: var(--border); background: rgba(245,242,237,0.95); backdrop-filter: blur(8px); }
+  nav.scrolled { border-color: var(--border); background: rgba(13,13,13,0.95); backdrop-filter: blur(8px); }
   .nav-logo { font-family: 'Fraunces', serif; font-size: 22px; font-weight: 700; color: var(--ink); text-decoration: none; }
   .nav-logo span { color: var(--green); }
   .nav-links { display: flex; align-items: center; gap: 32px; }
   .nav-links a { color: var(--muted); font-size: 14px; text-decoration: none; transition: color 0.2s; }
   .nav-links a:hover { color: var(--ink); }
-  .nav-cta { background: var(--ink); color: #fff; border: none; border-radius: 100px; padding: 10px 22px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; transition: all 0.2s; font-family: inherit; }
-  .nav-cta:hover { background: var(--green); }
+  .nav-cta { background: #FF6B00; color: #fff; border: none; border-radius: 100px; padding: 10px 22px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; transition: all 0.2s; font-family: inherit; }
+  .nav-cta:hover { background: #E55A00; }
 
   .hero { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 120px 24px 80px; }
   .hero-badge { display: inline-flex; align-items: center; gap: 8px; background: var(--green-light); color: var(--green); border-radius: 100px; padding: 7px 16px; font-size: 13px; font-weight: 600; margin-bottom: 32px; animation: fadeUp 0.6s ease forwards; }
@@ -191,7 +191,7 @@
     <a href="#faq">FAQ</a>
   </div>
   <div style="display:flex;align-items:center;gap:6px;">
-    <input id="codigo-input" placeholder="Tu código" style="border:2px solid #E2DDD7;border-radius:100px;padding:7px 12px;font-size:12px;font-family:'DM Sans',sans-serif;color:#F0EDE8;width:110px;outline:none;" onkeydown="if(event.key==='Enter')entrarConCodigo()"/>
+    <input id="codigo-input" placeholder="Tu código" style="border:2px solid #FF6B00;border-radius:100px;padding:7px 12px;font-size:12px;font-family:'DM Sans',sans-serif;color:#F0EDE8;background:#1A1A1A;width:110px;outline:none;" onkeydown="if(event.key==='Enter')entrarConCodigo()"/>
     <button onclick="entrarConCodigo()" style="background:#1E5C3A;color:#fff;border:none;border-radius:100px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;">Entrar</button>
     <a href="/app" class="nav-cta" style="font-size:12px;padding:7px 14px;white-space:nowrap;">Empezar</a>
   </div>

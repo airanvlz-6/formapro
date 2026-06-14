@@ -185,7 +185,7 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
   ],
 };
 
-const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "", memoria?: {lesiones?:string; plan?:string; notas?:string}, ciclo?: {bloque?:string; semana?:number; totalSemanas?:number; objetivo?:string}, psicologia?: {arousal?:string; confianza?:string; estres?:string; motivacion?:string; notas_mentales?:string}, premium?: boolean) => {
+const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "", memoria?: {lesiones?:string; plan?:string; notas?:string}, ciclo?: {bloque?:string; semana?:number; totalSemanas?:number; objetivo?:string}, psicologia?: {arousal?:string; confianza?:string; estres?:string; motivacion?:string; notas_mentales?:string}, premium?: boolean, athleteState?: Record<string,any>) => {
   const perfilStr = Object.entries(perfil).map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join("\n");
   const marcasStr = marcas.length > 0 ? marcas.map(m => `- ${m.fecha}: ${m.valor}`).join("\n") : "Sin registros aún";
   const cicloStr = ciclo?.bloque ? `
@@ -196,6 +196,23 @@ CICLO DE ENTRENAMIENTO ACTUAL:
 - IMPORTANTE: Mantén coherencia con este punto del ciclo. Progresión acorde a semana ${ciclo.semana||1}.` : `
 CICLO DE ENTRENAMIENTO:
 - No hay ciclo activo. En la primera programación define el bloque, semanas totales y objetivo, y actualiza el ciclo.`;
+
+const athleteStateStr = athleteState && Object.keys(athleteState).length > 0 ? `
+ESTADO ACTUAL DEL ATLETA (fuente de verdad — usa esto, no inferas del historial):
+- Macrociclo: ${athleteState.macro_cycle||"No definido"}
+- Mesociclo: ${athleteState.meso_cycle||"No definido"}
+- Bloque: ${athleteState.block||"No definido"}
+- Semana: ${athleteState.week||"?"} de ${athleteState.total_weeks||"?"}
+- Día del ciclo: ${athleteState.day||"?"}
+- Fatiga acumulada: ${athleteState.fatigue||"No evaluada"}
+- Última sesión: ${athleteState.last_session||"No registrada"}
+- Próxima sesión planificada: ${athleteState.next_session||"No planificada"}
+- Actualizado: ${athleteState.updated_at||""}
+
+INSTRUCCIÓN CRÍTICA: Al responder, SIEMPRE incluye al final un bloque JSON con este formato exacto:
+[STATE_UPDATE]{"macro_cycle":"...","meso_cycle":"...","block":"...","week":N,"total_weeks":N,"day":N,"fatigue":"baja|media|alta","last_session":"...","next_session":"..."}[/STATE_UPDATE]
+Actualiza solo los campos que cambien. Mantén los demás igual.` : `
+ESTADO DEL ATLETA: No hay estado definido aún. En tu primera respuesta de programación, define el macrociclo, mesociclo, bloque y semana, e incluye el bloque [STATE_UPDATE]...[/STATE_UPDATE] al final.`;
 
 const psicologiaStr = `
 PERFIL PSICOLÓGICO DEL ATLETA:
@@ -239,6 +256,7 @@ FORMATO ESTRICTO:
 ${memoriaStr}
 ${cicloStr}
 ${premium?psicologiaStr:""}
+${athleteStateStr}
 
 FECHA HOY: ${new Date().toLocaleDateString("es-ES", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
 PROXIMOS 14 DIAS: ${Array.from({length:14},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i+1);return d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"});}).join(" | ")}
@@ -477,6 +495,8 @@ export default function Forge() {
         setMarcasEspecificas((u as any).marcas_especificas||{});
         setLimiteConsultas((u as any).limite_consultas||FREE_LIMIT);
         setCicloActual((u as any).ciclo_actual||{});
+        setPerfilPsicologico((u as any).perfil_psicologico||{});
+        setAthleteState((u as any).athlete_state||{});
         setFechaRegistro((u as any).created_at||null);
         apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
       },500);
@@ -497,6 +517,7 @@ const [limiteConsultas,setLimiteConsultas]=useState(FREE_LIMIT);
 const [fechaRegistro,setFechaRegistro]=useState<string|null>(null);
 const [memoriaCoach,setMemoriaCoach]=useState<{lesiones?:string;plan?:string;notas?:string}>({});
 const [perfilPsicologico,setPerfilPsicologico]=useState<{arousal?:string;confianza?:string;estres?:string;motivacion?:string;notas_mentales?:string}>({});
+const [athleteState,setAthleteState]=useState<Record<string,any>>({});
 const [testAtleta,setTestAtleta]=useState<Record<string,string|string[]>>({});
 const [testIdx,setTestIdx]=useState(0);
 const [pantallTest,setPantallaTest]=useState(false);
@@ -586,6 +607,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     setMarcasEspecificas((u as any).marcas_especificas||{});
     setCicloActual((u as any).ciclo_actual||{});
     setPerfilPsicologico((u as any).perfil_psicologico||{});
+    setAthleteState((u as any).athlete_state||{});
     setFechaRegistro((u as any).created_at||null);
     apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
     // reanudarSesion eliminada para reducir consumo de tokens
@@ -655,7 +677,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
     const esp=espKey||categoria!;
     try{
       const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[archivo]"}...`).join("\n");
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin),messages:nuevoHist},true);
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState),messages:nuevoHist},true);
       if(data.aborted) return;
       const respText=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
@@ -699,9 +721,23 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[imagen/archivo]"}...`).join("\n");
       const esProgramacion=texto.toLowerCase().includes("programacion")||texto.toLowerCase().includes("rutina")||texto.toLowerCase().includes("semana")||texto.toLowerCase().includes("plan")||texto.toLowerCase().includes("sesion")||texto.toLowerCase().includes("entreno")||texto.toLowerCase().includes("wod")||texto.toLowerCase().includes("ejercicio")||texto.toLowerCase().includes("bloque")||texto.toLowerCase().includes("rehabilitacion")||texto.toLowerCase().includes("protocolo")||texto.toLowerCase().includes("fase");
       const mensajesContexto=esProgramacion?-6:-4;
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?4000:2000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?4000:2000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
       if(data.aborted) return;
-      const respText=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
+      let respText=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
+      
+      // Extraer STATE_UPDATE si existe
+      const stateMatch=respText.match(/\[STATE_UPDATE\]([\s\S]*?)\[\/STATE_UPDATE\]/);
+      if(stateMatch){
+        try{
+          const newState=JSON.parse(stateMatch[1].trim());
+          const updatedState={...newState,updated_at:new Date().toISOString()};
+          setAthleteState(updatedState);
+          if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{athlete_state:updatedState}});
+        }catch{}
+        // Eliminar el bloque STATE_UPDATE del texto visible
+        respText=respText.replace(/\[STATE_UPDATE\][\s\S]*?\[\/STATE_UPDATE\]/g,"").trim();
+      }
+
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);setHistorial(hist);
       if(hist.length>=10) compactarHistorial(hist);

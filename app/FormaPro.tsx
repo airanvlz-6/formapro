@@ -234,6 +234,7 @@ FORMATO ESTRICTO:
 - NUNCA repitas información del perfil, historial o sesiones anteriores salvo que el cliente lo pida explícitamente.
 - NUNCA hagas resumen de lo que acaba de decir el cliente.
 - Si el cliente reporta un entrenamiento realizado: responde SOLO con el siguiente entreno o ajuste en una frase breve de contexto + la sesión. Sin análisis salvo petición explícita.
+- CICLO OBLIGATORIO: En cada respuesta donde generes o ajustes programación, menciona explícitamente el bloque actual, la semana y el total de semanas. Ejemplo: "Semana 2/4 — Bloque acumulación". Esto es obligatorio para mantener coherencia entre sesiones.
 ${memoriaStr}
 ${cicloStr}
 ${premium?psicologiaStr:""}

@@ -2,9 +2,9 @@
 import { useState, useRef, useEffect } from "react";
 
 const C = {
-  bg: "#F6F4F0", card: "#FFFFFF", ink: "#1A1A1A", muted: "#6B6B6B",
-  border: "#E5E0D8", accent: "#1A3C5E", accentLight: "#E8EEF4",
-  warm: "#D4622A", warmLight: "#FDF0EB", tag: "#EDEAE4", success: "#2D6A4F", successLight: "#D8F3DC",
+  bg: "#0D0D0D", card: "#1A1A1A", ink: "#F0EDE8", muted: "#9A9590",
+  border: "#2A2A2A", accent: "#FF6B00", accentLight: "#2A1A0D",
+  warm: "#FF6B00", warmLight: "#2A1A0D", tag: "#222222", success: "#4CAF50", successLight: "#1A2A1A",
 };
 
 const CATEGORIAS = [
@@ -905,8 +905,10 @@ ${testStr}`}]});
 
       {pantalla==="inicio"&&(
         <div className="fade-up" style={{maxWidth:520,width:"100%",textAlign:"center"}}>
-          <div style={{fontSize:44,marginBottom:16}}>🏅</div>
-          <h1 style={{fontSize:"clamp(36px,8vw,54px)",color:C.ink,lineHeight:1.1,marginBottom:14}}>Forge</h1>
+          <div style={{marginBottom:16}}>
+            <span style={{fontSize:"clamp(48px,10vw,72px)",fontWeight:900,color:"#FF6B00",fontFamily:"'DM Sans',sans-serif",letterSpacing:"-2px"}}>F</span>
+            <span style={{fontSize:"clamp(36px,8vw,54px)",fontWeight:700,color:C.ink,fontFamily:"'DM Sans',sans-serif",letterSpacing:"-1px"}}>ORGE</span>
+          </div>
           <p style={{color:C.muted,fontSize:17,lineHeight:1.65,marginBottom:8}}>Coach de entrenamiento personal. Siempre disponible, seguimiento de progreso y adaptado a tu vida.</p>
           <p style={{color:C.muted,fontSize:14,marginBottom:32}}>Tu programa evoluciona contigo cada semana.</p>
           <button className="btn-main" onClick={()=>setPantalla("categoria")} style={{background:C.ink,color:"#fff",border:"none",borderRadius:14,padding:"16px 40px",fontSize:16,fontWeight:600,cursor:"pointer",width:"100%",maxWidth:360,marginBottom:20}}>

@@ -1,33 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="80" fill="#1A4D2E"/>
-  
-  <!-- Sombra/resplandor exterior -->
-  <polygon points="310,60 180,280 240,280 200,450 340,210 275,210" 
-    fill="none" stroke="#FFD700" stroke-width="8" opacity="0.3"
-    filter="url(#glow-outer)"/>
-  
-  <!-- Resplandor medio -->
-  <polygon points="310,60 180,280 240,280 200,450 340,210 275,210" 
-    fill="none" stroke="#FFE44D" stroke-width="5" opacity="0.6"
-    filter="url(#glow-mid)"/>
-  
-  <!-- Rayo principal -->
-  <polygon points="310,60 180,280 240,280 200,450 340,210 275,210" 
-    fill="#FFFFFF" stroke="#FFD700" stroke-width="2"
-    filter="url(#glow)"/>
-
+  <rect width="512" height="512" fill="#0D0D0D"/>
+  <path d="M256 40L440 120V280C440 380 256 470 256 470C256 470 72 380 72 280V120L256 40Z" fill="#FF6B00"/>
+  <path d="M256 40L440 120V280C440 380 256 470 256 470C256 470 72 380 72 280V120L256 40Z" fill="url(#grad)"/>
+  <text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="white" font-size="200" font-weight="900" font-family="Arial, sans-serif">F</text>
   <defs>
-    <filter id="glow-outer" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="18" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="blur"/></feMerge>
-    </filter>
-    <filter id="glow-mid" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="10" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="5" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
+    <linearGradient id="grad" x1="256" y1="40" x2="256" y2="470" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FF8C00"/>
+      <stop offset="100%" stop-color="#CC4400"/>
+    </linearGradient>
   </defs>
 </svg>

@@ -5,15 +5,20 @@ export const metadata: Metadata = {
   title: "Forge — Tu coach de entrenamiento personal",
   description: "Programación de entrenamiento con base científica. Adaptada a tu disciplina, nivel y objetivos.",
   manifest: "/manifest.json",
+  icons: {
+    apple: "/icon-512.png",
+    icon: "/icon-512.png",
+  },
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
     title: "Forge",
+    startupImage: "/icon-512.png",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#1E5C3A",
+  themeColor: "#FF6B00",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,

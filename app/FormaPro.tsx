@@ -807,10 +807,13 @@ Extrae SOLO lo que puedas determinar con certeza. Responde SOLO con este JSON:
               setPerfilPsicologico(nuevoPsico);
               nuevaMemoria.perfil_psicologico=nuevoPsico;
             }
-            if(datos.datos_entrenamiento&&typeof datos.datos_entrenamiento==="object"){
-              const nuevosDatos={...datosEntrenamiento,...datos.datos_entrenamiento};
-              setDatosEntrenamiento(nuevosDatos);
-              nuevaMemoria.datos_entrenamiento=nuevosDatos;
+            if(datos.datos_entrenamiento&&datos.datos_entrenamiento!=="null"&&datos.datos_entrenamiento!==""){
+              const datosExtra=typeof datos.datos_entrenamiento==="string"?JSON.parse(datos.datos_entrenamiento):datos.datos_entrenamiento;
+              if(typeof datosExtra==="object"&&datosExtra!==null){
+                const nuevosDatos={...datosEntrenamiento,...datosExtra};
+                setDatosEntrenamiento(nuevosDatos);
+                nuevaMemoria.datos_entrenamiento=nuevosDatos;
+              }
             }
             if(datos.nueva_marca){
               const nuevaMarcaAuto:Marca={fecha:new Date().toLocaleDateString("es-ES"),valor:datos.nueva_marca};

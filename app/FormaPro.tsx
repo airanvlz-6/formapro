@@ -925,8 +925,12 @@ ${testStr}`}]});
         .btn-main:active{transform:scale(0.97);}
         @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
         .fade-up{animation:fadeUp 0.3s ease forwards;}
+        @keyframes msgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+        .msg-in{animation:msgIn 0.25s ease forwards;}
         @keyframes dotPulse{0%,80%,100%{opacity:0.25;transform:scale(0.8)}40%{opacity:1;transform:scale(1)}}
-        .dot{width:7px;height:7px;border-radius:50%;animation:dotPulse 1.3s infinite;display:inline-block;}
+        .dot{width:8px;height:8px;border-radius:50%;animation:dotPulse 1.3s infinite;display:inline-block;}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+        .sending{animation:pulse 1s infinite;}
         textarea,input{resize:none;font-family:inherit;}
         textarea:focus,input:focus{outline:none;}
         .sugg:hover{opacity:0.75;}
@@ -1495,9 +1499,13 @@ ${testStr}`}]});
               </div>
             )}
             {mensajes.map((msg,i)=>(
-              <div key={i} className="fade-up" style={{display:"flex",justifyContent:msg.role==="user"?"flex-end":"flex-start",gap:10,alignItems:"flex-start"}}>
-                {msg.role==="assistant"&&<div style={{width:36,height:36,borderRadius:12,background:cat.colorLight,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{cat.emoji}</div>}
-                <div style={{maxWidth:"80%",padding:"13px 17px",borderRadius:msg.role==="user"?"16px 4px 16px 16px":"4px 16px 16px 16px",background:msg.role==="user"?accentColor:C.bg,color:msg.role==="user"?"#fff":C.ink}}>
+              <div key={i} className="msg-in" style={{display:"flex",justifyContent:msg.role==="user"?"flex-end":"flex-start",gap:10,alignItems:"flex-start",animationDelay:`${Math.min(i*0.05,0.3)}s`}}>
+                {msg.role==="assistant"&&(
+                  <div style={{width:32,height:32,borderRadius:10,overflow:"hidden",flexShrink:0}}>
+                    <img src="/logo-forge.png" alt="Forge" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                  </div>
+                )}
+                <div style={{maxWidth:"80%",padding:"13px 17px",borderRadius:msg.role==="user"?"16px 4px 16px 16px":"4px 16px 16px 16px",background:msg.role==="user"?"#FF6B00":C.card,color:msg.role==="user"?"#fff":C.ink,border:msg.role==="assistant"?`1px solid ${C.border}`:"none"}}>
                   {msg.role==="assistant"?<MensajeTexto texto={msg.content}/>:<p style={{fontSize:14,lineHeight:1.6}}>{msg.content}</p>}
                 </div>
               </div>

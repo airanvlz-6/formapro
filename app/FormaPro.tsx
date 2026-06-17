@@ -823,7 +823,7 @@ Extrae SOLO lo que puedas determinar con certeza. Responde SOLO con este JSON:
               nuevaMemoria.marcas=marcasActualizadas;
             }
             if(Object.keys(nuevaMemoria).length>0){
-              apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{...nuevaMemoria,memoria_actualizada:new Date().toISOString()}});
+              apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{...nuevaMemoria}});
               setMemoriaCoach(prev=>({...prev,lesiones:datos.lesiones||prev.lesiones,plan:datos.plan||prev.plan,notas:datos.notas||prev.notas}));
             }
           }catch{}

@@ -739,7 +739,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
 
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);setHistorial(hist);
-      if(hist.length>=10) compactarHistorial(hist);
+      if(hist.length>=20) compactarHistorial(hist);
       if(codigoUsuario){
         apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:hist}});
         const extractarMemoria=async()=>{
@@ -900,7 +900,7 @@ ${testStr}`}]});
       const res=await apiCall({model:"claude-sonnet-4-5",max_tokens:300,system:"Eres un asistente que resume conversaciones de entrenamiento. Responde SOLO con un resumen comprimido en máximo 150 palabras que incluya: progreso del atleta, decisiones de programación tomadas, marcas conseguidas y contexto relevante para continuar el entrenamiento.",messages:[{role:"user",content:`Resume esta conversación de entrenamiento:\n${textoHistorial}`}]});
       const resumen=res.content?.map((b:{text?:string})=>b.text||"").join("")||"";
       if(resumen&&codigoUsuario){
-        const histCompactado=hist.slice(-6);
+        const histCompactado=hist.slice(-10);
         setHistorial(histCompactado);
         const notasActualizadas=`[Resumen sesiones anteriores - ${new Date().toLocaleDateString("es-ES")}]\n${resumen}`;
         setMemoriaCoach(prev=>({...prev,notas:notasActualizadas}));

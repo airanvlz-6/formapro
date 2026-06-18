@@ -745,10 +745,12 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       }
 
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
-      setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);setHistorial(hist);
+      setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);
+      const histFinal=hist.length>=20?hist.slice(-10):hist;
+      setHistorial(histFinal);
       if(hist.length>=20) compactarHistorial(hist);
       if(codigoUsuario){
-        apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:hist}});
+        apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histFinal}});
         const extractarMemoria=async()=>{
           const cicloStr=cicloActual.bloque?`Ciclo en memoria: Bloque ${cicloActual.bloque}, Semana ${cicloActual.semana||"?"} de ${cicloActual.totalSemanas||"?"}, Objetivo: ${cicloActual.objetivo||"?"}`:"Sin ciclo definido aún";
           const extractPrompt=`Analiza esta conversación entre un atleta y su coach de entrenamiento y extrae datos en JSON.

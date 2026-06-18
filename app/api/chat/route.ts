@@ -44,6 +44,10 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({data});
 }
   if (action === "actualizar_usuario") {
+    // Limitar historial a máximo 15 mensajes antes de guardar
+    if (datos.historial && Array.isArray(datos.historial) && datos.historial.length > 15) {
+      datos.historial = datos.historial.slice(-15);
+    }
     const { error } = await supabase
       .from("usuarios")
       .update({ ...datos, updated_at: new Date().toISOString() })

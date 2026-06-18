@@ -779,7 +779,8 @@ Extrae SOLO lo que puedas determinar con certeza. Responde SOLO con este JSON:
     "motivacion": "baja|media|alta o vacío",
     "notas_mentales": "observación psicológica relevante o vacío"
   },
-  "datos_entrenamiento": "si se mencionan zonas de FC, ritmos, cargas específicas extráelos como objeto JSON. Ejemplo: {\"z2_fc\":\"130-145ppm\",\"ritmo_z2\":\"5:30/km\",\"squat_1rm\":\"140kg\"}. null si no hay datos nuevos"
+  "datos_entrenamiento": "si se mencionan zonas de FC, ritmos, cargas específicas extráelos como objeto JSON. Ejemplo: {\"z2_fc\":\"130-145ppm\",\"ritmo_z2\":\"5:30/km\",\"squat_1rm\":\"140kg\"}. null si no hay datos nuevos",
+  "sesion_completada": "si el atleta reporta haber completado un entrenamiento, extrae: {\"tipo\":\"tipo de sesión\",\"duracion\":\"duración en minutos o null\",\"sensacion\":\"buena/normal/mala\",\"notas\":\"resumen breve de la sesión\"}. null si no reporta sesión completada"
 }`;
           const res=await apiCall({model:"claude-sonnet-4-5",max_tokens:500,system:"Eres un extractor de datos deportivos. Responde SOLO con JSON válido sin markdown ni texto adicional.",messages:[{role:"user",content:extractPrompt}]});
           try{
@@ -807,6 +808,17 @@ Extrae SOLO lo que puedas determinar con certeza. Responde SOLO con este JSON:
               const nuevoPsico={...perfilPsicologico,...datos.psicologia};
               setPerfilPsicologico(nuevoPsico);
               nuevaMemoria.perfil_psicologico=nuevoPsico;
+            }
+            if(datos.sesion_completada&&datos.sesion_completada!=="null"){
+              try{
+                const sesion=typeof datos.sesion_completada==="string"?JSON.parse(datos.sesion_completada):datos.sesion_completada;
+                if(sesion&&typeof sesion==="object"){
+                  const nuevaSesion={...sesion,fecha:new Date().toISOString()};
+                  const workoutHistorial=(await apiCall({action:"recuperar_usuario",codigo:codigoUsuario}))?.data?.workout_history||[];
+                  const workoutActualizado=[...workoutHistorial,nuevaSesion];
+                  apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{workout_history:workoutActualizado}});
+                }
+              }catch{}
             }
             if(datos.datos_entrenamiento&&datos.datos_entrenamiento!=="null"&&datos.datos_entrenamiento!==""){
               const datosExtra=typeof datos.datos_entrenamiento==="string"?JSON.parse(datos.datos_entrenamiento):datos.datos_entrenamiento;

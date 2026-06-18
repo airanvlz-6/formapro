@@ -5,7 +5,7 @@ export default function Progreso() {
   const [codigo, setCodigo] = useState("");
   const [autenticado, setAutenticado] = useState(false);
   const [datos, setDatos] = useState<any>(null);
-  const [cargando, setCargando] = useState(false);
+  const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
 
   const C = {

@@ -782,7 +782,7 @@ Extrae SOLO lo que puedas determinar con certeza. Responde SOLO con este JSON:
     "notas_mentales": "observación psicológica relevante o vacío"
   },
   "datos_entrenamiento": "si se mencionan zonas de FC, ritmos, cargas específicas extráelos como objeto JSON. Ejemplo: {\"z2_fc\":\"130-145ppm\",\"ritmo_z2\":\"5:30/km\",\"squat_1rm\":\"140kg\"}. null si no hay datos nuevos",
-  "sesion_completada": "si el atleta reporta haber completado un entrenamiento, extrae: {\"tipo\":\"tipo de sesión\",\"duracion\":\"duración en minutos o null\",\"sensacion\":\"buena/normal/mala\",\"notas\":\"resumen breve de la sesión\"}. null si no reporta sesión completada"
+  "sesion_completada": "si el atleta menciona haber realizado, completado o hecho cualquier actividad física (entreno, sesión, carrera, wod, ejercicio, competición, etc.), extrae: {\"tipo\":\"tipo de actividad\",\"duracion\":\"duración en minutos o null\",\"sensacion\":\"buena/normal/mala según lo que exprese\",\"notas\":\"resumen breve de lo que realizó\"}. Sé muy liberal detectando esto — cualquier reporte de actividad física pasada cuenta. null SOLO si claramente no hay ninguna actividad reportada"
 }`;
           const res=await apiCall({model:"claude-sonnet-4-5",max_tokens:500,system:"Eres un extractor de datos deportivos. Responde SOLO con JSON válido sin markdown ni texto adicional.",messages:[{role:"user",content:extractPrompt}]});
           try{

@@ -8,8 +8,6 @@ export default function Progreso() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [iniciado, setIniciado] = useState(false);
-  const [iniciado, setIniciado] = useState(false);
-
   const C = {
     bg: "#0D0D0D", card: "#1A1A1A", ink: "#F0EDE8", muted: "#9A9590",
     border: "#2A2A2A", accent: "#FF6B00"

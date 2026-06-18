@@ -1322,7 +1322,7 @@ ${testStr}`}]});
                 {!esPremium&&!esAdmin&&<a href={`mailto:coachforgeapp@gmail.com?subject=Consulta Forge - ${codigoUsuario}&body=Hola, tengo una consulta sobre mi programación en Forge.`} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"6px 9px",fontSize:12,textDecoration:"none"}}>✉️</a>}
               </div>
               <div style={{display:"flex",gap:6}}>
-                <button onClick={()=>{setMostrarMarcas(!mostrarMarcas);setMostrarPerfil(false);}} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:"#fff",cursor:"pointer"}}>📊</button>
+                <button onClick={()=>window.open(`/progreso?codigo=${codigoUsuario}`,'_blank')} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:"#fff",cursor:"pointer"}}>📊</button>
               <button onClick={()=>{setTestIdx(0);setTestAtleta({});setPantalla("test");}} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 9px",fontSize:12,color:"#fff",cursor:"pointer",fontWeight:600}}>🏆 Test</button>
                 <button onClick={()=>{setMostrarPerfil(!mostrarPerfil);setMostrarMarcas(false);}} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:"#fff",cursor:"pointer"}}>👤</button>
               </div>

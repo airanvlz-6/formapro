@@ -19,6 +19,9 @@ export default function Progreso() {
     if (codigoUrl) {
       setCodigo(codigoUrl.toUpperCase());
       cargarDatos(codigoUrl.toUpperCase());
+    } else {
+      // Si no hay código en URL mostrar formulario
+      setCargando(false);
     }
   }, []);
 

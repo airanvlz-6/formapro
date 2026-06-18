@@ -789,8 +789,7 @@ Extrae SOLO lo que puedas determinar con certeza. Responde SOLO con este JSON:
             const texto=res.content?.map((b:{text?:string})=>b.text||"").join("")||"{}";
             const clean=texto.replace(/```json|```/g,"").trim();
             const datos=JSON.parse(clean);
-            console.log("Extracción completa:", JSON.stringify(datos));
-            console.log("Sesion completada:", datos.sesion_completada);
+            
             const nuevaMemoria:any={};
             if(datos.lesiones) nuevaMemoria.lesiones_actuales=datos.lesiones;
             if(datos.plan) nuevaMemoria.plan_proxima_semana=datos.plan;

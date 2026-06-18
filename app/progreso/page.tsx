@@ -134,20 +134,25 @@ useEffect(() => {
           </div>
         )}
 
-        {/* Datos de entrenamiento */}
-        {Object.keys(datosEntreno).length > 0 && (
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
-            <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>⚡ Datos de entrenamiento</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {Object.entries(datosEntreno).filter(([,v]) => v).map(([k, v]) => (
-                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
-                  <span style={{ color: C.muted, fontSize: 13, textTransform: "capitalize" }}>{k.replace(/_/g, " ")}</span>
-                  <span style={{ color: C.ink, fontSize: 13, fontWeight: 600 }}>{String(v)}</span>
-                </div>
-              ))}
+        {/* Métricas del atleta */}
+        {Object.keys(datosEntreno).length > 0 && (()=>{
+          const METRICAS_CLAVE = ['fc_maxima','fc_reposo','umbral','potencia','z1','z2','z3','z4','z5','ftp','vo2','ritmo','peso','altura','frecuencia'];
+          const metricasFiltradas = Object.entries(datosEntreno).filter(([k,v]) => v && METRICAS_CLAVE.some(m => k.toLowerCase().includes(m)));
+          if(metricasFiltradas.length===0) return null;
+          return (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+              <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>⚡ Métricas del atleta</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {metricasFiltradas.map(([k, v]) => (
+                  <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
+                    <span style={{ color: C.muted, fontSize: 13, textTransform: "capitalize" }}>{k.replace(/_/g, " ")}</span>
+                    <span style={{ color: C.accent, fontSize: 13, fontWeight: 600 }}>{String(v)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Historial sesiones */}
         {totalSesiones > 0 && (

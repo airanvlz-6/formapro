@@ -7,21 +7,23 @@ export default function Progreso() {
   const [datos, setDatos] = useState<any>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
+  const [iniciado, setIniciado] = useState(false);
+  const [iniciado, setIniciado] = useState(false);
 
   const C = {
     bg: "#0D0D0D", card: "#1A1A1A", ink: "#F0EDE8", muted: "#9A9590",
     border: "#2A2A2A", accent: "#FF6B00"
   };
 
-  useEffect(() => {
+useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const codigoUrl = params.get("codigo");
     if (codigoUrl) {
       setCodigo(codigoUrl.toUpperCase());
       cargarDatos(codigoUrl.toUpperCase());
     } else {
-      // Si no hay código en URL mostrar formulario
       setCargando(false);
+      setIniciado(true);
     }
   }, []);
 
@@ -47,6 +49,12 @@ export default function Progreso() {
   const ciclo = datos?.ciclo_actual || {};
   const marcas = datos?.marcas_especificas || {};
   const datosEntreno = datos?.datos_entrenamiento || {};
+
+  if (cargando && !iniciado) return (
+    <div style={{minHeight:"100vh",background:"#0D0D0D",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <img src="/logo-forge.png" alt="Forge" style={{width:60,height:60,objectFit:"contain",opacity:0.8}}/>
+    </div>
+  );
 
   if (!autenticado) return (
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif", padding: 24 }}>

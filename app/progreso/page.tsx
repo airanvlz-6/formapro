@@ -49,8 +49,12 @@ useEffect(() => {
   const datosEntreno = datos?.datos_entrenamiento || {};
 
   if (cargando && !iniciado) return (
-    <div style={{minHeight:"100vh",background:"#0D0D0D",display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <img src="/logo-forge.png" alt="Forge" style={{width:60,height:60,objectFit:"contain",opacity:0.8}}/>
+    <div style={{minHeight:"100vh",background:"#0D0D0D",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
+      <img src="/logo-forge.png" alt="Forge" style={{width:100,height:100,objectFit:"contain",borderRadius:"50%"}}/>
+      <div style={{display:"flex",gap:6}}>
+        {[0,1,2].map(i=><div key={i} style={{width:8,height:8,borderRadius:"50%",background:"#FF6B00",animation:"pulse 1s infinite",animationDelay:`${i*0.2}s`}}/>)}
+      </div>
+      <style>{`@keyframes pulse{0%,100%{opacity:0.3}50%{opacity:1}}`}</style>
     </div>
   );
 

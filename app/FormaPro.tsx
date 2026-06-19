@@ -833,7 +833,7 @@ Extrae SOLO lo que puedas determinar con certeza. Responde SOLO con este JSON:
               if(typeof datosExtra==="object"&&datosExtra!==null){
                 // Filtrar solo claves estándar
                 const CLAVES_VALIDAS=['fc_maxima','fc_reposo','umbral_fc','z1_fc','z2_fc','z3_fc','z4_fc','z5_fc','ritmo_z2','ritmo_umbral','squat_1rm','bench_1rm','deadlift_1rm','snatch_1rm','clean_jerk_1rm','ftp','vo2max','peso_corporal','umbral_potencia','ritmo_row_suave','row_ritmo'];
-                const datosLimpios=Object.fromEntries(Object.entries(datosExtra).filter(([k])=>CLAVES_VALIDAS.some(c=>k.toLowerCase().includes(c.toLowerCase()))));
+                const datosLimpios=Object.fromEntries(Object.entries(datosExtra).filter(([k,v])=>v!==null&&v!==""&&v!=="null"&&CLAVES_VALIDAS.some(c=>k.toLowerCase().includes(c.toLowerCase()))));
                 if(Object.keys(datosLimpios).length>0){
                   const nuevosDatos={...datosEntrenamiento,...datosLimpios};
                   setDatosEntrenamiento(nuevosDatos);

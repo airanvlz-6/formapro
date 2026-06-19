@@ -817,8 +817,14 @@ Extrae SOLO lo que puedas determinar con certeza. Responde SOLO con este JSON:
                 if(sesion&&typeof sesion==="object"){
                   const nuevaSesion={...sesion,fecha:new Date().toISOString()};
                   const workoutHistorial=(await apiCall({action:"recuperar_usuario",codigo:codigoUsuario}))?.data?.workout_history||[];
-                  const workoutActualizado=[...workoutHistorial,nuevaSesion];
-                  apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{workout_history:workoutActualizado}});
+                  // Evitar duplicados - no guardar si ya hay una sesión en los últimos 5 minutos
+                  const ahora=new Date().getTime();
+                  const ultimaSesion=workoutHistorial[workoutHistorial.length-1];
+                  const tiempoUltima=ultimaSesion?new Date(ultimaSesion.fecha).getTime():0;
+                  if(ahora-tiempoUltima>300000){ // 5 minutos
+                    const workoutActualizado=[...workoutHistorial,nuevaSesion];
+                    apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{workout_history:workoutActualizado}});
+                  }
                 }
               }catch{}
             }

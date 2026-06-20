@@ -48,6 +48,16 @@ export async function POST(req: NextRequest) {
     if (datos.historial && Array.isArray(datos.historial) && datos.historial.length > 15) {
       datos.historial = datos.historial.slice(-15);
     }
+    // Evitar sesiones duplicadas en workout_history
+    if (datos.workout_history && Array.isArray(datos.workout_history)) {
+      const {data: usuarioActual} = await supabase.from("usuarios").select("workout_history").eq("codigo", codigo).single();
+      const historialActual = usuarioActual?.workout_history || [];
+      const ultimaSesion = historialActual[historialActual.length - 1];
+      const tiempoUltima = ultimaSesion ? new Date(ultimaSesion.fecha).getTime() : 0;
+      if (new Date().getTime() - tiempoUltima < 300000) {
+        delete datos.workout_history;
+      }
+    }
     const { error } = await supabase
       .from("usuarios")
       .update({ ...datos, updated_at: new Date().toISOString() })

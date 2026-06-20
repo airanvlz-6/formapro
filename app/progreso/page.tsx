@@ -158,7 +158,7 @@ useEffect(() => {
         {totalSesiones > 0 && (
           <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
             <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>📋 Últimas sesiones</p>
-            {[...datos.workout_history].reverse().slice(0, 10).map((s: any, i: number) => (
+            {[...datos.workout_history].sort((a:any,b:any)=>new Date(b.fecha).getTime()-new Date(a.fecha).getTime()).slice(0, 10).map((s: any, i: number) => (
               <div key={i} style={{ padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                   <span style={{ color: C.ink, fontSize: 13, fontWeight: 600, textTransform: "capitalize" }}>{s.tipo?.replace(/_/g, " ") || "Sesión"}</span>

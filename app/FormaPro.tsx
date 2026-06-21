@@ -568,6 +568,24 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
   const bottomRef=useRef<HTMLDivElement>(null);
 const abortControllerRef=useRef<AbortController|null>(null);
   const inputRef=useRef<HTMLTextAreaElement>(null);
+  const [alturaViewport,setAlturaViewport]=useState<number>(0);
+
+  useEffect(()=>{
+    const actualizarAltura=()=>{
+      if(window.visualViewport){
+        setAlturaViewport(window.visualViewport.height);
+      } else {
+        setAlturaViewport(window.innerHeight);
+      }
+    };
+    actualizarAltura();
+    window.visualViewport?.addEventListener('resize',actualizarAltura);
+    window.addEventListener('resize',actualizarAltura);
+    return()=>{
+      window.visualViewport?.removeEventListener('resize',actualizarAltura);
+      window.removeEventListener('resize',actualizarAltura);
+    };
+  },[]);
 
   useEffect(()=>{bottomRef.current?.scrollIntoView({behavior:"smooth"});},[mensajes,cargando,generando]);
 
@@ -1302,7 +1320,7 @@ ${testStr}`}]});
       )}
 
       {pantalla==="chat"&&cat&&(
-        <div style={{width:"100%",maxWidth:700,display:"flex",flexDirection:"column",height:"100dvh",maxHeight:"100dvh",paddingTop:"max(50px, env(safe-area-inset-top))",paddingBottom:"max(16px, env(safe-area-inset-bottom))"}}>
+        <div style={{width:"100%",maxWidth:700,display:"flex",flexDirection:"column",height:alturaViewport>0?`${alturaViewport}px`:"100dvh",maxHeight:alturaViewport>0?`${alturaViewport}px`:"100dvh",paddingTop:"max(50px, env(safe-area-inset-top))",paddingBottom:"max(16px, env(safe-area-inset-bottom))",transition:"height 0.15s ease"}}>
           {codigoGuardado&&(
             <div style={{background:C.successLight,border:`1px solid ${C.success}33`,borderRadius:12,padding:"10px 16px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>
               <span style={{fontSize:16}}>🔑</span>

@@ -436,7 +436,7 @@ const TEST_ATLETA: Record<string, {id:string; label:string; tipo:string; opcione
 
 const SUGERENCIAS: Record<string, string[]> = {
   carrera: ["¿Qué metodología estoy usando?", "Muéstrame mi evolución", "Tengo carrera en 3 semanas", "Me duele la rodilla"],
-  funcional: ["¿Qué metodología estoy usando?", "Muéstrame mi evolución", "Cambia el entreno de hoy", "Estoy muy cansado"],
+  funcional: ["¿Qué metodología estoy usando?", "Muéstrame mi evolución", "Cambia el entreno de hoy", "Ajusta mi programación"],
   hibrido: ["¿Qué metodología estoy usando?", "Muéstrame mi evolución", "Tengo competición pronto", "Ajusta mi programación"],
   fuerza: ["¿Qué metodología estoy usando?", "Muéstrame mi evolución", "Registro nuevo 1RM", "Mi punto débil"],
   grupos: ["¿Qué metodología estoy usando?", "Muéstrame la progresión del grupo", "Cambia el WOD de hoy", "Ajusta la dificultad"],
@@ -1693,7 +1693,7 @@ ${testStr}`}]});
               {mensajes.length>0&&!cargando&&(
                 <div style={{marginTop:8}}>
                   <button onClick={()=>setMostrarSugerencias(p=>!p)} style={{background:"none",border:"none",color:C.muted,fontSize:11,cursor:"pointer",padding:"4px 0",display:"flex",alignItems:"center",gap:4}}>
-                    {mostrarSugerencias?"▲":"▼"} Accesos rápidos
+                    {mostrarSugerencias?"▲":"▼"} Mensajes rápidos
                   </button>
                   {mostrarSugerencias&&(
                     <div style={{display:"flex",gap:7,marginTop:6,flexWrap:"wrap"}}>

@@ -185,7 +185,7 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
   ],
 };
 
-const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "", memoria?: {lesiones?:string; plan?:string; notas?:string}, ciclo?: {bloque?:string; semana?:number; totalSemanas?:number; objetivo?:string}, psicologia?: {arousal?:string; confianza?:string; estres?:string; motivacion?:string; notas_mentales?:string}, premium?: boolean, athleteState?: Record<string,any>, datosEntreno?: Record<string,any>) => {
+const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "", memoria?: {lesiones?:string; plan?:string; notas?:string}, ciclo?: {bloque?:string; semana?:number; totalSemanas?:number; objetivo?:string}, psicologia?: {arousal?:string; confianza?:string; estres?:string; motivacion?:string; notas_mentales?:string}, premium?: boolean, athleteState?: Record<string,any>, datosEntreno?: Record<string,any>, estadoFisio?: {fatiga_aguda?:number;fatiga_cronica?:number;tendencia?:string;hrv?:number;sueno?:number;rhr?:number;adherencia?:number}) => {
   const perfilStr = Object.entries(perfil).map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join("\n");
   const marcasStr = marcas.length > 0 ? marcas.map(m => `- ${m.fecha}: ${m.valor}`).join("\n") : "Sin registros aún";
   const cicloStr = ciclo?.bloque ? `
@@ -264,6 +264,26 @@ ${datosEntreno&&Object.keys(datosEntreno).length>0?`
 DATOS DE ENTRENAMIENTO ESPECÍFICOS:
 ${Object.entries(datosEntreno).map(([k,v])=>`- ${k}: ${v}`).join("\n")}
 IMPORTANTE: Usa estos datos para programar con precisión. Son los valores reales del atleta y deben respetarse siempre.`:""}
+${estadoFisio&&Object.keys(estadoFisio).length>0?`
+ESTADO FISIOLÓGICO ACTUAL:
+- Fatiga aguda (ATL): ${estadoFisio.fatiga_aguda??'no disponible'}/100
+- Fatiga crónica (CTL): ${estadoFisio.fatiga_cronica??'no disponible'}/100
+- Tendencia: ${estadoFisio.tendencia||'no disponible'}
+- HRV: ${estadoFisio.hrv??'no disponible'} ms
+- Calidad sueño: ${estadoFisio.sueno??'no disponible'}/100
+- FC reposo: ${estadoFisio.rhr??'no disponible'} bpm
+- Adherencia: ${estadoFisio.adherencia??'no disponible'}%
+IMPORTANTE: Ajusta la intensidad y volumen de la sesión según este estado. HRV bajo (<50ms) o fatiga aguda alta (>80) = reduce intensidad. Sueño bajo (<60) = sesión de recuperación activa.`:""}
+${estadoFisio&&Object.keys(estadoFisio).length>0?`
+ESTADO FISIOLÓGICO ACTUAL:
+- Fatiga aguda (ATL): ${estadoFisio.fatiga_aguda??'no disponible'}/100
+- Fatiga crónica (CTL): ${estadoFisio.fatiga_cronica??'no disponible'}/100
+- Tendencia: ${estadoFisio.tendencia||'no disponible'}
+- HRV: ${estadoFisio.hrv??'no disponible'} ms
+- Calidad sueño: ${estadoFisio.sueno??'no disponible'}/100
+- FC reposo: ${estadoFisio.rhr??'no disponible'} bpm
+- Adherencia: ${estadoFisio.adherencia??'no disponible'}%
+IMPORTANTE: Ajusta la intensidad y volumen de la sesión según este estado. HRV bajo (<50ms) o fatiga aguda alta (>80) = reduce intensidad. Sueño bajo (<60) = sesión de recuperación activa.`:""}
 ${athleteStateStr}
 
 FECHA HOY: ${new Date().toLocaleDateString("es-ES", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
@@ -519,6 +539,7 @@ export default function Forge() {
         setPerfilPsicologico((u as any).perfil_psicologico||{});
         setAthleteState((u as any).athlete_state||{});
         setDatosEntrenamiento((u as any).datos_entrenamiento||{});
+        setEstadoFisiologico((u as any).estado_fisiologico||{});
         setFechaRegistro((u as any).created_at||null);
         apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
       },500);
@@ -540,6 +561,7 @@ const [fechaRegistro,setFechaRegistro]=useState<string|null>(null);
 const [memoriaCoach,setMemoriaCoach]=useState<{lesiones?:string;plan?:string;notas?:string}>({});
 const [perfilPsicologico,setPerfilPsicologico]=useState<{arousal?:string;confianza?:string;estres?:string;motivacion?:string;notas_mentales?:string}>({});
 const [datosEntrenamiento,setDatosEntrenamiento]=useState<Record<string,any>>({});
+const [estadoFisiologico,setEstadoFisiologico]=useState<{fatiga_aguda?:number;fatiga_cronica?:number;tendencia?:string;hrv?:number;sueno?:number;rhr?:number;adherencia?:number}>({});
 const [athleteState,setAthleteState]=useState<Record<string,any>>({});
 const [testAtleta,setTestAtleta]=useState<Record<string,string|string[]>>({});
 const [testIdx,setTestIdx]=useState(0);
@@ -651,6 +673,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     setPerfilPsicologico((u as any).perfil_psicologico||{});
     setAthleteState((u as any).athlete_state||{});
     setDatosEntrenamiento((u as any).datos_entrenamiento||{});
+    setEstadoFisiologico((u as any).estado_fisiologico||{});
     setFechaRegistro((u as any).created_at||null);
     apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
     // reanudarSesion eliminada para reducir consumo de tokens
@@ -720,7 +743,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
     const esp=espKey||categoria!;
     try{
       const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[archivo]"}...`).join("\n");
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento),messages:nuevoHist},true);
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico),messages:nuevoHist},true);
       if(data.aborted) return;
       const respText=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
@@ -764,7 +787,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[imagen/archivo]"}...`).join("\n");
       const esProgramacion=texto.toLowerCase().includes("programacion")||texto.toLowerCase().includes("rutina")||texto.toLowerCase().includes("semana")||texto.toLowerCase().includes("plan")||texto.toLowerCase().includes("sesion")||texto.toLowerCase().includes("entreno")||texto.toLowerCase().includes("wod")||texto.toLowerCase().includes("ejercicio")||texto.toLowerCase().includes("bloque")||texto.toLowerCase().includes("rehabilitacion")||texto.toLowerCase().includes("protocolo")||texto.toLowerCase().includes("fase");
       const mensajesContexto=esProgramacion?-6:-4;
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?4000:2000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?4000:2000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
       if(data.aborted) return;
       let respText=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
       
@@ -819,6 +842,7 @@ Extrae SOLO lo que puedas determinar con certeza. Responde SOLO con este JSON:
     "notas_mentales": "observación psicológica relevante o vacío"
   },
   "datos_entrenamiento": "si se mencionan métricas del atleta (zonas FC, umbrales, ritmos, cargas, potencia) extráelos usando SIEMPRE estas claves estándar: fc_maxima, fc_reposo, umbral_fc, z1_fc, z2_fc, z3_fc, z4_fc, z5_fc, ritmo_z2, ritmo_umbral, squat_1rm, bench_1rm, deadlift_1rm, snatch_1rm, clean_jerk_1rm, ftp, vo2max, peso_corporal. Usa solo estas claves, nunca inventes nombres nuevos. null si no hay métricas nuevas",
+  "estado_fisiologico": "si el atleta menciona HRV, sueño, FC reposo, fatiga o recuperación extrae: {\"hrv\":número en ms o null,\"sueno\":número 0-100 o null,\"rhr\":FC reposo en bpm o null,\"fatiga_aguda\":número 0-100 estimado según reporte o null,\"tendencia\":\"ascendente|estable|descendente según evolución reportada o null\"}. null si no hay datos fisiológicos",
   "sesion_completada": "SOLO si el atleta reporta explícitamente haber COMPLETADO o TERMINADO una sesión de entrenamiento HOY o AYER. NO registres sesión si solo menciona métricas, datos de reloj, zonas de FC, o información técnica sin confirmar que completó un entreno. Extrae: {\"tipo\":\"tipo de actividad\",\"duracion\":\"duración en minutos o null\",\"sensacion\":\"buena/normal/mala\",\"notas\":\"resumen breve\"}. null en caso de duda"
 }`;
           const res=await apiCall({model:"claude-sonnet-4-5",max_tokens:500,system:"Eres un extractor de datos deportivos. Responde SOLO con JSON válido sin markdown ni texto adicional.",messages:[{role:"user",content:extractPrompt}]});
@@ -862,6 +886,16 @@ Extrae SOLO lo que puedas determinar con certeza. Responde SOLO con este JSON:
                     const workoutActualizado=[...workoutHistorial,nuevaSesion];
                     apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{workout_history:workoutActualizado}});
                   }
+                }
+              }catch{}
+            }
+            if(datos.estado_fisiologico&&datos.estado_fisiologico!=="null"){
+              try{
+                const estadoExtra=typeof datos.estado_fisiologico==="string"?JSON.parse(datos.estado_fisiologico):datos.estado_fisiologico;
+                if(typeof estadoExtra==="object"&&estadoExtra!==null){
+                  const nuevoEstado={...estadoFisiologico,...Object.fromEntries(Object.entries(estadoExtra).filter(([,v])=>v!==null))};
+                  setEstadoFisiologico(nuevoEstado);
+                  nuevaMemoria.estado_fisiologico=nuevoEstado;
                 }
               }catch{}
             }

@@ -569,6 +569,7 @@ const [mensajeRecuperar,setMensajeRecuperar]=useState("");
 const abortControllerRef=useRef<AbortController|null>(null);
   const inputRef=useRef<HTMLTextAreaElement>(null);
   const [alturaViewport,setAlturaViewport]=useState<number>(0);
+const [mostrarSugerencias,setMostrarSugerencias]=useState(false);
 
   useEffect(()=>{
     const actualizarAltura=()=>{
@@ -1690,10 +1691,17 @@ ${testStr}`}]});
                 </button>
               </div>
               {mensajes.length>0&&!cargando&&(
-                <div style={{display:"flex",gap:7,marginTop:8,flexWrap:"wrap"}}>
-                  {(SUGERENCIAS[categoria||""]||[]).map(s=>(
-                    <button key={s} className="sugg" onClick={()=>enviar(s)} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:100,padding:"5px 13px",fontSize:12,color:C.muted,cursor:"pointer",transition:"all 0.15s"}}>{s}</button>
-                  ))}
+                <div style={{marginTop:8}}>
+                  <button onClick={()=>setMostrarSugerencias(p=>!p)} style={{background:"none",border:"none",color:C.muted,fontSize:11,cursor:"pointer",padding:"4px 0",display:"flex",alignItems:"center",gap:4}}>
+                    {mostrarSugerencias?"▲":"▼"} Accesos rápidos
+                  </button>
+                  {mostrarSugerencias&&(
+                    <div style={{display:"flex",gap:7,marginTop:6,flexWrap:"wrap"}}>
+                      {(SUGERENCIAS[categoria||""]||[]).map(s=>(
+                        <button key={s} className="sugg" onClick={()=>{enviar(s);setMostrarSugerencias(false);}} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:100,padding:"5px 13px",fontSize:12,color:C.muted,cursor:"pointer",transition:"all 0.15s"}}>{s}</button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </>

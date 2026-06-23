@@ -118,6 +118,57 @@ useEffect(() => {
           ))}
         </div>
 
+        {/* Estado fisiologico */}
+        {datos?.estado_fisiologico && Object.keys(datos.estado_fisiologico).some(k => datos.estado_fisiologico[k]) && (()=>{
+          const ef = datos.estado_fisiologico;
+          const hrv = ef.hrv;
+          const sueno = ef.sueno;
+          const fatiga = ef.fatiga_aguda;
+          const rhr = ef.rhr;
+
+          let recuperacion = "Sin datos";
+          let recomendacion = "Reporta tu HRV y sueño al coach para obtener recomendaciones";
+          let colorRec = C.muted;
+
+          if(hrv && sueno){
+            if(hrv >= 60 && sueno >= 75){ recuperacion = "Excelente"; recomendacion = "Apto para entrenamiento intenso"; colorRec = "#4CAF50"; }
+            else if(hrv >= 50 && sueno >= 60){ recuperacion = "Buena"; recomendacion = "Apto para entrenamiento normal"; colorRec = "#4CAF50"; }
+            else if(hrv >= 40 && sueno >= 50){ recuperacion = "Moderada"; recomendacion = "Reduce intensidad, prioriza técnica"; colorRec = C.accent; }
+            else { recuperacion = "Baja"; recomendacion = "Sesión de recuperación activa recomendada"; colorRec = "#ff4444"; }
+          }
+
+          return (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+              <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 14 }}>⚡ Estado fisiológico actual</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
+                {hrv && <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: C.muted, fontSize: 13 }}>HRV</span>
+                  <span style={{ color: C.ink, fontSize: 13, fontWeight: 600 }}>{hrv} ms</span>
+                </div>}
+                {sueno && <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: C.muted, fontSize: 13 }}>Calidad sueño</span>
+                  <span style={{ color: C.ink, fontSize: 13, fontWeight: 600 }}>{sueno}/100</span>
+                </div>}
+                {rhr && <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: C.muted, fontSize: 13 }}>FC reposo</span>
+                  <span style={{ color: C.ink, fontSize: 13, fontWeight: 600 }}>{rhr} bpm</span>
+                </div>}
+                {fatiga && <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: C.muted, fontSize: 13 }}>Fatiga acumulada</span>
+                  <span style={{ color: fatiga>70?"#ff4444":fatiga>50?C.accent:"#4CAF50", fontSize: 13, fontWeight: 600 }}>
+                    {fatiga>70?"Alta":fatiga>50?"Moderada":"Baja"}
+                  </span>
+                </div>}
+              </div>
+              <div style={{ background: C.bg, borderRadius: 12, padding: "12px 14px", borderLeft: `3px solid ${colorRec}` }}>
+                <p style={{ color: C.muted, fontSize: 11, marginBottom: 4 }}>Recuperación</p>
+                <p style={{ color: colorRec, fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{recuperacion}</p>
+                <p style={{ color: C.muted, fontSize: 12 }}>→ {recomendacion}</p>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Adherencia */}
         {(adherencia.adherencia7!==undefined) && (
           <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>

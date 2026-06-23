@@ -45,8 +45,24 @@ export async function POST(req: NextRequest) {
 }
   if (action === "actualizar_usuario") {
     // Limitar historial a máximo 15 mensajes antes de guardar
-    if (datos.historial && Array.isArray(datos.historial) && datos.historial.length > 15) {
-      datos.historial = datos.historial.slice(-15);
+    if (datos.historial && Array.isArray(datos.historial)) {
+      // Eliminar imágenes del historial antes de guardar
+      datos.historial = datos.historial.map((m: any) => {
+        if (Array.isArray(m.content)) {
+          return {
+            ...m,
+            content: m.content
+              .filter((c: any) => c.type !== 'image')
+              .map((c: any) => c.type === 'text' ? c.text : c.type === 'tool_result' ? '' : c)
+              .join(' ') || '[imagen enviada]'
+          };
+        }
+        return m;
+      });
+      // Limitar a 15 mensajes
+      if (datos.historial.length > 15) {
+        datos.historial = datos.historial.slice(-15);
+      }
     }
     // Evitar sesiones duplicadas en workout_history
     if (datos.workout_history && Array.isArray(datos.workout_history)) {

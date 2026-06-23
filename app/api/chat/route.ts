@@ -63,6 +63,84 @@ export async function POST(req: NextRequest) {
       .update({ ...datos, updated_at: new Date().toISOString() })
       .eq("codigo", codigo);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // Extracción automática de memoria en el servidor cuando se guarda historial
+    if (datos.historial && Array.isArray(datos.historial) && datos.historial.length > 0) {
+      try {
+        const {data: usuarioData} = await supabase.from("usuarios").select("ciclo_actual,notas_coach,datos_entrenamiento,estado_fisiologico,workout_history").eq("codigo", codigo).single();
+        const cicloActual = usuarioData?.ciclo_actual || {};
+        const ultimos = datos.historial.slice(-6).map((m: any) => `${m.role === "user" ? "ATLETA" : "COACH"}: ${typeof m.content === "string" ? m.content.substring(0, 300) : "[archivo]"}`).join("\n\n");
+
+        const extractPrompt = `Analiza esta conversación y extrae datos en JSON. Responde SOLO con JSON válido:
+{
+  "lesiones": "lesiones mencionadas o vacío",
+  "plan": "sesiones planificadas próximos 7 días o vacío",
+  "notas": "decisiones importantes máx 80 palabras o vacío",
+  "nueva_marca": "nueva marca en formato ejercicio:valor o vacío",
+  "ciclo": {"bloque": "${cicloActual.bloque||"vacío"}", "semana": ${cicloActual.semana||"null"}, "totalSemanas": ${cicloActual.totalSemanas||"null"}, "objetivo": "${cicloActual.objetivo||"vacío"}"},
+  "estado_fisiologico": {"hrv": null, "sueno": null, "rhr": null, "fatiga_aguda": null, "tendencia": null},
+  "sesion_completada": null,
+  "datos_entrenamiento": null
+}
+
+Conversación:
+${ultimos}`;
+
+        const extractRes = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01" },
+          body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 500, messages: [{ role: "user", content: extractPrompt }] })
+        });
+        const extractData = await extractRes.json();
+        const textoExtract = extractData.content?.map((b: any) => b.text || "").join("") || "{}";
+        const clean = textoExtract.replace(/```json|```/g, "").trim();
+        const extracted = JSON.parse(clean);
+
+        const updates: any = {};
+        if (extracted.lesiones) updates.lesiones_actuales = extracted.lesiones;
+        if (extracted.plan) updates.plan_proxima_semana = extracted.plan;
+        if (extracted.notas) updates.notas_coach = extracted.notas;
+
+        if (extracted.ciclo?.bloque) {
+          updates.ciclo_actual = { ...cicloActual, ...Object.fromEntries(Object.entries(extracted.ciclo).filter(([,v]) => v !== null)) };
+        }
+
+        if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).some(v => v !== null)) {
+          const estadoActual = usuarioData?.estado_fisiologico || {};
+          updates.estado_fisiologico = { ...estadoActual, ...Object.fromEntries(Object.entries(extracted.estado_fisiologico).filter(([,v]) => v !== null)) };
+        }
+
+        if (extracted.sesion_completada && extracted.sesion_completada !== "null") {
+          const sesion = typeof extracted.sesion_completada === "string" ? JSON.parse(extracted.sesion_completada) : extracted.sesion_completada;
+          if (sesion && typeof sesion === "object") {
+            const workoutActual = usuarioData?.workout_history || [];
+            const ultimaSesion = workoutActual[workoutActual.length - 1];
+            const tiempoUltima = ultimaSesion ? new Date(ultimaSesion.fecha).getTime() : 0;
+            if (new Date().getTime() - tiempoUltima > 300000) {
+              updates.workout_history = [...workoutActual, { ...sesion, fecha: new Date().toISOString() }];
+            }
+          }
+        }
+
+        if (extracted.datos_entrenamiento && extracted.datos_entrenamiento !== "null") {
+          const datosExtra = typeof extracted.datos_entrenamiento === "string" ? JSON.parse(extracted.datos_entrenamiento) : extracted.datos_entrenamiento;
+          if (typeof datosExtra === "object" && datosExtra !== null) {
+            const CLAVES_VALIDAS = ['fc_maxima','fc_reposo','umbral_fc','z1_fc','z2_fc','z3_fc','z4_fc','z5_fc','ritmo_z2','ritmo_umbral','squat_1rm','bench_1rm','deadlift_1rm','snatch_1rm','clean_jerk_1rm','ftp','vo2max','peso_corporal','umbral_potencia','ritmo_row_suave'];
+            const datosLimpios = Object.fromEntries(Object.entries(datosExtra).filter(([k,v]) => v !== null && CLAVES_VALIDAS.some(c => k.toLowerCase().includes(c.toLowerCase()))));
+            if (Object.keys(datosLimpios).length > 0) {
+              updates.datos_entrenamiento = { ...(usuarioData?.datos_entrenamiento || {}), ...datosLimpios };
+            }
+          }
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await supabase.from("usuarios").update(updates).eq("codigo", codigo);
+        }
+      } catch (e) {
+        console.error("Error extraccion servidor:", e);
+      }
+    }
+
     return NextResponse.json({ ok: true });
   }
 

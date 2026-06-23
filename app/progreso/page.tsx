@@ -48,6 +48,7 @@ useEffect(() => {
   const marcas = datos?.marcas_especificas || {};
   const datosEntreno = datos?.datos_entrenamiento || {};
   const [adherencia, setAdherencia] = useState<{adherencia7?:number;adherencia28?:number;adherenciaBloque?:number;diasSemana?:number}>({});
+  const histFisio = datos?.historial_fisiologico || [];
 
   useEffect(()=>{
     if(autenticado && codigo){
@@ -117,6 +118,35 @@ useEffect(() => {
             </div>
           ))}
         </div>
+
+        {/* Tendencias fisiologicas */}
+        {histFisio.length >= 3 && (()=>{
+          const ultimos = histFisio.slice(-7);
+          const hrvValues = ultimos.filter((e:any) => e.hrv).map((e:any) => e.hrv);
+          const suenoValues = ultimos.filter((e:any) => e.sueno).map((e:any) => e.sueno);
+          const tendenciaHrv = hrvValues.length>=3?(hrvValues[hrvValues.length-1]-hrvValues[0]>5?"↑ Mejorando":hrvValues[hrvValues.length-1]-hrvValues[0]<-5?"↓ Empeorando":"→ Estable"):"Sin datos";
+          const tendenciaSueno = suenoValues.length>=3?(suenoValues[suenoValues.length-1]-suenoValues[0]>5?"↑ Mejorando":suenoValues[suenoValues.length-1]-suenoValues[0]<-5?"↓ Empeorando":"→ Estable"):"Sin datos";
+          const colorHrv = tendenciaHrv.includes("Mejorando")?"#4CAF50":tendenciaHrv.includes("Empeorando")?"#ff4444":C.muted;
+          const colorSueno = tendenciaSueno.includes("Mejorando")?"#4CAF50":tendenciaSueno.includes("Empeorando")?"#ff4444":C.muted;
+          const alerta = tendenciaHrv.includes("Empeorando") && tendenciaSueno.includes("Empeorando");
+          return (
+            <div style={{ background: C.card, border: `1px solid ${alerta?"#ff4444":C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+              <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 14 }}>📈 Tendencias ({ultimos.length} días)</p>
+              {hrvValues.length>=2 && <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
+                <span style={{ color:C.muted, fontSize:13 }}>HRV media</span>
+                <span style={{ color:colorHrv, fontSize:13, fontWeight:600 }}>{Math.round(hrvValues.reduce((a:number,b:number)=>a+b,0)/hrvValues.length)}ms — {tendenciaHrv}</span>
+              </div>}
+              {suenoValues.length>=2 && <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
+                <span style={{ color:C.muted, fontSize:13 }}>Sueño medio</span>
+                <span style={{ color:colorSueno, fontSize:13, fontWeight:600 }}>{Math.round(suenoValues.reduce((a:number,b:number)=>a+b,0)/suenoValues.length)}/100 — {tendenciaSueno}</span>
+              </div>}
+              {alerta && <div style={{ background:"#ff444420", borderRadius:10, padding:"10px 12px", marginTop:8 }}>
+                <p style={{ color:"#ff4444", fontSize:12, fontWeight:600 }}>⚠️ Tendencia negativa detectada</p>
+                <p style={{ color:C.muted, fontSize:12, marginTop:4 }}>Forge ha notificado al coach para ajustar tu carga de entrenamiento</p>
+              </div>}
+            </div>
+          );
+        })()}
 
         {/* Estado fisiologico */}
         {datos?.estado_fisiologico && Object.keys(datos.estado_fisiologico).some(k => datos.estado_fisiologico[k]) && (()=>{

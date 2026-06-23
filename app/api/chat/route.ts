@@ -80,8 +80,11 @@ export async function POST(req: NextRequest) {
   "ciclo": {"bloque": "${cicloActual.bloque||"vacío"}", "semana": ${cicloActual.semana||"null"}, "totalSemanas": ${cicloActual.totalSemanas||"null"}, "objetivo": "${cicloActual.objetivo||"vacío"}"},
   "estado_fisiologico": {"hrv": null, "sueno": null, "rhr": null, "fatiga_aguda": null, "tendencia": null},
   "sesion_completada": null,
-  "datos_entrenamiento": null
+  "datos_entrenamiento": null,
+  "distribucion_semanal": null
 }
+
+Para "distribucion_semanal": si el coach y atleta acuerdan qué tipo de sesión corresponde a cada día, extrae como texto. Ejemplo: "lunes-carrera, martes-box, miercoles-carrera, jueves-box, viernes-carrera, sabado-box". null si no se habló de distribución.
 
 Conversación:
 ${ultimos}`;
@@ -134,6 +137,10 @@ ${ultimos}`;
               updates.workout_history = [...workoutActual, { ...sesion, fecha: new Date().toISOString() }];
             }
           }
+        }
+
+        if (extracted.distribucion_semanal && extracted.distribucion_semanal !== "null" && extracted.distribucion_semanal !== "") {
+          updates.distribucion_semanal = extracted.distribucion_semanal;
         }
 
         if (extracted.datos_entrenamiento && extracted.datos_entrenamiento !== "null") {

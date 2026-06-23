@@ -47,6 +47,14 @@ useEffect(() => {
   const ciclo = datos?.ciclo_actual || {};
   const marcas = datos?.marcas_especificas || {};
   const datosEntreno = datos?.datos_entrenamiento || {};
+  const [adherencia, setAdherencia] = useState<{adherencia7?:number;adherencia28?:number;adherenciaBloque?:number;diasSemana?:number}>({});
+
+  useEffect(()=>{
+    if(autenticado && codigo){
+      fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"calcular_adherencia",codigo})})
+        .then(r=>r.json()).then(d=>setAdherencia(d)).catch(()=>{});
+    }
+  },[autenticado,codigo]);
 
   if (cargando && !iniciado) return (
     <div style={{minHeight:"100vh",background:"#0D0D0D",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
@@ -109,6 +117,29 @@ useEffect(() => {
             </div>
           ))}
         </div>
+
+        {/* Adherencia */}
+        {(adherencia.adherencia7!==undefined) && (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+            <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 14 }}>📊 Adherencia al entrenamiento</p>
+            {[
+              { label: "Esta semana", value: adherencia.adherencia7||0 },
+              { label: "Bloque actual", value: adherencia.adherenciaBloque||0 },
+              { label: "Últimos 28 días", value: adherencia.adherencia28||0 },
+            ].map(item => (
+              <div key={item.label} style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span style={{ fontSize: 13, color: C.muted }}>{item.label}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: item.value>=80?"#4CAF50":item.value>=60?C.accent:"#ff4444" }}>{item.value}%</span>
+                </div>
+                <div style={{ height: 8, background: C.border, borderRadius: 100 }}>
+                  <div style={{ height: 8, borderRadius: 100, background: item.value>=80?"#4CAF50":item.value>=60?C.accent:"#ff4444", width:`${item.value}%`, transition:"width 0.8s ease" }}/>
+                </div>
+              </div>
+            ))}
+            <p style={{ color: C.muted, fontSize: 11, marginTop: 8 }}>Basado en {adherencia.diasSemana} días/semana planificados</p>
+          </div>
+        )}
 
         {/* Ciclo actual */}
         {ciclo.bloque && (

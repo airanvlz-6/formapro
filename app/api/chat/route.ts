@@ -79,6 +79,7 @@ export async function POST(req: NextRequest) {
   "nueva_marca": "nueva marca en formato ejercicio:valor o vacío",
   "ciclo": {"bloque": "${cicloActual.bloque||"vacío"}", "semana": ${cicloActual.semana||"null"}, "totalSemanas": ${cicloActual.totalSemanas||"null"}, "objetivo": "${cicloActual.objetivo||"vacío"}"},
   "estado_fisiologico": {"hrv": null, "sueno": null, "rhr": null, "fatiga_aguda": null, "tendencia": null},
+IMPORTANTE para estado_fisiologico: "sueno" debe ser SIEMPRE un número 0-100 (la puntuación), NUNCA un objeto. "hrv" en ms como número. "rhr" en bpm como número.
   "sesion_completada": null,
   "datos_entrenamiento": null,
   "distribucion_semanal": null

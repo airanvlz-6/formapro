@@ -66,6 +66,41 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  if (action === "calcular_adherencia") {
+    const { data: usuario } = await supabase.from("usuarios").select("perfil,workout_history,ciclo_actual").eq("codigo", codigo).single();
+    if (!usuario) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+
+    const workouts = usuario.workout_history || [];
+    const perfil = usuario.perfil || {};
+    const ciclo = usuario.ciclo_actual || {};
+
+    const diasStr = perfil.dias || "3 dias";
+    const diasSemana = parseInt(diasStr) || 3;
+
+    const ahora = new Date();
+    const hace7 = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const hace28 = new Date(ahora.getTime() - 28 * 24 * 60 * 60 * 1000);
+
+    const sesiones7 = workouts.filter((w: any) => new Date(w.fecha) >= hace7).length;
+    const sesiones28 = workouts.filter((w: any) => new Date(w.fecha) >= hace28).length;
+
+    const planificadas7 = diasSemana;
+    const planificadas28 = diasSemana * 4;
+
+    const semanasCiclo = ciclo.semana || 1;
+    const sesionesBloque = workouts.filter((w: any) => {
+      const fechaInicioCiclo = new Date(ahora.getTime() - (semanasCiclo * 7 * 24 * 60 * 60 * 1000));
+      return new Date(w.fecha) >= fechaInicioCiclo;
+    }).length;
+    const planificadasBloque = diasSemana * semanasCiclo;
+
+    const adherencia7 = Math.min(100, Math.round((sesiones7 / planificadas7) * 100));
+    const adherencia28 = Math.min(100, Math.round((sesiones28 / planificadas28) * 100));
+    const adherenciaBloque = Math.min(100, Math.round((sesionesBloque / planificadasBloque) * 100));
+
+    return NextResponse.json({ adherencia7, adherencia28, adherenciaBloque, diasSemana });
+  }
+
   if (action === "admin_stats") {
     const ahora = new Date();
     const hace7dias = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();

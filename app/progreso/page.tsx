@@ -258,7 +258,7 @@ useEffect(() => {
                 {metricasFiltradas.map(([k, v]) => (
                   <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
                     <span style={{ color: C.muted, fontSize: 13, textTransform: "capitalize" }}>{k.replace(/_/g, " ")}</span>
-                    <span style={{ color: C.accent, fontSize: 13, fontWeight: 600 }}>{String(v)}</span>
+                    <span style={{ color: C.accent, fontSize: 13, fontWeight: 600 }}>{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
                   </div>
                 ))}
               </div>

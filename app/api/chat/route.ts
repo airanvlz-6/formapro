@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     // Extracción automática de memoria en el servidor cuando se guarda historial
     if (datos.historial && Array.isArray(datos.historial) && datos.historial.length > 0) {
       try {
-        const {data: usuarioData} = await supabase.from("usuarios").select("ciclo_actual,notas_coach,datos_entrenamiento,estado_fisiologico,workout_history").eq("codigo", codigo).single();
+        const {data: usuarioData} = await supabase.from("usuarios").select("ciclo_actual,notas_coach,datos_entrenamiento,estado_fisiologico,workout_history,historial_fisiologico").eq("codigo", codigo).single();
         const cicloActual = usuarioData?.ciclo_actual || {};
         const ultimos = datos.historial.slice(-6).map((m: any) => `${m.role === "user" ? "ATLETA" : "COACH"}: ${typeof m.content === "string" ? m.content.substring(0, 300) : "[archivo]"}`).join("\n\n");
 
@@ -107,7 +107,21 @@ ${ultimos}`;
 
         if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).some(v => v !== null)) {
           const estadoActual = usuarioData?.estado_fisiologico || {};
-          updates.estado_fisiologico = { ...estadoActual, ...Object.fromEntries(Object.entries(extracted.estado_fisiologico).filter(([,v]) => v !== null)) };
+          const nuevoEstado = { ...estadoActual, ...Object.fromEntries(Object.entries(extracted.estado_fisiologico).filter(([,v]) => v !== null)) };
+          updates.estado_fisiologico = nuevoEstado;
+          
+          // Añadir al historial fisiológico
+          const historialActual = usuarioData?.historial_fisiologico || [];
+          const hoy = new Date().toISOString().split('T')[0];
+          const entradaHoy = { 
+            fecha: hoy,
+            ...Object.fromEntries(Object.entries(extracted.estado_fisiologico).filter(([k,v]) => v !== null && ['hrv','sueno','rhr','fatiga_aguda'].includes(k)))
+          };
+          // Solo añadir si tiene datos y no existe entrada de hoy
+          const yaExisteHoy = historialActual.some((e: any) => e.fecha === hoy);
+          if(Object.keys(entradaHoy).length > 1 && !yaExisteHoy){
+            updates.historial_fisiologico = [...historialActual.slice(-29), entradaHoy]; // máximo 30 días
+          }
         }
 
         if (extracted.sesion_completada && extracted.sesion_completada !== "null") {

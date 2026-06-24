@@ -119,6 +119,71 @@ useEffect(() => {
           ))}
         </div>
 
+        {/* Prediccion de riesgo */}
+        {(()=>{
+          const ef = datos?.estado_fisiologico || {};
+          const wh = datos?.workout_history || [];
+          const ahora = new Date();
+          const hace7 = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
+          const hace14 = new Date(ahora.getTime() - 14 * 24 * 60 * 60 * 1000);
+          const sesiones7 = wh.filter((w:any) => new Date(w.fecha) >= hace7).length;
+          const sesiones14 = wh.filter((w:any) => new Date(w.fecha) >= hace14).length;
+          const diasSemana = parseInt(datos?.perfil?.dias||"3");
+
+          // Riesgo lesion
+          let riesgoLesion = 0;
+          if(ef.fatiga_aguda && ef.fatiga_aguda > 70) riesgoLesion += 35;
+          if(ef.hrv && ef.hrv < 45) riesgoLesion += 25;
+          if(sesiones7 > diasSemana) riesgoLesion += 25;
+          if(ef.sueno && ef.sueno < 55) riesgoLesion += 15;
+
+          // Riesgo abandono
+          let riesgoAbandono = 0;
+          const esperadas14 = diasSemana * 2;
+          if(sesiones14 < esperadas14 * 0.4) riesgoAbandono += 50;
+          else if(sesiones14 < esperadas14 * 0.6) riesgoAbandono += 25;
+          if(histFisio.length >= 3){
+            const hrvValues = histFisio.slice(-5).filter((e:any)=>e.hrv).map((e:any)=>e.hrv);
+            if(hrvValues.length >= 3 && hrvValues[hrvValues.length-1] < hrvValues[0] - 8) riesgoAbandono += 25;
+          }
+          if(adherencia.adherencia7 && adherencia.adherencia7 < 50) riesgoAbandono += 25;
+
+          // Riesgo sobrecarga
+          let riesgoSobrecarga = 0;
+          if(ef.fatiga_aguda && ef.fatiga_aguda > 60) riesgoSobrecarga += 30;
+          if(ef.sueno && ef.sueno < 65) riesgoSobrecarga += 25;
+          if(ef.hrv && ef.hrv < 50) riesgoSobrecarga += 25;
+          if(sesiones7 >= diasSemana) riesgoSobrecarga += 20;
+
+          const getColor = (v:number) => v >= 70 ? "#ff4444" : v >= 40 ? "#FF6B00" : "#4CAF50";
+          const getLabel = (v:number) => v >= 70 ? "Alto" : v >= 40 ? "Moderado" : "Bajo";
+          const getEmoji = (v:number) => v >= 70 ? "🔴" : v >= 40 ? "🟡" : "🟢";
+
+          return (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+              <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 14 }}>🎯 Predicción de riesgo</p>
+              {[
+                { label: "Riesgo de lesión", value: riesgoLesion },
+                { label: "Riesgo de abandono", value: riesgoAbandono },
+                { label: "Riesgo de sobrecarga", value: riesgoSobrecarga },
+              ].map(item => (
+                <div key={item.label} style={{ marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, color: C.muted }}>{item.label}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: getColor(item.value) }}>
+                      {getEmoji(item.value)} {getLabel(item.value)}
+                    </span>
+                  </div>
+                  <div style={{ height: 6, background: C.border, borderRadius: 100 }}>
+                    <div style={{ height: 6, borderRadius: 100, background: getColor(item.value), width:`${Math.min(item.value,100)}%`, transition:"width 0.8s ease" }}/>
+                  </div>
+                </div>
+              ))}
+              <p style={{ color: C.muted, fontSize: 11, marginTop: 8 }}>Basado en HRV, sueño, fatiga y adherencia reciente</p>
+            </div>
+          );
+        })()}
+
         {/* Alertas inteligentes */}
         {(()=>{
           const alertas: {mensaje: string; tipo: 'warning' | 'danger'}[] = [];

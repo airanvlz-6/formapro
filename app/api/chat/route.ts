@@ -151,7 +151,15 @@ ${ultimos}`;
             const ultimaSesion = workoutActual[workoutActual.length - 1];
             const tiempoUltima = ultimaSesion ? new Date(ultimaSesion.fecha).getTime() : 0;
             if (new Date().getTime() - tiempoUltima > 300000) {
-              updates.workout_history = [...workoutActual, { ...sesion, fecha: new Date().toISOString() }];
+              // Normalizar formato de sesión
+              const sesionNormalizada = {
+                tipo: sesion.tipo || sesion.type || "Entrenamiento",
+                fecha: new Date().toISOString(),
+                notas: sesion.notas || sesion.notes || Object.entries(sesion).filter(([k])=>!['tipo','type','fecha','date','duracion','duration','sensacion'].includes(k)).map(([k,v])=>`${k}: ${v}`).join(', ') || "",
+                duracion: sesion.duracion || sesion.duration || null,
+                sensacion: sesion.sensacion || sesion.feeling || "buena"
+              };
+              updates.workout_history = [...workoutActual, sesionNormalizada];
             }
           }
         }

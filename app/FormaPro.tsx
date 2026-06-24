@@ -185,7 +185,7 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
   ],
 };
 
-const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "", memoria?: {lesiones?:string; plan?:string; notas?:string}, ciclo?: {bloque?:string; semana?:number; totalSemanas?:number; objetivo?:string}, psicologia?: {arousal?:string; confianza?:string; estres?:string; motivacion?:string; notas_mentales?:string}, premium?: boolean, athleteState?: Record<string,any>, datosEntreno?: Record<string,any>, estadoFisio?: {fatiga_aguda?:number;fatiga_cronica?:number;tendencia?:string;hrv?:number;sueno?:number;rhr?:number;adherencia?:number}, histFisio?: {fecha:string;hrv?:number;sueno?:number;rhr?:number}[], distribucion?: string) => {
+const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "", memoria?: {lesiones?:string; plan?:string; notas?:string}, ciclo?: {bloque?:string; semana?:number; totalSemanas?:number; objetivo?:string}, psicologia?: {arousal?:string; confianza?:string; estres?:string; motivacion?:string; notas_mentales?:string}, premium?: boolean, athleteState?: Record<string,any>, datosEntreno?: Record<string,any>, estadoFisio?: {fatiga_aguda?:number;fatiga_cronica?:number;tendencia?:string;hrv?:number;sueno?:number;rhr?:number;adherencia?:number}, histFisio?: {fecha:string;hrv?:number;sueno?:number;rhr?:number}[], distribucion?: string, objetivo?: {descripcion?:string;fecha?:string;tipo?:string}) => {
   const perfilStr = Object.entries(perfil).map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join("\n");
   const marcasStr = marcas.length > 0 ? marcas.map(m => `- ${m.fecha}: ${m.valor}`).join("\n") : "Sin registros aún";
   const cicloStr = ciclo?.bloque ? `
@@ -296,6 +296,13 @@ IMPORTANTE: Usa estas fechas exactas al planificar sesiones. No calcules fechas 
 DISPONIBILIDAD DEL ATLETA — REGLA CRÍTICA: Antes de programar cualquier sesión, consulta el perfil del atleta y respeta ESTRICTAMENTE sus días disponibles, horarios y lugar de entrenamiento. NUNCA programes una sesión en un día que el atleta no ha indicado como disponible. Si el perfil indica "lunes no disponible" o "solo box martes y jueves", respeta eso sin excepciones. La disponibilidad es una restricción inamovible, no una sugerencia.
 ${distribucion?`DISTRIBUCIÓN SEMANAL ACORDADA: ${distribucion}
 REGLA ABSOLUTA: Respeta esta distribución sin excepciones. Si hoy es lunes y la distribución indica carrera, programa carrera. Si indica box, programa box. NO cambies el tipo de sesión por ningún motivo salvo que el atleta lo pida explícitamente.`:""}
+${objetivo?.descripcion?`
+OBJETIVO PRINCIPAL DEL ATLETA:
+- Descripción: ${objetivo.descripcion}
+- Fecha objetivo: ${objetivo.fecha||"sin fecha definida"}
+- Tipo: ${objetivo.tipo||"rendimiento"}
+- Semanas restantes: ${objetivo.fecha?Math.max(0,Math.round((new Date(objetivo.fecha).getTime()-new Date().getTime())/(7*24*60*60*1000))):"desconocido"}
+IMPORTANTE: Toda la planificación debe orientarse hacia este objetivo. Si la fecha se acerca, ajusta la periodización (taper, realización). Si hay mucho tiempo, prioriza base y acumulación. Menciona el objetivo cuando sea relevante para motivar al atleta.`:""}
 PRINCIPIOS Y METODOLOGÍA CIENTÍFICA:
 - Periodización por bloques: acumulación (volumen alto, intensidad baja) → intensificación (volumen medio, intensidad alta) → realización (volumen bajo, intensidad máxima) → deload
 - Sobrecarga progresiva: aumenta volumen o intensidad cada semana dentro del bloque, nunca ambos a la vez
@@ -549,6 +556,7 @@ export default function Forge() {
         setEstadoFisiologico((u as any).estado_fisiologico||{});
         setHistorialFisiologico((u as any).historial_fisiologico||[]);
         setDistribucionSemanal((u as any).distribucion_semanal||"");
+        setObjetivoPrincipal((u as any).objetivo_principal||{});
         setFechaRegistro((u as any).created_at||null);
         apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
       },500);
@@ -573,6 +581,7 @@ const [datosEntrenamiento,setDatosEntrenamiento]=useState<Record<string,any>>({}
 const [estadoFisiologico,setEstadoFisiologico]=useState<{fatiga_aguda?:number;fatiga_cronica?:number;tendencia?:string;hrv?:number;sueno?:number;rhr?:number;adherencia?:number}>({});
 const [historialFisiologico,setHistorialFisiologico]=useState<{fecha:string;hrv?:number;sueno?:number;rhr?:number}[]>([]);
 const [distribucionSemanal,setDistribucionSemanal]=useState<string>("");
+const [objetivoPrincipal,setObjetivoPrincipal]=useState<{descripcion?:string;fecha?:string;tipo?:string}>({});
 const [athleteState,setAthleteState]=useState<Record<string,any>>({});
 const [testAtleta,setTestAtleta]=useState<Record<string,string|string[]>>({});
 const [testIdx,setTestIdx]=useState(0);
@@ -687,6 +696,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     setEstadoFisiologico((u as any).estado_fisiologico||{});
     setHistorialFisiologico((u as any).historial_fisiologico||[]);
     setDistribucionSemanal((u as any).distribucion_semanal||"");
+    setObjetivoPrincipal((u as any).objetivo_principal||{});
     setFechaRegistro((u as any).created_at||null);
     apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
     // reanudarSesion eliminada para reducir consumo de tokens
@@ -756,7 +766,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
     const esp=espKey||categoria!;
     try{
       const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[archivo]"}...`).join("\n");
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal),messages:nuevoHist},true);
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal),messages:nuevoHist},true);
       if(data.aborted) return;
       const respText=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
@@ -800,7 +810,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[imagen/archivo]"}...`).join("\n");
       const esProgramacion=texto.toLowerCase().includes("programacion")||texto.toLowerCase().includes("rutina")||texto.toLowerCase().includes("semana")||texto.toLowerCase().includes("plan")||texto.toLowerCase().includes("sesion")||texto.toLowerCase().includes("entreno")||texto.toLowerCase().includes("wod")||texto.toLowerCase().includes("ejercicio")||texto.toLowerCase().includes("bloque")||texto.toLowerCase().includes("rehabilitacion")||texto.toLowerCase().includes("protocolo")||texto.toLowerCase().includes("fase");
       const mensajesContexto=esProgramacion?-6:-4;
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?4000:2000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?4000:2000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
       if(data.aborted) return;
       let respText=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
       

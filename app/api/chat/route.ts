@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
     // Extracción automática de memoria en el servidor cuando se guarda historial
     if (datos.historial && Array.isArray(datos.historial) && datos.historial.length > 0) {
       try {
-        const {data: usuarioData} = await supabase.from("usuarios").select("ciclo_actual,notas_coach,datos_entrenamiento,estado_fisiologico,workout_history,historial_fisiologico").eq("codigo", codigo).single();
+        const {data: usuarioData} = await supabase.from("usuarios").select("ciclo_actual,notas_coach,datos_entrenamiento,estado_fisiologico,workout_history,historial_fisiologico,distribucion_semanal,objetivo_principal").eq("codigo", codigo).single();
         const cicloActual = usuarioData?.ciclo_actual || {};
         const ultimos = datos.historial.slice(-6).map((m: any) => `${m.role === "user" ? "ATLETA" : "COACH"}: ${typeof m.content === "string" ? m.content.substring(0, 300) : "[archivo]"}`).join("\n\n");
 
@@ -98,9 +98,11 @@ export async function POST(req: NextRequest) {
 IMPORTANTE para estado_fisiologico: "sueno" debe ser SIEMPRE un número 0-100 (la puntuación), NUNCA un objeto. "hrv" en ms como número. "rhr" en bpm como número.
   "sesion_completada": null,
   "datos_entrenamiento": null,
-  "distribucion_semanal": null
+  "distribucion_semanal": null,
+  "objetivo_principal": null
 }
 
+Para "objetivo_principal": si el atleta menciona un objetivo concreto con fecha (competición, carrera, evento, marca objetivo), extrae: {"descripcion":"descripción del objetivo","fecha":"YYYY-MM-DD","tipo":"competicion|marca|evento|otro"}. null si no hay objetivo mencionado.
 Para "distribucion_semanal": si el coach y atleta acuerdan qué tipo de sesión corresponde a cada día, extrae como texto. Ejemplo: "lunes-carrera, martes-box, miercoles-carrera, jueves-box, viernes-carrera, sabado-box". null si no se habló de distribución.
 
 Conversación:
@@ -166,6 +168,10 @@ ${ultimos}`;
 
         if (extracted.distribucion_semanal && extracted.distribucion_semanal !== "null" && extracted.distribucion_semanal !== "") {
           updates.distribucion_semanal = extracted.distribucion_semanal;
+        }
+        if (extracted.objetivo_principal && extracted.objetivo_principal !== "null") {
+          const obj = typeof extracted.objetivo_principal === "string" ? JSON.parse(extracted.objetivo_principal) : extracted.objetivo_principal;
+          if (obj && typeof obj === "object") updates.objetivo_principal = obj;
         }
 
         if (extracted.datos_entrenamiento && extracted.datos_entrenamiento !== "null") {

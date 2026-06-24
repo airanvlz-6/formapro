@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
     // Extracción automática de memoria en el servidor cuando se guarda historial
     if (datos.historial && Array.isArray(datos.historial) && datos.historial.length > 0) {
       try {
-        const {data: usuarioData} = await supabase.from("usuarios").select("ciclo_actual,notas_coach,datos_entrenamiento,estado_fisiologico,workout_history,historial_fisiologico,distribucion_semanal,objetivo_principal").eq("codigo", codigo).single();
+        const {data: usuarioData} = await supabase.from("usuarios").select("ciclo_actual,notas_coach,datos_entrenamiento,estado_fisiologico,workout_history,historial_fisiologico,distribucion_semanal,objetivo_principal,historial_marcas").eq("codigo", codigo).single();
         const cicloActual = usuarioData?.ciclo_actual || {};
         const ultimos = datos.historial.slice(-6).map((m: any) => `${m.role === "user" ? "ATLETA" : "COACH"}: ${typeof m.content === "string" ? m.content.substring(0, 300) : "[archivo]"}`).join("\n\n");
 
@@ -172,6 +172,19 @@ ${ultimos}`;
         if (extracted.distribucion_semanal && extracted.distribucion_semanal !== "null" && extracted.distribucion_semanal !== "") {
           updates.distribucion_semanal = extracted.distribucion_semanal;
         }
+        if (extracted.nueva_marca && extracted.nueva_marca !== "" && extracted.nueva_marca !== "vacío") {
+          const histMarcas = usuarioData?.historial_marcas || [];
+          const partes = extracted.nueva_marca.split(":");
+          if (partes.length >= 2) {
+            const nuevaEntrada = {
+              fecha: new Date().toISOString().split('T')[0],
+              ejercicio: partes[0].trim(),
+              valor: partes.slice(1).join(":").trim()
+            };
+            updates.historial_marcas = [...histMarcas, nuevaEntrada];
+          }
+        }
+
         if (extracted.objetivo_principal && extracted.objetivo_principal !== "null") {
           const obj = typeof extracted.objetivo_principal === "string" ? JSON.parse(extracted.objetivo_principal) : extracted.objetivo_principal;
           if (obj && typeof obj === "object") updates.objetivo_principal = obj;

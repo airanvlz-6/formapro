@@ -557,6 +557,7 @@ export default function Forge() {
         setHistorialFisiologico((u as any).historial_fisiologico||[]);
         setDistribucionSemanal((u as any).distribucion_semanal||"");
         setObjetivoPrincipal((u as any).objetivo_principal||{});
+        setHistorialMarcas((u as any).historial_marcas||[]);
         setFechaRegistro((u as any).created_at||null);
         apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
       },500);
@@ -582,6 +583,7 @@ const [estadoFisiologico,setEstadoFisiologico]=useState<{fatiga_aguda?:number;fa
 const [historialFisiologico,setHistorialFisiologico]=useState<{fecha:string;hrv?:number;sueno?:number;rhr?:number}[]>([]);
 const [distribucionSemanal,setDistribucionSemanal]=useState<string>("");
 const [objetivoPrincipal,setObjetivoPrincipal]=useState<{descripcion?:string;fecha?:string;tipo?:string}>({});
+const [historialMarcas,setHistorialMarcas]=useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
 const [athleteState,setAthleteState]=useState<Record<string,any>>({});
 const [testAtleta,setTestAtleta]=useState<Record<string,string|string[]>>({});
 const [testIdx,setTestIdx]=useState(0);
@@ -697,6 +699,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     setHistorialFisiologico((u as any).historial_fisiologico||[]);
     setDistribucionSemanal((u as any).distribucion_semanal||"");
     setObjetivoPrincipal((u as any).objetivo_principal||{});
+    setHistorialMarcas((u as any).historial_marcas||[]);
     setFechaRegistro((u as any).created_at||null);
     apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
     // reanudarSesion eliminada para reducir consumo de tokens

@@ -119,6 +119,55 @@ useEffect(() => {
           ))}
         </div>
 
+        {/* Alertas inteligentes */}
+        {(()=>{
+          const alertas: {mensaje: string; tipo: 'warning' | 'danger'}[] = [];
+          const ahora = new Date();
+
+          // Alerta sueño bajo
+          if(datos?.estado_fisiologico?.sueno && datos.estado_fisiologico.sueno < 60){
+            alertas.push({mensaje: `Tu calidad de sueño está por debajo de 60/100. La recuperación puede verse afectada.`, tipo: 'warning'});
+          }
+
+          // Alerta HRV bajo
+          if(datos?.estado_fisiologico?.hrv && histFisio.length >= 3){
+            const mediaHrv = histFisio.slice(-7).filter((e:any)=>e.hrv).reduce((a:number,b:any)=>a+b.hrv,0) / histFisio.slice(-7).filter((e:any)=>e.hrv).length;
+            if(datos.estado_fisiologico.hrv < mediaHrv * 0.85){
+              alertas.push({mensaje: `Tu HRV actual (${datos.estado_fisiologico.hrv}ms) está un 15% por debajo de tu media reciente. Considera reducir intensidad.`, tipo: 'warning'});
+            }
+          }
+
+          // Alerta sesiones incumplidas
+          const hace14 = new Date(ahora.getTime() - 14 * 24 * 60 * 60 * 1000);
+          const sesiones14 = (datos?.workout_history||[]).filter((w:any) => new Date(w.fecha) >= hace14).length;
+          const diasSemana = parseInt(datos?.perfil?.dias||"3");
+          const esperadas14 = diasSemana * 2;
+          if(sesiones14 < esperadas14 * 0.5){
+            alertas.push({mensaje: `Has completado ${sesiones14} de ${esperadas14} sesiones esperadas en los últimos 14 días. La adherencia está cayendo.`, tipo: 'danger'});
+          }
+
+          // Alerta tendencia negativa sostenida
+          if(histFisio.length >= 5){
+            const ultimos5 = histFisio.slice(-5);
+            const hrvUltimos = ultimos5.filter((e:any)=>e.hrv).map((e:any)=>e.hrv);
+            if(hrvUltimos.length >= 4 && hrvUltimos[hrvUltimos.length-1] < hrvUltimos[0] - 8){
+              alertas.push({mensaje: `Tu HRV lleva ${hrvUltimos.length} días descendiendo. Forge ha notificado al coach para ajustar la carga.`, tipo: 'danger'});
+            }
+          }
+
+          if(alertas.length === 0) return null;
+          return (
+            <div style={{ marginBottom: 16 }}>
+              {alertas.map((a, i) => (
+                <div key={i} style={{ background: a.tipo==='danger'?"#ff444415":"#FF6B0015", border: `1px solid ${a.tipo==='danger'?"#ff4444":"#FF6B00"}`, borderRadius: 12, padding: "12px 14px", marginBottom: 8, display:"flex", gap: 10, alignItems:"flex-start" }}>
+                  <span style={{ fontSize: 16 }}>{a.tipo==='danger'?"🔴":"🟡"}</span>
+                  <p style={{ color: C.ink, fontSize: 13, lineHeight: 1.5 }}>{a.mensaje}</p>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
         {/* Tendencias fisiologicas */}
         {histFisio.length >= 3 && (()=>{
           const ultimos = histFisio.slice(-7);

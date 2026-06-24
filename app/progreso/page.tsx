@@ -119,6 +119,43 @@ useEffect(() => {
           ))}
         </div>
 
+        {/* Deteccion estancamiento */}
+        {(()=>{
+          const histMarcas = datos?.historial_marcas || [];
+          if(histMarcas.length < 3) return null;
+
+          // Agrupar por ejercicio
+          const porEjercicio: Record<string, {fecha:string;valor:string}[]> = {};
+          histMarcas.forEach((m:any) => {
+            if(!porEjercicio[m.ejercicio]) porEjercicio[m.ejercicio] = [];
+            porEjercicio[m.ejercicio].push({fecha:m.fecha, valor:m.valor});
+          });
+
+          const estancados: string[] = [];
+          Object.entries(porEjercicio).forEach(([ejercicio, registros]) => {
+            if(registros.length < 2) return;
+            const primero = new Date(registros[0].fecha);
+            const ultimo = new Date(registros[registros.length-1].fecha);
+            const semanas = Math.round((ultimo.getTime()-primero.getTime())/(7*24*60*60*1000));
+            if(semanas >= 6 && registros[0].valor === registros[registros.length-1].valor){
+              estancados.push(ejercicio);
+            }
+          });
+
+          if(estancados.length === 0) return null;
+          return (
+            <div style={{ background: C.card, border: `1px solid #FF6B00`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+              <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 10 }}>⚠️ Posible estancamiento detectado</p>
+              {estancados.map((e:string) => (
+                <div key={e} style={{ display:"flex", gap:8, alignItems:"center", marginBottom:8 }}>
+                  <span style={{ fontSize:12 }}>📊</span>
+                  <p style={{ color:C.muted, fontSize:13 }}>Sin mejora en <span style={{color:C.ink,fontWeight:600}}>{e}</span> durante 6+ semanas. Forge ajustará el estímulo.</p>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
         {/* Prediccion de riesgo */}
         {(()=>{
           const ef = datos?.estado_fisiologico || {};

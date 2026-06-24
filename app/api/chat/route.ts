@@ -111,12 +111,15 @@ ${ultimos}`;
         const extractRes = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY!, "anthropic-version": "2023-06-01" },
-          body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 500, messages: [{ role: "user", content: extractPrompt }] })
+          body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 600, messages: [{ role: "user", content: extractPrompt }] })
         });
         const extractData = await extractRes.json();
         const textoExtract = extractData.content?.map((b: any) => b.text || "").join("") || "{}";
         const clean = textoExtract.replace(/```json|```/g, "").trim();
-        const extracted = JSON.parse(clean);
+        // Extraer solo el JSON válido
+        const jsonMatch = clean.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error("No JSON found");
+        const extracted = JSON.parse(jsonMatch[0]);
 
         const updates: any = {};
         if (extracted.lesiones) updates.lesiones_actuales = extracted.lesiones;

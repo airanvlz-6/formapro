@@ -172,7 +172,6 @@ ${ultimos}`;
         if (extracted.distribucion_semanal && extracted.distribucion_semanal !== "null" && extracted.distribucion_semanal !== "") {
           updates.distribucion_semanal = extracted.distribucion_semanal;
         }
-        console.log("objetivo extraido:", JSON.stringify(extracted.objetivo_principal));
         if (extracted.objetivo_principal && extracted.objetivo_principal !== "null") {
           const obj = typeof extracted.objetivo_principal === "string" ? JSON.parse(extracted.objetivo_principal) : extracted.objetivo_principal;
           if (obj && typeof obj === "object") updates.objetivo_principal = obj;

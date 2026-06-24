@@ -336,6 +336,29 @@ useEffect(() => {
           </div>
         )}
 
+        {/* Objetivo principal */}
+        {datos?.objetivo_principal?.descripcion && (()=>{
+          const obj = datos.objetivo_principal;
+          const fechaObj = obj.fecha ? new Date(obj.fecha) : null;
+          const semanasRestantes = fechaObj ? Math.max(0, Math.round((fechaObj.getTime() - new Date().getTime()) / (7*24*60*60*1000))) : null;
+          const diasRestantes = fechaObj ? Math.max(0, Math.round((fechaObj.getTime() - new Date().getTime()) / (24*60*60*1000))) : null;
+          const urgente = semanasRestantes !== null && semanasRestantes <= 4;
+          return (
+            <div style={{ background: C.card, border: `2px solid ${urgente?"#FF6B00":C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+              <p style={{ color: C.accent, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>🎯 Objetivo principal</p>
+              <p style={{ color: C.ink, fontSize: 16, fontWeight: 700, marginBottom: 6 }}>{obj.descripcion}</p>
+              {fechaObj && (
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                  <span style={{ color: C.muted, fontSize: 13 }}>📅 {fechaObj.toLocaleDateString("es-ES", {day:"numeric", month:"long", year:"numeric"})}</span>
+                  {semanasRestantes !== null && <span style={{ color: urgente?"#FF6B00":"#4CAF50", fontSize: 13, fontWeight: 600 }}>
+                    {diasRestantes === 0 ? "¡Hoy!" : diasRestantes === 1 ? "Mañana" : `${semanasRestantes} semanas restantes`}
+                  </span>}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* Ciclo actual */}
         {ciclo.bloque && (
           <div style={{ background: C.card, border: `1px solid ${C.accent}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>

@@ -1024,19 +1024,7 @@ Extrae SOLO lo que puedas determinar con certeza. Responde SOLO con este JSON:
             }
             if(datos.sesion_completada&&datos.sesion_completada!=="null"){
               try{
-                const sesion=typeof datos.sesion_completada==="string"?JSON.parse(datos.sesion_completada):datos.sesion_completada;
-                if(sesion&&typeof sesion==="object"){
-                  const nuevaSesion={...sesion,fecha:new Date().toISOString()};
-                  const workoutHistorial=(await apiCall({action:"recuperar_usuario",codigo:codigoUsuario}))?.data?.workout_history||[];
-                  // Evitar duplicados - no guardar si ya hay una sesión en los últimos 5 minutos
-                  const ahora=new Date().getTime();
-                  const ultimaSesion=workoutHistorial[workoutHistorial.length-1];
-                  const tiempoUltima=ultimaSesion?new Date(ultimaSesion.fecha).getTime():0;
-                  if(ahora-tiempoUltima>300000){ // 5 minutos
-                    const workoutActualizado=[...workoutHistorial,nuevaSesion];
-                    apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{workout_history:workoutActualizado}});
-                  }
-                }
+                // Registro de sesiones por acción explícita del usuario
               }catch{}
             }
             if(datos.estado_fisiologico&&datos.estado_fisiologico!=="null"){

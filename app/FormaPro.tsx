@@ -669,6 +669,7 @@ const abortControllerRef=useRef<AbortController|null>(null);
   const inputRef=useRef<HTMLTextAreaElement>(null);
   const [alturaViewport,setAlturaViewport]=useState<number>(0);
 const [mostrarSugerencias,setMostrarSugerencias]=useState(false);
+const [mostrarMenu,setMostrarMenu]=useState(false);
 const [mostrarConjunto,setMostrarConjunto]=useState(false);
 const [codigoConjuntoInput,setCodigoConjuntoInput]=useState("");
 const [codigoTempGenerado,setCodigoTempGenerado]=useState("");
@@ -1501,11 +1502,26 @@ ${testStr}`}]});
                 {(esPremium||esAdmin)&&<a href="https://t.me/forgeapp_es" target="_blank" rel="noopener noreferrer" style={{background:"#1E5C3A",border:"none",color:"#fff",cursor:"pointer",borderRadius:10,padding:"6px 9px",fontSize:12,textDecoration:"none"}}>👨‍💻</a>}
                 {!esPremium&&!esAdmin&&<a href={`mailto:coachforgeapp@gmail.com?subject=Consulta Forge - ${codigoUsuario}&body=Hola, tengo una consulta sobre mi programación en Forge.`} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"6px 9px",fontSize:12,textDecoration:"none"}}>✉️</a>}
               </div>
-              <div style={{display:"flex",gap:6}}>
-                <button onClick={()=>window.open(`/progreso?codigo=${codigoUsuario}`,'_blank')} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:"#fff",cursor:"pointer"}}>📊</button>
-              <button onClick={()=>{setMostrarEquipos(!mostrarEquipos);setMostrarConjunto(false);}} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:"#fff",cursor:"pointer"}}>👥</button>
-              <button onClick={()=>{setTestIdx(0);setTestAtleta({});setPantalla("test");}} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 9px",fontSize:12,color:"#fff",cursor:"pointer",fontWeight:600}}>🏆 Test</button>
-                <button onClick={()=>{setMostrarPerfil(!mostrarPerfil);setMostrarMarcas(false);}} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:"#fff",cursor:"pointer"}}>👤</button>
+              <div style={{position:"relative"}}>
+                <button onClick={()=>setMostrarMenu(!mostrarMenu)} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 12px",fontSize:13,color:"#fff",cursor:"pointer",fontWeight:600}}>
+                  ☰ Menú
+                </button>
+                {mostrarMenu&&(
+                  <div style={{position:"absolute",right:0,top:"calc(100% + 6px)",background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:8,zIndex:100,minWidth:160,boxShadow:"0 4px 20px rgba(0,0,0,0.3)"}}>
+                    <button onClick={()=>{window.open(`/progreso?codigo=${codigoUsuario}`,'_blank');setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
+                      📊 Mi progreso
+                    </button>
+                    <button onClick={()=>{setMostrarEquipos(!mostrarEquipos);setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
+                      👥 Equipos
+                    </button>
+                    <button onClick={()=>{setTestIdx(0);setTestAtleta({});setPantalla("test");setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
+                      🏆 Test de atleta
+                    </button>
+                    <button onClick={()=>{setMostrarPerfil(!mostrarPerfil);setMostrarMarcas(false);setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
+                      👤 Mi perfil
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -852,13 +852,15 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       let respText=respTextRaw;
       if(sesionStart>=0){
         const jsonStart=sesionStart+8;
-        const sesionEnd=respTextRaw.indexOf("]",jsonStart);
+        // Buscar el cierre correcto: "}]" no solo "]"
+        const sesionEnd=respTextRaw.indexOf("}]",jsonStart);
         if(sesionEnd>=0){
           try{
-            const sesionJson=respTextRaw.substring(jsonStart,sesionEnd);
+            const sesionJson=respTextRaw.substring(jsonStart,sesionEnd+1);
+            console.log("SESION_JSON:",sesionJson);
             const sesionData=JSON.parse(sesionJson);
             setSesionPendiente(sesionData);
-          }catch{}
+          }catch(e){console.log("SESION_ERROR:",e);}
           respText=respTextRaw.substring(0,sesionStart).trim();
         }
       }

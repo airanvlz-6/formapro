@@ -199,7 +199,16 @@ ${ultimos}`;
 
         if (extracted.objetivo_principal && extracted.objetivo_principal !== "null") {
           const obj = typeof extracted.objetivo_principal === "string" ? JSON.parse(extracted.objetivo_principal) : extracted.objetivo_principal;
-          if (obj && typeof obj === "object") updates.objetivo_principal = obj;
+          // Solo actualizar objetivo si el usuario lo menciona explícitamente en primera persona
+          // No actualizar si viene de una sesión conjunta (el historial contiene datos de otro atleta)
+          const ultMensajeUsuario = datos.historial?.filter((m:any)=>m.role==="user").slice(-1)[0]?.content||"";
+          const mencionaObjetivo = typeof ultMensajeUsuario === "string" && 
+            (ultMensajeUsuario.toLowerCase().includes("objetivo") || 
+             ultMensajeUsuario.toLowerCase().includes("competición") ||
+             ultMensajeUsuario.toLowerCase().includes("carrera") ||
+             ultMensajeUsuario.toLowerCase().includes("quiero") ||
+             ultMensajeUsuario.toLowerCase().includes("meta"));
+          if (obj && typeof obj === "object" && mencionaObjetivo) updates.objetivo_principal = obj;
         }
 
         if (extracted.datos_entrenamiento && extracted.datos_entrenamiento !== "null") {

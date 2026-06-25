@@ -561,6 +561,7 @@ export default function Forge() {
         setHistorialMarcas((u as any).historial_marcas||[]);
         setAnalisisBloques((u as any).analisis_bloques||[]);
         setFechaRegistro((u as any).created_at||null);
+        cargarEquipos(u.codigo);
         apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
       },500);
     }
@@ -612,6 +613,35 @@ const [errorCodigoPersonal,setErrorCodigoPersonal]=useState("");
 const [emailInput,setEmailInput]=useState("");
 const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
 
+  const cargarEquipos=async(cod:string)=>{
+    const res=await apiCall({action:"mis_equipos",codigo:cod});
+    if(res?.equipos) setMisEquipos(res.equipos);
+  };
+
+  const crearEquipo=async()=>{
+    if(!crearEquipoNombre) return;
+    const res=await apiCall({action:"crear_equipo",codigo:codigoUsuario,datos:{nombre:crearEquipoNombre,tipo:crearEquipoTipo}});
+    if(res?.equipo){
+      setMisEquipos(prev=>[...prev,res.equipo]);
+      setCrearEquipoNombre("");
+    } else {
+      alert(res?.error||"Error al crear equipo");
+    }
+  };
+
+  const generarSesionEquipo=async(equipo:any)=>{
+    const res=await apiCall({action:"generar_sesion_equipo",codigo:codigoUsuario,datos:{team_id:equipo.id}});
+    if(res?.perfiles){
+      const {perfiles, memoria, usarRatios} = res;
+      const atletaA=perfiles[0];
+      const atletaB=perfiles[1];
+      const ratiosStr=usarRatios&&memoria.length>0?`\nRATIOS APRENDIDOS:\n${memoria.map((m:any)=>`- ${m.movement}: ratio ${m.ratio} (${m.sessions_count} sesiones)`).join("\n")}`:"(Sesión de observación — aún sin ratios establecidos)";
+      const prompt=`Genera una sesión conjunta para el equipo "${equipo.name}" (tipo: ${equipo.team_type}).\n\nATLETA A:\nPerfil: ${JSON.stringify(atletaA.perfil)}\nCiclo: ${JSON.stringify(atletaA.ciclo_actual)}\nLesiones: ${atletaA.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(atletaA.marcas_especificas)}\n\nATLETA B:\nPerfil: ${JSON.stringify(atletaB.perfil)}\nCiclo: ${JSON.stringify(atletaB.ciclo_actual)}\nLesiones: ${atletaB.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(atletaB.marcas_especificas)}\n\n${ratiosStr}\n\nREGLAS:\n1. La sesión respeta el bloque actual de CADA atleta\n2. Mismo estímulo, cargas y escalados individualizados\n3. Indica claramente qué hace cada atleta cuando difieren\n4. El plan individual de cada uno NO se rompe`;
+      enviar(prompt);
+      await apiCall({action:"guardar_sesion_equipo",codigo:codigoUsuario,datos:{team_id:equipo.id,workout:prompt}});
+    }
+  };
+
   const generarCodigoConjunto=async()=>{
     setModoConjunto("generando");
     const res=await apiCall({action:"crear_codigo_conjunto",codigo:codigoUsuario});
@@ -645,6 +675,12 @@ const [codigoTempGenerado,setCodigoTempGenerado]=useState("");
 const [perfilAmigo,setPerfilAmigo]=useState<any>(null);
 const [modoConjunto,setModoConjunto]=useState<"idle"|"generando"|"esperando"|"introducir"|"listo">("idle");
 const [copiadoConjunto,setCopiadoConjunto]=useState(false);
+const [misEquipos,setMisEquipos]=useState<any[]>([]);
+const [mostrarEquipos,setMostrarEquipos]=useState(false);
+const [crearEquipoNombre,setCrearEquipoNombre]=useState("");
+const [crearEquipoTipo,setCrearEquipoTipo]=useState("generic");
+const [unirseCodigo,setUnirseCodigo]=useState("");
+const [equipoSeleccionado,setEquipoSeleccionado]=useState<any>(null);
 
   useEffect(()=>{
     const actualizarAltura=()=>{
@@ -733,6 +769,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     setHistorialMarcas((u as any).historial_marcas||[]);
     setAnalisisBloques((u as any).analisis_bloques||[]);
     setFechaRegistro((u as any).created_at||null);
+    cargarEquipos(u.codigo);
     apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
     // reanudarSesion eliminada para reducir consumo de tokens
   };
@@ -1466,12 +1503,58 @@ ${testStr}`}]});
               </div>
               <div style={{display:"flex",gap:6}}>
                 <button onClick={()=>window.open(`/progreso?codigo=${codigoUsuario}`,'_blank')} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:"#fff",cursor:"pointer"}}>📊</button>
-              <button onClick={()=>setMostrarConjunto(!mostrarConjunto)} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:"#fff",cursor:"pointer"}}>👥</button>
+              <button onClick={()=>{setMostrarEquipos(!mostrarEquipos);setMostrarConjunto(false);}} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:"#fff",cursor:"pointer"}}>👥</button>
               <button onClick={()=>{setTestIdx(0);setTestAtleta({});setPantalla("test");}} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 9px",fontSize:12,color:"#fff",cursor:"pointer",fontWeight:600}}>🏆 Test</button>
                 <button onClick={()=>{setMostrarPerfil(!mostrarPerfil);setMostrarMarcas(false);}} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:"#fff",cursor:"pointer"}}>👤</button>
               </div>
             </div>
           </div>
+
+          {mostrarEquipos&&(
+            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:10,maxHeight:450,overflowY:"auto"}}>
+              <p style={{color:C.ink,fontSize:14,fontWeight:700,marginBottom:12}}>👥 Mis equipos</p>
+
+              {/* Equipos existentes */}
+              {misEquipos.map((eq:any)=>(
+                <div key={eq.id} style={{background:C.bg,borderRadius:12,padding:"12px",marginBottom:10,border:`1px solid ${C.border}`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <div>
+                      <p style={{color:C.ink,fontSize:13,fontWeight:700}}>{eq.name}</p>
+                      <p style={{color:C.muted,fontSize:11,textTransform:"capitalize"}}>{eq.team_type} · {eq.team_metrics?.[0]?.sessions_completed||0} sesiones</p>
+                    </div>
+                    <button onClick={()=>generarSesionEquipo(eq)} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"6px 10px",fontSize:11,fontWeight:600,cursor:"pointer"}}>
+                      Entrenar
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Crear equipo */}
+              {misEquipos.length < 2 && (
+                <div style={{borderTop:`1px solid ${C.border}`,paddingTop:12,marginTop:4}}>
+                  <p style={{color:C.muted,fontSize:12,marginBottom:8}}>Crear nuevo equipo:</p>
+                  <input value={crearEquipoNombre} onChange={e=>setCrearEquipoNombre(e.target.value)}
+                    placeholder="Nombre del equipo (ej: Box con Pedro)"
+                    style={{width:"100%",border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 10px",fontSize:12,color:C.ink,background:C.bg,marginBottom:8,fontFamily:"inherit"}}/>
+                  <select value={crearEquipoTipo} onChange={e=>setCrearEquipoTipo(e.target.value)}
+                    style={{width:"100%",border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 10px",fontSize:12,color:C.ink,background:C.bg,marginBottom:8,fontFamily:"inherit"}}>
+                    <option value="generic">General</option>
+                    <option value="crossfit">CrossFit</option>
+                    <option value="running">Running</option>
+                    <option value="hyrox">Hyrox</option>
+                    <option value="functional">Funcional</option>
+                  </select>
+                  <button onClick={crearEquipo} style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"8px",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                    Crear equipo
+                  </button>
+                </div>
+              )}
+
+              {misEquipos.length === 0 && (
+                <p style={{color:C.muted,fontSize:12,textAlign:"center",padding:"12px 0"}}>No tienes equipos aún. ¡Crea uno e invita a tu compañero!</p>
+              )}
+            </div>
+          )}
 
           {mostrarConjunto&&(
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:10}}>

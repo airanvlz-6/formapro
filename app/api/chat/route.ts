@@ -386,6 +386,15 @@ ${ultimos}`;
     return NextResponse.json({ data: amigo });
   }
 
+  if (action === "borrar_ultima_sesion") {
+    const { data: usuario } = await supabase.from("usuarios").select("workout_history").eq("codigo", codigo).single();
+    const workouts = usuario?.workout_history || [];
+    if (workouts.length === 0) return NextResponse.json({ error: "No hay sesiones" }, { status: 400 });
+    const workoutActualizado = workouts.slice(0, -1);
+    await supabase.from("usuarios").update({ workout_history: workoutActualizado }).eq("codigo", codigo);
+    return NextResponse.json({ ok: true, sesionEliminada: workouts[workouts.length - 1] });
+  }
+
   if (action === "calcular_adherencia") {
     const { data: usuario } = await supabase.from("usuarios").select("perfil,workout_history,ciclo_actual").eq("codigo", codigo).single();
     if (!usuario) return NextResponse.json({ error: "No encontrado" }, { status: 404 });

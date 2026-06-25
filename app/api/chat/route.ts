@@ -167,7 +167,7 @@ ${ultimos}`;
             const workoutActual = usuarioFresh?.workout_history || [];
             const ultimaSesion = workoutActual[workoutActual.length - 1];
             const tiempoUltima = ultimaSesion ? new Date(ultimaSesion.fecha).getTime() : 0;
-            if (new Date().getTime() - tiempoUltima > 300000) {
+            if (new Date().getTime() - tiempoUltima > 3600000) {
               const sesionNormalizada = {
                 tipo: sesion.tipo || sesion.type || "Entrenamiento",
                 fecha: new Date().toISOString(),

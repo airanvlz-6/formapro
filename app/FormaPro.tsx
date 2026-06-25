@@ -251,7 +251,7 @@ FORMATO ESTRICTO:
 - NUNCA repitas información del perfil, historial o sesiones anteriores salvo que el cliente lo pida explícitamente.
 - NUNCA hagas resumen de lo que acaba de decir el cliente.
 - Si el cliente reporta un entrenamiento realizado: responde SOLO con el siguiente entreno o ajuste en una frase breve de contexto + la sesión. Sin análisis salvo petición explícita.
-GESTIÓN DE SESIONES: Si el usuario menciona que una sesión está duplicada o pide borrar la última sesión registrada, responde confirmando que la borrarás y añade al final de tu respuesta exactamente: [BORRAR_ULTIMA_SESION]. No uses este comando en ningún otro contexto.
+GESTIÓN DE SESIONES: Cuando el usuario reporte haber completado un entrenamiento, al final de tu respuesta añade exactamente: [SESION:{"tipo":"tipo de sesión","fecha":"YYYY-MM-DDThh:mm:ss.000Z usando la fecha real mencionada o hoy","notas":"resumen breve","duracion":null,"sensacion":"buena|normal|mala"}]. Solo añade esto cuando el usuario reporte una sesión completada, nunca en conversaciones sobre planificación futura. Si el usuario pide borrar una sesión por fecha, añade: [BORRAR_SESION:{"fecha":"YYYY-MM-DD","tipo":"tipo mencionado"}].
 COHERENCIA DE PLANIFICACIÓN — REGLA CRÍTICA:
 - NUNCA cambies un entrenamiento ya programado sin motivo justificado. Si el atleta pide recordar la sesión del día, repite EXACTAMENTE la sesión programada sin modificaciones.
 - Solo puedes modificar un entreno si el atleta reporta: lesión, molestia física, falta de material, falta de tiempo o cambio de disponibilidad.
@@ -673,6 +673,7 @@ const abortControllerRef=useRef<AbortController|null>(null);
   const [alturaViewport,setAlturaViewport]=useState<number>(0);
 const [mostrarSugerencias,setMostrarSugerencias]=useState(false);
 const [mostrarMenu,setMostrarMenu]=useState(false);
+const [sesionPendiente,setSesionPendiente]=useState<any>(null);
 const [mostrarConjunto,setMostrarConjunto]=useState(false);
 const [codigoConjuntoInput,setCodigoConjuntoInput]=useState("");
 const [codigoTempGenerado,setCodigoTempGenerado]=useState("");
@@ -845,10 +846,24 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:nuevoHist},true);
       if(data.aborted) return;
       const respTextRaw=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.").replace(/\[STATE_UPDATE\][\s\S]*?\[\/STATE_UPDATE\]/g,"").trim();
-      if(respTextRaw.includes("[BORRAR_ULTIMA_SESION]")){
-        await apiCall({action:"borrar_ultima_sesion",codigo:codigoUsuario});
+      
+      const sesionMatch=respTextRaw.match(/\[SESION:(\{[\s\S]*?\})\]/);
+      if(sesionMatch){
+        try{
+          const sesionData=JSON.parse(sesionMatch[1]);
+          setSesionPendiente(sesionData);
+        }catch{}
       }
-      const respText=respTextRaw.replace(/\[BORRAR_ULTIMA_SESION\]/g,"").trim();
+
+      const borrarMatch=respTextRaw.match(/\[BORRAR_SESION:(\{[\s\S]*?\})\]/);
+      if(borrarMatch){
+        try{
+          const borrarData=JSON.parse(borrarMatch[1]);
+          await apiCall({action:"borrar_sesion_fecha",codigo:codigoUsuario,datos:borrarData});
+        }catch{}
+      }
+
+      const respText=respTextRaw.replace(/\[SESION:[\s\S]*?\]/g,"").replace(/\[BORRAR_SESION:[\s\S]*?\]/g,"").trim();
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);
       setHistorial(hist);
@@ -1945,6 +1960,26 @@ ${testStr}`}]});
                   )}
                 </button>
               </div>
+              {sesionPendiente&&(
+                <div style={{background:"#1A2A1A",border:"1px solid #4CAF50",borderRadius:12,padding:"12px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+                  <div>
+                    <p style={{color:"#4CAF50",fontSize:12,fontWeight:700,marginBottom:2}}>✅ Sesión detectada</p>
+                    <p style={{color:"#9A9590",fontSize:11}}>{sesionPendiente.tipo} · {new Date(sesionPendiente.fecha).toLocaleDateString("es-ES")}</p>
+                  </div>
+                  <div style={{display:"flex",gap:6}}>
+                    <button onClick={async()=>{
+                      await apiCall({action:"registrar_sesion",codigo:codigoUsuario,datos:{sesion:sesionPendiente}});
+                      setSesionPendiente(null);
+                    }} style={{background:"#4CAF50",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                      Registrar
+                    </button>
+                    <button onClick={()=>setSesionPendiente(null)} style={{background:"none",color:"#9A9590",border:"1px solid #2A2A2A",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer"}}>
+                      Ignorar
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {mensajes.length>0&&!cargando&&(
                 <div style={{marginTop:8}}>
                   <button onClick={()=>setMostrarSugerencias(p=>!p)} style={{background:"none",border:"none",color:C.muted,fontSize:11,cursor:"pointer",padding:"4px 0",display:"flex",alignItems:"center",gap:4}}>

@@ -160,24 +160,18 @@ ${ultimos}`;
         }
 
         if (extracted.sesion_completada && extracted.sesion_completada !== "null") {
-          const sesion = typeof extracted.sesion_completada === "string" ? JSON.parse(extracted.sesion_completada) : extracted.sesion_completada;
-          if (sesion && typeof sesion === "object") {
-            // Leer workout_history actualizado directamente de Supabase
-            const { data: usuarioFresh } = await supabase.from("usuarios").select("workout_history").eq("codigo", codigo).single();
-            const workoutActual = usuarioFresh?.workout_history || [];
-            const ultimaSesion = workoutActual[workoutActual.length - 1];
-            const tiempoUltima = ultimaSesion ? new Date(ultimaSesion.fecha).getTime() : 0;
-            if (new Date().getTime() - tiempoUltima > 3600000) {
-              const sesionNormalizada = {
-                tipo: sesion.tipo || sesion.type || "Entrenamiento",
+          try {
+            const sesion = typeof extracted.sesion_completada === "string" ? JSON.parse(extracted.sesion_completada) : extracted.sesion_completada;
+            if (sesion && typeof sesion === "object") {
+              updates._sesion_pendiente = {
+                tipo: sesion.tipo || "Entrenamiento",
                 fecha: new Date().toISOString(),
-                notas: typeof sesion.notas === "string" ? sesion.notas : sesion.notes || Object.entries(sesion).filter(([k])=>!['tipo','type','fecha','date','duracion','duration','sensacion'].includes(k)).map(([k,v])=>typeof v === "object" ? JSON.stringify(v) : `${k}: ${v}`).join(', ') || "",
-                duracion: sesion.duracion || sesion.duration || null,
-                sensacion: sesion.sensacion || sesion.feeling || "buena"
+                notas: typeof sesion.notas === "string" ? sesion.notas : "",
+                duracion: sesion.duracion || null,
+                sensacion: sesion.sensacion || "buena"
               };
-              updates.workout_history = [...workoutActual, sesionNormalizada];
             }
-          }
+          } catch {}
         }
 
         if (extracted.distribucion_semanal && extracted.distribucion_semanal !== "null" && extracted.distribucion_semanal !== "") {
@@ -384,6 +378,22 @@ ${ultimos}`;
     const { data: amigo } = await supabase.from("usuarios").select("perfil,marcas_especificas,ciclo_actual,lesiones_actuales,datos_entrenamiento,especialidad,categoria").eq("codigo", entrada.codigo_usuario).single();
     if (!amigo) return NextResponse.json({ error: "Perfil no encontrado" }, { status: 404 });
     return NextResponse.json({ data: amigo });
+  }
+
+  if (action === "registrar_sesion") {
+    const { sesion } = datos;
+    const { data: usuarioFresh } = await supabase.from("usuarios").select("workout_history").eq("codigo", codigo).single();
+    const workoutActual = usuarioFresh?.workout_history || [];
+    const sesionNormalizada = {
+      tipo: sesion.tipo || "Entrenamiento",
+      fecha: sesion.fecha || new Date().toISOString(),
+      notas: sesion.notas || "",
+      duracion: sesion.duracion || null,
+      sensacion: sesion.sensacion || "buena"
+    };
+    const workoutActualizado = [...workoutActual, sesionNormalizada];
+    await supabase.from("usuarios").update({ workout_history: workoutActualizado }).eq("codigo", codigo);
+    return NextResponse.json({ ok: true });
   }
 
   if (action === "borrar_ultima_sesion") {

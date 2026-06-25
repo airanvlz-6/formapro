@@ -848,7 +848,9 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       const respTextRaw=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.").replace(/\[STATE_UPDATE\][\s\S]*?\[\/STATE_UPDATE\]/g,"").trim();
       
       // Detectar [SESION:...] por índice
+      console.log("RESP_RAW_FINAL:", respTextRaw.slice(-200));
       const sesionStart=respTextRaw.indexOf("[SESION:");
+      console.log("SESION_START:", sesionStart);
       let respText=respTextRaw;
       if(sesionStart>=0){
         const jsonStart=sesionStart+8;

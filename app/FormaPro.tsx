@@ -1542,9 +1542,15 @@ ${testStr}`}]});
                     </div>
                   </div>
                   <div style={{display:"flex",gap:6}}>
+                    {eq.created_by===codigoUsuario?(
                     <button onClick={()=>generarSesionEquipo(eq)} style={{flex:1,background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"6px",fontSize:11,fontWeight:600,cursor:"pointer"}}>
                       🏋️ Entrenar
                     </button>
+                  ):(
+                    <div style={{flex:1,background:C.border,borderRadius:8,padding:"6px",fontSize:11,color:C.muted,textAlign:"center"}}>
+                      El creador genera la sesión
+                    </div>
+                  )}
                     <button onClick={async()=>{
                       if(!confirm(`¿Disolver el equipo "${eq.name}"?`)) return;
                       await apiCall({action:"disolver_equipo",codigo:codigoUsuario,datos:{team_id:eq.id}});

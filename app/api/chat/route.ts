@@ -254,7 +254,7 @@ ${ultimos}`;
     const { data: membresias } = await supabase.from("team_members").select("team_id").eq("user_id", codigo);
     if (!membresias?.length) return NextResponse.json({ equipos: [] });
     const teamIds = membresias.map((m:any) => m.team_id);
-    const { data: equipos } = await supabase.from("teams").select("*, team_metrics(*)").in("id", teamIds).eq("active", true);
+    const { data: equipos } = await supabase.from("teams").select("id, name, team_type, created_by, created_at, active, team_metrics(*)").in("id", teamIds).eq("active", true);
     return NextResponse.json({ equipos: equipos||[] });
   }
 

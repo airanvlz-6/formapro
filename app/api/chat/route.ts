@@ -224,6 +224,80 @@ ${ultimos}`;
     return NextResponse.json({ ok: true });
   }
 
+  if (action === "crear_equipo") {
+    const { nombre, tipo } = datos;
+    // Verificar máximo 2 equipos por usuario
+    const { data: equiposActuales } = await supabase.from("team_members").select("team_id").eq("user_id", codigo);
+    if (equiposActuales && equiposActuales.length >= 2) {
+      return NextResponse.json({ error: "Máximo 2 equipos por usuario" }, { status: 400 });
+    }
+    const { data: equipo, error } = await supabase.from("teams").insert({ name: nombre, team_type: tipo||"generic", created_by: codigo }).select().single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await supabase.from("team_members").insert({ team_id: equipo.id, user_id: codigo });
+    await supabase.from("team_metrics").insert({ team_id: equipo.id });
+    return NextResponse.json({ equipo });
+  }
+
+  if (action === "unirse_equipo") {
+    const { team_id } = datos;
+    // Verificar máximo 2 miembros por equipo
+    const { data: miembros } = await supabase.from("team_members").select("*").eq("team_id", team_id);
+    if (miembros && miembros.length >= 2) return NextResponse.json({ error: "El equipo ya está completo" }, { status: 400 });
+    // Verificar máximo 2 equipos por usuario
+    const { data: equiposActuales } = await supabase.from("team_members").select("team_id").eq("user_id", codigo);
+    if (equiposActuales && equiposActuales.length >= 2) return NextResponse.json({ error: "Máximo 2 equipos por usuario" }, { status: 400 });
+    await supabase.from("team_members").insert({ team_id, user_id: codigo });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === "mis_equipos") {
+    const { data: membresias } = await supabase.from("team_members").select("team_id").eq("user_id", codigo);
+    if (!membresias?.length) return NextResponse.json({ equipos: [] });
+    const teamIds = membresias.map((m:any) => m.team_id);
+    const { data: equipos } = await supabase.from("teams").select("*, team_metrics(*)").in("id", teamIds).eq("active", true);
+    return NextResponse.json({ equipos: equipos||[] });
+  }
+
+  if (action === "generar_sesion_equipo") {
+    const { team_id } = datos;
+    // Obtener miembros
+    const { data: miembros } = await supabase.from("team_members").select("user_id").eq("team_id", team_id);
+    if (!miembros || miembros.length < 2) return NextResponse.json({ error: "El equipo necesita 2 miembros" }, { status: 400 });
+    // Obtener perfiles de ambos
+    const perfiles = await Promise.all(miembros.map(async (m:any) => {
+      const { data } = await supabase.from("usuarios").select("perfil,ciclo_actual,lesiones_actuales,datos_entrenamiento,marcas_especificas,especialidad,categoria").eq("codigo", m.user_id).single();
+      return { user_id: m.user_id, ...data };
+    }));
+    // Obtener team_memory
+    const { data: memoria } = await supabase.from("team_memory").select("*").eq("team_id", team_id);
+    const { data: equipo } = await supabase.from("teams").select("*").eq("id", team_id).single();
+    const { data: metricas } = await supabase.from("team_metrics").select("*").eq("team_id", team_id).single();
+    const usarRatios = (metricas?.sessions_completed||0) >= 3;
+    return NextResponse.json({ perfiles, memoria: memoria||[], equipo, usarRatios });
+  }
+
+  if (action === "guardar_sesion_equipo") {
+    const { team_id, workout } = datos;
+    await supabase.from("team_sessions").insert({ team_id, workout_generated: workout, status: "planned" });
+    await supabase.from("team_metrics").update({ last_session: new Date().toISOString().split('T')[0] }).eq("team_id", team_id);
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === "completar_sesion_equipo") {
+    const { team_id, movimientos } = datos;
+    // Actualizar métricas
+    const { data: metricas } = await supabase.from("team_metrics").select("sessions_completed").eq("team_id", team_id).single();
+    const nuevasSesiones = (metricas?.sessions_completed||0) + 1;
+    await supabase.from("team_metrics").update({ sessions_completed: nuevasSesiones }).eq("team_id", team_id);
+    // Actualizar team_memory si hay suficientes sesiones
+    if (nuevasSesiones >= 3 && movimientos) {
+      for (const [movement, ratio] of Object.entries(movimientos)) {
+        await supabase.from("team_memory").upsert({ team_id, movement, ratio, sessions_count: nuevasSesiones, last_updated: new Date().toISOString() }, { onConflict: "team_id,movement" });
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   if (action === "crear_codigo_conjunto") {
     const caracteres = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     const codigoTemp = "FJ-" + Array.from({length:6}, () => caracteres[Math.floor(Math.random()*caracteres.length)]).join("");

@@ -847,7 +847,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       if(data.aborted) return;
       const respTextRaw=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.").replace(/\[STATE_UPDATE\][\s\S]*?\[\/STATE_UPDATE\]/g,"").trim();
       
-      const sesionMatch=respTextRaw.match(/\[SESION:(\{[\s\S]*?\})\]/);
+      const sesionMatch=respTextRaw.match(/\[SESION:([\s\S]*?)\]\n?/);
       if(sesionMatch){
         try{
           const sesionData=JSON.parse(sesionMatch[1]);
@@ -863,7 +863,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
         }catch{}
       }
 
-      const respText=respTextRaw.replace(/\[SESION:[\s\S]*?\]/g,"").replace(/\[BORRAR_SESION:[\s\S]*?\]/g,"").trim();
+      const respText=respTextRaw.replace(/\[SESION:[\s\S]*?\]\n?/g,"").replace(/\[BORRAR_SESION:[\s\S]*?\]\n?/g,"").trim();
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);
       setHistorial(hist);

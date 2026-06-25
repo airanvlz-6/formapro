@@ -847,23 +847,36 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       if(data.aborted) return;
       const respTextRaw=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.").replace(/\[STATE_UPDATE\][\s\S]*?\[\/STATE_UPDATE\]/g,"").trim();
       
-      const sesionMatch=respTextRaw.match(/\[SESION:([\s\S]*?)\]\n?/);
-      if(sesionMatch){
-        try{
-          const sesionData=JSON.parse(sesionMatch[1]);
-          setSesionPendiente(sesionData);
-        }catch{}
+      // Detectar [SESION:...] por índice
+      const sesionStart=respTextRaw.indexOf("[SESION:");
+      let respText=respTextRaw;
+      if(sesionStart>=0){
+        const jsonStart=sesionStart+8;
+        const sesionEnd=respTextRaw.indexOf("]",jsonStart);
+        if(sesionEnd>=0){
+          try{
+            const sesionJson=respTextRaw.substring(jsonStart,sesionEnd);
+            const sesionData=JSON.parse(sesionJson);
+            setSesionPendiente(sesionData);
+          }catch{}
+          respText=respTextRaw.substring(0,sesionStart).trim();
+        }
       }
 
-      const borrarMatch=respTextRaw.match(/\[BORRAR_SESION:(\{[\s\S]*?\})\]/);
-      if(borrarMatch){
-        try{
-          const borrarData=JSON.parse(borrarMatch[1]);
-          await apiCall({action:"borrar_sesion_fecha",codigo:codigoUsuario,datos:borrarData});
-        }catch{}
+      // Detectar [BORRAR_SESION:...]
+      const borrarStart=respText.indexOf("[BORRAR_SESION:");
+      if(borrarStart>=0){
+        const jsonStart=borrarStart+15;
+        const borrarEnd=respText.indexOf("]",jsonStart);
+        if(borrarEnd>=0){
+          try{
+            const borrarJson=respText.substring(jsonStart,borrarEnd);
+            const borrarData=JSON.parse(borrarJson);
+            await apiCall({action:"borrar_sesion_fecha",codigo:codigoUsuario,datos:borrarData});
+          }catch{}
+          respText=respText.substring(0,borrarStart).trim();
+        }
       }
-
-      const respText=respTextRaw.replace(/\[SESION:[\s\S]*?\]\n?/g,"").replace(/\[BORRAR_SESION:[\s\S]*?\]\n?/g,"").trim();
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);
       setHistorial(hist);

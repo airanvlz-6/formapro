@@ -123,6 +123,7 @@ ${ultimos}`;
         const jsonMatch = clean.match(/\{[\s\S]*\}/);
         if (!jsonMatch) throw new Error("No JSON found");
         const extracted = JSON.parse(jsonMatch[0]);
+        console.log("ESTADO_FISIO_EXTRAIDO:", JSON.stringify(extracted.estado_fisiologico));
 
         const updates: any = {};
         if (extracted.lesiones) updates.lesiones_actuales = extracted.lesiones;

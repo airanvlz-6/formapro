@@ -1555,56 +1555,7 @@ ${testStr}`}]});
               )}
             </div>
           )}
-
-          {mostrarConjunto&&(
-            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:10}}>
-              <p style={{color:C.ink,fontSize:14,fontWeight:700,marginBottom:12}}>👥 Entreno en conjunto</p>
-              {modoConjunto==="idle"&&(
-                <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  <button onClick={generarCodigoConjunto} style={{background:C.accent,color:"#fff",border:"none",borderRadius:10,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
-                    Generar código para mi amigo
-                  </button>
-                  <button onClick={()=>setModoConjunto("introducir")} style={{background:C.card,color:C.ink,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px",fontSize:13,cursor:"pointer"}}>
-                    Tengo el código de mi amigo
-                  </button>
-                </div>
-              )}
-              {modoConjunto==="generando"&&<p style={{color:C.muted,fontSize:13}}>Generando código...</p>}
-              {modoConjunto==="esperando"&&(
-                <div>
-                  <p style={{color:C.muted,fontSize:12,marginBottom:8}}>Comparte este código con tu amigo — válido 10 minutos:</p>
-                  <div style={{background:C.bg,borderRadius:10,padding:"12px",textAlign:"center",marginBottom:10}}>
-                    <span style={{color:C.accent,fontSize:22,fontWeight:900,letterSpacing:3}}>{codigoTempGenerado}</span>
-                  </div>
-                  <button onClick={()=>{navigator.clipboard.writeText(codigoTempGenerado);setCopiadoConjunto(true);setTimeout(()=>setCopiadoConjunto(false),2000);}} style={{width:"100%",background:copiadoConjunto?"#4CAF50":C.border,color:copiadoConjunto?"#fff":C.ink,border:"none",borderRadius:10,padding:"8px",fontSize:12,cursor:"pointer",transition:"all 0.2s"}}>
-                    {copiadoConjunto?"✅ ¡Copiado!":"📋 Copiar código"}
-                  </button>
-                </div>
-              )}
-              {modoConjunto==="introducir"&&(
-                <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  <input value={codigoConjuntoInput} onChange={e=>setCodigoConjuntoInput(e.target.value.toUpperCase())}
-                    placeholder="Código de tu amigo (FJ-XXXXXX)"
-                    style={{border:`1px solid ${C.border}`,borderRadius:10,padding:"10px",fontSize:13,color:C.ink,background:C.bg,fontFamily:"inherit",letterSpacing:2}}/>
-                  <button onClick={usarCodigoConjunto} style={{background:C.accent,color:"#fff",border:"none",borderRadius:10,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
-                    Conectar con amigo
-                  </button>
-                </div>
-              )}
-              {modoConjunto==="listo"&&perfilAmigo&&(
-                <div>
-                  <p style={{color:"#4CAF50",fontSize:13,fontWeight:600,marginBottom:8}}>✅ Perfiles conectados</p>
-                  <p style={{color:C.muted,fontSize:12,marginBottom:10}}>El coach tiene acceso a ambos perfiles y generará una sesión conjunta optimizada.</p>
-                  <button onClick={()=>enviar("Genera una sesión de entrenamiento conjunto para los dos atletas, teniendo en cuenta nuestros perfiles, ciclos actuales y objetivos individuales. La sesión debe beneficiar a ambos.")}
-                    style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:10,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
-                    🏋️ Generar sesión conjunta
-                  </button>
-                </div>
-              )}
-              {modoConjunto!=="idle"&&<button onClick={()=>{setModoConjunto("idle");setCodigoTempGenerado("");setCodigoConjuntoInput("");setPerfilAmigo(null);}} style={{marginTop:8,background:"none",border:"none",color:C.muted,fontSize:12,cursor:"pointer"}}>Cancelar</button>}
-            </div>
-          )}
-
+          
           {mostrarPerfil&&(
         <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:10,maxHeight:400,overflowY:"auto"}}>
           <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:16,color:C.ink,marginBottom:16}}>Mi perfil</div>

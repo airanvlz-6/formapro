@@ -610,12 +610,39 @@ const [codigoPersonal,setCodigoPersonal]=useState("");
 const [errorCodigoPersonal,setErrorCodigoPersonal]=useState("");
 const [emailInput,setEmailInput]=useState("");
 const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
+
+  const generarCodigoConjunto=async()=>{
+    setModoConjunto("generando");
+    const res=await apiCall({action:"crear_codigo_conjunto",codigo:codigoUsuario});
+    if(res?.codigoTemp){
+      setCodigoTempGenerado(res.codigoTemp);
+      setModoConjunto("esperando");
+    } else {
+      setModoConjunto("idle");
+    }
+  };
+
+  const usarCodigoConjunto=async()=>{
+    if(!codigoConjuntoInput) return;
+    const res=await apiCall({action:"usar_codigo_conjunto",codigo:codigoUsuario,codigoConjunto:codigoConjuntoInput});
+    if(res?.data){
+      setPerfilAmigo(res.data);
+      setModoConjunto("listo");
+    } else {
+      alert("Código inválido o expirado");
+    }
+  };
 const [mensajeRecuperar,setMensajeRecuperar]=useState("");
   const bottomRef=useRef<HTMLDivElement>(null);
 const abortControllerRef=useRef<AbortController|null>(null);
   const inputRef=useRef<HTMLTextAreaElement>(null);
   const [alturaViewport,setAlturaViewport]=useState<number>(0);
 const [mostrarSugerencias,setMostrarSugerencias]=useState(false);
+const [mostrarConjunto,setMostrarConjunto]=useState(false);
+const [codigoConjuntoInput,setCodigoConjuntoInput]=useState("");
+const [codigoTempGenerado,setCodigoTempGenerado]=useState("");
+const [perfilAmigo,setPerfilAmigo]=useState<any>(null);
+const [modoConjunto,setModoConjunto]=useState<"idle"|"generando"|"esperando"|"introducir"|"listo">("idle");
 
   useEffect(()=>{
     const actualizarAltura=()=>{
@@ -772,7 +799,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
     const esp=espKey||categoria!;
     try{
       const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[archivo]"}...`).join("\n");
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal),messages:nuevoHist},true);
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:nuevoHist},true);
       if(data.aborted) return;
       const respText=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
@@ -816,7 +843,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[imagen/archivo]"}...`).join("\n");
       const esProgramacion=texto.toLowerCase().includes("programacion")||texto.toLowerCase().includes("rutina")||texto.toLowerCase().includes("semana")||texto.toLowerCase().includes("plan")||texto.toLowerCase().includes("sesion")||texto.toLowerCase().includes("entreno")||texto.toLowerCase().includes("wod")||texto.toLowerCase().includes("ejercicio")||texto.toLowerCase().includes("bloque")||texto.toLowerCase().includes("rehabilitacion")||texto.toLowerCase().includes("protocolo")||texto.toLowerCase().includes("fase");
       const mensajesContexto=esProgramacion?-6:-4;
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?4000:2000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?4000:2000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
       if(data.aborted) return;
       let respText=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
       
@@ -1437,11 +1464,61 @@ ${testStr}`}]});
               </div>
               <div style={{display:"flex",gap:6}}>
                 <button onClick={()=>window.open(`/progreso?codigo=${codigoUsuario}`,'_blank')} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:"#fff",cursor:"pointer"}}>📊</button>
+              <button onClick={()=>setMostrarConjunto(!mostrarConjunto)} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:"#fff",cursor:"pointer"}}>👥</button>
               <button onClick={()=>{setTestIdx(0);setTestAtleta({});setPantalla("test");}} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 9px",fontSize:12,color:"#fff",cursor:"pointer",fontWeight:600}}>🏆 Test</button>
                 <button onClick={()=>{setMostrarPerfil(!mostrarPerfil);setMostrarMarcas(false);}} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 9px",fontSize:13,color:"#fff",cursor:"pointer"}}>👤</button>
               </div>
             </div>
           </div>
+
+          {mostrarConjunto&&(
+            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:10}}>
+              <p style={{color:C.ink,fontSize:14,fontWeight:700,marginBottom:12}}>👥 Entreno en conjunto</p>
+              {modoConjunto==="idle"&&(
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  <button onClick={generarCodigoConjunto} style={{background:C.accent,color:"#fff",border:"none",borderRadius:10,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                    Generar código para mi amigo
+                  </button>
+                  <button onClick={()=>setModoConjunto("introducir")} style={{background:C.card,color:C.ink,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px",fontSize:13,cursor:"pointer"}}>
+                    Tengo el código de mi amigo
+                  </button>
+                </div>
+              )}
+              {modoConjunto==="generando"&&<p style={{color:C.muted,fontSize:13}}>Generando código...</p>}
+              {modoConjunto==="esperando"&&(
+                <div>
+                  <p style={{color:C.muted,fontSize:12,marginBottom:8}}>Comparte este código con tu amigo — válido 10 minutos:</p>
+                  <div style={{background:C.bg,borderRadius:10,padding:"12px",textAlign:"center",marginBottom:10}}>
+                    <span style={{color:C.accent,fontSize:22,fontWeight:900,letterSpacing:3}}>{codigoTempGenerado}</span>
+                  </div>
+                  <button onClick={()=>{navigator.clipboard.writeText(codigoTempGenerado);}} style={{width:"100%",background:C.border,color:C.ink,border:"none",borderRadius:10,padding:"8px",fontSize:12,cursor:"pointer"}}>
+                    📋 Copiar código
+                  </button>
+                </div>
+              )}
+              {modoConjunto==="introducir"&&(
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  <input value={codigoConjuntoInput} onChange={e=>setCodigoConjuntoInput(e.target.value.toUpperCase())}
+                    placeholder="Código de tu amigo (FJ-XXXXXX)"
+                    style={{border:`1px solid ${C.border}`,borderRadius:10,padding:"10px",fontSize:13,color:C.ink,background:C.bg,fontFamily:"inherit",letterSpacing:2}}/>
+                  <button onClick={usarCodigoConjunto} style={{background:C.accent,color:"#fff",border:"none",borderRadius:10,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                    Conectar con amigo
+                  </button>
+                </div>
+              )}
+              {modoConjunto==="listo"&&perfilAmigo&&(
+                <div>
+                  <p style={{color:"#4CAF50",fontSize:13,fontWeight:600,marginBottom:8}}>✅ Perfiles conectados</p>
+                  <p style={{color:C.muted,fontSize:12,marginBottom:10}}>El coach tiene acceso a ambos perfiles y generará una sesión conjunta optimizada.</p>
+                  <button onClick={()=>enviar("Genera una sesión de entrenamiento conjunto para los dos atletas, teniendo en cuenta nuestros perfiles, ciclos actuales y objetivos individuales. La sesión debe beneficiar a ambos.")}
+                    style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:10,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                    🏋️ Generar sesión conjunta
+                  </button>
+                </div>
+              )}
+              {modoConjunto!=="idle"&&<button onClick={()=>{setModoConjunto("idle");setCodigoTempGenerado("");setCodigoConjuntoInput("");setPerfilAmigo(null);}} style={{marginTop:8,background:"none",border:"none",color:C.muted,fontSize:12,cursor:"pointer"}}>Cancelar</button>}
+            </div>
+          )}
 
           {mostrarPerfil&&(
         <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:10,maxHeight:400,overflowY:"auto"}}>

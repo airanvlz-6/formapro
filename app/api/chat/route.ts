@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "API key not found" }, { status: 500 });
   }
 
-  const { messages, system, model, max_tokens, action, codigo, datos, email } = await req.json();
+  const { messages, system, model, max_tokens, action, codigo, datos, email, codigoConjunto } = await req.json();
 
   // Guardar usuario nuevo
   if (action === "guardar_usuario") {
@@ -222,6 +222,35 @@ ${ultimos}`;
     }
 
     return NextResponse.json({ ok: true });
+  }
+
+  if (action === "crear_codigo_conjunto") {
+    const caracteres = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    const codigoTemp = "FJ-" + Array.from({length:6}, () => caracteres[Math.floor(Math.random()*caracteres.length)]).join("");
+    const { error } = await supabase.from("codigos_conjuntos").insert({
+      codigo: codigoTemp,
+      codigo_usuario: codigo
+    });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ codigoTemp });
+  }
+
+  if (action === "usar_codigo_conjunto") {
+    // codigoConjunto ya extraído del body
+    const { data: entrada, error } = await supabase
+      .from("codigos_conjuntos")
+      .select("*")
+      .eq("codigo", codigoConjunto)
+      .eq("usado", false)
+      .gt("expira_at", new Date().toISOString())
+      .single();
+    if (error || !entrada) return NextResponse.json({ error: "Código inválido o expirado" }, { status: 400 });
+    // Marcar como usado
+    await supabase.from("codigos_conjuntos").update({ usado: true }).eq("codigo", codigoConjunto);
+    // Recuperar perfil del amigo
+    const { data: amigo } = await supabase.from("usuarios").select("perfil,marcas_especificas,ciclo_actual,lesiones_actuales,datos_entrenamiento,especialidad,categoria").eq("codigo", entrada.codigo_usuario).single();
+    if (!amigo) return NextResponse.json({ error: "Perfil no encontrado" }, { status: 404 });
+    return NextResponse.json({ data: amigo });
   }
 
   if (action === "calcular_adherencia") {

@@ -95,6 +95,12 @@ export async function POST(req: NextRequest) {
   "nueva_marca": "nueva marca en formato ejercicio:valor o vacío",
   "ciclo": {"bloque": "${cicloActual.bloque||"vacío"}", "semana": ${cicloActual.semana||"null"}, "totalSemanas": ${cicloActual.totalSemanas||"null"}, "objetivo": "${cicloActual.objetivo||"vacío"}"},
   "estado_fisiologico": {"hrv": null, "sueno": null, "rhr": null, "fatiga_aguda": null, "tendencia": null},
+INSTRUCCIONES PARA estado_fisiologico:
+- "hrv": busca HRV, VFC, variabilidad cardíaca — extrae el número en ms
+- "sueno": busca puntuación sueño, calidad sueño, score sueño — extrae el número 0-100. Si menciona "puntuación 79" o "score 79" extrae 79
+- "rhr": busca FC reposo, frecuencia mínima nocturna, pulsaciones reposo — extrae el número en bpm
+- "fatiga_aguda": estima 0-100 según sensaciones reportadas
+- Extrae TODOS los valores presentes aunque haya más información en el mensaje
 IMPORTANTE para estado_fisiologico: "sueno" debe ser SIEMPRE un número 0-100 (la puntuación), NUNCA un objeto. "hrv" en ms como número. "rhr" en bpm como número.
   "sesion_completada": null,
   "datos_entrenamiento": null,
@@ -123,7 +129,7 @@ ${ultimos}`;
         const jsonMatch = clean.match(/\{[\s\S]*\}/);
         if (!jsonMatch) throw new Error("No JSON found");
         const extracted = JSON.parse(jsonMatch[0]);
-        console.log("ESTADO_FISIO_EXTRAIDO:", JSON.stringify(extracted.estado_fisiologico));
+        
 
         const updates: any = {};
         if (extracted.lesiones) updates.lesiones_actuales = extracted.lesiones;

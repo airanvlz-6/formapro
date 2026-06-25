@@ -643,6 +643,7 @@ const [codigoConjuntoInput,setCodigoConjuntoInput]=useState("");
 const [codigoTempGenerado,setCodigoTempGenerado]=useState("");
 const [perfilAmigo,setPerfilAmigo]=useState<any>(null);
 const [modoConjunto,setModoConjunto]=useState<"idle"|"generando"|"esperando"|"introducir"|"listo">("idle");
+const [copiadoConjunto,setCopiadoConjunto]=useState(false);
 
   useEffect(()=>{
     const actualizarAltura=()=>{
@@ -1491,8 +1492,8 @@ ${testStr}`}]});
                   <div style={{background:C.bg,borderRadius:10,padding:"12px",textAlign:"center",marginBottom:10}}>
                     <span style={{color:C.accent,fontSize:22,fontWeight:900,letterSpacing:3}}>{codigoTempGenerado}</span>
                   </div>
-                  <button onClick={()=>{navigator.clipboard.writeText(codigoTempGenerado);}} style={{width:"100%",background:C.border,color:C.ink,border:"none",borderRadius:10,padding:"8px",fontSize:12,cursor:"pointer"}}>
-                    📋 Copiar código
+                  <button onClick={()=>{navigator.clipboard.writeText(codigoTempGenerado);setCopiadoConjunto(true);setTimeout(()=>setCopiadoConjunto(false),2000);}} style={{width:"100%",background:copiadoConjunto?"#4CAF50":C.border,color:copiadoConjunto?"#fff":C.ink,border:"none",borderRadius:10,padding:"8px",fontSize:12,cursor:"pointer",transition:"all 0.2s"}}>
+                    {copiadoConjunto?"✅ ¡Copiado!":"📋 Copiar código"}
                   </button>
                 </div>
               )}

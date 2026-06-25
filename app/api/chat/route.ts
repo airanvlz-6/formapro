@@ -159,20 +159,7 @@ ${ultimos}`;
           }
         }
 
-        if (extracted.sesion_completada && extracted.sesion_completada !== "null") {
-          try {
-            const sesion = typeof extracted.sesion_completada === "string" ? JSON.parse(extracted.sesion_completada) : extracted.sesion_completada;
-            if (sesion && typeof sesion === "object") {
-              updates._sesion_pendiente = {
-                tipo: sesion.tipo || "Entrenamiento",
-                fecha: new Date().toISOString(),
-                notas: typeof sesion.notas === "string" ? sesion.notas : "",
-                duracion: sesion.duracion || null,
-                sensacion: sesion.sensacion || "buena"
-              };
-            }
-          } catch {}
-        }
+        // Registro de sesiones por acción explícita del usuario
 
         if (extracted.distribucion_semanal && extracted.distribucion_semanal !== "null" && extracted.distribucion_semanal !== "") {
           updates.distribucion_semanal = extracted.distribucion_semanal;

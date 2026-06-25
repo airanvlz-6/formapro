@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
       try {
         const {data: usuarioData} = await supabase.from("usuarios").select("ciclo_actual,notas_coach,datos_entrenamiento,estado_fisiologico,workout_history,historial_fisiologico,distribucion_semanal,objetivo_principal,historial_marcas,analisis_bloques").eq("codigo", codigo).single();
         const cicloActual = usuarioData?.ciclo_actual || {};
-        const ultimos = datos.historial.slice(-6).map((m: any) => `${m.role === "user" ? "ATLETA" : "COACH"}: ${typeof m.content === "string" ? m.content.substring(0, 300) : "[archivo]"}`).join("\n\n");
+        const ultimos = datos.historial.slice(-6).map((m: any) => `${m.role === "user" ? "ATLETA" : "COACH"}: ${typeof m.content === "string" ? m.content.substring(0, 800) : "[archivo]"}`).join("\n\n");
 
         const extractPrompt = `Analiza esta conversación y extrae datos en JSON. Responde SOLO con JSON válido:
 {

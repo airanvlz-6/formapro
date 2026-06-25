@@ -924,7 +924,21 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       const mensajesContexto=esProgramacion?-6:-4;
       const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esProgramacion?4000:2000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
       if(data.aborted) return;
-      let respText=data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.";
+      const respTextRaw2=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.").replace(/\[STATE_UPDATE\][\s\S]*?\[\/STATE_UPDATE\]/g,"").trim();
+      const sesionStart2=respTextRaw2.indexOf("[SESION:");
+      let respText=respTextRaw2;
+      if(sesionStart2>=0){
+        const jsonStart2=sesionStart2+8;
+        const sesionEnd2=respTextRaw2.indexOf("}]",jsonStart2);
+        if(sesionEnd2>=0){
+          try{
+            const sesionJson2=respTextRaw2.substring(jsonStart2,sesionEnd2+1);
+            const sesionData2=JSON.parse(sesionJson2);
+            setSesionPendiente(sesionData2);
+          }catch{}
+          respText=respTextRaw2.substring(0,sesionStart2).trim();
+        }
+      }
       
       // Extraer STATE_UPDATE si existe
       const stateMatch=respText.match(/\[STATE_UPDATE\]([\s\S]*?)\[\/STATE_UPDATE\]/);

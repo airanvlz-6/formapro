@@ -1517,17 +1517,59 @@ ${testStr}`}]});
               {/* Equipos existentes */}
               {misEquipos.map((eq:any)=>(
                 <div key={eq.id} style={{background:C.bg,borderRadius:12,padding:"12px",marginBottom:10,border:`1px solid ${C.border}`}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                     <div>
                       <p style={{color:C.ink,fontSize:13,fontWeight:700}}>{eq.name}</p>
                       <p style={{color:C.muted,fontSize:11,textTransform:"capitalize"}}>{eq.team_type} · {eq.team_metrics?.[0]?.sessions_completed||0} sesiones</p>
                     </div>
-                    <button onClick={()=>generarSesionEquipo(eq)} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"6px 10px",fontSize:11,fontWeight:600,cursor:"pointer"}}>
-                      Entrenar
+                  </div>
+                  <div style={{display:"flex",gap:6}}>
+                    <button onClick={()=>generarSesionEquipo(eq)} style={{flex:1,background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"6px",fontSize:11,fontWeight:600,cursor:"pointer"}}>
+                      🏋️ Entrenar
+                    </button>
+                    <button onClick={async()=>{
+                      const res=await apiCall({action:"crear_invitacion_equipo",codigo:codigoUsuario,datos:{team_id:eq.id}});
+                      if(res?.codigoTemp){
+                        setEquipoSeleccionado({...eq,codigoInvitacion:res.codigoTemp});
+                      } else {
+                        alert(res?.error||"Error al generar invitación");
+                      }
+                    }} style={{flex:1,background:C.card,color:C.ink,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px",fontSize:11,cursor:"pointer"}}>
+                      📨 Invitar
                     </button>
                   </div>
+                  {equipoSeleccionado?.id===eq.id&&equipoSeleccionado?.codigoInvitacion&&(
+                    <div style={{marginTop:8,background:C.bg,borderRadius:8,padding:"10px",textAlign:"center"}}>
+                      <p style={{color:C.muted,fontSize:11,marginBottom:4}}>Comparte este código — válido 10 min:</p>
+                      <p style={{color:C.accent,fontSize:20,fontWeight:900,letterSpacing:3,marginBottom:6}}>{equipoSeleccionado.codigoInvitacion}</p>
+                      <button onClick={()=>{navigator.clipboard.writeText(equipoSeleccionado.codigoInvitacion);}} style={{background:C.border,color:C.ink,border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,cursor:"pointer"}}>
+                        📋 Copiar
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
+
+              {/* Unirse con codigo */}
+              <div style={{borderTop:`1px solid ${C.border}`,paddingTop:10,marginTop:4}}>
+                <p style={{color:C.muted,fontSize:12,marginBottom:6}}>¿Tienes un código de invitación?</p>
+                <div style={{display:"flex",gap:6}}>
+                  <input value={unirseCodigo} onChange={e=>setUnirseCodigo(e.target.value.toUpperCase())}
+                    placeholder="Código (XXXXXX)"
+                    style={{flex:1,border:`1px solid ${C.border}`,borderRadius:8,padding:"7px 10px",fontSize:12,color:C.ink,background:C.bg,fontFamily:"inherit",letterSpacing:2}}/>
+                  <button onClick={async()=>{
+                    const res=await apiCall({action:"unirse_con_codigo",codigo:codigoUsuario,datos:{codigoInvitacion:unirseCodigo}});
+                    if(res?.equipo){
+                      setMisEquipos(prev=>[...prev,res.equipo]);
+                      setUnirseCodigo("");
+                    } else {
+                      alert(res?.error||"Código inválido o expirado");
+                    }
+                  }} style={{background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"7px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                    Unirse
+                  </button>
+                </div>
+              </div>
 
               {/* Crear equipo */}
               {misEquipos.length < 2 && (
@@ -1555,7 +1597,7 @@ ${testStr}`}]});
               )}
             </div>
           )}
-          
+
           {mostrarPerfil&&(
         <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:10,maxHeight:400,overflowY:"auto"}}>
           <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:16,color:C.ink,marginBottom:16}}>Mi perfil</div>

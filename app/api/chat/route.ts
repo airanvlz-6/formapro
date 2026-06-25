@@ -298,6 +298,39 @@ ${ultimos}`;
     return NextResponse.json({ ok: true });
   }
 
+  if (action === "crear_invitacion_equipo") {
+    const { team_id } = datos;
+    // Verificar que el equipo no está completo
+    const { data: miembros } = await supabase.from("team_members").select("*").eq("team_id", team_id);
+    if (miembros && miembros.length >= 2) return NextResponse.json({ error: "El equipo ya está completo" }, { status: 400 });
+    const caracteres = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    const codigoTemp = Array.from({length:6}, () => caracteres[Math.floor(Math.random()*caracteres.length)]).join("");
+    const { error } = await supabase.from("codigos_conjuntos").insert({
+      codigo: codigoTemp,
+      codigo_usuario: codigo,
+      team_id
+    });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ codigoTemp });
+  }
+
+  if (action === "unirse_con_codigo") {
+    const { codigoInvitacion } = datos;
+    const { data: entrada } = await supabase.from("codigos_conjuntos")
+      .select("*").eq("codigo", codigoInvitacion).eq("usado", false)
+      .gt("expira_at", new Date().toISOString()).single();
+    if (!entrada) return NextResponse.json({ error: "Código inválido o expirado" }, { status: 400 });
+    // Verificar máximo 2 equipos por usuario
+    const { data: equiposActuales } = await supabase.from("team_members").select("team_id").eq("user_id", codigo);
+    if (equiposActuales && equiposActuales.length >= 2) return NextResponse.json({ error: "Ya tienes 2 equipos — máximo permitido" }, { status: 400 });
+    // Unirse al equipo
+    await supabase.from("team_members").insert({ team_id: entrada.team_id, user_id: codigo });
+    await supabase.from("codigos_conjuntos").update({ usado: true }).eq("codigo", codigoInvitacion);
+    // Devolver datos del equipo
+    const { data: equipo } = await supabase.from("teams").select("*").eq("id", entrada.team_id).single();
+    return NextResponse.json({ equipo });
+  }
+
   if (action === "crear_codigo_conjunto") {
     const caracteres = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     const codigoTemp = "FJ-" + Array.from({length:6}, () => caracteres[Math.floor(Math.random()*caracteres.length)]).join("");

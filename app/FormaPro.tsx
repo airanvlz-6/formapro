@@ -637,7 +637,9 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
       const atletaB=perfiles[1];
       const ratiosStr=usarRatios&&memoria.length>0?`\nRATIOS APRENDIDOS:\n${memoria.map((m:any)=>`- ${m.movement}: ratio ${m.ratio} (${m.sessions_count} sesiones)`).join("\n")}`:"(Sesión de observación — aún sin ratios establecidos)";
       const prompt=`Genera una sesión conjunta para el equipo "${equipo.name}" (tipo: ${equipo.team_type}).\n\nATLETA A:\nPerfil: ${JSON.stringify(atletaA.perfil)}\nCiclo: ${JSON.stringify(atletaA.ciclo_actual)}\nLesiones: ${atletaA.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(atletaA.marcas_especificas)}\n\nATLETA B:\nPerfil: ${JSON.stringify(atletaB.perfil)}\nCiclo: ${JSON.stringify(atletaB.ciclo_actual)}\nLesiones: ${atletaB.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(atletaB.marcas_especificas)}\n\n${ratiosStr}\n\nREGLAS:\n1. La sesión respeta el bloque actual de CADA atleta\n2. Mismo estímulo, cargas y escalados individualizados\n3. Indica claramente qué hace cada atleta cuando difieren\n4. El plan individual de cada uno NO se rompe`;
-      enviar(prompt);
+      setMostrarEquipos(false);
+      setMostrarMenu(false);
+      enviarSilencioso(prompt);
       await apiCall({action:"guardar_sesion_equipo",codigo:codigoUsuario,datos:{team_id:equipo.id,workout:prompt}});
     }
   };
@@ -1565,8 +1567,8 @@ ${testStr}`}]});
                     <div style={{marginTop:8,background:C.bg,borderRadius:8,padding:"10px",textAlign:"center"}}>
                       <p style={{color:C.muted,fontSize:11,marginBottom:4}}>Comparte este código — válido 10 min:</p>
                       <p style={{color:C.accent,fontSize:20,fontWeight:900,letterSpacing:3,marginBottom:6}}>{equipoSeleccionado.codigoInvitacion}</p>
-                      <button onClick={()=>{navigator.clipboard.writeText(equipoSeleccionado.codigoInvitacion);}} style={{background:C.border,color:C.ink,border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,cursor:"pointer"}}>
-                        📋 Copiar
+                      <button onClick={()=>{navigator.clipboard.writeText(equipoSeleccionado.codigoInvitacion);setEquipoSeleccionado((prev:any)=>({...prev,copiado:true}));setTimeout(()=>setEquipoSeleccionado((prev:any)=>({...prev,copiado:false})),2000);}} style={{background:equipoSeleccionado?.copiado?"#4CAF50":C.border,color:equipoSeleccionado?.copiado?"#fff":C.ink,border:"none",borderRadius:6,padding:"4px 10px",fontSize:11,cursor:"pointer",transition:"all 0.2s"}}>
+                        {equipoSeleccionado?.copiado?"✅ Copiado":"📋 Copiar"}
                       </button>
                     </div>
                   )}

@@ -256,6 +256,7 @@ COHERENCIA DE PLANIFICACIÓN — REGLA CRÍTICA:
 - Solo puedes modificar un entreno si el atleta reporta: lesión, molestia física, falta de material, falta de tiempo o cambio de disponibilidad.
 - Si no hay motivo justificado, mantén el plan original. La coherencia del ciclo es prioritaria sobre cualquier improvisación.
 - Ante cualquier duda, pregunta al atleta antes de cambiar algo.
+- SESIÓN CONJUNTA — REGLA ABSOLUTA: Cuando generes una sesión para dos atletas, la sesión DEBE mantener el estímulo del bloque actual de cada atleta. Adapta las cargas, escalados y variantes pero NUNCA sustituyas el objetivo del bloque. Si un atleta está en semana de fuerza máxima, la sesión conjunta debe incluir fuerza máxima para ese atleta aunque el otro esté en otra fase. El entreno conjunto adapta, NUNCA sustituye.
 - CICLO OBLIGATORIO: En cada respuesta donde generes o ajustes programación, incluye SIEMPRE al inicio de tu respuesta una línea con este formato exacto: "📅 CICLO: Bloque [nombre] · Semana [X] de [Y] · Objetivo: [objetivo]". Ejemplo: "📅 CICLO: Bloque acumulación · Semana 2 de 4 · Objetivo: aumentar volumen base". Si no hay ciclo definido aún, defínelo tú mismo según el perfil del atleta.
 ${memoriaStr}
 ${cicloStr}

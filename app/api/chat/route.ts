@@ -303,7 +303,7 @@ ${ultimos}`;
     // Verificar que es el creador
     const { data: equipo } = await supabase.from("teams").select("created_by").eq("id", team_id).single();
     if (equipo?.created_by !== codigo) return NextResponse.json({ error: "Solo el creador puede disolver el equipo" }, { status: 403 });
-    await supabase.from("teams").update({ active: false }).eq("id", team_id);
+    await supabase.from("teams").delete().eq("id", team_id);
     return NextResponse.json({ ok: true });
   }
 

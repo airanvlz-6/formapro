@@ -958,6 +958,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       }
 
       // Detectar [METRICA:...] en enviar
+      console.log("METRICA_CHECK:", respText.slice(-150));
       const metricaStart2=respText.indexOf("[METRICA:");
       if(metricaStart2>=0){
         const jsonStart2m=metricaStart2+9;

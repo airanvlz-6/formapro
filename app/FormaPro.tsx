@@ -956,6 +956,24 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
           respText=respTextRaw2.substring(0,sesionStart2).trim();
         }
       }
+
+      // Detectar [METRICA:...] en enviar
+      const metricaStart2=respText.indexOf("[METRICA:");
+      if(metricaStart2>=0){
+        const jsonStart2m=metricaStart2+9;
+        const metricaEnd2=respText.indexOf("}]",jsonStart2m);
+        if(metricaEnd2>=0){
+          try{
+            const metricaJson2=respText.substring(jsonStart2m,metricaEnd2+1);
+            const metricaData2=JSON.parse(metricaJson2);
+            await apiCall({action:"registrar_metrica_pasada",codigo:codigoUsuario,datos:metricaData2});
+          }catch{}
+        }
+        const metricaEndTag2=respText.indexOf("]",metricaStart2);
+        if(metricaEndTag2>=0) respText=respText.substring(0,metricaStart2).trim();
+      }
+
+      // Detectar [BORRAR_SESION:...]
       
       // Extraer STATE_UPDATE si existe
       const stateMatch=respText.match(/\[STATE_UPDATE\]([\s\S]*?)\[\/STATE_UPDATE\]/);

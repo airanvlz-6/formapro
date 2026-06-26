@@ -252,7 +252,7 @@ FORMATO ESTRICTO:
 - NUNCA hagas resumen de lo que acaba de decir el cliente.
 - Si el cliente reporta un entrenamiento realizado: responde SOLO con el siguiente entreno o ajuste en una frase breve de contexto + la sesión. Sin análisis salvo petición explícita.
 ZONAS DE FRECUENCIA: Cuando calcules o presentes zonas de frecuencia cardíaca al atleta, al final de tu explicación pregunta siempre: "¿Confirmas estas zonas de frecuencia? Si es así, responde 'Confirmo mis zonas' para que queden registradas en tu perfil." Solo presenta esta pregunta cuando calcules zonas nuevas o las modifiques, no en cada mensaje.
-GESTIÓN DE SESIONES: Cuando el usuario reporte haber completado un entrenamiento, al final de tu respuesta añade exactamente: [SESION:{"tipo":"tipo de sesión","fecha":"YYYY-MM-DDThh:mm:ss.000Z usando la fecha real mencionada o hoy","notas":"resumen breve","duracion":null,"sensacion":"buena|normal|mala"}]. Solo añade esto cuando el usuario reporte una sesión completada, nunca en conversaciones sobre planificación futura. Si el usuario pide borrar una sesión por fecha, añade: [BORRAR_SESION:{"fecha":"YYYY-MM-DD","tipo":"tipo mencionado"}].
+GESTIÓN DE SESIONES: Cuando el usuario reporte haber completado un entrenamiento (hoy, ayer o en días pasados), al final de tu respuesta añade exactamente: [SESION:{"tipo":"tipo de sesión","fecha":"YYYY-MM-DDThh:mm:ss.000Z — usa la fecha EXACTA mencionada por el atleta, si dice 'el lunes pasado' calcula la fecha real","notas":"resumen breve","duracion":null,"sensacion":"buena|normal|mala"}]. Solo añade esto cuando el usuario reporte una sesión completada. Si el usuario reporta métricas fisiológicas pasadas con fecha (HRV, sueño, FC reposo de días anteriores), añade: [METRICA:{"fecha":"YYYY-MM-DD","hrv":null,"sueno":null,"rhr":null}]. Si el usuario pide borrar una sesión por fecha, añade: [BORRAR_SESION:{"fecha":"YYYY-MM-DD","tipo":"tipo mencionado"}].
 COHERENCIA DE PLANIFICACIÓN — REGLA CRÍTICA:
 - NUNCA cambies un entrenamiento ya programado sin motivo justificado. Si el atleta pide recordar la sesión del día, repite EXACTAMENTE la sesión programada sin modificaciones.
 - Solo puedes modificar un entreno si el atleta reporta: lesión, molestia física, falta de material, falta de tiempo o cambio de disponibilidad.
@@ -870,14 +870,29 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       const borrarStart=respText.indexOf("[BORRAR_SESION:");
       if(borrarStart>=0){
         const jsonStart=borrarStart+15;
-        const borrarEnd=respText.indexOf("]",jsonStart);
+        const borrarEnd=respText.indexOf("}]",jsonStart);
         if(borrarEnd>=0){
           try{
-            const borrarJson=respText.substring(jsonStart,borrarEnd);
+            const borrarJson=respText.substring(jsonStart,borrarEnd+1);
             const borrarData=JSON.parse(borrarJson);
             await apiCall({action:"borrar_sesion_fecha",codigo:codigoUsuario,datos:borrarData});
           }catch{}
           respText=respText.substring(0,borrarStart).trim();
+        }
+      }
+
+      // Detectar [METRICA:...]
+      const metricaStart=respText.indexOf("[METRICA:");
+      if(metricaStart>=0){
+        const jsonStart=metricaStart+9;
+        const metricaEnd=respText.indexOf("}]",jsonStart);
+        if(metricaEnd>=0){
+          try{
+            const metricaJson=respText.substring(jsonStart,metricaEnd+1);
+            const metricaData=JSON.parse(metricaJson);
+            await apiCall({action:"registrar_metrica_pasada",codigo:codigoUsuario,datos:metricaData});
+          }catch{}
+          respText=respText.substring(0,metricaStart).trim();
         }
       }
       const hist=[...nuevoHist,{role:"assistant",content:respText}];

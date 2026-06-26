@@ -385,8 +385,25 @@ ${ultimos}`;
       duracion: sesion.duracion || null,
       sensacion: sesion.sensacion || "buena"
     };
-    const workoutActualizado = [...workoutActual, sesionNormalizada];
+    // Insertar en orden cronológico
+    const workoutActualizado = [...workoutActual, sesionNormalizada].sort((a,b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
     await supabase.from("usuarios").update({ workout_history: workoutActualizado }).eq("codigo", codigo);
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === "registrar_metrica_pasada") {
+    const { fecha, hrv, sueno, rhr } = datos;
+    const { data: usuarioFresh } = await supabase.from("usuarios").select("historial_fisiologico").eq("codigo", codigo).single();
+    const historialActual = usuarioFresh?.historial_fisiologico || [];
+    // No duplicar fechas
+    const yaExiste = historialActual.some((e:any) => e.fecha === fecha);
+    if(yaExiste) return NextResponse.json({ ok: true, mensaje: "Fecha ya registrada" });
+    const nuevaEntrada:any = { fecha };
+    if(hrv) nuevaEntrada.hrv = hrv;
+    if(sueno) nuevaEntrada.sueno = sueno;
+    if(rhr) nuevaEntrada.rhr = rhr;
+    const historialActualizado = [...historialActual, nuevaEntrada].sort((a,b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()).slice(-30);
+    await supabase.from("usuarios").update({ historial_fisiologico: historialActualizado }).eq("codigo", codigo);
     return NextResponse.json({ ok: true });
   }
 

@@ -892,8 +892,10 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
             const metricaData=JSON.parse(metricaJson);
             await apiCall({action:"registrar_metrica_pasada",codigo:codigoUsuario,datos:metricaData});
           }catch{}
-          respText=respText.substring(0,metricaStart).trim();
         }
+        // Eliminar siempre el tag aunque falle el parse
+        const metricaEndTag=respText.indexOf("]",metricaStart);
+        if(metricaEndTag>=0) respText=respText.substring(0,metricaStart).trim();
       }
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);

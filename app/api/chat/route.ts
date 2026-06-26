@@ -147,23 +147,24 @@ ${ultimos}`;
           updates.ciclo_actual = { ...cicloActual, ...Object.fromEntries(Object.entries(extracted.ciclo).filter(([,v]) => v !== null)) };
         }
 
-        if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).some(v => v !== null)) {
+if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).some(v => v !== null)) {
           const estadoActual = usuarioData?.estado_fisiologico || {};
-          const nuevoEstado = { ...estadoActual, ...Object.fromEntries(Object.entries(extracted.estado_fisiologico).filter(([,v]) => v !== null)) };
-          updates.estado_fisiologico = nuevoEstado;
-          
-          // Añadir al historial fisiológico
           const historialActual = usuarioData?.historial_fisiologico || [];
           const hoy = new Date().toISOString().split('T')[0];
           const entradaHoy = { 
             fecha: hoy,
             ...Object.fromEntries(Object.entries(extracted.estado_fisiologico).filter(([k,v]) => v !== null && ['hrv','sueno','rhr','fatiga_aguda'].includes(k)))
           };
-          // Solo añadir si tiene datos y no existe entrada de hoy
           const yaExisteHoy = historialActual.some((e: any) => e.fecha === hoy);
+          // Solo actualizar estado_fisiologico si las métricas son de HOY
           if(Object.keys(entradaHoy).length > 1 && !yaExisteHoy){
-            updates.historial_fisiologico = [...historialActual.slice(-29), entradaHoy]; // máximo 30 días
+            updates.estado_fisiologico = { ...estadoActual, ...Object.fromEntries(Object.entries(extracted.estado_fisiologico).filter(([,v]) => v !== null)) };
+            updates.historial_fisiologico = [...historialActual.slice(-29), entradaHoy];
+          } else if(Object.keys(entradaHoy).length > 1 && yaExisteHoy){
+            // Si ya existe entrada de hoy, solo actualizar estado_fisiologico
+            updates.estado_fisiologico = { ...estadoActual, ...Object.fromEntries(Object.entries(extracted.estado_fisiologico).filter(([,v]) => v !== null)) };
           }
+          // Si las métricas son de una fecha pasada, NO tocar estado_fisiologico
         }
 
         // Registro de sesiones por acción explícita del usuario

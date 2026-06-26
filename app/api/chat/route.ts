@@ -96,13 +96,15 @@ export async function POST(req: NextRequest) {
   "nueva_marca": "nueva marca en formato ejercicio:valor o vacío",
   "ciclo": {"bloque": "${cicloActual.bloque||"vacío"}", "semana": ${cicloActual.semana||"null"}, "totalSemanas": ${cicloActual.totalSemanas||"null"}, "objetivo": "${cicloActual.objetivo||"vacío"}"},
   "estado_fisiologico": {"hrv": null, "sueno": null, "rhr": null, "fatiga_aguda": null, "tendencia": null},
-INSTRUCCIONES PARA estado_fisiologico:
-- "hrv": busca HRV, VFC, variabilidad cardíaca — extrae el número en ms
-- "sueno": busca puntuación sueño, calidad sueño, score sueño — extrae el número 0-100. Si menciona "puntuación 79" o "score 79" extrae 79
-- "rhr": busca FC reposo, frecuencia mínima nocturna, pulsaciones reposo — extrae el número en bpm
-- "fatiga_aguda": estima 0-100 según sensaciones reportadas
-- Extrae TODOS los valores presentes aunque haya más información en el mensaje
-IMPORTANTE para estado_fisiologico: "sueno" debe ser SIEMPRE un número 0-100 (la puntuación), NUNCA un objeto. "hrv" en ms como número. "rhr" en bpm como número.
+INSTRUCCIONES PARA estado_fisiologico — analiza SOLO mensajes del ATLETA:
+- "hrv": busca HRV, VFC, variabilidad cardíaca — extrae el número en ms. Ejemplo: "VFC 92ms" → 92
+- "sueno": busca puntuación sueño, calidad sueño, score sueño — extrae SOLO el número 0-100. Ejemplo: "puntuación 93" → 93. NUNCA un objeto
+- "rhr": busca FC reposo, frecuencia mínima nocturna, pulsaciones reposo — extrae el número en bpm. Ejemplo: "mínima 43bpm" → 43
+- "fatiga_aguda": estima 0-100 según sensaciones reportadas por el atleta
+- Extrae TODOS los valores presentes en los mensajes del atleta
+- Si el atleta reporta métricas del reloj (Oura, Garmin, Apple Watch) extrae todas las métricas de recuperación
+MENSAJES DEL ATLETA PARA ANALIZAR:
+${soloUsuario}
   "sesion_completada": null,
   "datos_entrenamiento": null,
   "distribucion_semanal": null,

@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
         const {data: usuarioData} = await supabase.from("usuarios").select("ciclo_actual,notas_coach,datos_entrenamiento,estado_fisiologico,workout_history,historial_fisiologico,distribucion_semanal,objetivo_principal,historial_marcas,analisis_bloques").eq("codigo", codigo).single();
         const cicloActual = usuarioData?.ciclo_actual || {};
         const ultimos = datos.historial.slice(-6).map((m: any) => `${m.role === "user" ? "ATLETA" : "COACH"}: ${typeof m.content === "string" ? m.content.substring(0, 1500) : "[archivo]"}`).join("\n\n");
+        const soloUsuario = datos.historial.slice(-6).filter((m:any) => m.role === "user").map((m: any) => typeof m.content === "string" ? m.content.substring(0, 1500) : "").join("\n\n");
 
         const extractPrompt = `Analiza esta conversación y extrae datos en JSON. Responde SOLO con JSON válido:
 {
@@ -109,9 +110,13 @@ IMPORTANTE para estado_fisiologico: "sueno" debe ser SIEMPRE un número 0-100 (l
   "fin_bloque": null
 }
 
+MENSAJES SOLO DEL ATLETA (para extraer datos_entrenamiento y estado_fisiologico):
+${soloUsuario}
+
 Para "fin_bloque": si el coach menciona que se ha completado un bloque, inicia deload, o empieza un nuevo bloque, extrae: {"bloque_completado":"nombre del bloque completado","objetivo_bloque":"objetivo que tenía","resultado":"cumplido|parcial|no_cumplido","adherencia_estimada":"porcentaje estimado","carga":"adecuada|alta|baja","siguiente_bloque":"nombre del siguiente bloque"}. null si no hay cambio de bloque.
 
 Para "objetivo_principal": si el atleta menciona un objetivo concreto con fecha (competición, carrera, evento, marca objetivo), extrae: {"descripcion":"descripción del objetivo","fecha":"YYYY-MM-DD","tipo":"competicion|marca|evento|otro"}. null si no hay objetivo mencionado.
+Para "datos_entrenamiento": extrae SOLO de mensajes del ATLETA, nunca del COACH. Si el atleta menciona explícitamente sus zonas, marcas o métricas personales extráelas. Si solo es el coach hablando de zonas en su planificación, devuelve null.
 Para "distribucion_semanal": si el coach y atleta acuerdan qué tipo de sesión corresponde a cada día, extrae como texto. Ejemplo: "lunes-carrera, martes-box, miercoles-carrera, jueves-box, viernes-carrera, sabado-box". null si no se habló de distribución.
 
 Conversación:

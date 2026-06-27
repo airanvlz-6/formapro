@@ -423,6 +423,29 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     return NextResponse.json({ ok: true, sesionEliminada: workouts[workouts.length - 1] });
   }
 
+  if (action === "registrar_evento") {
+    const { evento } = datos;
+    const { error } = await supabase.from("athlete_events").insert({
+      user_codigo: codigo,
+      date: evento.date,
+      type: evento.type,
+      title: evento.title || "",
+      data: evento.data || {}
+    });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === "obtener_historia") {
+    const { data: eventos } = await supabase
+      .from("athlete_events")
+      .select("*")
+      .eq("user_codigo", codigo)
+      .order("date", { ascending: false })
+      .limit(100);
+    return NextResponse.json({ eventos: eventos || [] });
+  }
+
   if (action === "calcular_adherencia") {
     const { data: usuario } = await supabase.from("usuarios").select("perfil,workout_history,ciclo_actual").eq("codigo", codigo).single();
     if (!usuario) return NextResponse.json({ error: "No encontrado" }, { status: 404 });

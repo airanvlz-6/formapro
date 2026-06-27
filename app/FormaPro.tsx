@@ -1604,6 +1604,9 @@ ${testStr}`}]});
                     <button onClick={()=>{window.open(`/progreso?codigo=${codigoUsuario}`,'_blank');setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
                       📊 Mi progreso
                     </button>
+                    <button onClick={()=>{window.open(`/historia?codigo=${codigoUsuario}`,'_blank');setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
+                      📖 Mi historia
+                    </button>
                     <button onClick={()=>{setMostrarEquipos(!mostrarEquipos);setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
                       👥 Equipos
                     </button>

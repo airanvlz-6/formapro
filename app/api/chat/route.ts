@@ -309,6 +309,12 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     // Verificar que es el creador
     const { data: equipo } = await supabase.from("teams").select("created_by").eq("id", team_id).single();
     if (equipo?.created_by !== codigo) return NextResponse.json({ error: "Solo el creador puede disolver el equipo" }, { status: 403 });
+    // Borrar en orden correcto para evitar violaciones de foreign key
+    await supabase.from("codigos_conjuntos").delete().eq("team_id", team_id);
+    await supabase.from("team_members").delete().eq("team_id", team_id);
+    await supabase.from("team_sessions").delete().eq("team_id", team_id);
+    await supabase.from("team_memory").delete().eq("team_id", team_id);
+    await supabase.from("team_metrics").delete().eq("team_id", team_id);
     await supabase.from("teams").delete().eq("id", team_id);
     return NextResponse.json({ ok: true });
   }

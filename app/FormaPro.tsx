@@ -866,6 +866,22 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
         }
       }
 
+      // Detectar [EVENTO:...]
+      const eventoStart=respText.indexOf("[EVENTO:");
+      if(eventoStart>=0){
+        const jsonStartE=eventoStart+8;
+        const eventoEnd=respText.indexOf("}]",jsonStartE);
+        if(eventoEnd>=0){
+          try{
+            const eventoJson=respText.substring(jsonStartE,eventoEnd+1);
+            const eventoData=JSON.parse(eventoJson);
+            await apiCall({action:"registrar_evento",codigo:codigoUsuario,datos:{evento:eventoData}});
+          }catch{}
+        }
+        const eventoEndTag=respText.indexOf("]",eventoStart);
+        if(eventoEndTag>=0) respText=respText.substring(0,eventoStart).trim();
+      }
+
       // Detectar [BORRAR_SESION:...]
       const borrarStart=respText.indexOf("[BORRAR_SESION:");
       if(borrarStart>=0){

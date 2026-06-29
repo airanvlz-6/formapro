@@ -868,6 +868,38 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
         }
       }
 
+      // Detectar [PLAN:...]
+      const planStart=respText.indexOf("[PLAN:");
+      if(planStart>=0){
+        const jsonStartP=planStart+6;
+        const planEnd=respText.indexOf("}]",jsonStartP);
+        if(planEnd>=0){
+          try{
+            const planJson=respText.substring(jsonStartP,planEnd+1);
+            const planData=JSON.parse(planJson);
+            await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planData}});
+          }catch{}
+        }
+        const planEndTag=respText.indexOf("]",planStart);
+        if(planEndTag>=0) respText=respText.substring(0,planStart).trim();
+      }
+
+      // Detectar [MODIFICAR_SESION:...]
+      const modStart=respText.indexOf("[MODIFICAR_SESION:");
+      if(modStart>=0){
+        const jsonStartM=modStart+18;
+        const modEnd=respText.indexOf("}]",jsonStartM);
+        if(modEnd>=0){
+          try{
+            const modJson=respText.substring(jsonStartM,modEnd+1);
+            const modData=JSON.parse(modJson);
+            await apiCall({action:"actualizar_sesion_plan",codigo:codigoUsuario,datos:modData});
+          }catch{}
+        }
+        const modEndTag=respText.indexOf("]",modStart);
+        if(modEndTag>=0) respText=respText.substring(0,modStart).trim();
+      }
+
       // Detectar [EVENTO:...]
       const eventoStart=respText.indexOf("[EVENTO:");
       if(eventoStart>=0){

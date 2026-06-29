@@ -872,16 +872,20 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       const planStart=respText.indexOf("[PLAN:");
       if(planStart>=0){
         const jsonStartP=planStart+6;
-        const planEnd=respText.indexOf("}]",jsonStartP);
+        // Buscar cierre correcto del JSON usando balance de llaves
+        let depth=0, planEnd=-1;
+        for(let i=jsonStartP;i<respText.length;i++){
+          if(respText[i]==='{') depth++;
+          else if(respText[i]==='}') { depth--; if(depth===0){planEnd=i;break;} }
+        }
         if(planEnd>=0){
           try{
             const planJson=respText.substring(jsonStartP,planEnd+1);
             const planData=JSON.parse(planJson);
             await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planData}});
           }catch{}
+          respText=respText.substring(0,planStart).trim();
         }
-        const planEndTag=respText.indexOf("]",planStart);
-        if(planEndTag>=0) respText=respText.substring(0,planStart).trim();
       }
 
       // Detectar [MODIFICAR_SESION:...]

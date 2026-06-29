@@ -202,8 +202,8 @@ export default function Plan() {
 
         {/* Modal detalle sesión */}
         {sesionDetalle&&(
-          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:200}} onClick={()=>setSesionDetalle(null)}>
-            <div style={{background:C.card,borderRadius:"20px 20px 0 0",padding:"24px",width:"100%",maxWidth:600,maxHeight:"70vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:"24px"}} onClick={()=>setSesionDetalle(null)}>
+            <div style={{background:"#1C1C1C",borderRadius:"20px",padding:"24px",width:"100%",maxWidth:600,maxHeight:"80vh",overflowY:"auto",border:"1px solid #2A2A2A"}} onClick={e=>e.stopPropagation()}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
                 <h3 style={{color:C.ink,fontSize:16,fontWeight:700}}>{sesionDetalle.titulo}</h3>
                 <button onClick={()=>setSesionDetalle(null)} style={{background:"none",border:"none",color:C.muted,fontSize:20,cursor:"pointer"}}>✕</button>
@@ -216,8 +216,8 @@ export default function Plan() {
                     const contenido = bloque.replace(/^[^:]+:/,"").trim();
                     return (
                       <div key={i} style={{marginBottom:12}}>
-                        {titulo&&<p style={{color:C.accent,fontSize:12,fontWeight:700,marginBottom:4,textTransform:"uppercase",letterSpacing:1}}>{titulo}</p>}
-                        <p style={{color:C.muted,fontSize:13,lineHeight:1.7}}>{contenido}</p>
+                        {titulo&&<p style={{color:C.accent,fontSize:12,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:1}}>{titulo}</p>}
+                        <p style={{color:"#D4D0CB",fontSize:14,lineHeight:1.8}}>{contenido}</p>
                       </div>
                     );
                   })}

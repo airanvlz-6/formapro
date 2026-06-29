@@ -872,23 +872,16 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       const planStart=respText.indexOf("[PLAN:");
       if(planStart>=0){
         const jsonStartP=planStart+6;
-        // Buscar cierre con balance de llaves y corchetes
-        let depth=0, bracketDepth=0, planEnd=-1;
-        for(let i=jsonStartP;i<respText.length;i++){
-          if(respText[i]==='{') depth++;
-          else if(respText[i]==='}') depth--;
-          else if(respText[i]==='[') bracketDepth++;
-          else if(respText[i]===']') {
-            bracketDepth--;
-            if(depth===0 && bracketDepth<0){planEnd=i-1;break;}
-          }
-        }
-        if(planEnd>=0){
+        // El tag termina con }] al final — buscar último ] del texto
+        const planEndTag=respText.lastIndexOf("]");
+        if(planEndTag>jsonStartP){
           try{
-            const planJson=respText.substring(jsonStartP,planEnd+1);
+            const planJson=respText.substring(jsonStartP,planEndTag);
+            console.log("PLAN_JSON_INTENTANDO:",planJson.slice(0,100));
             const planData=JSON.parse(planJson);
             await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planData}});
-          }catch(e){console.log("PLAN_ERROR:",e,respText.substring(jsonStartP,planEnd+1));}
+            console.log("PLAN_GUARDADO_OK");
+          }catch(e){console.log("PLAN_ERROR:",e);}
           respText=respText.substring(0,planStart).trim();
         }
       }

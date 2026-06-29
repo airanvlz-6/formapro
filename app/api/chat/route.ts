@@ -423,6 +423,46 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     return NextResponse.json({ ok: true, sesionEliminada: workouts[workouts.length - 1] });
   }
 
+  if (action === "obtener_plan_semana") {
+    const hoy = new Date();
+    const diaSemana = hoy.getDay() || 7;
+    const lunes = new Date(hoy);
+    lunes.setDate(hoy.getDate() - diaSemana + 1);
+    const weekStart = lunes.toISOString().split('T')[0];
+    const { data: plan } = await supabase.from("weekly_plan").select("*").eq("user_codigo", codigo).eq("week_start", weekStart).single();
+    return NextResponse.json({ plan: plan || null, weekStart });
+  }
+
+  if (action === "guardar_plan_semana") {
+    const { plan } = datos;
+    const { error } = await supabase.from("weekly_plan").upsert({
+      user_codigo: codigo,
+      week_start: plan.week_start,
+      week_number: plan.week_number,
+      block_name: plan.block_name,
+      status: plan.status || "active",
+      confidence: plan.confidence || 100,
+      sessions: plan.sessions,
+      updated_at: new Date().toISOString()
+    }, { onConflict: "user_codigo,week_start" });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === "actualizar_sesion_plan") {
+    const { week_start, dia, cambios, motivo } = datos;
+    const { data: planActual } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", week_start).single();
+    if (!planActual) return NextResponse.json({ error: "Plan no encontrado" }, { status: 404 });
+    const sessions = planActual.sessions.map((s: any) => {
+      if (s.dia === dia) {
+        return { ...s, ...cambios, modificado: true, motivo_modificacion: motivo || "", modificado_at: new Date().toISOString() };
+      }
+      return s;
+    });
+    await supabase.from("weekly_plan").update({ sessions, updated_at: new Date().toISOString() }).eq("user_codigo", codigo).eq("week_start", week_start);
+    return NextResponse.json({ ok: true });
+  }
+
   if (action === "registrar_evento") {
     const { evento } = datos;
     const { error } = await supabase.from("athlete_events").insert({

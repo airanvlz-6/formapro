@@ -208,7 +208,21 @@ export default function Plan() {
                 <h3 style={{color:C.ink,fontSize:16,fontWeight:700}}>{sesionDetalle.titulo}</h3>
                 <button onClick={()=>setSesionDetalle(null)} style={{background:"none",border:"none",color:C.muted,fontSize:20,cursor:"pointer"}}>✕</button>
               </div>
-              {sesionDetalle.descripcion&&<p style={{color:C.muted,fontSize:14,lineHeight:1.6,marginBottom:12}}>{sesionDetalle.descripcion}</p>}
+{sesionDetalle.descripcion&&(
+                <div style={{marginBottom:12}}>
+                  {sesionDetalle.descripcion.split(/(?=Calentamiento:|Bloque principal:|Bloque fuerza|Bloque técnica|Vuelta a la calma:|Notas técnicas:|Objetivo:)/).map((bloque:string,i:number)=>{
+                    if(!bloque.trim()) return null;
+                    const titulo = bloque.match(/^([^:]+:)/)?.[1] || "";
+                    const contenido = bloque.replace(/^[^:]+:/,"").trim();
+                    return (
+                      <div key={i} style={{marginBottom:12}}>
+                        {titulo&&<p style={{color:C.accent,fontSize:12,fontWeight:700,marginBottom:4,textTransform:"uppercase",letterSpacing:1}}>{titulo}</p>}
+                        <p style={{color:C.muted,fontSize:13,lineHeight:1.7}}>{contenido}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               {sesionDetalle.modificado&&(
                 <div style={{background:"#FFD70015",border:"1px solid #FFD70040",borderRadius:10,padding:"10px 14px",marginBottom:12}}>
                   <p style={{color:"#FFD700",fontSize:12,fontWeight:700,marginBottom:4}}>⚠️ Sesión modificada</p>

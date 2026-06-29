@@ -1023,7 +1023,14 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       }
 
       const sesionStart2=respTextRaw2.indexOf("[SESION:");
-      let respText=planStart2>=0?respTextRaw2.substring(0,planStart2).trim():respTextRaw2;
+      let respText=respTextRaw2;
+      if(planStart2>=0){
+        const despuesPlan=respTextRaw2.indexOf("]",planStart2);
+        const textoDespues=despuesPlan>=0?respTextRaw2.substring(despuesPlan+1).trim():"";
+        const textAntes=respTextRaw2.substring(0,planStart2).trim();
+        respText=(textAntes+(textoDespues?" "+textoDespues:"")).trim();
+        if(!respText) respText="✅ Plan guardado. Puedes ver tu semana completa en **Mi Plan**.";
+      }
       if(sesionStart2>=0){
         const jsonStart2=sesionStart2+8;
         const sesionEnd2=respTextRaw2.indexOf("}]",jsonStart2);

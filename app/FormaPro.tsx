@@ -868,22 +868,23 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
         }
       }
 
-      // Detectar [PLAN:...]
-      const planStart=respText.indexOf("[PLAN:");
+      // Detectar [PLAN:...] — buscar en texto original
+      const planStart=respTextRaw.indexOf("[PLAN:");
       if(planStart>=0){
         const jsonStartP=planStart+6;
-        // El tag termina con }] al final — buscar último ] del texto
-        const planEndTag=respText.lastIndexOf("]");
+        const planEndTag=respTextRaw.lastIndexOf("]");
         if(planEndTag>jsonStartP){
           try{
-            const planJson=respText.substring(jsonStartP,planEndTag);
-            console.log("PLAN_JSON_INTENTANDO:",planJson.slice(0,100));
+            const planJson=respTextRaw.substring(jsonStartP,planEndTag);
             const planData=JSON.parse(planJson);
             await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planData}});
             console.log("PLAN_GUARDADO_OK");
           }catch(e){console.log("PLAN_ERROR:",e);}
-          respText=respText.substring(0,planStart).trim();
         }
+        // Eliminar del respText también
+        const planStartEnResp=respText.indexOf("[PLAN:");
+        if(planStartEnResp>=0) respText=respText.substring(0,planStartEnResp).trim();
+        else respText=respText.replace(/\[PLAN:[\s\S]*$/,"").trim();
       }
 
       // Detectar [MODIFICAR_SESION:...]

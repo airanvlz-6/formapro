@@ -167,6 +167,32 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
           }
         }
 
+        // Detectar [PLAN:...] en el historial y guardarlo
+        const ultimoMensajeCoach = datos.historial?.filter((m:any)=>m.role==="assistant").slice(-1)[0]?.content||"";
+        if(typeof ultimoMensajeCoach === "string" && ultimoMensajeCoach.includes("[PLAN:")){
+          const planIdx = ultimoMensajeCoach.indexOf("[PLAN:");
+          let depth=0, planEnd=-1;
+          for(let i=planIdx+6;i<ultimoMensajeCoach.length;i++){
+            if(ultimoMensajeCoach[i]==='{') depth++;
+            else if(ultimoMensajeCoach[i]==='}') { depth--; if(depth===0){planEnd=i;break;} }
+          }
+          if(planEnd>=0){
+            try{
+              const planJson=ultimoMensajeCoach.substring(planIdx+6,planEnd+1);
+              const planData=JSON.parse(planJson);
+              await supabase.from("weekly_plan").upsert({
+                user_codigo: codigo,
+                week_start: planData.week_start,
+                week_number: planData.week_number,
+                block_name: planData.block_name,
+                status: "active",
+                confidence: 100,
+                sessions: planData.sessions,
+                updated_at: new Date().toISOString()
+              }, { onConflict: "user_codigo,week_start" });
+            }catch{}
+          }
+        }
         // Registro de sesiones por acción explícita del usuario
 
         if (extracted.distribucion_semanal && extracted.distribucion_semanal !== "null" && extracted.distribucion_semanal !== "") {

@@ -1016,6 +1016,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
           try{
             const planJson2=respTextRaw2.substring(jsonStartP2,planEndTag2);
             const planData2=JSON.parse(planJson2);
+            console.log("GUARDANDO_PLAN_CON_CODIGO:", codigoUsuario);
             await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planData2}});
             console.log("PLAN_GUARDADO_OK");
           }catch(e){console.log("PLAN_ERROR:",e);}

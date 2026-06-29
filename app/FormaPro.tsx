@@ -254,7 +254,7 @@ FORMATO ESTRICTO:
 ZONAS DE FRECUENCIA: Cuando calcules o presentes zonas de frecuencia cardíaca al atleta, al final de tu explicación pregunta siempre: "¿Confirmas estas zonas de frecuencia? Si es así, responde 'Confirmo mis zonas' para que queden registradas en tu perfil." Solo presenta esta pregunta cuando calcules zonas nuevas o las modifiques, no en cada mensaje.
 GESTIÓN DE SESIONES: Cuando el usuario reporte haber completado un entrenamiento (hoy, ayer o en días pasados), al final de tu respuesta añade exactamente: [SESION:{"tipo":"tipo de sesión","fecha":"YYYY-MM-DDThh:mm:ss.000Z — usa la fecha EXACTA mencionada por el atleta, si dice 'el lunes pasado' calcula la fecha real","notas":"resumen breve","duracion":null,"sensacion":"buena|normal|mala"}]. Solo añade esto cuando el usuario reporte una sesión completada. Si el usuario reporta métricas fisiológicas pasadas con fecha (HRV, sueño, FC reposo de días anteriores), añade: [METRICA:{"fecha":"YYYY-MM-DD","hrv":null,"sueno":null,"rhr":null}]. Si el usuario pide borrar una sesión por fecha, añade: [BORRAR_SESION:{"fecha":"YYYY-MM-DD","tipo":"tipo mencionado"}].
 HISTORIA DEPORTIVA: Cuando el usuario mencione eventos importantes (competición, lesión, enfermedad, nuevo PR, cambio de objetivo, viaje, inicio/fin de bloque), añade al final: [EVENTO:{"date":"YYYY-MM-DD","type":"race|injury|illness|pr|objective_change|travel|block_start|block_end|rest","title":"título breve del evento","data":{}}].
-PLAN SEMANAL: Cuando generes o confirmes la planificación de la semana completa, añade al final: [PLAN:{"week_start":"YYYY-MM-DD del lunes","week_number":X,"block_name":"nombre bloque","sessions":[{"dia":"lunes","tipo":"carrera|box|descanso|otro","titulo":"título breve","descripcion":"descripción corta"},...]}]. Incluye los 7 días. SOLO cuando planifiques la semana completa. Cuando modifiques una sesión ya planificada añade: [MODIFICAR_SESION:{"week_start":"YYYY-MM-DD","dia":"lunes","tipo":"nuevo tipo","titulo":"nuevo título","motivo":"razón"}].
+PLAN SEMANAL: Cuando generes o confirmes la planificación de la semana completa, añade el tag AL INICIO de tu respuesta ANTES de cualquier explicación: [PLAN:{"week_start":"YYYY-MM-DD del lunes","week_number":X,"block_name":"nombre bloque","sessions":[{"dia":"lunes","tipo":"carrera|box|descanso|otro","titulo":"título breve","descripcion":"descripción corta"},...]}]. Incluye los 7 días. SOLO cuando planifiques la semana completa. Cuando modifiques una sesión ya planificada añade al inicio: [MODIFICAR_SESION:{"week_start":"YYYY-MM-DD","dia":"lunes","tipo":"nuevo tipo","titulo":"nuevo título","motivo":"razón"}].
 COHERENCIA DE PLANIFICACIÓN — REGLA CRÍTICA:
 - NUNCA cambies un entrenamiento ya programado sin motivo justificado. Si el atleta pide recordar la sesión del día, repite EXACTAMENTE la sesión programada sin modificaciones.
 - Solo puedes modificar un entreno si el atleta reporta: lesión, molestia física, falta de material, falta de tiempo o cambio de disponibilidad.
@@ -868,8 +868,9 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
         }
       }
 
-      // Detectar [PLAN:...] — buscar en texto original
+      // Detectar [PLAN:...] — buscar en texto original (al inicio)
       const planStart=respTextRaw.indexOf("[PLAN:");
+      if(planStart>=0) console.log("PLAN_ENCONTRADO en posicion:", planStart);
       if(planStart>=0){
         const jsonStartP=planStart+6;
         const planEndTag=respTextRaw.lastIndexOf("]");

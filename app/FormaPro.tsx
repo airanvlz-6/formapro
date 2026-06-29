@@ -997,8 +997,23 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       if(data.aborted) return;
       const respTextRaw2=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.").replace(/\[STATE_UPDATE\][\s\S]*?\[\/STATE_UPDATE\]/g,"").trim();
       
+      // Detectar [PLAN:...] en enviar — buscar en texto original
+      const planStart2=respTextRaw2.indexOf("[PLAN:");
+      if(planStart2>=0){
+        const jsonStartP2=planStart2+6;
+        const planEndTag2=respTextRaw2.lastIndexOf("]");
+        if(planEndTag2>jsonStartP2){
+          try{
+            const planJson2=respTextRaw2.substring(jsonStartP2,planEndTag2);
+            const planData2=JSON.parse(planJson2);
+            await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planData2}});
+            console.log("PLAN_GUARDADO_OK");
+          }catch(e){console.log("PLAN_ERROR:",e);}
+        }
+      }
+
       const sesionStart2=respTextRaw2.indexOf("[SESION:");
-      let respText=respTextRaw2;
+      let respText=planStart2>=0?respTextRaw2.substring(0,planStart2).trim():respTextRaw2;
       if(sesionStart2>=0){
         const jsonStart2=sesionStart2+8;
         const sesionEnd2=respTextRaw2.indexOf("}]",jsonStart2);

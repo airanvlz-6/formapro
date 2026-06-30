@@ -210,16 +210,19 @@ export default function Plan() {
               </div>
 {sesionDetalle.descripcion&&(
                 <div style={{marginBottom:12}}>
-                  {sesionDetalle.descripcion.split(/(?=Calentamiento:|Bloque principal:|Bloque fuerza|Bloque técnica|Vuelta a la calma:|Notas técnicas:|Objetivo:)/).map((bloque:string,i:number)=>{
-                    if(!bloque.trim()) return null;
-                    const titulo = bloque.match(/^([^:]+:)/)?.[1] || "";
-                    const contenido = bloque.replace(/^[^:]+:/,"").trim();
-                    return (
-                      <div key={i} style={{marginBottom:12}}>
-                        {titulo&&<p style={{color:C.accent,fontSize:12,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:1}}>{titulo}</p>}
-                        <p style={{color:"#D4D0CB",fontSize:14,lineHeight:1.8}}>{contenido}</p>
-                      </div>
-                    );
+                  {sesionDetalle.descripcion.split(/\n+/).filter((l:string)=>l.trim()).map((linea:string,i:number)=>{
+                    const t=linea.trim();
+                    // Encabezados de bloque (mayúsculas o con **)
+                    const esEncabezado = /^[A-ZÁÉÍÓÚÑ\s\d()]+$/.test(t.replace(/[*#]/g,'').trim()) && t.length<60 && t.length>2;
+                    const esItem = /^[-.•]/.test(t) || /^[A-Z]\)/.test(t);
+                    const limpio = t.replace(/^[-.•]\s*/,'').replace(/\*\*/g,'').replace(/^#+\s*/,'');
+                    if(esEncabezado){
+                      return <p key={i} style={{color:C.accent,fontSize:12,fontWeight:700,marginTop:i>0?16:0,marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>{limpio}</p>;
+                    }
+                    if(esItem){
+                      return <p key={i} style={{color:"#D4D0CB",fontSize:13,lineHeight:1.7,marginBottom:4,paddingLeft:12,position:"relative"}}><span style={{position:"absolute",left:0,color:C.muted}}>•</span>{limpio}</p>;
+                    }
+                    return <p key={i} style={{color:"#D4D0CB",fontSize:13,lineHeight:1.7,marginBottom:6}}>{limpio}</p>;
                   })}
                 </div>
               )}

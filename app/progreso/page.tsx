@@ -121,28 +121,7 @@ useEffect(() => {
           ))}
         </div>
 
-        {/* Analisis post bloque */}
-        {datos?.analisis_bloques?.length > 0 && (
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
-            <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 14 }}>📋 Historial de bloques</p>
-            {[...datos.analisis_bloques].reverse().map((b:any, i:number) => (
-              <div key={i} style={{ padding: "12px 0", borderBottom: i < datos.analisis_bloques.length-1 ? `1px solid ${C.border}` : "none" }}>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
-                  <span style={{ color:C.ink, fontSize:13, fontWeight:700, textTransform:"capitalize" }}>{b.bloque_completado}</span>
-                  <span style={{ color:C.muted, fontSize:11 }}>{b.fecha}</span>
-                </div>
-                <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:6 }}>
-                  <span style={{ background: b.resultado==="cumplido"?"#4CAF5020":b.resultado==="parcial"?"#FF6B0020":"#ff444420", color: b.resultado==="cumplido"?"#4CAF50":b.resultado==="parcial"?"#FF6B00":"#ff4444", fontSize:11, fontWeight:600, padding:"2px 8px", borderRadius:100 }}>
-                    {b.resultado==="cumplido"?"✅ Cumplido":b.resultado==="parcial"?"⚡ Parcial":"❌ No cumplido"}
-                  </span>
-                  {b.adherencia_estimada && <span style={{ background:C.border, color:C.muted, fontSize:11, padding:"2px 8px", borderRadius:100 }}>📊 {b.adherencia_estimada}</span>}
-                  {b.carga && <span style={{ background:C.border, color:C.muted, fontSize:11, padding:"2px 8px", borderRadius:100 }}>⚖️ Carga {b.carga}</span>}
-                </div>
-                {b.siguiente_bloque && <p style={{ color:C.muted, fontSize:12 }}>→ Siguiente: <span style={{color:C.ink}}>{b.siguiente_bloque}</span></p>}
-              </div>
-            ))}
-          </div>
-        )}
+        
 
         {/* Deteccion estancamiento */}
         {(()=>{

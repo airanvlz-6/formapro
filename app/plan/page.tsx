@@ -189,8 +189,11 @@ export default function Plan() {
                         {sesion?.modificado&&<span style={{background:"#FFD70020",color:"#FFD700",fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:100}}>⚠️ Modificado</span>}
                       </div>
                       <span style={{color:esDescanso?C.muted:C.ink,fontSize:13,fontWeight:esDescanso?400:600}}>
-                        {sesion?.titulo || (esDescanso?"Descanso":"Sin sesión")}
+                        {sesion?.completada && sesion?.coincide_plan===false ? `${sesion.titulo_real} (real)` : sesion?.titulo || (esDescanso?"Descanso":"Sin sesión")}
                       </span>
+                      {sesion?.completada && sesion?.coincide_plan===false && (
+                        <p style={{color:"#FFD700",fontSize:10,marginTop:2}}>⚠️ Diferente a lo planificado</p>
+                      )}
                     </div>
                     {sesion&&!esDescanso&&<span style={{color:C.muted,fontSize:16}}>›</span>}
                   </div>

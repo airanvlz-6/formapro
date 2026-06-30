@@ -2138,6 +2138,7 @@ ${testStr}`}]});
                   <div style={{display:"flex",gap:6}}>
                     <button onClick={async()=>{
                       await apiCall({action:"registrar_sesion",codigo:codigoUsuario,datos:{sesion:sesionPendiente}});
+                      await apiCall({action:"marcar_sesion_completada",codigo:codigoUsuario,datos:{fecha:sesionPendiente.fecha,sesion:sesionPendiente}});
                       setSesionPendiente(null);
                     }} style={{background:"#4CAF50",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>
                       Registrar

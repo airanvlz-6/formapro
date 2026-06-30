@@ -449,6 +449,35 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     return NextResponse.json({ ok: true, sesionEliminada: workouts[workouts.length - 1] });
   }
 
+  if (action === "marcar_sesion_completada") {
+    const { fecha, sesion } = datos;
+    const fechaSesion = new Date(fecha);
+    const diaSemana = fechaSesion.getDay() || 7;
+    const lunesSemana = new Date(fechaSesion);
+    lunesSemana.setDate(fechaSesion.getDate() - diaSemana + 1);
+    const weekStart = lunesSemana.toISOString().split('T')[0];
+    const DIAS_MAP = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+    const diaNombre = DIAS_MAP[fechaSesion.getDay()];
+
+    const { data: planActual } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", weekStart).single();
+    if (!planActual) return NextResponse.json({ ok: true, mensaje: "Sin plan para esta semana" });
+
+    const sessions = planActual.sessions.map((s: any) => {
+      if (s.dia === diaNombre) {
+        return {
+          ...s,
+          completada: true,
+          titulo_real: sesion.tipo,
+          descripcion_real: sesion.notas,
+          coincide_plan: s.tipo?.toLowerCase().includes(sesion.tipo?.toLowerCase()) || sesion.tipo?.toLowerCase().includes(s.tipo?.toLowerCase())
+        };
+      }
+      return s;
+    });
+    await supabase.from("weekly_plan").update({ sessions, updated_at: new Date().toISOString() }).eq("user_codigo", codigo).eq("week_start", weekStart);
+    return NextResponse.json({ ok: true });
+  }
+
   if (action === "obtener_plan_semana") {
     const hoy = new Date();
     const diaSemana = hoy.getDay() || 7;

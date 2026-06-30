@@ -468,8 +468,7 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
           ...s,
           completada: true,
           titulo_real: sesion.tipo,
-          descripcion_real: sesion.notas,
-          coincide_plan: s.tipo?.toLowerCase().includes(sesion.tipo?.toLowerCase()) || sesion.tipo?.toLowerCase().includes(s.tipo?.toLowerCase())
+          descripcion_real: sesion.notas
         };
       }
       return s;

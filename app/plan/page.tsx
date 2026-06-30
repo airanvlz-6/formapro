@@ -189,10 +189,10 @@ export default function Plan() {
                         {sesion?.modificado&&<span style={{background:"#FFD70020",color:"#FFD700",fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:100}}>⚠️ Modificado</span>}
                       </div>
                       <span style={{color:esDescanso?C.muted:C.ink,fontSize:13,fontWeight:esDescanso?400:600}}>
-                        {sesion?.completada && sesion?.coincide_plan===false ? `${sesion.titulo_real} (real)` : sesion?.titulo || (esDescanso?"Descanso":"Sin sesión")}
+                        {sesion?.titulo || (esDescanso?"Descanso":"Sin sesión")}
                       </span>
-                      {sesion?.completada && sesion?.coincide_plan===false && (
-                        <p style={{color:"#FFD700",fontSize:10,marginTop:2}}>⚠️ Diferente a lo planificado</p>
+                      {sesion?.completada && sesion?.descripcion_real && (
+                        <p style={{color:"#4CAF50",fontSize:10,marginTop:2}}>✅ Completada</p>
                       )}
                     </div>
                     {sesion&&!esDescanso&&<span style={{color:C.muted,fontSize:16}}>›</span>}
@@ -211,7 +211,15 @@ export default function Plan() {
                 <h3 style={{color:C.ink,fontSize:16,fontWeight:700}}>{sesionDetalle.titulo}</h3>
                 <button onClick={()=>setSesionDetalle(null)} style={{background:"none",border:"none",color:C.muted,fontSize:20,cursor:"pointer"}}>✕</button>
               </div>
-{sesionDetalle.descripcion&&(
+{sesionDetalle.descripcion_real && (
+                <div style={{background:"#4CAF5015",border:"1px solid #4CAF5040",borderRadius:10,padding:"12px 14px",marginBottom:16}}>
+                  <p style={{color:"#4CAF50",fontSize:12,fontWeight:700,marginBottom:6}}>✅ Lo que realmente hiciste:</p>
+                  <p style={{color:"#D4D0CB",fontSize:13,lineHeight:1.6}}>{sesionDetalle.titulo_real}</p>
+                  <p style={{color:C.muted,fontSize:12,lineHeight:1.6,marginTop:4}}>{sesionDetalle.descripcion_real}</p>
+                </div>
+              )}
+              <p style={{color:C.muted,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Planificado:</p>
+              {sesionDetalle.descripcion&&(
                 <div style={{marginBottom:12}}>
                   {sesionDetalle.descripcion.split(/\n+/).filter((l:string)=>l.trim()).map((linea:string,i:number)=>{
                     const t=linea.trim();

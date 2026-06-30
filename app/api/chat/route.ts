@@ -527,6 +527,21 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
       data: evento.data || {}
     });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // Si es un PR, también añadir a historial_marcas para gráficas
+    if (evento.type === "pr" && evento.data) {
+      const { data: usuarioActual } = await supabase.from("usuarios").select("historial_marcas").eq("codigo", codigo).single();
+      const histMarcas = usuarioActual?.historial_marcas || [];
+      // Intentar extraer ejercicio y valor del título o data
+      const ejercicio = evento.data.ejercicio || evento.title?.split(/\s+\d/)[0]?.trim() || evento.title;
+      const valor = evento.data.valor || evento.title?.match(/[\d.]+\s*kg|[\d:]+/)?.[0] || "";
+      if (ejercicio && valor) {
+        await supabase.from("usuarios").update({
+          historial_marcas: [...histMarcas, { fecha: evento.date, ejercicio: ejercicio.toLowerCase().replace(/\s+/g,'_'), valor }]
+        }).eq("codigo", codigo);
+      }
+    }
+
     return NextResponse.json({ ok: true });
   }
 

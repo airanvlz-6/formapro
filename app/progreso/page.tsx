@@ -99,7 +99,9 @@ useEffect(() => {
             <h1 style={{ fontSize: 20, fontWeight: 700, color: C.ink, fontFamily: "Georgia, serif" }}>Mi Progreso</h1>
             <p style={{ color: C.accent, fontSize: 12, fontWeight: 600 }}>{codigo}</p>
           </div>
-          <a href={`/app?codigo=${codigo}`} style={{ marginLeft: "auto", background: C.accent, color: "#fff", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+          <a href={`/plan?codigo=${codigo}`} style={{ background: C.card, color: C.ink, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 12px", fontSize: 13, textDecoration: "none" }}>📅</a>
+            <a href={`/historia?codigo=${codigo}`} style={{ background: C.card, color: C.ink, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 12px", fontSize: 13, textDecoration: "none" }}>📖</a>
+            <a href={`/app?codigo=${codigo}`} style={{ marginLeft: "auto", background: C.accent, color: "#fff", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
             💬 Ir al coach
           </a>
         </div>
@@ -428,20 +430,7 @@ useEffect(() => {
           </div>
         )}
 
-        {/* Marcas específicas */}
-        {Object.keys(marcas).length > 0 && (
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
-            <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>🏆 Marcas</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {Object.entries(marcas).filter(([,v]) => v).map(([k, v]) => (
-                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
-                  <span style={{ color: C.muted, fontSize: 13, textTransform: "capitalize" }}>{k.replace(/_/g, " ")}</span>
-                  <span style={{ color: C.ink, fontSize: 13, fontWeight: 600 }}>{String(v)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        
 
         {/* Métricas del atleta */}
         {Object.keys(datosEntreno).length > 0 && (()=>{
@@ -463,23 +452,7 @@ useEffect(() => {
           );
         })()}
 
-        {/* Historial sesiones */}
-        {totalSesiones > 0 && (
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
-            <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>📋 Últimas sesiones</p>
-            {[...datos.workout_history].sort((a:any,b:any)=>new Date(b.fecha).getTime()-new Date(a.fecha).getTime()).slice(0, 10).map((s: any, i: number) => (
-              <div key={i} style={{ padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ color: C.ink, fontSize: 13, fontWeight: 600, textTransform: "capitalize" }}>{s.tipo?.replace(/_/g, " ") || "Sesión"}</span>
-                  <span style={{ color: C.muted, fontSize: 11 }}>{new Date(s.fecha).toLocaleDateString("es-ES")}</span>
-                </div>
-                {s.duracion && <span style={{ color: C.muted, fontSize: 12 }}>⏱ {s.duracion} min</span>}
-                {s.sensacion && <span style={{ color: C.accent, fontSize: 12, marginLeft: 12 }}>● {s.sensacion}</span>}
-                {s.notas && <p style={{ color: C.muted, fontSize: 12, marginTop: 4 }}>{s.notas}</p>}
-              </div>
-            ))}
-          </div>
-        )}
+        
 
         {totalSesiones === 0 && (
           <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "32px", textAlign: "center" }}>

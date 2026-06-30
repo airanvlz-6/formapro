@@ -1032,6 +1032,26 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
         respText=(textAntes+(textoDespues?" "+textoDespues:"")).trim();
         if(!respText) respText="✅ Plan guardado. Puedes ver tu semana completa en **Mi Plan**.";
       }
+
+      // Detectar [MODIFICAR_SESION:...] en enviar
+      const modStart2=respText.indexOf("[MODIFICAR_SESION:");
+      if(modStart2>=0){
+        const jsonStartM2=modStart2+18;
+        let depthM=0, modEnd2=-1;
+        for(let i=jsonStartM2;i<respText.length;i++){
+          if(respText[i]==='{') depthM++;
+          else if(respText[i]==='}') { depthM--; if(depthM===0){modEnd2=i;break;} }
+        }
+        if(modEnd2>=0){
+          try{
+            const modJson2=respText.substring(jsonStartM2,modEnd2+1);
+            const modData2=JSON.parse(modJson2);
+            await apiCall({action:"actualizar_sesion_plan",codigo:codigoUsuario,datos:modData2});
+          }catch{}
+        }
+        const modEndTag2=respText.indexOf("]",modStart2);
+        if(modEndTag2>=0) respText=respText.substring(0,modStart2).trim()+" Sesión actualizada en Mi Plan ✅";
+      }
       if(sesionStart2>=0){
         const jsonStart2=sesionStart2+8;
         const sesionEnd2=respTextRaw2.indexOf("}]",jsonStart2);

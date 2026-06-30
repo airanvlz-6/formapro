@@ -202,12 +202,20 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
           const histMarcas = usuarioData?.historial_marcas || [];
           const partes = extracted.nueva_marca.split(":");
           if (partes.length >= 2) {
-            const nuevaEntrada = {
-              fecha: new Date().toISOString().split('T')[0],
-              ejercicio: partes[0].trim(),
-              valor: partes.slice(1).join(":").trim()
-            };
-            updates.historial_marcas = [...histMarcas, nuevaEntrada];
+            const ejercicioNormalizado = partes[0].trim().toLowerCase()
+              .replace(/sentadilla trasera/i, "back_squat")
+              .replace(/sentadilla frontal/i, "front_squat")
+              .replace(/peso muerto/i, "deadlift")
+              .replace(/press banca|press de banca/i, "bench_press")
+              .replace(/press militar|press hombro/i, "push_press")
+              .replace(/\s+/g, "_");
+            const valorNuevo = partes.slice(1).join(":").trim();
+            const fechaHoy = new Date().toISOString().split('T')[0];
+            // Evitar duplicado exacto mismo ejercicio+fecha+valor
+            const yaExiste = histMarcas.some((m:any) => m.ejercicio === ejercicioNormalizado && m.fecha === fechaHoy && m.valor === valorNuevo);
+            if (!yaExiste) {
+              updates.historial_marcas = [...histMarcas, { fecha: fechaHoy, ejercicio: ejercicioNormalizado, valor: valorNuevo }];
+            }
           }
         }
 
@@ -533,12 +541,22 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
       const { data: usuarioActual } = await supabase.from("usuarios").select("historial_marcas").eq("codigo", codigo).single();
       const histMarcas = usuarioActual?.historial_marcas || [];
       // Intentar extraer ejercicio y valor del título o data
-      const ejercicio = evento.data.ejercicio || evento.title?.split(/\s+\d/)[0]?.trim() || evento.title;
+      const ejercicioRaw = evento.data.ejercicio || evento.title?.split(/\s+\d/)[0]?.trim() || evento.title;
       const valor = evento.data.valor || evento.title?.match(/[\d.]+\s*kg|[\d:]+/)?.[0] || "";
-      if (ejercicio && valor) {
-        await supabase.from("usuarios").update({
-          historial_marcas: [...histMarcas, { fecha: evento.date, ejercicio: ejercicio.toLowerCase().replace(/\s+/g,'_'), valor }]
-        }).eq("codigo", codigo);
+      if (ejercicioRaw && valor) {
+        const ejercicio = ejercicioRaw.toLowerCase()
+          .replace(/sentadilla trasera/i, "back_squat")
+          .replace(/sentadilla frontal/i, "front_squat")
+          .replace(/peso muerto/i, "deadlift")
+          .replace(/press banca|press de banca/i, "bench_press")
+          .replace(/\s+/g, "_");
+        const fechaEvento = evento.date;
+        const yaExiste = histMarcas.some((m:any) => m.ejercicio === ejercicio && m.fecha === fechaEvento);
+        if (!yaExiste) {
+          await supabase.from("usuarios").update({
+            historial_marcas: [...histMarcas, { fecha: fechaEvento, ejercicio, valor }]
+          }).eq("codigo", codigo);
+        }
       }
     }
 

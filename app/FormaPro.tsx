@@ -848,6 +848,70 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
     finally{setGenerando(false);setTimeout(()=>inputRef.current?.focus(),300);}
   };
 
+  const procesarTags=async(textoOriginal:string):Promise<string>=>{
+    let texto=textoOriginal.replace(/\[STATE_UPDATE\][\s\S]*?\[\/STATE_UPDATE\]/g,"").trim();
+
+    const extraerJSON=(str:string, tagStart:number, prefixLen:number):{json:string|null,endIdx:number}=>{
+      const jsonStart=tagStart+prefixLen;
+      let depth=0, endIdx=-1;
+      for(let i=jsonStart;i<str.length;i++){
+        if(str[i]==='{') depth++;
+        else if(str[i]==='}'){ depth--; if(depth===0){ endIdx=i; break; } }
+      }
+      if(endIdx<0) return {json:null,endIdx:-1};
+      return {json:str.substring(jsonStart,endIdx+1),endIdx};
+    };
+
+    const procesarTag=async(tag:string,prefixLen:number,callback:(data:any)=>Promise<void>)=>{
+      const tagStart=texto.indexOf(tag);
+      if(tagStart<0) return;
+      const {json,endIdx}=extraerJSON(texto,tagStart,prefixLen);
+      if(json){
+        try{
+          const data=JSON.parse(json);
+          await callback(data);
+        }catch{}
+      }
+      // Eliminar el tag completo del texto, dejando lo que venga antes y después
+      const tagEndBracket=texto.indexOf("]",endIdx>=0?endIdx:tagStart);
+      const antes=texto.substring(0,tagStart).trim();
+      const despues=tagEndBracket>=0?texto.substring(tagEndBracket+1).trim():"";
+      texto=(antes+(despues?" "+despues:"")).trim();
+    };
+
+    await procesarTag("[PLAN:",6,async(data)=>{
+      await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:data}});
+    });
+    await procesarTag("[MODIFICAR_SESION:",18,async(data)=>{
+      await apiCall({action:"actualizar_sesion_plan",codigo:codigoUsuario,datos:data});
+    });
+    await procesarTag("[EVENTO:",8,async(data)=>{
+      await apiCall({action:"registrar_evento",codigo:codigoUsuario,datos:{evento:data}});
+    });
+    await procesarTag("[METRICA:",9,async(data)=>{
+      await apiCall({action:"registrar_metrica_pasada",codigo:codigoUsuario,datos:data});
+    });
+    await procesarTag("[BORRAR_SESION:",15,async(data)=>{
+      await apiCall({action:"borrar_sesion_fecha",codigo:codigoUsuario,datos:data});
+    });
+
+    // SESION es especial: no se guarda automáticamente, se muestra el banner
+    const sesionStart=texto.indexOf("[SESION:");
+    if(sesionStart>=0){
+      const {json,endIdx}=extraerJSON(texto,sesionStart,8);
+      if(json){
+        try{ setSesionPendiente(JSON.parse(json)); }catch{}
+      }
+      const tagEndBracket=texto.indexOf("]",endIdx>=0?endIdx:sesionStart);
+      const antes=texto.substring(0,sesionStart).trim();
+      const despues=tagEndBracket>=0?texto.substring(tagEndBracket+1).trim():"";
+      texto=(antes+(despues?" "+despues:"")).trim();
+    }
+
+    if(!texto) texto="✅ Hecho. Puedes ver los detalles en las secciones correspondientes.";
+    return texto;
+  };
+
   const enviarSilencioso=async(texto:string)=>{
     if(!texto.trim()||cargando) return;
     const nuevoHist=[...historial,{role:"user",content:texto.trim()}];
@@ -858,109 +922,8 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[archivo]"}...`).join("\n");
       const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:nuevoHist},true);
       if(data.aborted) return;
-      const respTextRaw=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.").replace(/\[STATE_UPDATE\][\s\S]*?\[\/STATE_UPDATE\]/g,"").trim();
-      
-      // Detectar [SESION:...] por índice
-      const sesionStart=respTextRaw.indexOf("[SESION:");
-      let respText=respTextRaw;
-      if(sesionStart>=0){
-        const jsonStart=sesionStart+8;
-        // Buscar el cierre correcto: "}]" no solo "]"
-        const sesionEnd=respTextRaw.indexOf("}]",jsonStart);
-        if(sesionEnd>=0){
-          try{
-            const sesionJson=respTextRaw.substring(jsonStart,sesionEnd+1);
-            console.log("SESION_JSON:",sesionJson);
-            const sesionData=JSON.parse(sesionJson);
-            setSesionPendiente(sesionData);
-          }catch(e){console.log("SESION_ERROR:",e);}
-          respText=respTextRaw.substring(0,sesionStart).trim();
-        }
-      }
-
-      // Detectar [PLAN:...] — buscar en texto original (al inicio)
-      const planStart=respTextRaw.indexOf("[PLAN:");
-      if(planStart>=0) console.log("PLAN_ENCONTRADO en posicion:", planStart);
-      if(planStart>=0){
-        const jsonStartP=planStart+6;
-        const planEndTag=respTextRaw.lastIndexOf("]");
-        if(planEndTag>jsonStartP){
-          try{
-            const planJson=respTextRaw.substring(jsonStartP,planEndTag);
-            const planData=JSON.parse(planJson);
-            await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planData}});
-            console.log("PLAN_GUARDADO_OK");
-          }catch(e){console.log("PLAN_ERROR:",e);}
-        }
-        // Eliminar del respText también
-        const planStartEnResp=respText.indexOf("[PLAN:");
-        if(planStartEnResp>=0) respText=respText.substring(0,planStartEnResp).trim();
-        else respText=respText.replace(/\[PLAN:[\s\S]*$/,"").trim();
-      }
-
-      // Detectar [MODIFICAR_SESION:...]
-      const modStart=respText.indexOf("[MODIFICAR_SESION:");
-      if(modStart>=0){
-        const jsonStartM=modStart+18;
-        const modEnd=respText.indexOf("}]",jsonStartM);
-        if(modEnd>=0){
-          try{
-            const modJson=respText.substring(jsonStartM,modEnd+1);
-            const modData=JSON.parse(modJson);
-            await apiCall({action:"actualizar_sesion_plan",codigo:codigoUsuario,datos:modData});
-          }catch{}
-        }
-        const modEndTag=respText.indexOf("]",modStart);
-        if(modEndTag>=0) respText=respText.substring(0,modStart).trim();
-      }
-
-      // Detectar [EVENTO:...]
-      const eventoStart=respText.indexOf("[EVENTO:");
-      if(eventoStart>=0){
-        const jsonStartE=eventoStart+8;
-        const eventoEnd=respText.indexOf("}]",jsonStartE);
-        if(eventoEnd>=0){
-          try{
-            const eventoJson=respText.substring(jsonStartE,eventoEnd+1);
-            const eventoData=JSON.parse(eventoJson);
-            await apiCall({action:"registrar_evento",codigo:codigoUsuario,datos:{evento:eventoData}});
-          }catch{}
-        }
-        const eventoEndTag=respText.indexOf("]",eventoStart);
-        if(eventoEndTag>=0) respText=respText.substring(0,eventoStart).trim();
-      }
-
-      // Detectar [BORRAR_SESION:...]
-      const borrarStart=respText.indexOf("[BORRAR_SESION:");
-      if(borrarStart>=0){
-        const jsonStart=borrarStart+15;
-        const borrarEnd=respText.indexOf("}]",jsonStart);
-        if(borrarEnd>=0){
-          try{
-            const borrarJson=respText.substring(jsonStart,borrarEnd+1);
-            const borrarData=JSON.parse(borrarJson);
-            await apiCall({action:"borrar_sesion_fecha",codigo:codigoUsuario,datos:borrarData});
-          }catch{}
-          respText=respText.substring(0,borrarStart).trim();
-        }
-      }
-
-      // Detectar [METRICA:...]
-      const metricaStart=respText.indexOf("[METRICA:");
-      if(metricaStart>=0){
-        const jsonStart=metricaStart+9;
-        const metricaEnd=respText.indexOf("}]",jsonStart);
-        if(metricaEnd>=0){
-          try{
-            const metricaJson=respText.substring(jsonStart,metricaEnd+1);
-            const metricaData=JSON.parse(metricaJson);
-            await apiCall({action:"registrar_metrica_pasada",codigo:codigoUsuario,datos:metricaData});
-          }catch{}
-        }
-        // Eliminar siempre el tag aunque falle el parse
-        const metricaEndTag=respText.indexOf("]",metricaStart);
-        if(metricaEndTag>=0) respText=respText.substring(0,metricaStart).trim();
-      }
+      const respTextRaw=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.");
+      const respText=await procesarTags(respTextRaw);
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);
       setHistorial(hist);
@@ -1005,107 +968,10 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       const mensajesContexto=esProgramacion?-6:-4;
       const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:esPlanificacionSemanal?6000:esProgramacion?4000:2000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
       if(data.aborted) return;
-      const respTextRaw2=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.").replace(/\[STATE_UPDATE\][\s\S]*?\[\/STATE_UPDATE\]/g,"").trim();
+      const respTextRaw2=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.");
       
-      // Detectar [PLAN:...] en enviar — buscar en texto original
-      const planStart2=respTextRaw2.indexOf("[PLAN:");
-      if(planStart2>=0){
-        const jsonStartP2=planStart2+6;
-        const planEndTag2=respTextRaw2.lastIndexOf("]");
-        if(planEndTag2>jsonStartP2){
-          try{
-            const planJson2=respTextRaw2.substring(jsonStartP2,planEndTag2);
-            const planData2=JSON.parse(planJson2);
-            console.log("GUARDANDO_PLAN_CON_CODIGO:", codigoUsuario);
-            await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planData2}});
-            console.log("PLAN_GUARDADO_OK");
-          }catch(e){console.log("PLAN_ERROR:",e);}
-        }
-      }
-
-      const sesionStart2=respTextRaw2.indexOf("[SESION:");
-      let respText=respTextRaw2;
-      if(planStart2>=0){
-        const despuesPlan=respTextRaw2.indexOf("]",planStart2);
-        const textoDespues=despuesPlan>=0?respTextRaw2.substring(despuesPlan+1).trim():"";
-        const textAntes=respTextRaw2.substring(0,planStart2).trim();
-        respText=(textAntes+(textoDespues?" "+textoDespues:"")).trim();
-        if(!respText) respText="✅ Plan guardado. Puedes ver tu semana completa en **Mi Plan**.";
-      }
-
-      // Detectar [EVENTO:...] en enviar
-      const eventoStart2=respText.indexOf("[EVENTO:");
-      if(eventoStart2>=0){
-        const jsonStartE2=eventoStart2+8;
-        let depthE=0, eventoEnd2=-1;
-        for(let i=jsonStartE2;i<respText.length;i++){
-          if(respText[i]==='{') depthE++;
-          else if(respText[i]==='}') { depthE--; if(depthE===0){eventoEnd2=i;break;} }
-        }
-        if(eventoEnd2>=0){
-          try{
-            const eventoJson2=respText.substring(jsonStartE2,eventoEnd2+1);
-            const eventoData2=JSON.parse(eventoJson2);
-            await apiCall({action:"registrar_evento",codigo:codigoUsuario,datos:{evento:eventoData2}});
-          }catch{}
-        }
-        const eventoEndTag2=respText.indexOf("]",eventoStart2);
-        if(eventoEndTag2>=0) respText=respText.substring(0,eventoStart2).trim();
-      }
-
-      // Detectar [MODIFICAR_SESION:...] en enviar
-      const modStart2=respText.indexOf("[MODIFICAR_SESION:");
-      if(modStart2>=0){
-        const jsonStartM2=modStart2+18;
-        let depthM=0, modEnd2=-1;
-        for(let i=jsonStartM2;i<respText.length;i++){
-          if(respText[i]==='{') depthM++;
-          else if(respText[i]==='}') { depthM--; if(depthM===0){modEnd2=i;break;} }
-        }
-        if(modEnd2>=0){
-          try{
-            const modJson2=respText.substring(jsonStartM2,modEnd2+1);
-            const modData2=JSON.parse(modJson2);
-            await apiCall({action:"actualizar_sesion_plan",codigo:codigoUsuario,datos:modData2});
-          }catch{}
-        }
-        const modEndTag2=respText.indexOf("]",modStart2);
-        if(modEndTag2>=0) respText=respText.substring(0,modStart2).trim()+" Sesión actualizada en Mi Plan ✅";
-      }
-      if(sesionStart2>=0){
-        const jsonStart2=sesionStart2+8;
-        const sesionEnd2=respTextRaw2.indexOf("}]",jsonStart2);
-        if(sesionEnd2>=0){
-          try{
-            const sesionJson2=respTextRaw2.substring(jsonStart2,sesionEnd2+1);
-            const sesionData2=JSON.parse(sesionJson2);
-            setSesionPendiente(sesionData2);
-          }catch{}
-          respText=respTextRaw2.substring(0,sesionStart2).trim();
-        }
-      }
-
-      // Detectar [METRICA:...] en enviar
-      
-      const metricaStart2=respText.indexOf("[METRICA:");
-      if(metricaStart2>=0){
-        const jsonStart2m=metricaStart2+9;
-        const metricaEnd2=respText.indexOf("}]",jsonStart2m);
-        if(metricaEnd2>=0){
-          try{
-            const metricaJson2=respText.substring(jsonStart2m,metricaEnd2+1);
-            const metricaData2=JSON.parse(metricaJson2);
-            await apiCall({action:"registrar_metrica_pasada",codigo:codigoUsuario,datos:metricaData2});
-          }catch{}
-        }
-        const metricaEndTag2=respText.indexOf("]",metricaStart2);
-        if(metricaEndTag2>=0) respText=respText.substring(0,metricaStart2).trim();
-      }
-
-      // Detectar [BORRAR_SESION:...]
-      
-      // Extraer STATE_UPDATE si existe
-      const stateMatch=respText.match(/\[STATE_UPDATE\]([\s\S]*?)\[\/STATE_UPDATE\]/);
+      // Extraer STATE_UPDATE primero (formato distinto, con cierre [/STATE_UPDATE])
+      const stateMatch=respTextRaw2.match(/\[STATE_UPDATE\]([\s\S]*?)\[\/STATE_UPDATE\]/);
       if(stateMatch){
         try{
           const newState=JSON.parse(stateMatch[1].trim());
@@ -1113,10 +979,9 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
           setAthleteState(updatedState);
           if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{athlete_state:updatedState}});
         }catch{}
-        // Eliminar el bloque STATE_UPDATE del texto visible
-        respText=respText.replace(/\[STATE_UPDATE\][\s\S]*?\[\/STATE_UPDATE\]/g,"").trim();
       }
 
+      const respText=await procesarTags(respTextRaw2);
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);
       const histFinal=hist.length>=20?hist.slice(-10):hist;

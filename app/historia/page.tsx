@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from "react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 const TIPO_CONFIG: Record<string, {emoji:string;label:string;color:string}> = {
   workout: { emoji:"🏋️", label:"Entrenamiento", color:"#FF6B00" },
@@ -42,6 +43,8 @@ export default function Historia() {
   },[]);
 
   const [bloques, setBloques] = useState<any[]>([]);
+  const [historialMarcas, setHistorialMarcas] = useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
+  const [ejercicioSeleccionado, setEjercicioSeleccionado] = useState<string>("");
 
   const cargarDatos = async(cod:string)=>{
     setCargando(true);
@@ -53,6 +56,7 @@ export default function Historia() {
       const resUser = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"recuperar_usuario",codigo:cod})});
       const dataUser = await resUser.json();
       setBloques(dataUser?.data?.analisis_bloques||[]);
+      setHistorialMarcas(dataUser?.data?.historial_marcas||[]);
       setAutenticado(true);
     }catch{ setError("Error de conexión"); }
     finally{ setCargando(false); setIniciado(true); }
@@ -167,6 +171,69 @@ export default function Historia() {
             </div>
           </div>
         )}
+
+        {/* Evolución */}
+        {historialMarcas.length > 0 && (()=>{
+          const ejercicios = Array.from(new Set(historialMarcas.map((m:any)=>m.ejercicio)));
+          const ejercicioActivo = ejercicioSeleccionado || ejercicios[0];
+          const datosEjercicio = historialMarcas
+            .filter((m:any)=>m.ejercicio===ejercicioActivo)
+            .map((m:any)=>({
+              fecha: new Date(m.fecha).toLocaleDateString("es-ES",{day:"numeric",month:"short"}),
+              valor: parseFloat(String(m.valor).replace(/[^\d.,]/g,'').replace(',','.'))||0,
+              valorOriginal: m.valor
+            }))
+            .filter((d:any)=>!isNaN(d.valor) && d.valor>0)
+            .sort((a:any,b:any)=>new Date(a.fecha).getTime()-new Date(b.fecha).getTime());
+
+          const ultimoValor = datosEjercicio[datosEjercicio.length-1];
+          const primerValor = datosEjercicio[0];
+          const mejora = ultimoValor && primerValor ? ((ultimoValor.valor-primerValor.valor)/primerValor.valor*100).toFixed(1) : null;
+
+          return (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+              <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>📈 Evolución</p>
+              <select value={ejercicioActivo} onChange={e=>setEjercicioSeleccionado(e.target.value)}
+                style={{ width:"100%", border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 10px", fontSize:13, color:C.ink, background:C.bg, marginBottom:16, fontFamily:"inherit" }}>
+                {ejercicios.map((ej:string)=>(
+                  <option key={ej} value={ej}>{ej.replace(/_/g,' ')}</option>
+                ))}
+              </select>
+
+              {datosEjercicio.length >= 2 ? (
+                <>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <LineChart data={datosEjercicio}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={C.border}/>
+                      <XAxis dataKey="fecha" stroke={C.muted} fontSize={11}/>
+                      <YAxis stroke={C.muted} fontSize={11}/>
+                      <Tooltip contentStyle={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,fontSize:12}} labelStyle={{color:C.ink}}/>
+                      <Line type="monotone" dataKey="valor" stroke={C.accent} strokeWidth={2} dot={{fill:C.accent,r:4}}/>
+                    </LineChart>
+                  </ResponsiveContainer>
+                  <div style={{ display:"flex", justifyContent:"space-between", marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
+                    <div>
+                      <p style={{ color:C.muted, fontSize:11 }}>Último registro</p>
+                      <p style={{ color:C.ink, fontSize:16, fontWeight:700 }}>{ultimoValor?.valorOriginal}</p>
+                    </div>
+                    {mejora && (
+                      <div style={{ textAlign:"right" }}>
+                        <p style={{ color:C.muted, fontSize:11 }}>Evolución</p>
+                        <p style={{ color: parseFloat(mejora)>=0?"#4CAF50":"#ff4444", fontSize:16, fontWeight:700 }}>
+                          {parseFloat(mejora)>=0?"+":""}{mejora}%
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <p style={{ color:C.muted, fontSize:13, textAlign:"center", padding:"20px 0" }}>
+                  Necesitas al menos 2 registros de {ejercicioActivo?.replace(/_/g,' ')} para ver la evolución.
+                </p>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Historial de bloques */}
         {bloques.length > 0 && (

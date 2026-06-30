@@ -512,8 +512,8 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
   }
 
   if (action === "actualizar_sesion_plan") {
-    const { week_start, dia, cambios, motivo } = datos;
-    const { data: planActual } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", week_start).single();
+    const { week_start, dia, cambios, motivo, confidence } = datos;
+    const { data: planActual } = await supabase.from("weekly_plan").select("sessions,confidence").eq("user_codigo", codigo).eq("week_start", week_start).single();
     if (!planActual) return NextResponse.json({ error: "Plan no encontrado" }, { status: 404 });
     const sessions = planActual.sessions.map((s: any) => {
       if (s.dia === dia) {
@@ -521,7 +521,11 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
       }
       return s;
     });
-    await supabase.from("weekly_plan").update({ sessions, updated_at: new Date().toISOString() }).eq("user_codigo", codigo).eq("week_start", week_start);
+    const updates: any = { sessions, updated_at: new Date().toISOString() };
+    if (confidence !== undefined && confidence !== null) {
+      updates.confidence = Math.max(0, Math.min(100, confidence));
+    }
+    await supabase.from("weekly_plan").update(updates).eq("user_codigo", codigo).eq("week_start", week_start);
     return NextResponse.json({ ok: true });
   }
 

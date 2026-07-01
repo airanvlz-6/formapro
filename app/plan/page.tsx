@@ -254,7 +254,7 @@ export default function Plan() {
                     const lineas = texto.split(/\n+/).filter((l:string)=>l.trim());
                     return lineas.map((linea:string,i:number)=>{
                       const t=linea.trim();
-                      const esEncabezado = /^(Calentamiento|Bloque principal|Bloque fuerza|Bloque técnica|Metcon|Vuelta a la calma|Notas técnicas|Objetivo)/i.test(t) && t.length<80;
+                      const esEncabezado = /^(Calentamiento|Bloque principal|Bloque fuerza|Bloque técnica|Metcon|Vuelta a la calma|Notas técnicas|Objetivo)\s*(\([^)]*\))?:/i.test(t);
                       const esItem = /^[-.•]/.test(t) || /^[A-Z]\)/.test(t);
                       const limpio = t.replace(/^[-.•]\s*/,'').replace(/\*\*/g,'').replace(/^#+\s*/,'');
                       if(esEncabezado){

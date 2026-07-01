@@ -119,7 +119,7 @@ Para "fin_bloque": si el coach menciona que se ha completado un bloque, inicia d
 
 Para "objetivo_principal": si el atleta menciona un objetivo concreto con fecha (competición, carrera, evento, marca objetivo), extrae: {"descripcion":"descripción del objetivo","fecha":"YYYY-MM-DD","tipo":"competicion|marca|evento|otro"}. null si no hay objetivo mencionado.
 Para "datos_entrenamiento": extrae SOLO de mensajes del ATLETA, nunca del COACH. Si el atleta menciona explícitamente sus zonas, marcas o métricas personales extráelas. Si solo es el coach hablando de zonas en su planificación, devuelve null.
-Para "distribucion_semanal": si el coach y atleta acuerdan qué tipo de sesión corresponde a cada día, extrae como texto. Ejemplo: "lunes-carrera, martes-box, miercoles-carrera, jueves-box, viernes-carrera, sabado-box". null si no se habló de distribución.
+Para "distribucion_semanal": SOLO extrae si el ATLETA declara explícitamente un cambio PERMANENTE en su disponibilidad real (ej: "ya no puedo entrenar los martes", "ahora tengo libre los viernes"). NUNCA extraigas esto de una planificación semanal generada por el coach o de confirmaciones de plan — esos son ajustes puntuales, no cambios de disponibilidad real. null en el 99% de los casos, solo actualiza si el atleta menciona explícitamente su horario/trabajo/disponibilidad ha cambiado.
 
 Conversación:
 ${ultimos}`;

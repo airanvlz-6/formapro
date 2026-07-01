@@ -58,7 +58,9 @@ export default function Plan() {
     finally{ setCargando(false); setIniciado(true); }
   };
 
-  const getTipoConfig = (tipo:string) => {
+  const getTipoConfig = (tipo:string, titulo?:string) => {
+    const textoCompleto = `${tipo||""} ${titulo||""}`.toLowerCase();
+    if(/descanso|recuperaci[oó]n|casa|foam roller/i.test(textoCompleto)) return TIPO_CONFIG.descanso;
     const key = Object.keys(TIPO_CONFIG).find(k => tipo?.toLowerCase().includes(k));
     return key ? TIPO_CONFIG[key] : TIPO_CONFIG.otro;
   };
@@ -189,8 +191,8 @@ export default function Plan() {
             {DIAS.map(dia => {
               const sesion = sesiones.find((s:any) => s.dia === dia);
               const esHoy = dia === diaHoy;
-              const config = sesion ? getTipoConfig(sesion.tipo) : {emoji:"—",color:C.muted};
-              const esDescanso = sesion?.tipo === "descanso" || !sesion;
+              const config = sesion ? getTipoConfig(sesion.tipo, sesion.titulo) : {emoji:"—",color:C.muted};
+              const esDescanso = /descanso|recuperaci[oó]n|casa|foam roller/i.test(`${sesion?.tipo||""} ${sesion?.titulo||""}`) || !sesion;
 
               return (
                 <div key={dia} onClick={()=>sesion&&!esDescanso&&setSesionDetalle(sesion)}

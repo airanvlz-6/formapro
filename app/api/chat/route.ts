@@ -497,6 +497,18 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
 
   if (action === "guardar_plan_semana") {
     const { plan } = datos;
+    // Preservar sesiones ya completadas si existen
+    const { data: planExistente } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", plan.week_start).single();
+    if (planExistente?.sessions) {
+      plan.sessions = plan.sessions.map((nuevaSesion: any) => {
+        const sesionExistente = planExistente.sessions.find((s: any) => s.dia === nuevaSesion.dia);
+        if (sesionExistente?.completada) {
+          // Mantener la sesión completada tal cual estaba, no sobrescribir
+          return sesionExistente;
+        }
+        return nuevaSesion;
+      });
+    }
     const { error } = await supabase.from("weekly_plan").upsert({
       user_codigo: codigo,
       week_start: plan.week_start,

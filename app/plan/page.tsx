@@ -189,7 +189,8 @@ export default function Plan() {
 
             {/* Sesiones */}
             {DIAS.map(dia => {
-              const sesion = sesiones.find((s:any) => s.dia === dia);
+              const normalizar = (s:string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+              const sesion = sesiones.find((s:any) => normalizar(s.dia) === normalizar(dia));
               const esHoy = dia === diaHoy;
               const config = sesion ? getTipoConfig(sesion.tipo, sesion.titulo) : {emoji:"—",color:C.muted};
               const esDescanso = /descanso|recuperaci[oó]n|casa|foam roller/i.test(`${sesion?.tipo||""} ${sesion?.titulo||""}`) || !sesion;

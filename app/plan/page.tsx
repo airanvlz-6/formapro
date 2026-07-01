@@ -19,6 +19,7 @@ export default function Plan() {
   const [codigo, setCodigo] = useState("");
   const [autenticado, setAutenticado] = useState(false);
   const [plan, setPlan] = useState<any>(null);
+  const [objetivoPrincipal, setObjetivoPrincipal] = useState<any>(null);
   const [weekStart, setWeekStart] = useState("");
   const [cargando, setCargando] = useState(true);
   const [iniciado, setIniciado] = useState(false);
@@ -51,6 +52,8 @@ export default function Plan() {
       setPlan(data.plan);
       setWeekStart(data.weekStart);
       setAutenticado(true);
+      fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"recuperar_usuario",codigo:cod})})
+        .then(r=>r.json()).then(d=>setObjetivoPrincipal(d?.data?.objetivo_principal||null)).catch(()=>{});
     }catch{ setError("Error de conexión"); }
     finally{ setCargando(false); setIniciado(true); }
   };
@@ -130,33 +133,55 @@ export default function Plan() {
           </div>
         ) : (
           <>
+            {/* Objetivo principal */}
+            {objetivoPrincipal?.descripcion && (()=>{
+              const fechaObj = objetivoPrincipal.fecha ? new Date(objetivoPrincipal.fecha) : null;
+              const diasRestantes = fechaObj ? Math.max(0, Math.round((fechaObj.getTime() - new Date().getTime()) / (24*60*60*1000))) : null;
+              return (
+                <div style={{background:C.card,border:`2px solid ${C.accent}`,borderRadius:16,padding:"14px 18px",marginBottom:16}}>
+                  <p style={{color:C.accent,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>🏆 Objetivo principal</p>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                    <p style={{color:C.ink,fontSize:15,fontWeight:700}}>{objetivoPrincipal.descripcion}</p>
+                    {diasRestantes !== null && <span style={{color:C.muted,fontSize:12}}>{diasRestantes} días</span>}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Info semana */}
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:16}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                <div>
-                  <p style={{color:C.ink,fontSize:14,fontWeight:700}}>Semana {plan.week_number} — {plan.block_name}</p>
-                  <p style={{color:C.muted,fontSize:12}}>
-                    {new Date(weekStart).toLocaleDateString("es-ES",{day:"numeric",month:"long"})} — {new Date(new Date(weekStart).getTime()+6*24*60*60*1000).toLocaleDateString("es-ES",{day:"numeric",month:"long"})}
-                  </p>
+              <p style={{color:C.ink,fontSize:15,fontWeight:700,marginBottom:2,textTransform:"capitalize"}}>{plan.block_name}</p>
+              <p style={{color:C.muted,fontSize:12,marginBottom:10}}>
+                Semana {plan.week_number}{plan.total_weeks_block?` de ${plan.total_weeks_block}`:""} · {new Date(weekStart).toLocaleDateString("es-ES",{day:"numeric",month:"long"})} — {new Date(new Date(weekStart).getTime()+6*24*60*60*1000).toLocaleDateString("es-ES",{day:"numeric",month:"long"})}
+              </p>
+              {plan.total_weeks_block && (
+                <div style={{height:6,background:C.border,borderRadius:100,marginBottom:14,display:"flex",gap:2,overflow:"hidden"}}>
+                  {Array.from({length:plan.total_weeks_block}).map((_,i)=>(
+                    <div key={i} style={{flex:1,background:i<plan.week_number?C.accent:C.border,borderRadius:2}}/>
+                  ))}
                 </div>
-                <div style={{textAlign:"right"}}>
-                  <p style={{color:C.muted,fontSize:11,marginBottom:4}}>Sesiones</p>
-                  <p style={{color:C.ink,fontSize:16,fontWeight:700}}>{sesionesCompletadas}/{totalSesiones}</p>
+              )}
+              {plan.week_objective && (
+                <div style={{background:C.bg,borderRadius:10,padding:"10px 12px",marginBottom:14}}>
+                  <p style={{color:C.muted,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Objetivo de la semana</p>
+                  <p style={{color:C.ink,fontSize:13}}>{plan.week_objective}</p>
                 </div>
+              )}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <span style={{color:C.muted,fontSize:12}}>Sesiones completadas</span>
+                <span style={{color:C.ink,fontSize:13,fontWeight:700}}>{sesionesCompletadas}/{totalSesiones}</span>
               </div>
-              {/* Barra progreso semana */}
-              <div style={{height:6,background:C.border,borderRadius:100,marginBottom:10}}>
+              <div style={{height:6,background:C.border,borderRadius:100,marginBottom:14}}>
                 <div style={{height:6,borderRadius:100,background:"#4CAF50",width:`${totalSesiones>0?(sesionesCompletadas/totalSesiones)*100:0}%`,transition:"width 0.8s ease"}}/>
               </div>
-              {/* Confianza planificación */}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{color:C.muted,fontSize:12}}>Confianza del plan</span>
-                <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <div style={{width:80,height:4,background:C.border,borderRadius:100}}>
-                    <div style={{height:4,borderRadius:100,background:getConfianzaColor(confianza),width:`${confianza}%`}}/>
-                  </div>
-                  <span style={{color:getConfianzaColor(confianza),fontSize:12,fontWeight:700}}>{confianza}%</span>
+                <div>
+                  <span style={{color:C.muted,fontSize:12}}>Confianza del plan</span>
+                  <p style={{color:getConfianzaColor(confianza),fontSize:11,marginTop:2}}>
+                    {confianza>=90?"Plan estable, sin cambios previstos":confianza>=70?"Esperando nuevos datos":"Es probable que la planificación cambie"}
+                  </p>
                 </div>
+                <span style={{color:getConfianzaColor(confianza),fontSize:18,fontWeight:700}}>{confianza}%</span>
               </div>
             </div>
 

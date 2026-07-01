@@ -880,7 +880,9 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
     };
 
     await procesarTag("[PLAN:",6,async(data)=>{
-      await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:data}});
+      console.log("PLAN_DATA_A_GUARDAR:",JSON.stringify(data).slice(0,200));
+      const res=await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:data}});
+      console.log("RESPUESTA_GUARDAR_PLAN:",JSON.stringify(res));
     });
     await procesarTag("[MODIFICAR_SESION:",18,async(data)=>{
       await apiCall({action:"actualizar_sesion_plan",codigo:codigoUsuario,datos:data});

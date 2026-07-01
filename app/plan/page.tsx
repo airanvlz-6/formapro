@@ -246,20 +246,32 @@ export default function Plan() {
               <p style={{color:C.muted,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Planificado:</p>
               {sesionDetalle.descripcion&&(
                 <div style={{marginBottom:12}}>
-                  {sesionDetalle.descripcion.split(/\n+/).filter((l:string)=>l.trim()).map((linea:string,i:number)=>{
-                    const t=linea.trim();
-                    // Encabezados de bloque (mayúsculas o con **)
-                    const esEncabezado = /^[A-ZÁÉÍÓÚÑ\s\d()]+$/.test(t.replace(/[*#]/g,'').trim()) && t.length<60 && t.length>2;
-                    const esItem = /^[-.•]/.test(t) || /^[A-Z]\)/.test(t);
-                    const limpio = t.replace(/^[-.•]\s*/,'').replace(/\*\*/g,'').replace(/^#+\s*/,'');
-                    if(esEncabezado){
-                      return <p key={i} style={{color:C.accent,fontSize:12,fontWeight:700,marginTop:i>0?16:0,marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>{limpio}</p>;
-                    }
-                    if(esItem){
-                      return <p key={i} style={{color:"#D4D0CB",fontSize:13,lineHeight:1.7,marginBottom:4,paddingLeft:12,position:"relative"}}><span style={{position:"absolute",left:0,color:C.muted}}>•</span>{limpio}</p>;
-                    }
-                    return <p key={i} style={{color:"#D4D0CB",fontSize:13,lineHeight:1.7,marginBottom:6}}>{limpio}</p>;
-                  })}
+                  {(()=>{
+                    // Normalizar: dividir por saltos de línea Y por patrones de bloque conocidos
+                    let texto = sesionDetalle.descripcion;
+                    const patronesBloque = /(Calentamiento|Bloque principal|Bloque fuerza|Bloque técnica|Metcon|Vuelta a la calma|Notas técnicas|Objetivo)(\s*\([^)]*\))?:/gi;
+                    texto = texto.replace(patronesBloque, (match:string) => `\n\n${match}`);
+                    const lineas = texto.split(/\n+/).filter((l:string)=>l.trim());
+                    return lineas.map((linea:string,i:number)=>{
+                      const t=linea.trim();
+                      const esEncabezado = /^(Calentamiento|Bloque principal|Bloque fuerza|Bloque técnica|Metcon|Vuelta a la calma|Notas técnicas|Objetivo)/i.test(t) && t.length<80;
+                      const esItem = /^[-.•]/.test(t) || /^[A-Z]\)/.test(t);
+                      const limpio = t.replace(/^[-.•]\s*/,'').replace(/\*\*/g,'').replace(/^#+\s*/,'');
+                      if(esEncabezado){
+                        const partes = limpio.split(":");
+                        return (
+                          <div key={i} style={{marginTop:i>0?14:0,marginBottom:6}}>
+                            <p style={{color:C.accent,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>{partes[0]}</p>
+                            {partes[1] && <p style={{color:"#D4D0CB",fontSize:13,lineHeight:1.7}}>{partes.slice(1).join(":").trim()}</p>}
+                          </div>
+                        );
+                      }
+                      if(esItem){
+                        return <p key={i} style={{color:"#D4D0CB",fontSize:13,lineHeight:1.7,marginBottom:4,paddingLeft:12,position:"relative"}}><span style={{position:"absolute",left:0,color:C.muted}}>•</span>{limpio}</p>;
+                      }
+                      return <p key={i} style={{color:"#D4D0CB",fontSize:13,lineHeight:1.7,marginBottom:6}}>{limpio}</p>;
+                    });
+                  })()}
                 </div>
               )}
               {sesionDetalle.modificado&&(

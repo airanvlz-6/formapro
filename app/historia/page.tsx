@@ -49,6 +49,7 @@ export default function Historia() {
   const [mesActual, setMesActual] = useState(new Date());
   const [diaSeleccionado, setDiaSeleccionado] = useState<any>(null);
   const [logros, setLogros] = useState<any[]>([]);
+  const [historialFisiologico, setHistorialFisiologico] = useState<any[]>([]);
 
   const cargarDatos = async(cod:string)=>{
     setCargando(true);
@@ -62,6 +63,7 @@ export default function Historia() {
       setBloques(dataUser?.data?.analisis_bloques||[]);
       setHistorialMarcas(dataUser?.data?.historial_marcas||[]);
       setWorkoutHistory(dataUser?.data?.workout_history||[]);
+      setHistorialFisiologico(dataUser?.data?.historial_fisiologico||[]);
       fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"calcular_logros",codigo:cod})})
         .then(r=>r.json()).then(d=>setLogros(d.logros||[])).catch(()=>{});
       setAutenticado(true);
@@ -263,18 +265,32 @@ export default function Historia() {
                 <p style={{color:C.ink,fontSize:15,fontWeight:700}}>{new Date(diaSeleccionado.fecha).toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"})}</p>
                 <button onClick={()=>setDiaSeleccionado(null)} style={{background:"none",border:"none",color:C.muted,fontSize:20,cursor:"pointer"}}>✕</button>
               </div>
+              {(()=>{
+                const fisioDia = historialFisiologico.find((f:any) => f.fecha === diaSeleccionado.fecha);
+                return fisioDia && (
+                  <div style={{background:C.bg,borderRadius:12,padding:14,marginBottom:10}}>
+                    <p style={{color:C.muted,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>🙂 Estado</p>
+                    <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
+                      {fisioDia.hrv && <span style={{color:C.ink,fontSize:13}}>HRV {fisioDia.hrv}ms</span>}
+                      {fisioDia.sueno && <span style={{color:C.ink,fontSize:13}}>Sueño {fisioDia.sueno}/100</span>}
+                      {fisioDia.rhr && <span style={{color:C.ink,fontSize:13}}>FC reposo {fisioDia.rhr}bpm</span>}
+                    </div>
+                  </div>
+                );
+              })()}
               {diaSeleccionado.items.map((item:any,i:number)=>(
                 <div key={i} style={{background:C.bg,borderRadius:12,padding:14,marginBottom:10}}>
                   {item.esEvento ? (
                     <>
-                      <p style={{color:C.accent,fontSize:12,fontWeight:700,marginBottom:4,textTransform:"uppercase"}}>{item.type}</p>
+                      <p style={{color:C.muted,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>{TIPO_CONFIG[item.type]?.emoji||"📌"} {TIPO_CONFIG[item.type]?.label||item.type}</p>
                       <p style={{color:C.ink,fontSize:14,fontWeight:600}}>{item.title}</p>
                     </>
                   ) : (
                     <>
+                      <p style={{color:C.muted,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🏋️ Entrenamiento</p>
                       <p style={{color:C.ink,fontSize:14,fontWeight:600,marginBottom:6,textTransform:"capitalize"}}>{item.tipo?.replace(/_/g,' ')}</p>
                       <p style={{color:C.muted,fontSize:12,lineHeight:1.6}}>{item.notas}</p>
-                      {item.sensacion && <span style={{color:C.accent,fontSize:11,marginTop:4,display:"inline-block"}}>● {item.sensacion}</span>}
+                      {item.sensacion && <span style={{color:C.accent,fontSize:11,marginTop:6,display:"inline-block"}}>● Sensación: {item.sensacion}</span>}
                     </>
                   )}
                 </div>

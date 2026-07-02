@@ -424,7 +424,8 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
       fecha: sesion.fecha || new Date().toISOString(),
       notas: sesion.notas || "",
       duracion: sesion.duracion || null,
-      sensacion: sesion.sensacion || "buena"
+      sensacion: sesion.sensacion || "buena",
+      analisis: sesion.analisis || null
     };
     // Insertar en orden cronológico
     const workoutActualizado = [...workoutActual, sesionNormalizada].sort((a,b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());

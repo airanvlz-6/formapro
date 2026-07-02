@@ -60,7 +60,8 @@ export default function Plan() {
 
   const getTipoConfig = (tipo:string, titulo?:string) => {
     const textoCompleto = `${tipo||""} ${titulo||""}`.toLowerCase();
-    if(/descanso|recuperaci[oó]n|casa|foam roller/i.test(textoCompleto)) return TIPO_CONFIG.descanso;
+    if(/descanso completo|descanso total|^descanso$/i.test(textoCompleto.trim())) return TIPO_CONFIG.descanso;
+    if(/recuperaci[oó]n|foam roller/i.test(textoCompleto)) return { emoji:"🧘", color:"#64B5F6" };
     const key = Object.keys(TIPO_CONFIG).find(k => tipo?.toLowerCase().includes(k));
     return key ? TIPO_CONFIG[key] : TIPO_CONFIG.otro;
   };

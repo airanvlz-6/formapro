@@ -952,7 +952,8 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
 
   const enviar=async(texto:string=input)=>{
     if((!texto.trim()&&imagenesAdjuntas.length===0)||cargando||bloqueado) return;
-    const textoEnvio=texto.trim()||"Analiza esta imagen o archivo y dame feedback en base a mi programacion.";
+    const fechaHoyStr=new Date().toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"Europe/Madrid"});
+    const textoEnvio=(texto.trim()||"Analiza esta imagen o archivo y dame feedback en base a mi programacion.")+`\n\n[Fecha actual del sistema: ${fechaHoyStr}]`;
     let contenidoUsuario:any=textoEnvio;
     if(imagenesAdjuntas.length>0){
       const contenido:any[]=imagenesAdjuntas.map(img=>{
@@ -967,7 +968,8 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       contenidoUsuario=contenido;
     }
     const nuevoHist=[...historial,{role:"user",content:contenidoUsuario}];
-    const mensajeDisplay=imagenesAdjuntas.length>0?`📎 ${imagenesAdjuntas.length} archivo${imagenesAdjuntas.length>1?"s":""} adjunto${imagenesAdjuntas.length>1?"s":""}\n${textoEnvio}`:textoEnvio;
+    const textoSinFecha=textoEnvio.replace(/\n\n\[Fecha actual del sistema:.*?\]/,"");
+    const mensajeDisplay=imagenesAdjuntas.length>0?`📎 ${imagenesAdjuntas.length} archivo${imagenesAdjuntas.length>1?"s":""} adjunto${imagenesAdjuntas.length>1?"s":""}\n${textoSinFecha}`:textoSinFecha;
     setMensajes(prev=>[...prev,{role:"user",content:mensajeDisplay}]);
     setInput("");setImagenAdjunta(null);setImagenPreview(null);setImagenesAdjuntas([]);
     if(inputRef.current){inputRef.current.style.height="auto";}

@@ -1603,9 +1603,7 @@ ${testStr}`}]});
                     <button onClick={()=>{window.open(`/plan?codigo=${codigoUsuario}`,'_blank');setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
                       📅 Mi plan
                     </button>
-                    <button onClick={()=>{setMostrarMenu(false);enviarSilencioso("SISTEMA: Genera AHORA el plan semanal completo de los 7 días con el formato JSON [PLAN:{...}] al inicio de tu respuesta, con week_objective, total_weeks_block y por_que en cada sesión. Ten en cuenta el ciclo actual, sesiones ya completadas esta semana, disponibilidad y objetivo. Este mensaje requiere generar el tag técnico sin excepción.");}} style={{width:"100%",background:"none",border:"none",color:C.accent,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8,fontWeight:600}}>
-                      🔄 Sincronizar Mi Plan
-                    </button>
+                    
                     <button onClick={()=>{window.open(`/historia?codigo=${codigoUsuario}`,'_blank');setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
                       📖 Mi historia
                     </button>

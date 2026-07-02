@@ -313,7 +313,7 @@ ${planSemana&&planSemana.sessions?`
 📅 PLAN SEMANAL ACTUAL EN "MI PLAN" — ESTA ES LA ÚNICA FUENTE DE VERDAD:
 Bloque: ${planSemana.block_name} · Semana ${planSemana.week_number}${planSemana.total_weeks_block?` de ${planSemana.total_weeks_block}`:""}
 Objetivo semana: ${planSemana.week_objective||"no definido"}
-${planSemana.sessions.map((s:any)=>`- ${s.dia.toUpperCase()}: ${s.titulo}${s.completada?` [YA COMPLETADO — real: ${s.titulo_real||""}: ${s.descripcion_real||""}]`:""}${s.modificado?` [MODIFICADO: ${s.motivo_modificacion}]`:""}`).join("\n")}
+${planSemana.sessions.map((s:any)=>`\n### ${s.dia.toUpperCase()} ###\nTítulo: ${s.titulo}\nContenido completo: ${s.descripcion||"no detallado"}\nPor qué: ${s.por_que||""}${s.completada?`\n[YA COMPLETADO — reportó: ${s.titulo_real||""}: ${s.descripcion_real||""}]`:""}${s.modificado?`\n[MODIFICADO: ${s.motivo_modificacion}]`:""}`).join("\n")}
 REGLA CRÍTICA ABSOLUTA: Esta es la planificación REAL y VIGENTE. Cuando el atleta pregunte por la sesión de cualquier día, SIEMPRE responde basándote EXACTAMENTE en esta lista, nunca inventes ni generes una sesión diferente. Si un día ya está marcado como completado, NO lo vuelvas a prescribir — pregunta si necesita algo más o pasa al siguiente día pendiente. Si no existe plan para un día futuro lejano, dilo claramente en vez de inventar contenido.`:"⚠️ NO HAY PLAN SEMANAL GUARDADO EN MI PLAN. Si el atleta pregunta por una sesión, indícale que no tienes un plan guardado para esta semana y sugiere generarlo."}
 
 ${distribucion?`DISPONIBILIDAD RÍGIDA POR DÍA — RESTRICCIÓN ABSOLUTA E INQUEBRANTABLE:

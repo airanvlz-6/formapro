@@ -589,21 +589,15 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     const marcas = usuario.historial_marcas || [];
     const logros: any[] = [];
 
-    // Primera sesion
-    if (workouts.length >= 1) {
-      const primera = [...workouts].sort((a:any,b:any)=>new Date(a.fecha).getTime()-new Date(b.fecha).getTime())[0];
-      logros.push({ tipo: "primera_sesion", emoji: "🎯", titulo: "Primera sesión completada", fecha: primera.fecha });
-    }
-
-    // Hitos de sesiones
-    [10, 50, 100, 200].forEach(hito => {
+    // Hitos de sesiones (solo si hay suficiente volumen para ser relevante)
+    [50, 100, 200].forEach(hito => {
       if (workouts.length >= hito) {
         const sesionHito = [...workouts].sort((a:any,b:any)=>new Date(a.fecha).getTime()-new Date(b.fecha).getTime())[hito-1];
-        logros.push({ tipo: `sesiones_${hito}`, emoji: "💯", titulo: `${hito} sesiones completadas`, fecha: sesionHito?.fecha || new Date().toISOString() });
+        logros.push({ tipo: `sesiones_${hito}`, emoji: "💯", titulo: `${hito} sesiones completadas`, subtitulo: "Constancia que da resultados", fecha: sesionHito?.fecha || new Date().toISOString() });
       }
     });
 
-    // PRs y mejoras de marca
+    // Solo mejoras reales de marca (mínimo 2 registros, con % de mejora calculado)
     const porEjercicio: Record<string, any[]> = {};
     marcas.forEach((m: any) => {
       if (!porEjercicio[m.ejercicio]) porEjercicio[m.ejercicio] = [];
@@ -611,15 +605,21 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     });
     Object.entries(porEjercicio).forEach(([ejercicio, registros]) => {
       const ordenados = [...registros].sort((a:any,b:any)=>new Date(a.fecha).getTime()-new Date(b.fecha).getTime());
-      if (ordenados.length === 1) {
-        logros.push({ tipo: `primer_pr_${ejercicio}`, emoji: "🏆", titulo: `Primer registro: ${ejercicio.replace(/_/g,' ')}`, fecha: ordenados[0].fecha });
-      } else if (ordenados.length >= 2) {
-        const ultimo = ordenados[ordenados.length-1];
-        const anterior = ordenados[ordenados.length-2];
-        const valorUltimo = parseFloat(String(ultimo.valor).replace(/[^\d.]/g,''));
+      for (let i = 1; i < ordenados.length; i++) {
+        const actual = ordenados[i];
+        const anterior = ordenados[i-1];
+        const valorActual = parseFloat(String(actual.valor).replace(/[^\d.]/g,''));
         const valorAnterior = parseFloat(String(anterior.valor).replace(/[^\d.]/g,''));
-        if (!isNaN(valorUltimo) && !isNaN(valorAnterior) && valorUltimo > valorAnterior) {
-          logros.push({ tipo: `mejora_${ejercicio}_${ultimo.fecha}`, emoji: "📊", titulo: `Nueva marca: ${ejercicio.replace(/_/g,' ')} ${ultimo.valor}`, fecha: ultimo.fecha });
+        if (!isNaN(valorActual) && !isNaN(valorAnterior) && valorAnterior > 0 && valorActual > valorAnterior) {
+          const mejoraPct = (((valorActual - valorAnterior) / valorAnterior) * 100).toFixed(1);
+          const unidad = String(actual.valor).replace(/[\d.,]/g,'').trim();
+          logros.push({
+            tipo: `mejora_${ejercicio}_${actual.fecha}`,
+            emoji: "📈",
+            titulo: `${ejercicio.replace(/_/g,' ')}: ${actual.valor}`,
+            subtitulo: `+${mejoraPct}% vs anterior (${anterior.valor})`,
+            fecha: actual.fecha
+          });
         }
       }
     });

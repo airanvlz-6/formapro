@@ -193,7 +193,8 @@ export default function Plan() {
               const sesion = sesiones.find((s:any) => normalizar(s.dia) === normalizar(dia));
               const esHoy = dia === diaHoy;
               const config = sesion ? getTipoConfig(sesion.tipo, sesion.titulo) : {emoji:"—",color:C.muted};
-              const esDescanso = /descanso|recuperaci[oó]n|casa|foam roller/i.test(`${sesion?.tipo||""} ${sesion?.titulo||""}`) || !sesion;
+              const esDescansoTotal = /descanso completo|descanso total|^descanso$/i.test(`${sesion?.tipo||""} ${sesion?.titulo||""}`.trim()) || !sesion;
+              const esDescanso = esDescansoTotal;
 
               return (
                 <div key={dia} onClick={()=>sesion&&!esDescanso&&setSesionDetalle(sesion)}

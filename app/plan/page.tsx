@@ -177,14 +177,16 @@ export default function Plan() {
               <div style={{height:6,background:C.border,borderRadius:100,marginBottom:14}}>
                 <div style={{height:6,borderRadius:100,background:"#4CAF50",width:`${totalSesiones>0?(sesionesCompletadas/totalSesiones)*100:0}%`,transition:"width 0.8s ease"}}/>
               </div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div>
-                  <span style={{color:C.muted,fontSize:12}}>Confianza del plan</span>
-                  <p style={{color:getConfianzaColor(confianza),fontSize:11,marginTop:2}}>
-                    {confianza>=90?"Plan estable, sin cambios previstos":confianza>=70?"Esperando nuevos datos":"Es probable que la planificación cambie"}
-                  </p>
+              <div style={{background:C.bg,borderRadius:10,padding:"10px 12px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                  <span style={{color:getConfianzaColor(confianza),fontSize:13,fontWeight:700}}>
+                    {confianza>=90?"🟢 Plan estable":confianza>=70?"🟡 Adaptándose al atleta":"🔴 Recalculando planificación"}
+                  </span>
+                  <span style={{color:getConfianzaColor(confianza),fontSize:14,fontWeight:700}}>{confianza}%</span>
                 </div>
-                <span style={{color:getConfianzaColor(confianza),fontSize:18,fontWeight:700}}>{confianza}%</span>
+                <p style={{color:C.muted,fontSize:11}}>
+                  {confianza>=90?"No se prevén cambios.":confianza>=70?"Esperando nuevos datos.":"Se recomienda reportar la próxima sesión."}
+                </p>
               </div>
             </div>
 

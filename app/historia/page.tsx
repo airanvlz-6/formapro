@@ -45,6 +45,9 @@ export default function Historia() {
   const [bloques, setBloques] = useState<any[]>([]);
   const [historialMarcas, setHistorialMarcas] = useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
   const [ejercicioSeleccionado, setEjercicioSeleccionado] = useState<string>("");
+  const [workoutHistory, setWorkoutHistory] = useState<any[]>([]);
+  const [mesActual, setMesActual] = useState(new Date());
+  const [diaSeleccionado, setDiaSeleccionado] = useState<any>(null);
 
   const cargarDatos = async(cod:string)=>{
     setCargando(true);
@@ -57,6 +60,7 @@ export default function Historia() {
       const dataUser = await resUser.json();
       setBloques(dataUser?.data?.analisis_bloques||[]);
       setHistorialMarcas(dataUser?.data?.historial_marcas||[]);
+      setWorkoutHistory(dataUser?.data?.workout_history||[]);
       setAutenticado(true);
     }catch{ setError("Error de conexión"); }
     finally{ setCargando(false); setIniciado(true); }
@@ -168,6 +172,105 @@ export default function Historia() {
                   Cancelar
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Calendario visual */}
+        {(()=>{
+          const anio = mesActual.getFullYear();
+          const mes = mesActual.getMonth();
+          const primerDia = new Date(anio, mes, 1);
+          const ultimoDia = new Date(anio, mes+1, 0);
+          const diasEnMes = ultimoDia.getDate();
+          const diaSemanaInicio = (primerDia.getDay()+6)%7; // lunes=0
+
+          const eventosPorDia: Record<string, any[]> = {};
+          workoutHistory.forEach((w:any) => {
+            const key = new Date(w.fecha).toISOString().split('T')[0];
+            if(!eventosPorDia[key]) eventosPorDia[key]=[];
+            eventosPorDia[key].push({...w, esWorkout:true});
+          });
+          eventos.forEach((e:any) => {
+            const key = e.date;
+            if(!eventosPorDia[key]) eventosPorDia[key]=[];
+            eventosPorDia[key].push({...e, esEvento:true});
+          });
+
+          const getIconoDia = (items:any[]) => {
+            if(!items||items.length===0) return null;
+            const primero = items[0];
+            if(primero.esEvento){
+              const map:Record<string,string> = {race:"🏆",pr:"⚡",injury:"🩹",illness:"🤒",travel:"✈️",rest:"😴",objective_change:"🎯",block_start:"🚀",block_end:"✅"};
+              return map[primero.type]||"📌";
+            }
+            const tipo = (primero.tipo||"").toLowerCase();
+            if(tipo.includes("carrera")) return "🏃";
+            if(tipo.includes("box")||tipo.includes("crossfit")||tipo.includes("fuerza")) return "🏋️";
+            if(tipo.includes("descanso")) return "😴";
+            return "💪";
+          };
+
+          const celdas = [];
+          for(let i=0;i<diaSemanaInicio;i++) celdas.push(null);
+          for(let d=1;d<=diasEnMes;d++) celdas.push(d);
+
+          return (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                <button onClick={()=>setMesActual(new Date(anio,mes-1,1))} style={{background:"none",border:"none",color:C.muted,fontSize:18,cursor:"pointer"}}>‹</button>
+                <p style={{color:C.ink,fontSize:14,fontWeight:700,textTransform:"capitalize"}}>{mesActual.toLocaleDateString("es-ES",{month:"long",year:"numeric"})}</p>
+                <button onClick={()=>setMesActual(new Date(anio,mes+1,1))} style={{background:"none",border:"none",color:C.muted,fontSize:18,cursor:"pointer"}}>›</button>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:8}}>
+                {["L","M","X","J","V","S","D"].map(d=>(
+                  <div key={d} style={{textAlign:"center",fontSize:10,color:C.muted,fontWeight:600}}>{d}</div>
+                ))}
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
+                {celdas.map((d,i)=>{
+                  if(d===null) return <div key={i}/>;
+                  const fechaKey = `${anio}-${String(mes+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                  const items = eventosPorDia[fechaKey];
+                  const icono = getIconoDia(items);
+                  const esHoy = new Date().toISOString().split('T')[0]===fechaKey;
+                  return (
+                    <div key={i} onClick={()=>items&&setDiaSeleccionado({fecha:fechaKey,items})}
+                      style={{aspectRatio:"1",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",borderRadius:8,background:esHoy?`${C.accent}20`:items?C.bg:"transparent",border:esHoy?`1px solid ${C.accent}`:"1px solid transparent",cursor:items?"pointer":"default",fontSize:9}}>
+                      <span style={{color:esHoy?C.accent:C.muted,fontSize:10,fontWeight:esHoy?700:400}}>{d}</span>
+                      {icono && <span style={{fontSize:13,marginTop:1}}>{icono}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Modal dia seleccionado */}
+        {diaSeleccionado && (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:"24px"}} onClick={()=>setDiaSeleccionado(null)}>
+            <div style={{background:"#1C1C1C",borderRadius:20,padding:24,width:"100%",maxWidth:500,maxHeight:"70vh",overflowY:"auto",border:`1px solid ${C.border}`}} onClick={e=>e.stopPropagation()}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                <p style={{color:C.ink,fontSize:15,fontWeight:700}}>{new Date(diaSeleccionado.fecha).toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"})}</p>
+                <button onClick={()=>setDiaSeleccionado(null)} style={{background:"none",border:"none",color:C.muted,fontSize:20,cursor:"pointer"}}>✕</button>
+              </div>
+              {diaSeleccionado.items.map((item:any,i:number)=>(
+                <div key={i} style={{background:C.bg,borderRadius:12,padding:14,marginBottom:10}}>
+                  {item.esEvento ? (
+                    <>
+                      <p style={{color:C.accent,fontSize:12,fontWeight:700,marginBottom:4,textTransform:"uppercase"}}>{item.type}</p>
+                      <p style={{color:C.ink,fontSize:14,fontWeight:600}}>{item.title}</p>
+                    </>
+                  ) : (
+                    <>
+                      <p style={{color:C.ink,fontSize:14,fontWeight:600,marginBottom:6,textTransform:"capitalize"}}>{item.tipo?.replace(/_/g,' ')}</p>
+                      <p style={{color:C.muted,fontSize:12,lineHeight:1.6}}>{item.notas}</p>
+                      {item.sensacion && <span style={{color:C.accent,fontSize:11,marginTop:4,display:"inline-block"}}>● {item.sensacion}</span>}
+                    </>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}

@@ -48,6 +48,7 @@ export default function Historia() {
   const [workoutHistory, setWorkoutHistory] = useState<any[]>([]);
   const [mesActual, setMesActual] = useState(new Date());
   const [diaSeleccionado, setDiaSeleccionado] = useState<any>(null);
+  const [decisionDia, setDecisionDia] = useState<any>(null);
   const [logros, setLogros] = useState<any[]>([]);
   const [historialFisiologico, setHistorialFisiologico] = useState<any[]>([]);
 
@@ -241,7 +242,13 @@ export default function Historia() {
                   const iconos = getIconosDia(items);
                   const esHoy = new Date().toISOString().split('T')[0]===fechaKey;
                   return (
-                    <div key={i} onClick={()=>items&&setDiaSeleccionado({fecha:fechaKey,items})}
+                    <div key={i} onClick={()=>{
+                      if(items){
+                        setDiaSeleccionado({fecha:fechaKey,items});
+                        fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"obtener_plan_por_fecha",codigo,datos:{fecha:fechaKey}})})
+                          .then(r=>r.json()).then(d=>setDecisionDia(d.sesion||null)).catch(()=>setDecisionDia(null));
+                      }
+                    }}
                       style={{aspectRatio:"1",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",borderRadius:8,background:esHoy?`${C.accent}20`:items?C.bg:"transparent",border:esHoy?`1px solid ${C.accent}`:"1px solid transparent",cursor:items?"pointer":"default",fontSize:9,gap:1}}>
                       <span style={{color:esHoy?C.accent:C.muted,fontSize:10,fontWeight:esHoy?700:400}}>{d}</span>
                       {iconos.length>0 && (
@@ -278,6 +285,19 @@ export default function Historia() {
                   </div>
                 );
               })()}
+              {decisionDia && (
+                <div style={{background:C.bg,borderRadius:12,padding:14,marginBottom:10}}>
+                  <p style={{color:C.muted,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>🧠 Decisión de Forge</p>
+                  {decisionDia.modificado ? (
+                    <>
+                      <p style={{color:"#FFD700",fontSize:12,fontWeight:600,marginBottom:4}}>⚠️ Sesión modificada</p>
+                      <p style={{color:C.ink,fontSize:13,lineHeight:1.6}}>{decisionDia.motivo_modificacion}</p>
+                    </>
+                  ) : (
+                    <p style={{color:"#4CAF50",fontSize:13,lineHeight:1.6}}>Se mantuvo la planificación prevista: {decisionDia.titulo}</p>
+                  )}
+                </div>
+              )}
               {diaSeleccionado.items.map((item:any,i:number)=>(
                 <div key={i} style={{background:C.bg,borderRadius:12,padding:14,marginBottom:10}}>
                   {item.esEvento ? (

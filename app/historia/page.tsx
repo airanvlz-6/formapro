@@ -179,23 +179,7 @@ export default function Historia() {
           </div>
         )}
 
-        {/* Logros */}
-        {logros.length > 0 && (
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
-            <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>🏅 Logros</p>
-            <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
-              {logros.slice(0, 12).map((l:any, i:number) => (
-                <div key={i} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 14px", minWidth: 130, flexShrink: 0, textAlign: "center" }}>
-                  <p style={{ fontSize: 24, marginBottom: 6 }}>{l.emoji}</p>
-                  <p style={{ color: C.ink, fontSize: 11, fontWeight: 600, lineHeight: 1.3 }}>{l.titulo}</p>
-                  <p style={{ color: C.muted, fontSize: 10, marginTop: 4 }}>{new Date(l.fecha).toLocaleDateString("es-ES",{day:"numeric",month:"short"})}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Calendario visual */}
+        {/* 1. Calendario visual */}
         {(()=>{
           const anio = mesActual.getFullYear();
           const mes = mesActual.getMonth();
@@ -216,18 +200,19 @@ export default function Historia() {
             eventosPorDia[key].push({...e, esEvento:true});
           });
 
-          const getIconoDia = (items:any[]) => {
-            if(!items||items.length===0) return null;
-            const primero = items[0];
-            if(primero.esEvento){
-              const map:Record<string,string> = {race:"🏆",pr:"⚡",injury:"🩹",illness:"🤒",travel:"✈️",rest:"😴",objective_change:"🎯",block_start:"🚀",block_end:"✅"};
-              return map[primero.type]||"📌";
-            }
-            const tipo = (primero.tipo||"").toLowerCase();
-            if(tipo.includes("carrera")) return "🏃";
-            if(tipo.includes("box")||tipo.includes("crossfit")||tipo.includes("fuerza")) return "🏋️";
-            if(tipo.includes("descanso")) return "😴";
-            return "💪";
+          const getIconosDia = (items:any[]) => {
+            if(!items||items.length===0) return [];
+            return items.slice(0,3).map((item:any) => {
+              if(item.esEvento){
+                const map:Record<string,string> = {race:"🏆",pr:"⚡",injury:"🩹",illness:"🤒",travel:"✈️",rest:"😴",objective_change:"🎯",block_start:"🚀",block_end:"✅"};
+                return map[item.type]||"📌";
+              }
+              const tipo = (item.tipo||"").toLowerCase();
+              if(tipo.includes("carrera")) return "🏃";
+              if(tipo.includes("box")||tipo.includes("crossfit")||tipo.includes("fuerza")) return "🏋️";
+              if(tipo.includes("descanso")) return "😴";
+              return "💪";
+            });
           };
 
           const celdas = [];
@@ -251,13 +236,17 @@ export default function Historia() {
                   if(d===null) return <div key={i}/>;
                   const fechaKey = `${anio}-${String(mes+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                   const items = eventosPorDia[fechaKey];
-                  const icono = getIconoDia(items);
+                  const iconos = getIconosDia(items);
                   const esHoy = new Date().toISOString().split('T')[0]===fechaKey;
                   return (
                     <div key={i} onClick={()=>items&&setDiaSeleccionado({fecha:fechaKey,items})}
-                      style={{aspectRatio:"1",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",borderRadius:8,background:esHoy?`${C.accent}20`:items?C.bg:"transparent",border:esHoy?`1px solid ${C.accent}`:"1px solid transparent",cursor:items?"pointer":"default",fontSize:9}}>
+                      style={{aspectRatio:"1",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",borderRadius:8,background:esHoy?`${C.accent}20`:items?C.bg:"transparent",border:esHoy?`1px solid ${C.accent}`:"1px solid transparent",cursor:items?"pointer":"default",fontSize:9,gap:1}}>
                       <span style={{color:esHoy?C.accent:C.muted,fontSize:10,fontWeight:esHoy?700:400}}>{d}</span>
-                      {icono && <span style={{fontSize:13,marginTop:1}}>{icono}</span>}
+                      {iconos.length>0 && (
+                        <div style={{display:"flex",gap:1}}>
+                          {iconos.map((ic:string,idx:number)=><span key={idx} style={{fontSize:iconos.length>1?9:12}}>{ic}</span>)}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -294,7 +283,49 @@ export default function Historia() {
           </div>
         )}
 
-        {/* Evolución */}
+        {/* 2. Timeline */}
+        {eventos.length === 0 ? (
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"40px",textAlign:"center",marginBottom:16}}>
+            <p style={{fontSize:40,marginBottom:12}}>📖</p>
+            <p style={{color:C.ink,fontSize:16,fontWeight:600,marginBottom:8}}>Tu historia empieza aquí</p>
+            <p style={{color:C.muted,fontSize:13}}>Reporta entrenamientos, competiciones y logros al coach. Forge construirá tu historia deportiva automáticamente.</p>
+          </div>
+        ) : (
+          Object.entries(eventosPorMes).map(([mes, evs]) => (
+            <div key={mes} style={{marginBottom:24}}>
+              <div style={{fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:2,color:C.muted,marginBottom:12}}>
+                {new Date(mes+"-01").toLocaleDateString("es-ES",{month:"long",year:"numeric"})}
+              </div>
+              {evs.map((ev:any,i:number)=>{
+                const config = TIPO_CONFIG[ev.type] || {emoji:"📌",label:ev.type,color:C.accent};
+                return (
+                  <div key={i} style={{display:"flex",gap:14,marginBottom:12,position:"relative"}}>
+                    <div style={{display:"flex",flexDirection:"column",alignItems:"center"}}>
+                      <div style={{width:36,height:36,borderRadius:10,background:`${config.color}20`,border:`1px solid ${config.color}40`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
+                        {config.emoji}
+                      </div>
+                      {i<evs.length-1&&<div style={{width:1,flex:1,background:C.border,marginTop:4}}/>}
+                    </div>
+                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",flex:1,marginBottom:i<evs.length-1?8:0}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                        <span style={{color:C.ink,fontSize:14,fontWeight:600}}>{ev.title}</span>
+                        <span style={{color:C.muted,fontSize:11,flexShrink:0,marginLeft:8}}>
+                          {new Date(ev.date).toLocaleDateString("es-ES",{day:"numeric",month:"short"})}
+                        </span>
+                      </div>
+                      <span style={{background:`${config.color}20`,color:config.color,fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:100}}>
+                        {config.label}
+                      </span>
+                      {ev.data?.notas&&<p style={{color:C.muted,fontSize:12,marginTop:6}}>{ev.data.notas}</p>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))
+        )}
+
+        {/* 3. Evolución */}
         {historialMarcas.length > 0 && (()=>{
           const ejercicios = Array.from(new Set(historialMarcas.map((m:any)=>m.ejercicio)));
           const ejercicioActivo = ejercicioSeleccionado || ejercicios[0];
@@ -357,7 +388,7 @@ export default function Historia() {
           );
         })()}
 
-        {/* Historial de bloques */}
+        {/* 4. Historial de bloques */}
         {bloques.length > 0 && (
           <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
             <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 14 }}>📋 Historial de bloques</p>
@@ -377,48 +408,6 @@ export default function Historia() {
               </div>
             ))}
           </div>
-        )}
-
-        {/* Timeline */}
-        {eventos.length === 0 ? (
-          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"40px",textAlign:"center"}}>
-            <p style={{fontSize:40,marginBottom:12}}>📖</p>
-            <p style={{color:C.ink,fontSize:16,fontWeight:600,marginBottom:8}}>Tu historia empieza aquí</p>
-            <p style={{color:C.muted,fontSize:13}}>Reporta entrenamientos, competiciones y logros al coach. Forge construirá tu historia deportiva automáticamente.</p>
-          </div>
-        ) : (
-          Object.entries(eventosPorMes).map(([mes, evs]) => (
-            <div key={mes} style={{marginBottom:24}}>
-              <div style={{fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:2,color:C.muted,marginBottom:12}}>
-                {new Date(mes+"-01").toLocaleDateString("es-ES",{month:"long",year:"numeric"})}
-              </div>
-              {evs.map((ev:any,i:number)=>{
-                const config = TIPO_CONFIG[ev.type] || {emoji:"📌",label:ev.type,color:C.accent};
-                return (
-                  <div key={i} style={{display:"flex",gap:14,marginBottom:12,position:"relative"}}>
-                    <div style={{display:"flex",flexDirection:"column",alignItems:"center"}}>
-                      <div style={{width:36,height:36,borderRadius:10,background:`${config.color}20`,border:`1px solid ${config.color}40`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
-                        {config.emoji}
-                      </div>
-                      {i<evs.length-1&&<div style={{width:1,flex:1,background:C.border,marginTop:4}}/>}
-                    </div>
-                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",flex:1,marginBottom:i<evs.length-1?8:0}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
-                        <span style={{color:C.ink,fontSize:14,fontWeight:600}}>{ev.title}</span>
-                        <span style={{color:C.muted,fontSize:11,flexShrink:0,marginLeft:8}}>
-                          {new Date(ev.date).toLocaleDateString("es-ES",{day:"numeric",month:"short"})}
-                        </span>
-                      </div>
-                      <span style={{background:`${config.color}20`,color:config.color,fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:100}}>
-                        {config.label}
-                      </span>
-                      {ev.data?.notas&&<p style={{color:C.muted,fontSize:12,marginTop:6}}>{ev.data.notas}</p>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ))
         )}
 
       </div>

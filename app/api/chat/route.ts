@@ -486,6 +486,21 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     return NextResponse.json({ ok: true });
   }
 
+  if (action === "obtener_plan_por_fecha") {
+    const { fecha } = datos;
+    const fechaObj = new Date(fecha);
+    const diaSemana = fechaObj.getDay() || 7;
+    const lunes = new Date(fechaObj);
+    lunes.setDate(fechaObj.getDate() - diaSemana + 1);
+    const weekStart = lunes.toISOString().split('T')[0];
+    const { data: plan } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", weekStart).single();
+    if (!plan) return NextResponse.json({ sesion: null });
+    const DIAS_MAP = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+    const diaNombre = DIAS_MAP[fechaObj.getDay()].normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+    const sesionDia = plan.sessions.find((s:any) => s.dia.normalize("NFD").replace(/[\u0300-\u036f]/g,"") === diaNombre);
+    return NextResponse.json({ sesion: sesionDia || null });
+  }
+
   if (action === "obtener_plan_semana") {
     const hoy = new Date();
     const diaSemana = hoy.getDay() || 7;

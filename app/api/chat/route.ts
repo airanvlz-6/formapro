@@ -581,6 +581,53 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     return NextResponse.json({ ok: true });
   }
 
+  if (action === "calcular_logros") {
+    const { data: usuario } = await supabase.from("usuarios").select("workout_history,historial_marcas,created_at").eq("codigo", codigo).single();
+    if (!usuario) return NextResponse.json({ logros: [] });
+
+    const workouts = usuario.workout_history || [];
+    const marcas = usuario.historial_marcas || [];
+    const logros: any[] = [];
+
+    // Primera sesion
+    if (workouts.length >= 1) {
+      const primera = [...workouts].sort((a:any,b:any)=>new Date(a.fecha).getTime()-new Date(b.fecha).getTime())[0];
+      logros.push({ tipo: "primera_sesion", emoji: "🎯", titulo: "Primera sesión completada", fecha: primera.fecha });
+    }
+
+    // Hitos de sesiones
+    [10, 50, 100, 200].forEach(hito => {
+      if (workouts.length >= hito) {
+        const sesionHito = [...workouts].sort((a:any,b:any)=>new Date(a.fecha).getTime()-new Date(b.fecha).getTime())[hito-1];
+        logros.push({ tipo: `sesiones_${hito}`, emoji: "💯", titulo: `${hito} sesiones completadas`, fecha: sesionHito?.fecha || new Date().toISOString() });
+      }
+    });
+
+    // PRs y mejoras de marca
+    const porEjercicio: Record<string, any[]> = {};
+    marcas.forEach((m: any) => {
+      if (!porEjercicio[m.ejercicio]) porEjercicio[m.ejercicio] = [];
+      porEjercicio[m.ejercicio].push(m);
+    });
+    Object.entries(porEjercicio).forEach(([ejercicio, registros]) => {
+      const ordenados = [...registros].sort((a:any,b:any)=>new Date(a.fecha).getTime()-new Date(b.fecha).getTime());
+      if (ordenados.length === 1) {
+        logros.push({ tipo: `primer_pr_${ejercicio}`, emoji: "🏆", titulo: `Primer registro: ${ejercicio.replace(/_/g,' ')}`, fecha: ordenados[0].fecha });
+      } else if (ordenados.length >= 2) {
+        const ultimo = ordenados[ordenados.length-1];
+        const anterior = ordenados[ordenados.length-2];
+        const valorUltimo = parseFloat(String(ultimo.valor).replace(/[^\d.]/g,''));
+        const valorAnterior = parseFloat(String(anterior.valor).replace(/[^\d.]/g,''));
+        if (!isNaN(valorUltimo) && !isNaN(valorAnterior) && valorUltimo > valorAnterior) {
+          logros.push({ tipo: `mejora_${ejercicio}_${ultimo.fecha}`, emoji: "📊", titulo: `Nueva marca: ${ejercicio.replace(/_/g,' ')} ${ultimo.valor}`, fecha: ultimo.fecha });
+        }
+      }
+    });
+
+    logros.sort((a,b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+    return NextResponse.json({ logros });
+  }
+
   if (action === "obtener_historia") {
     const { data: eventos } = await supabase
       .from("athlete_events")

@@ -48,6 +48,7 @@ export default function Historia() {
   const [workoutHistory, setWorkoutHistory] = useState<any[]>([]);
   const [mesActual, setMesActual] = useState(new Date());
   const [diaSeleccionado, setDiaSeleccionado] = useState<any>(null);
+  const [logros, setLogros] = useState<any[]>([]);
 
   const cargarDatos = async(cod:string)=>{
     setCargando(true);
@@ -61,6 +62,8 @@ export default function Historia() {
       setBloques(dataUser?.data?.analisis_bloques||[]);
       setHistorialMarcas(dataUser?.data?.historial_marcas||[]);
       setWorkoutHistory(dataUser?.data?.workout_history||[]);
+      fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"calcular_logros",codigo:cod})})
+        .then(r=>r.json()).then(d=>setLogros(d.logros||[])).catch(()=>{});
       setAutenticado(true);
     }catch{ setError("Error de conexión"); }
     finally{ setCargando(false); setIniciado(true); }
@@ -172,6 +175,22 @@ export default function Historia() {
                   Cancelar
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Logros */}
+        {logros.length > 0 && (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+            <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>🏅 Logros</p>
+            <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
+              {logros.slice(0, 12).map((l:any, i:number) => (
+                <div key={i} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 14px", minWidth: 130, flexShrink: 0, textAlign: "center" }}>
+                  <p style={{ fontSize: 24, marginBottom: 6 }}>{l.emoji}</p>
+                  <p style={{ color: C.ink, fontSize: 11, fontWeight: 600, lineHeight: 1.3 }}>{l.titulo}</p>
+                  <p style={{ color: C.muted, fontSize: 10, marginTop: 4 }}>{new Date(l.fecha).toLocaleDateString("es-ES",{day:"numeric",month:"short"})}</p>
+                </div>
+              ))}
             </div>
           </div>
         )}

@@ -185,7 +185,7 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
   ],
 };
 
-const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "", memoria?: {lesiones?:string; plan?:string; notas?:string}, ciclo?: {bloque?:string; semana?:number; totalSemanas?:number; objetivo?:string}, psicologia?: {arousal?:string; confianza?:string; estres?:string; motivacion?:string; notas_mentales?:string}, premium?: boolean, athleteState?: Record<string,any>, datosEntreno?: Record<string,any>, estadoFisio?: {fatiga_aguda?:number;fatiga_cronica?:number;tendencia?:string;hrv?:number;sueno?:number;rhr?:number;adherencia?:number}, histFisio?: {fecha:string;hrv?:number;sueno?:number;rhr?:number}[], distribucion?: string, objetivo?: {descripcion?:string;fecha?:string;tipo?:string}) => {
+const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "", memoria?: {lesiones?:string; plan?:string; notas?:string}, ciclo?: {bloque?:string; semana?:number; totalSemanas?:number; objetivo?:string}, psicologia?: {arousal?:string; confianza?:string; estres?:string; motivacion?:string; notas_mentales?:string}, premium?: boolean, athleteState?: Record<string,any>, datosEntreno?: Record<string,any>, estadoFisio?: {fatiga_aguda?:number;fatiga_cronica?:number;tendencia?:string;hrv?:number;sueno?:number;rhr?:number;adherencia?:number}, histFisio?: {fecha:string;hrv?:number;sueno?:number;rhr?:number}[], distribucion?: string, objetivo?: {descripcion?:string;fecha?:string;tipo?:string}, planSemana?: any) => {
   const perfilStr = Object.entries(perfil).map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join("\n");
   const marcasStr = marcas.length > 0 ? marcas.map(m => `- ${m.fecha}: ${m.valor}`).join("\n") : "Sin registros aún";
   const cicloStr = ciclo?.bloque ? `
@@ -309,6 +309,13 @@ FECHA HOY: ${new Date().toLocaleDateString("es-ES", { weekday: "long", year: "nu
 PROXIMOS 14 DIAS: ${Array.from({length:14},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i+1);return d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long",timeZone:"Europe/Madrid"});}).join(" | ")}
 IMPORTANTE: Usa estas fechas exactas en TODO momento — al planificar sesiones, en despedidas, en referencias temporales y en cualquier comentario sobre el día o la hora. Hoy es ${new Date().toLocaleDateString("es-ES",{weekday:"long",timeZone:"Europe/Madrid"})}. No calcules fechas por tu cuenta. No asumas que es de noche si no lo sabes. No digas "hasta mañana lunes" si mañana es martes. La semana natural empieza el LUNES y termina el DOMINGO. Hoy es ${new Date().toLocaleDateString("es-ES",{weekday:"long",timeZone:"Europe/Madrid"})} por lo que la semana actual empezó el lunes ${new Date(new Date().setDate(new Date().getDate()-(new Date().getDay()||7)+1)).toLocaleDateString("es-ES",{day:"numeric",month:"long",timeZone:"Europe/Madrid"})} y termina el domingo ${new Date(new Date().setDate(new Date().getDate()-(new Date().getDay()||7)+7)).toLocaleDateString("es-ES",{day:"numeric",month:"long",timeZone:"Europe/Madrid"})}.
 DISPONIBILIDAD DEL ATLETA — REGLA CRÍTICA: Antes de programar cualquier sesión, consulta el perfil del atleta y respeta ESTRICTAMENTE sus días disponibles, horarios y lugar de entrenamiento. NUNCA programes una sesión en un día que el atleta no ha indicado como disponible. Si el perfil indica "lunes no disponible" o "solo box martes y jueves", respeta eso sin excepciones. La disponibilidad es una restricción inamovible, no una sugerencia.
+${planSemana&&planSemana.sessions?`
+📅 PLAN SEMANAL ACTUAL EN "MI PLAN" — ESTA ES LA ÚNICA FUENTE DE VERDAD:
+Bloque: ${planSemana.block_name} · Semana ${planSemana.week_number}${planSemana.total_weeks_block?` de ${planSemana.total_weeks_block}`:""}
+Objetivo semana: ${planSemana.week_objective||"no definido"}
+${planSemana.sessions.map((s:any)=>`- ${s.dia.toUpperCase()}: ${s.titulo}${s.completada?` [YA COMPLETADO — real: ${s.titulo_real||""}: ${s.descripcion_real||""}]`:""}${s.modificado?` [MODIFICADO: ${s.motivo_modificacion}]`:""}`).join("\n")}
+REGLA CRÍTICA ABSOLUTA: Esta es la planificación REAL y VIGENTE. Cuando el atleta pregunte por la sesión de cualquier día, SIEMPRE responde basándote EXACTAMENTE en esta lista, nunca inventes ni generes una sesión diferente. Si un día ya está marcado como completado, NO lo vuelvas a prescribir — pregunta si necesita algo más o pasa al siguiente día pendiente. Si no existe plan para un día futuro lejano, dilo claramente en vez de inventar contenido.`:"⚠️ NO HAY PLAN SEMANAL GUARDADO EN MI PLAN. Si el atleta pregunta por una sesión, indícale que no tienes un plan guardado para esta semana y sugiere generarlo."}
+
 ${distribucion?`DISPONIBILIDAD RÍGIDA POR DÍA — RESTRICCIÓN ABSOLUTA E INQUEBRANTABLE:
 ${distribucion}
 REGLA CRÍTICA: Esta disponibilidad NO es una sugerencia, es una restricción física real (horarios de trabajo, ubicación). NUNCA asignes una sesión de "box" a un día marcado como "pista" o viceversa, salvo que el atleta lo autorice EXPLÍCITAMENTE para esa semana concreta en el mensaje actual. Puedes decidir libremente si un día es descanso, recuperación activa o sesión completa — pero el LUGAR/TIPO del día, si hay sesión, debe respetar siempre esta disponibilidad. Ignorar esta regla es un error grave que rompe la confianza del atleta.`:""}
@@ -577,6 +584,7 @@ export default function Forge() {
         setAnalisisBloques((u as any).analisis_bloques||[]);
         setFechaRegistro((u as any).created_at||null);
         cargarEquipos(u.codigo);
+        cargarPlanSemanal(u.codigo);
         apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
       },500);
     }
@@ -601,6 +609,7 @@ const [estadoFisiologico,setEstadoFisiologico]=useState<{fatiga_aguda?:number;fa
 const [historialFisiologico,setHistorialFisiologico]=useState<{fecha:string;hrv?:number;sueno?:number;rhr?:number}[]>([]);
 const [distribucionSemanal,setDistribucionSemanal]=useState<string>("");
 const [objetivoPrincipal,setObjetivoPrincipal]=useState<{descripcion?:string;fecha?:string;tipo?:string}>({});
+const [planSemanal,setPlanSemanal]=useState<any>(null);
 const [historialMarcas,setHistorialMarcas]=useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
 const [analisisBloques,setAnalisisBloques]=useState<any[]>([]);
 const [athleteState,setAthleteState]=useState<Record<string,any>>({});
@@ -627,6 +636,11 @@ const [codigoPersonal,setCodigoPersonal]=useState("");
 const [errorCodigoPersonal,setErrorCodigoPersonal]=useState("");
 const [emailInput,setEmailInput]=useState("");
 const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
+
+  const cargarPlanSemanal=async(cod:string)=>{
+    const res=await apiCall({action:"obtener_plan_semana",codigo:cod});
+    if(res?.plan) setPlanSemanal(res.plan);
+  };
 
   const cargarEquipos=async(cod:string)=>{
     const res=await apiCall({action:"mis_equipos",codigo:cod});
@@ -789,6 +803,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     setAnalisisBloques((u as any).analisis_bloques||[]);
     setFechaRegistro((u as any).created_at||null);
     cargarEquipos(u.codigo);
+    cargarPlanSemanal(u.codigo);
     apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
     // reanudarSesion eliminada para reducir consumo de tokens
   };
@@ -923,7 +938,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
     const esp=espKey||categoria!;
     try{
       const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[archivo]"}...`).join("\n");
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:nuevoHist},true);
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal,planSemanal)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:nuevoHist},true);
       if(data.aborted) return;
       const respTextRaw=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.");
       const respText=await procesarTags(respTextRaw);
@@ -969,7 +984,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       const esPlanificacionSemanal=texto.toLowerCase().includes("semana completa")||texto.toLowerCase().includes("planificacion semanal")||texto.toLowerCase().includes("plan semanal")||texto.toLowerCase().includes("toda la semana")||texto.toLowerCase().includes("generar semana");
       const esProgramacion=esPlanificacionSemanal||texto.toLowerCase().includes("programacion")||texto.toLowerCase().includes("rutina")||texto.toLowerCase().includes("semana")||texto.toLowerCase().includes("plan")||texto.toLowerCase().includes("sesion")||texto.toLowerCase().includes("entreno")||texto.toLowerCase().includes("wod")||texto.toLowerCase().includes("ejercicio")||texto.toLowerCase().includes("bloque")||texto.toLowerCase().includes("rehabilitacion")||texto.toLowerCase().includes("protocolo")||texto.toLowerCase().includes("fase");
       const mensajesContexto=esProgramacion?-6:-4;
-      const data=await apiCall({model:esPlanificacionSemanal?"claude-opus-4-8":"claude-sonnet-4-5",max_tokens:esPlanificacionSemanal?6000:esProgramacion?4000:2000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
+      const data=await apiCall({model:esPlanificacionSemanal?"claude-opus-4-8":"claude-sonnet-4-5",max_tokens:esPlanificacionSemanal?6000:esProgramacion?4000:2000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal,planSemanal)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
       if(data.aborted) return;
       const respTextRaw2=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.");
       

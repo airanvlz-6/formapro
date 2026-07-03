@@ -918,7 +918,19 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
     if(sesionStart>=0){
       const {json,endIdx}=extraerJSON(texto,sesionStart,8);
       if(json){
-        try{ setSesionPendiente(JSON.parse(json)); }catch{}
+        try{
+          const sesionParsed=JSON.parse(json);
+          const fechaSesionCheck=new Date(sesionParsed.fecha);
+          const diaSemCheck=fechaSesionCheck.getDay()||7;
+          const lunesSemCheck=new Date(fechaSesionCheck);
+          lunesSemCheck.setDate(fechaSesionCheck.getDate()-diaSemCheck+1);
+          const weekStartCheck=lunesSemCheck.toISOString().split('T')[0];
+          const DIAS_CHECK=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+          const diaCheck=DIAS_CHECK[fechaSesionCheck.getDay()].normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+          const workoutIdCheck=`${weekStartCheck}_${diaCheck}`;
+          const yaExisteCheck=planSemanal?.sessions?.find((s:any)=>s.dia.normalize("NFD").replace(/[\u0300-\u036f]/g,"")===diaCheck)?.completada;
+          setSesionPendiente({...sesionParsed,workout_id:workoutIdCheck,yaExiste:!!yaExisteCheck});
+        }catch{}
       }
       const tagEndBracket=texto.indexOf("]",endIdx>=0?endIdx:sesionStart);
       const antes=texto.substring(0,sesionStart).trim();
@@ -2044,12 +2056,12 @@ ${testStr}`}]});
                   </div>
                   <div style={{display:"flex",gap:6}}>
                     <button onClick={async()=>{
-                      await apiCall({action:"registrar_sesion",codigo:codigoUsuario,datos:{sesion:sesionPendiente}});
+                      const res=await apiCall({action:"registrar_sesion",codigo:codigoUsuario,datos:{sesion:sesionPendiente}});
                       await apiCall({action:"marcar_sesion_completada",codigo:codigoUsuario,datos:{fecha:sesionPendiente.fecha,sesion:sesionPendiente}});
                       cargarPlanSemanal(codigoUsuario);
                       setSesionPendiente(null);
                     }} style={{background:"#4CAF50",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>
-                      Registrar
+                      {sesionPendiente.yaExiste ? "Actualizar" : "Registrar"}
                     </button>
                     <button onClick={()=>setSesionPendiente(null)} style={{background:"none",color:"#9A9590",border:"1px solid #2A2A2A",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer"}}>
                       Ignorar

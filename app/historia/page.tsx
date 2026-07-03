@@ -45,6 +45,7 @@ export default function Historia() {
   const [bloques, setBloques] = useState<any[]>([]);
   const [historialMarcas, setHistorialMarcas] = useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
   const [ejercicioSeleccionado, setEjercicioSeleccionado] = useState<string>("");
+  const [categoriaFiltro, setCategoriaFiltro] = useState<string>("Todos");
   const [workoutHistory, setWorkoutHistory] = useState<any[]>([]);
   const [mesActual, setMesActual] = useState(new Date());
   const [diaSeleccionado, setDiaSeleccionado] = useState<any>(null);
@@ -363,8 +364,25 @@ export default function Historia() {
 
         {/* 3. Evolución */}
         {historialMarcas.length > 0 && (()=>{
-          const ejercicios = Array.from(new Set(historialMarcas.map((m:any)=>m.ejercicio)));
-          const ejercicioActivo = ejercicioSeleccionado || ejercicios[0];
+          const CATEGORIAS_EJERCICIO: Record<string,string[]> = {
+            "Fuerza": ["squat","deadlift","bench","press","clean","snatch","row","curl"],
+            "Running": ["5k","10k","21k","42k","maraton","km","milla","mile"],
+            "CrossFit": ["fran","murph","cindy","grace","helen","diane","jackie","angie","annie","open","wod","amrap"],
+            "Hyrox": ["hyrox","wall_ball","farmer","sled","burpee_broad"],
+            "Gimnasticos": ["pullup","pull_up","muscle_up","hspu","toes_to_bar","double_under"],
+          };
+          const getCategoria = (ej:string) => {
+            const ejLower = ej.toLowerCase();
+            for(const [cat,keys] of Object.entries(CATEGORIAS_EJERCICIO)){
+              if(keys.some(k=>ejLower.includes(k))) return cat;
+            }
+            return "Otros";
+          };
+          const todosEjercicios = Array.from(new Set(historialMarcas.map((m:any)=>m.ejercicio)));
+          const categoriasDisponibles = ["Todos", ...Array.from(new Set(todosEjercicios.map(getCategoria)))];
+          const categoriaActiva = categoriaFiltro || "Todos";
+          const ejercicios = categoriaActiva==="Todos" ? todosEjercicios : todosEjercicios.filter(ej=>getCategoria(ej)===categoriaActiva);
+          const ejercicioActivo = ejercicios.includes(ejercicioSeleccionado) ? ejercicioSeleccionado : ejercicios[0];
           const registrosEjercicio = historialMarcas
             .filter((m:any)=>m.ejercicio===ejercicioActivo)
             .map((m:any)=>({
@@ -385,6 +403,14 @@ export default function Historia() {
           return (
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
               <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>📈 Evolución</p>
+              <div style={{display:"flex",gap:6,marginBottom:12,overflowX:"auto",paddingBottom:2}}>
+                {categoriasDisponibles.map((cat)=>(
+                  <button key={cat} onClick={()=>{setCategoriaFiltro(cat);setEjercicioSeleccionado("");}}
+                    style={{background:categoriaActiva===cat?C.accent:C.bg,color:categoriaActiva===cat?"#fff":C.muted,border:`1px solid ${categoriaActiva===cat?C.accent:C.border}`,borderRadius:100,padding:"5px 12px",fontSize:11,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>
+                    {cat}
+                  </button>
+                ))}
+              </div>
               <select value={ejercicioActivo} onChange={e=>setEjercicioSeleccionado(e.target.value)}
                 style={{ width:"100%", border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 10px", fontSize:13, color:C.ink, background:C.bg, marginBottom:16, fontFamily:"inherit" }}>
                 {ejercicios.map((ej:string)=>(

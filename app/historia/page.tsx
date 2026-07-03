@@ -467,7 +467,7 @@ export default function Historia() {
                       <CartesianGrid strokeDasharray="3 3" stroke={C.border}/>
                       <XAxis dataKey="fecha" stroke={C.muted} fontSize={11}/>
                       <YAxis stroke={C.muted} fontSize={11}/>
-                      <Tooltip contentStyle={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,fontSize:12}} labelStyle={{color:C.ink}}/>
+                      <Tooltip contentStyle={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,fontSize:12}} labelStyle={{color:C.ink}} formatter={(v:any)=>esTiempo?segundosATiempo(v):v}/>
                       <Line type="monotone" dataKey="valor" stroke={C.accent} strokeWidth={2} dot={{fill:C.accent,r:4}}/>
                     </LineChart>
                   </ResponsiveContainer>

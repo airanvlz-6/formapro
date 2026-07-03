@@ -159,9 +159,14 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
           );
           if(Object.keys(valoresSimples).length > 0){
             const entradaHoy = { fecha: hoy, ...valoresSimples };
-            const yaExisteHoy = historialActual.some((e: any) => e.fecha === hoy);
+            const indiceHoy = historialActual.findIndex((e: any) => e.fecha === hoy);
             updates.estado_fisiologico = { ...estadoActual, ...valoresSimples };
-            if(!yaExisteHoy){
+            if(indiceHoy >= 0){
+              // Actualizar entrada existente de hoy, mezclando datos nuevos con los que ya tenía
+              const historialActualizado = [...historialActual];
+              historialActualizado[indiceHoy] = { ...historialActual[indiceHoy], ...entradaHoy };
+              updates.historial_fisiologico = historialActualizado;
+            } else {
               updates.historial_fisiologico = [...historialActual.slice(-29), entradaHoy];
             }
           }

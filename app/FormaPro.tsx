@@ -2063,6 +2063,15 @@ ${testStr}`}]});
                     }} style={{background:"#4CAF50",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>
                       {sesionPendiente.yaExiste ? "Actualizar" : "Registrar"}
                     </button>
+                    {sesionPendiente.yaExiste && (
+                      <button onClick={async()=>{
+                        const sesionSegunda={...sesionPendiente,workout_id:`${sesionPendiente.workout_id}_2`};
+                        await apiCall({action:"registrar_sesion",codigo:codigoUsuario,datos:{sesion:sesionSegunda}});
+                        setSesionPendiente(null);
+                      }} style={{background:"none",color:"#4CAF50",border:"1px solid #4CAF50",borderRadius:8,padding:"6px 10px",fontSize:11,cursor:"pointer"}}>
+                        2ª sesión
+                      </button>
+                    )}
                     <button onClick={()=>setSesionPendiente(null)} style={{background:"none",color:"#9A9590",border:"1px solid #2A2A2A",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer"}}>
                       Ignorar
                     </button>

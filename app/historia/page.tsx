@@ -365,19 +365,22 @@ export default function Historia() {
         {historialMarcas.length > 0 && (()=>{
           const ejercicios = Array.from(new Set(historialMarcas.map((m:any)=>m.ejercicio)));
           const ejercicioActivo = ejercicioSeleccionado || ejercicios[0];
-          const datosEjercicio = historialMarcas
+          const registrosEjercicio = historialMarcas
             .filter((m:any)=>m.ejercicio===ejercicioActivo)
             .map((m:any)=>({
-              fecha: new Date(m.fecha).toLocaleDateString("es-ES",{day:"numeric",month:"short"}),
+              fecha: m.fecha,
+              fechaLabel: new Date(m.fecha).toLocaleDateString("es-ES",{day:"numeric",month:"short"}),
               valor: parseFloat(String(m.valor).replace(/[^\d.,]/g,'').replace(',','.'))||0,
               valorOriginal: m.valor
             }))
             .filter((d:any)=>!isNaN(d.valor) && d.valor>0)
             .sort((a:any,b:any)=>new Date(a.fecha).getTime()-new Date(b.fecha).getTime());
 
-          const ultimoValor = datosEjercicio[datosEjercicio.length-1];
-          const primerValor = datosEjercicio[0];
-          const mejora = ultimoValor && primerValor ? ((ultimoValor.valor-primerValor.valor)/primerValor.valor*100).toFixed(1) : null;
+          const ultimoValor = registrosEjercicio[registrosEjercicio.length-1];
+          const primerValor = registrosEjercicio[0];
+          const mejora = ultimoValor && primerValor && primerValor.valor>0 ? ((ultimoValor.valor-primerValor.valor)/primerValor.valor*100).toFixed(1) : null;
+          const diasUltimaMejora = ultimoValor ? Math.round((new Date().getTime()-new Date(ultimoValor.fecha).getTime())/(24*60*60*1000)) : null;
+          const recordsOrdenados = [...registrosEjercicio].sort((a,b)=>b.valor-a.valor).slice(0,4);
 
           return (
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
@@ -389,10 +392,30 @@ export default function Historia() {
                 ))}
               </select>
 
-              {datosEjercicio.length >= 2 ? (
+              {/* Stats destacadas */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+                <div style={{background:C.bg,borderRadius:10,padding:"10px 12px"}}>
+                  <p style={{color:C.muted,fontSize:10,marginBottom:2}}>RM actual</p>
+                  <p style={{color:C.ink,fontSize:18,fontWeight:700}}>{ultimoValor?.valorOriginal||"—"}</p>
+                </div>
+                <div style={{background:C.bg,borderRadius:10,padding:"10px 12px"}}>
+                  <p style={{color:C.muted,fontSize:10,marginBottom:2}}>Mejora total</p>
+                  <p style={{color:mejora&&parseFloat(mejora)>=0?"#4CAF50":"#ff4444",fontSize:18,fontWeight:700}}>{mejora?`${parseFloat(mejora)>=0?"+":""}${mejora}%`:"—"}</p>
+                </div>
+                <div style={{background:C.bg,borderRadius:10,padding:"10px 12px"}}>
+                  <p style={{color:C.muted,fontSize:10,marginBottom:2}}>Última mejora</p>
+                  <p style={{color:C.ink,fontSize:14,fontWeight:700}}>{diasUltimaMejora!==null?`hace ${diasUltimaMejora}d`:"—"}</p>
+                </div>
+                <div style={{background:C.bg,borderRadius:10,padding:"10px 12px"}}>
+                  <p style={{color:C.muted,fontSize:10,marginBottom:2}}>Registros</p>
+                  <p style={{color:C.ink,fontSize:14,fontWeight:700}}>{registrosEjercicio.length}</p>
+                </div>
+              </div>
+
+              {registrosEjercicio.length >= 2 ? (
                 <>
                   <ResponsiveContainer width="100%" height={180}>
-                    <LineChart data={datosEjercicio}>
+                    <LineChart data={registrosEjercicio.map(r=>({fecha:r.fechaLabel,valor:r.valor}))}>
                       <CartesianGrid strokeDasharray="3 3" stroke={C.border}/>
                       <XAxis dataKey="fecha" stroke={C.muted} fontSize={11}/>
                       <YAxis stroke={C.muted} fontSize={11}/>
@@ -400,19 +423,16 @@ export default function Historia() {
                       <Line type="monotone" dataKey="valor" stroke={C.accent} strokeWidth={2} dot={{fill:C.accent,r:4}}/>
                     </LineChart>
                   </ResponsiveContainer>
-                  <div style={{ display:"flex", justifyContent:"space-between", marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}` }}>
-                    <div>
-                      <p style={{ color:C.muted, fontSize:11 }}>Último registro</p>
-                      <p style={{ color:C.ink, fontSize:16, fontWeight:700 }}>{ultimoValor?.valorOriginal}</p>
-                    </div>
-                    {mejora && (
-                      <div style={{ textAlign:"right" }}>
-                        <p style={{ color:C.muted, fontSize:11 }}>Evolución</p>
-                        <p style={{ color: parseFloat(mejora)>=0?"#4CAF50":"#ff4444", fontSize:16, fontWeight:700 }}>
-                          {parseFloat(mejora)>=0?"+":""}{mejora}%
-                        </p>
+
+                  {/* Records */}
+                  <div style={{marginTop:16,paddingTop:12,borderTop:`1px solid ${C.border}`}}>
+                    <p style={{color:C.muted,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Récords</p>
+                    {recordsOrdenados.map((r,i)=>(
+                      <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0"}}>
+                        <span style={{color:i===0?C.accent:C.muted,fontSize:13,fontWeight:i===0?700:400}}>{r.valorOriginal}</span>
+                        <span style={{color:C.muted,fontSize:11}}>{r.fechaLabel}</span>
                       </div>
-                    )}
+                    ))}
                   </div>
                 </>
               ) : (

@@ -383,22 +383,44 @@ export default function Historia() {
           const categoriaActiva = categoriaFiltro || "Todos";
           const ejercicios = categoriaActiva==="Todos" ? todosEjercicios : todosEjercicios.filter(ej=>getCategoria(ej)===categoriaActiva);
           const ejercicioActivo = ejercicios.includes(ejercicioSeleccionado) ? ejercicioSeleccionado : ejercicios[0];
+          const esFormatoTiempo = (valor:string) => /^\d{1,2}:\d{2}(:\d{2})?$/.test(valor.trim());
+          const tiempoASegundos = (valor:string) => {
+            const partes = valor.trim().split(':').map(Number);
+            if(partes.length===2) return partes[0]*60+partes[1];
+            if(partes.length===3) return partes[0]*3600+partes[1]*60+partes[2];
+            return 0;
+          };
+          const segundosATiempo = (seg:number) => {
+            const h = Math.floor(seg/3600);
+            const m = Math.floor((seg%3600)/60);
+            const s = Math.round(seg%60);
+            return h>0 ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${m}:${String(s).padStart(2,'0')}`;
+          };
+          const esCategoriaMenorMejor = categoriaActiva==="Running"||categoriaActiva==="CrossFit"||categoriaActiva==="Hyrox";
+
           const registrosEjercicio = historialMarcas
             .filter((m:any)=>m.ejercicio===ejercicioActivo)
-            .map((m:any)=>({
-              fecha: m.fecha,
-              fechaLabel: new Date(m.fecha).toLocaleDateString("es-ES",{day:"numeric",month:"short"}),
-              valor: parseFloat(String(m.valor).replace(/[^\d.,]/g,'').replace(',','.'))||0,
-              valorOriginal: m.valor
-            }))
+            .map((m:any)=>{
+              const valorStr = String(m.valor).trim();
+              const esTiempo = esFormatoTiempo(valorStr);
+              const valorNum = esTiempo ? tiempoASegundos(valorStr) : parseFloat(valorStr.replace(/[^\d.,]/g,'').replace(',','.'))||0;
+              return {
+                fecha: m.fecha,
+                fechaLabel: new Date(m.fecha).toLocaleDateString("es-ES",{day:"numeric",month:"short"}),
+                valor: valorNum,
+                valorOriginal: m.valor,
+                esTiempo
+              };
+            })
             .filter((d:any)=>!isNaN(d.valor) && d.valor>0)
             .sort((a:any,b:any)=>new Date(a.fecha).getTime()-new Date(b.fecha).getTime());
 
           const ultimoValor = registrosEjercicio[registrosEjercicio.length-1];
           const primerValor = registrosEjercicio[0];
-          const mejora = ultimoValor && primerValor && primerValor.valor>0 ? ((ultimoValor.valor-primerValor.valor)/primerValor.valor*100).toFixed(1) : null;
+          const esTiempo = ultimoValor?.esTiempo;
+          const mejora = ultimoValor && primerValor && primerValor.valor>0 ? (esTiempo ? ((primerValor.valor-ultimoValor.valor)/primerValor.valor*100).toFixed(1) : ((ultimoValor.valor-primerValor.valor)/primerValor.valor*100).toFixed(1)) : null;
           const diasUltimaMejora = ultimoValor ? Math.round((new Date().getTime()-new Date(ultimoValor.fecha).getTime())/(24*60*60*1000)) : null;
-          const recordsOrdenados = [...registrosEjercicio].sort((a,b)=>b.valor-a.valor).slice(0,4);
+          const recordsOrdenados = [...registrosEjercicio].sort((a,b)=>esTiempo?a.valor-b.valor:b.valor-a.valor).slice(0,4);
 
           return (
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>

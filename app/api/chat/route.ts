@@ -419,7 +419,19 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     const { sesion } = datos;
     const { data: usuarioFresh } = await supabase.from("usuarios").select("workout_history").eq("codigo", codigo).single();
     const workoutActual = usuarioFresh?.workout_history || [];
+
+    // Calcular workout_id basado en la fecha de la sesión
+    const fechaSesionObj = new Date(sesion.fecha || new Date().toISOString());
+    const diaSem = fechaSesionObj.getDay() || 7;
+    const lunesSem = new Date(fechaSesionObj);
+    lunesSem.setDate(fechaSesionObj.getDate() - diaSem + 1);
+    const weekStartCalc = lunesSem.toISOString().split('T')[0];
+    const DIAS_MAP2 = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+    const diaCalc = DIAS_MAP2[fechaSesionObj.getDay()].normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+    const workoutIdCalc = sesion.workout_id || `${weekStartCalc}_${diaCalc}`;
+
     const sesionNormalizada = {
+      workout_id: workoutIdCalc,
       tipo: sesion.tipo || "Entrenamiento",
       fecha: sesion.fecha || new Date().toISOString(),
       notas: sesion.notas || "",
@@ -427,10 +439,21 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
       sensacion: sesion.sensacion || "buena",
       analisis: sesion.analisis || null
     };
-    // Insertar en orden cronológico
-    const workoutActualizado = [...workoutActual, sesionNormalizada].sort((a,b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+
+    // Buscar si ya existe una sesión con este workout_id
+    const indiceExistente = workoutActual.findIndex((w: any) => w.workout_id === workoutIdCalc);
+    let workoutActualizado;
+    if (indiceExistente >= 0) {
+      // Actualizar la existente
+      workoutActualizado = [...workoutActual];
+      workoutActualizado[indiceExistente] = { ...workoutActual[indiceExistente], ...sesionNormalizada };
+    } else {
+      // Crear nueva
+      workoutActualizado = [...workoutActual, sesionNormalizada].sort((a,b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
+    }
+
     await supabase.from("usuarios").update({ workout_history: workoutActualizado }).eq("codigo", codigo);
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, actualizado: indiceExistente >= 0 });
   }
 
   if (action === "registrar_metrica_pasada") {
@@ -467,6 +490,7 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     const weekStart = lunesSemana.toISOString().split('T')[0];
     const DIAS_MAP = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
     const diaNombre = DIAS_MAP[fechaSesion.getDay()];
+    const workoutId = `${weekStart}_${diaNombre.normalize("NFD").replace(/[\u0300-\u036f]/g,"")}`;
 
     const { data: planActual } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", weekStart).single();
     if (!planActual) return NextResponse.json({ ok: true, mensaje: "Sin plan para esta semana" });

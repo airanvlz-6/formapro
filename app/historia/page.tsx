@@ -466,7 +466,7 @@ export default function Historia() {
                     <LineChart data={registrosEjercicio.map(r=>({fecha:r.fechaLabel,valor:r.valor}))}>
                       <CartesianGrid strokeDasharray="3 3" stroke={C.border}/>
                       <XAxis dataKey="fecha" stroke={C.muted} fontSize={11}/>
-                      <YAxis stroke={C.muted} fontSize={11}/>
+                      <YAxis stroke={C.muted} fontSize={11} tickFormatter={(v)=>esTiempo?segundosATiempo(v):String(v)}/>
                       <Tooltip contentStyle={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,fontSize:12}} labelStyle={{color:C.ink}} formatter={(v:any)=>esTiempo?segundosATiempo(v):v}/>
                       <Line type="monotone" dataKey="valor" stroke={C.accent} strokeWidth={2} dot={{fill:C.accent,r:4}}/>
                     </LineChart>

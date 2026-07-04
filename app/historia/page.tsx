@@ -364,10 +364,11 @@ export default function Historia() {
 
         {/* 3. Evolución */}
         {historialMarcas.length > 0 && (()=>{
+          const BENCHMARKS_CROSSFIT = ["fran","murph","cindy","grace","helen","diane","jackie","angie","annie","dt","eva","chelsea","nancy","amanda","elizabeth","kelly","karen","isabel","linda","mary","barbara"];
           const CATEGORIAS_EJERCICIO: Record<string,string[]> = {
             "Fuerza": ["squat","deadlift","bench","press","clean","snatch","row","curl"],
             "Running": ["5k","10k","21k","42k","maraton","km","milla","mile"],
-            "CrossFit": ["fran","murph","cindy","grace","helen","diane","jackie","angie","annie","open","wod","amrap"],
+            "CrossFit": ["open","wod","amrap",...BENCHMARKS_CROSSFIT],
             "Hyrox": ["hyrox","wall_ball","farmer","sled","burpee_broad"],
             "Gimnasticos": ["pullup","pull_up","muscle_up","hspu","toes_to_bar","double_under"],
           };
@@ -433,12 +434,28 @@ export default function Historia() {
                   </button>
                 ))}
               </div>
-              <select value={ejercicioActivo} onChange={e=>setEjercicioSeleccionado(e.target.value)}
-                style={{ width:"100%", border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 10px", fontSize:13, color:C.ink, background:C.bg, marginBottom:16, fontFamily:"inherit" }}>
-                {ejercicios.map((ej:string)=>(
-                  <option key={ej} value={ej}>{ej.replace(/_/g,' ')}</option>
-                ))}
-              </select>
+              {categoriaActiva==="CrossFit" ? (
+                <select value={ejercicioActivo} onChange={e=>setEjercicioSeleccionado(e.target.value)}
+                  style={{ width:"100%", border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 10px", fontSize:13, color:C.ink, background:C.bg, marginBottom:16, fontFamily:"inherit" }}>
+                  <optgroup label="🏆 Benchmarks">
+                    {ejercicios.filter((ej:string)=>BENCHMARKS_CROSSFIT.some(b=>ej.toLowerCase().includes(b))).map((ej:string)=>(
+                      <option key={ej} value={ej}>{ej.replace(/_/g,' ')}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="WODs y otros">
+                    {ejercicios.filter((ej:string)=>!BENCHMARKS_CROSSFIT.some(b=>ej.toLowerCase().includes(b))).map((ej:string)=>(
+                      <option key={ej} value={ej}>{ej.replace(/_/g,' ')}</option>
+                    ))}
+                  </optgroup>
+                </select>
+              ) : (
+                <select value={ejercicioActivo} onChange={e=>setEjercicioSeleccionado(e.target.value)}
+                  style={{ width:"100%", border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 10px", fontSize:13, color:C.ink, background:C.bg, marginBottom:16, fontFamily:"inherit" }}>
+                  {ejercicios.map((ej:string)=>(
+                    <option key={ej} value={ej}>{ej.replace(/_/g,' ')}</option>
+                  ))}
+                </select>
+              )}
 
               {/* Stats destacadas */}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>

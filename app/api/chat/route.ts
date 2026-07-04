@@ -500,8 +500,9 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     const { data: planActual } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", weekStart).single();
     if (!planActual) return NextResponse.json({ ok: true, mensaje: "Sin plan para esta semana" });
 
+    const normalizarDia = (d: string) => d.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
     const sessions = planActual.sessions.map((s: any) => {
-      if (s.dia === diaNombre) {
+      if (normalizarDia(s.dia) === normalizarDia(diaNombre)) {
         return {
           ...s,
           completada: true,

@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { ArrowRight, Play } from "lucide-react";
+import FloatingPhones from "./FloatingPhones";
 
 export default function Hero() {
   return (
@@ -64,6 +65,8 @@ export default function Hero() {
             </a>
           </div>
         </motion.div>
+
+        <FloatingPhones />
 
       </div>
     </section>

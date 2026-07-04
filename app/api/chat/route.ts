@@ -96,13 +96,13 @@ export async function POST(req: NextRequest) {
   "nueva_marca": "nueva marca en formato ejercicio:valor o vacío",
   "ciclo": {"bloque": "${cicloActual.bloque||"vacío"}", "semana": ${cicloActual.semana||"null"}, "totalSemanas": ${cicloActual.totalSemanas||"null"}, "objetivo": "${cicloActual.objetivo||"vacío"}"},
   "estado_fisiologico": {"hrv": null, "sueno": null, "rhr": null, "fatiga_aguda": null, "tendencia": null},
-INSTRUCCIONES PARA estado_fisiologico — analiza SOLO mensajes del ATLETA:
-- "hrv": busca HRV, VFC, variabilidad cardíaca — extrae el número en ms. Ejemplo: "VFC 92ms" → 92
-- "sueno": busca puntuación sueño, calidad sueño, score sueño — extrae SOLO el número 0-100. Ejemplo: "puntuación 93" → 93. NUNCA un objeto
-- "rhr": busca FC reposo, frecuencia mínima nocturna, pulsaciones reposo — extrae el número en bpm. Ejemplo: "mínima 43bpm" → 43
-- "fatiga_aguda": estima 0-100 según sensaciones reportadas por el atleta
-- Extrae TODOS los valores presentes en los mensajes del atleta
-- Si el atleta reporta métricas del reloj (Oura, Garmin, Apple Watch) extrae todas las métricas de recuperación
+INSTRUCCIONES PARA estado_fisiologico — SOLO SI el mensaje es específicamente un REPORTE DE MÉTRICAS DE SUEÑO/RECUPERACIÓN NOCTURNA (no un reporte de entrenamiento):
+- Detecta primero si el mensaje habla de SUEÑO NOCTURNO ("dormí", "métricas de sueño", "puntuación de sueño", "VFC durante la noche", "anoche"). Si el mensaje es sobre un ENTRENAMIENTO (FC durante ejercicio, rondas, series, WOD) NO extraigas nada de aquí — deja todos los valores null.
+- "hrv": SOLO si se menciona HRV/VFC nocturna explícitamente, no FC de entreno. Ejemplo válido: "VFC media durante la noche 92ms" → 92. Ejemplo INVÁLIDO (ignorar): "FC media durante el WOD 142bpm"
+- "sueno": SOLO puntuación de sueño 0-100 explícita. Ejemplo: "puntuación de sueño 93" → 93
+- "rhr": SOLO FC reposo o mínima NOCTURNA, nunca FC de entrenamiento. Ejemplo válido: "FC mínima durante la noche 43bpm"
+- "fatiga_aguda": NO estimes esto a partir de un reporte de entreno. Déjalo null salvo que el atleta hable explícitamente de fatiga general/sistémica fuera de contexto deportivo
+- Si hay CUALQUIER duda sobre si es sueño o entreno, deja TODO en null
 MENSAJES DEL ATLETA PARA ANALIZAR:
 ${soloUsuario}
   "sesion_completada": null,

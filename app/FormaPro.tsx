@@ -563,7 +563,8 @@ export default function Forge() {
         setEspLabel(espLabelLoaded);
         setRespuestas(u.perfil);
         setMarcas(u.marcas||[]);setHistorial(u.historial||[]);
-        setMensajes(u.historial?.slice(-6)||[]);
+        const historialLimpio=(u.historial?.slice(-6)||[]).map((m:any)=>typeof m.content==="string"?{...m,content:m.content.replace(/\n\n\[Fecha actual del sistema:.*?\]/,"")}:m);
+        setMensajes(historialLimpio);
         const consultasUsadas=Math.floor((u.historial?.length||0)/2);
         setMsgCount(consultasUsadas);setPantalla("chat");
         setEmailGuardado(!!u.email);
@@ -779,7 +780,8 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     setEspLabel(espLabelLoaded);
     setRespuestas(u.perfil);
     setMarcas(u.marcas||[]);setHistorial(u.historial||[]);
-    setMensajes(u.historial?.slice(-6)||[]);
+    const historialLimpio2=(u.historial?.slice(-6)||[]).map((m:any)=>typeof m.content==="string"?{...m,content:m.content.replace(/\n\n\[Fecha actual del sistema:.*?\]/,"")}:m);
+    setMensajes(historialLimpio2);
     const consultasUsadas=Math.floor((u.historial?.length||0)/2);
     setMsgCount(consultasUsadas);setPantalla("chat");
     setEmailGuardado(!!u.email);

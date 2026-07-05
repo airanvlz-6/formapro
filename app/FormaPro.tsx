@@ -902,6 +902,9 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       texto=(antes+(despues?" "+despues:"")).trim();
     };
 
+    await procesarTag("[RESUMEN_SEMANA:",16,async(data)=>{
+      await apiCall({action:"guardar_resumen_semana",codigo:codigoUsuario,datos:data});
+    });
     await procesarTag("[PLAN:",6,async(data)=>{
       await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:data}});
       cargarPlanSemanal(codigoUsuario);

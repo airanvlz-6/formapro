@@ -176,8 +176,12 @@ useEffect(() => {
           const ultimos = histFisio.slice(-7);
           const hrvValues = ultimos.filter((e:any) => e.hrv).map((e:any) => e.hrv);
           const suenoValues = ultimos.filter((e:any) => e.sueno).map((e:any) => e.sueno);
-          const tendenciaHrv = hrvValues.length>=3?(hrvValues[hrvValues.length-1]-hrvValues[0]>5?"↑ Mejorando":hrvValues[hrvValues.length-1]-hrvValues[0]<-5?"↓ Empeorando":"→ Estable"):"Sin datos";
-          const tendenciaSueno = suenoValues.length>=3?(suenoValues[suenoValues.length-1]-suenoValues[0]>5?"↑ Mejorando":suenoValues[suenoValues.length-1]-suenoValues[0]<-5?"↓ Empeorando":"→ Estable"):"Sin datos";
+          const mediaHrv = hrvValues.length>0?hrvValues.reduce((a:number,b:number)=>a+b,0)/hrvValues.length:0;
+          const mediaSueno = suenoValues.length>0?suenoValues.reduce((a:number,b:number)=>a+b,0)/suenoValues.length:0;
+          const umbralHrv = Math.max(10, mediaHrv*0.15);
+          const umbralSueno = 12;
+          const tendenciaHrv = hrvValues.length>=3?(hrvValues[hrvValues.length-1]-hrvValues[0]>umbralHrv?"↑ Mejorando":hrvValues[hrvValues.length-1]-hrvValues[0]<-umbralHrv?"↓ Empeorando":"→ Estable"):"Sin datos";
+          const tendenciaSueno = suenoValues.length>=3?(suenoValues[suenoValues.length-1]-suenoValues[0]>umbralSueno?"↑ Mejorando":suenoValues[suenoValues.length-1]-suenoValues[0]<-umbralSueno?"↓ Empeorando":"→ Estable"):"Sin datos";
           const colorHrv = tendenciaHrv.includes("Mejorando")?"#4CAF50":tendenciaHrv.includes("Empeorando")?"#ff4444":C.muted;
           const colorSueno = tendenciaSueno.includes("Mejorando")?"#4CAF50":tendenciaSueno.includes("Empeorando")?"#ff4444":C.muted;
           const alerta = tendenciaHrv.includes("Empeorando") && tendenciaSueno.includes("Empeorando");

@@ -541,6 +541,20 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     return NextResponse.json({ plan: plan || null, weekStart });
   }
 
+  if (action === "guardar_resumen_semana") {
+    const { week_start, resumen, adherencia } = datos;
+    await supabase.from("weekly_plan").update({ resumen_semana: resumen }).eq("user_codigo", codigo).eq("week_start", week_start);
+    // También lo guardamos como evento en la historia
+    await supabase.from("athlete_events").insert({
+      user_codigo: codigo,
+      date: new Date().toISOString().split('T')[0],
+      type: "block_end",
+      title: `Resumen semanal — ${adherencia||""}`,
+      data: { notas: resumen }
+    });
+    return NextResponse.json({ ok: true });
+  }
+
   if (action === "guardar_plan_semana") {
     const { plan } = datos;
     // Preservar sesiones ya completadas si existen

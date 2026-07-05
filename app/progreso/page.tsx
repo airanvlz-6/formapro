@@ -206,17 +206,20 @@ useEffect(() => {
 
         {/* 3. Alertas inteligentes */}
         {(()=>{
-          const alertas: {mensaje: string; tipo: 'warning' | 'danger'}[] = [];
+          const alertas: {mensaje: string; tipo: 'precaucion' | 'warning' | 'danger'}[] = [];
           const ahora = new Date();
 
-          if(datos?.estado_fisiologico?.sueno && datos.estado_fisiologico.sueno < 60){
-            alertas.push({mensaje: `Tu calidad de sueño está por debajo de 60/100. La recuperación puede verse afectada.`, tipo: 'warning'});
+          if(datos?.estado_fisiologico?.sueno && datos.estado_fisiologico.sueno < 50){
+            alertas.push({mensaje: `Tu calidad de sueño está por debajo de 50/100. La recuperación puede verse afectada de forma significativa.`, tipo: 'warning'});
           }
 
           if(datos?.estado_fisiologico?.hrv && histFisio.length >= 3){
             const mediaHrv = histFisio.slice(-7).filter((e:any)=>e.hrv).reduce((a:number,b:any)=>a+b.hrv,0) / histFisio.slice(-7).filter((e:any)=>e.hrv).length;
-            if(datos.estado_fisiologico.hrv < mediaHrv * 0.85){
-              alertas.push({mensaje: `Tu HRV actual (${datos.estado_fisiologico.hrv}ms) está un 15% por debajo de tu media reciente. Considera reducir intensidad.`, tipo: 'warning'});
+            const ratioHrv = datos.estado_fisiologico.hrv / mediaHrv;
+            if(ratioHrv < 0.70){
+              alertas.push({mensaje: `Tu HRV actual (${datos.estado_fisiologico.hrv}ms) está un 30% o más por debajo de tu media reciente. Reduce intensidad hoy.`, tipo: 'danger'});
+            } else if(ratioHrv < 0.85){
+              alertas.push({mensaje: `Tu HRV actual (${datos.estado_fisiologico.hrv}ms) está algo por debajo de tu media reciente. Vigila cómo te sientes.`, tipo: 'precaucion'});
             }
           }
 
@@ -239,12 +242,16 @@ useEffect(() => {
           if(alertas.length === 0) return null;
           return (
             <div style={{ marginBottom: 16 }}>
-              {alertas.map((a, i) => (
-                <div key={i} style={{ background: a.tipo==='danger'?"#ff444415":"#FF6B0015", border: `1px solid ${a.tipo==='danger'?"#ff4444":"#FF6B00"}`, borderRadius: 12, padding: "12px 14px", marginBottom: 8, display:"flex", gap: 10, alignItems:"flex-start" }}>
-                  <span style={{ fontSize: 16 }}>{a.tipo==='danger'?"🔴":"🟡"}</span>
-                  <p style={{ color: C.ink, fontSize: 13, lineHeight: 1.5 }}>{a.mensaje}</p>
-                </div>
-              ))}
+              {alertas.map((a, i) => {
+                const colorAlerta = a.tipo==='danger'?"#ff4444":a.tipo==='warning'?"#FF6B00":"#FFD700";
+                const emojiAlerta = a.tipo==='danger'?"🔴":a.tipo==='warning'?"🟡":"🟢";
+                return (
+                  <div key={i} style={{ background: `${colorAlerta}15`, border: `1px solid ${colorAlerta}`, borderRadius: 12, padding: "12px 14px", marginBottom: 8, display:"flex", gap: 10, alignItems:"flex-start" }}>
+                    <span style={{ fontSize: 16 }}>{emojiAlerta}</span>
+                    <p style={{ color: C.ink, fontSize: 13, lineHeight: 1.5 }}>{a.mensaje}</p>
+                  </div>
+                );
+              })}
             </div>
           );
         })()}

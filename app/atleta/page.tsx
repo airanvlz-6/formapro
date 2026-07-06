@@ -149,8 +149,33 @@ export default function MiAtleta() {
         {/* Disponibilidad */}
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
           <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 10 }}>📅 Disponibilidad</p>
-          <p style={{ color: C.muted, fontSize: 13, lineHeight: 1.6 }}>{datos?.distribucion_semanal || datos?.perfil?.dias || "No especificada"}</p>
+          <p style={{ color: C.muted, fontSize: 13, lineHeight: 1.6 }}>
+            {(()=>{
+              const dist = datos?.distribucion_semanal;
+              if(!dist) return datos?.perfil?.dias || "No especificada";
+              if(typeof dist === "string" && dist.trim().startsWith("{")){
+                try{
+                  const parsed = JSON.parse(dist);
+                  return Object.values(parsed).join(" — ");
+                }catch{ return datos?.perfil?.dias || "No especificada"; }
+              }
+              return dist;
+            })()}
+          </p>
         </div>
+
+        {/* Debilidades activas */}
+        {debilidades.length > 0 && (
+          <div style={{ background: C.card, border: `1px solid #FF6B0060`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+            <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 10 }}>🎯 Debilidades en trabajo</p>
+            {debilidades.map((d:any,i:number)=>(
+              <div key={i} style={{ padding: "8px 0", borderBottom: i<debilidades.length-1?`1px solid ${C.border}`:"none" }}>
+                <p style={{ color: C.accent, fontSize: 13, fontWeight: 600, textTransform: "capitalize" }}>{d.ejercicio.replace(/_/g,' ')}</p>
+                <p style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{d.descripcion}</p>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Lesiones */}
         {datos?.lesiones_actuales && (

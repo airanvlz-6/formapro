@@ -116,7 +116,7 @@ export default function Plan() {
           <img src="/logo-forge.png" alt="Forge" style={{width:40,height:40,objectFit:"contain"}}/>
           <div>
             <h1 style={{fontSize:20,fontWeight:700,color:C.ink,fontFamily:"Georgia,serif"}}>Mi Plan</h1>
-            <p style={{color:C.accent,fontSize:12,fontWeight:600}}>{codigo}</p>
+            <p style={{color:C.accent,fontSize:12,fontWeight:600}}>••••••</p>
           </div>
           <div style={{marginLeft:"auto",display:"flex",gap:8}}>
             <a href={`/progreso?codigo=${codigo}`} style={{background:C.card,color:C.ink,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 12px",fontSize:13,textDecoration:"none"}}>📊</a>

@@ -613,6 +613,22 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     return NextResponse.json({ ok: true });
   }
 
+  if (action === "registrar_debilidad") {
+    const { ejercicio, descripcion } = datos;
+    const { data: usuarioActual } = await supabase.from("usuarios").select("debilidades").eq("codigo", codigo).single();
+    const debilidadesActuales = usuarioActual?.debilidades || [];
+    const yaExiste = debilidadesActuales.findIndex((d: any) => d.ejercicio === ejercicio);
+    let debilidadesActualizadas;
+    if (yaExiste >= 0) {
+      debilidadesActualizadas = [...debilidadesActuales];
+      debilidadesActualizadas[yaExiste] = { ejercicio, descripcion, fecha: new Date().toISOString().split('T')[0] };
+    } else {
+      debilidadesActualizadas = [...debilidadesActuales, { ejercicio, descripcion, fecha: new Date().toISOString().split('T')[0] }];
+    }
+    await supabase.from("usuarios").update({ debilidades: debilidadesActualizadas }).eq("codigo", codigo);
+    return NextResponse.json({ ok: true });
+  }
+
   if (action === "registrar_evento") {
     const { evento } = datos;
     const { error } = await supabase.from("athlete_events").insert({

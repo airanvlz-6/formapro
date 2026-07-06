@@ -185,7 +185,7 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
   ],
 };
 
-const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "", memoria?: {lesiones?:string; plan?:string; notas?:string}, ciclo?: {bloque?:string; semana?:number; totalSemanas?:number; objetivo?:string}, psicologia?: {arousal?:string; confianza?:string; estres?:string; motivacion?:string; notas_mentales?:string}, premium?: boolean, athleteState?: Record<string,any>, datosEntreno?: Record<string,any>, estadoFisio?: {fatiga_aguda?:number;fatiga_cronica?:number;tendencia?:string;hrv?:number;sueno?:number;rhr?:number;adherencia?:number}, histFisio?: {fecha:string;hrv?:number;sueno?:number;rhr?:number}[], distribucion?: string, objetivo?: {descripcion?:string;fecha?:string;tipo?:string}, planSemana?: any) => {
+const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "", memoria?: {lesiones?:string; plan?:string; notas?:string}, ciclo?: {bloque?:string; semana?:number; totalSemanas?:number; objetivo?:string}, psicologia?: {arousal?:string; confianza?:string; estres?:string; motivacion?:string; notas_mentales?:string}, premium?: boolean, athleteState?: Record<string,any>, datosEntreno?: Record<string,any>, estadoFisio?: {fatiga_aguda?:number;fatiga_cronica?:number;tendencia?:string;hrv?:number;sueno?:number;rhr?:number;adherencia?:number}, histFisio?: {fecha:string;hrv?:number;sueno?:number;rhr?:number}[], distribucion?: string, objetivo?: {descripcion?:string;fecha?:string;tipo?:string}, planSemana?: any, debilidadesAtleta?: {ejercicio:string;descripcion:string;fecha:string}[]) => {
   const perfilStr = Object.entries(perfil).map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join("\n");
   const marcasStr = marcas.length > 0 ? marcas.map(m => `- ${m.fecha}: ${m.valor}`).join("\n") : "Sin registros aún";
   const cicloStr = ciclo?.bloque ? `
@@ -252,6 +252,7 @@ FORMATO ESTRICTO:
 - NUNCA hagas resumen de lo que acaba de decir el cliente.
 - Si el cliente reporta un entrenamiento realizado: responde SOLO con el siguiente entreno o ajuste en una frase breve de contexto + la sesión. Sin análisis salvo petición explícita.
 ZONAS DE FRECUENCIA: Cuando calcules o presentes zonas de frecuencia cardíaca al atleta, al final de tu explicación pregunta siempre: "¿Confirmas estas zonas de frecuencia? Si es así, responde 'Confirmo mis zonas' para que queden registradas en tu perfil." Solo presenta esta pregunta cuando calcules zonas nuevas o las modifiques, no en cada mensaje.
+DETECCIÓN DE DEBILIDADES DEL ATLETA — REGISTRO OBLIGATORIO: Cuando el atleta mencione explícitamente una debilidad, limitación técnica, o punto débil suyo (ej: "no soy fuerte en press banca", "mi técnica de snatch falla", "mis isquios están débiles", "me cuesta el ritmo Z2"), añade: [DEBILIDAD:{"ejercicio":"nombre del ejercicio/área afectada","descripcion":"breve descripción de la debilidad reportada"}]. Además, SIEMPRE que planifiques sesiones futuras, revisa las debilidades ya registradas del atleta (verás una sección "DEBILIDADES DEL ATLETA" en tu contexto) e incorpora trabajo específico para mejorarlas cuando sea coherente con el bloque actual — no las ignores tras varios mensajes.
 BENCHMARKS CROSSFIT — REGISTRO OBLIGATORIO: Si el atleta reporta haber completado un benchmark conocido de CrossFit (Fran, Murph, Cindy, Grace, Helen, Diane, Jackie, Angie, Annie, DT, Eva, Chelsea, Nancy, Amanda, Elizabeth, Kelly, Karen, Isabel, Linda, Mary, Barbara, o cualquier WOD nombrado con mayúscula que sea benchmark reconocido), además de [SESION:] añade también: [EVENTO:{"date":"YYYY-MM-DD","type":"pr","title":"nombre benchmark: resultado (ej: Cindy: 22 rondas)","data":{"ejercicio":"benchmark_nombreminusculas","valor":"resultado con unidad (rondas, tiempo, reps)"}}]. Esto permite comparar el progreso del atleta en ese benchmark específico con el tiempo.
 GESTIÓN DE SESIONES — DETECCIÓN ESTRICTA: SOLO genera el tag [SESION:] cuando el atleta use frases de FINALIZACIÓN clara SOBRE UN ENTRENAMIENTO: "he terminado", "completé", "ya entrené", "acabo de hacer", "WOD completado", "entreno realizado", "hice el entreno". NUNCA lo generes si: (a) el atleta solo pregunta sobre una sesión futura, (b) pide detalles, (c) menciona la palabra "sesión" sin confirmar que la completó, (d) el mensaje es exclusivamente un reporte de MÉTRICAS DE SUEÑO/RECUPERACIÓN NOCTURNA sin mención de entrenamiento. Un mensaje que solo hable de sueño, HRV nocturna, FC reposo NUNCA debe generar [SESION:]. Formato: [SESION:{"tipo":"tipo de sesión","fecha":"YYYY-MM-DDThh:mm:ss.000Z — usa SIEMPRE la fecha de HOY (la indicada en [Fecha actual del sistema]) salvo que el atleta mencione explícitamente otra fecha","notas":"resumen breve","duracion":null,"sensacion":"buena|normal|mala","analisis":"UNA frase breve con tu análisis técnico"}].
 RESPUESTA TRAS REPORTAR SESIÓN — FORMATO OBLIGATORIO BREVE: Cuando el atleta reporte una sesión completada, tu respuesta debe ser SOLO: 1) Una frase breve de feedback sobre lo reportado (máx 2 líneas). 2) Invita a revisar la sesión de mañana en Mi Plan, ejemplo: "Revisa mañana en Mi Plan — ¿tienes alguna duda?". NUNCA repitas el contenido completo de la siguiente sesión (calentamiento, bloque principal, etc.) — esa información ya vive en Mi Plan. Si el atleta pregunta específicamente por detalles de la sesión de mañana, ahí sí puedes explicarla.
@@ -319,6 +320,10 @@ El sueño reportado SIEMPRE ocurrió ANTES de cualquier entrenamiento del día a
 ✅ La ÚNICA causa válida para explicar un HRV/sueño bajo es: actividad de DÍAS ANTERIORES (ayer o antes), estrés, enfermedad, alcohol, mala alimentación — NUNCA la actividad del día en curso que aún no ha terminado o que ocurrió DESPUÉS del sueño.
 ANTES de escribir cualquier frase que relacione sueño con entrenamiento, verifica: ¿el entrenamiento que menciono ocurrió ANTES o DESPUÉS de la noche de este sueño? Si ocurrió el mismo día o después, esa relación causal es IMPOSIBLE y no debes escribirla.
 DISPONIBILIDAD DEL ATLETA — REGLA CRÍTICA: Antes de programar cualquier sesión, consulta el perfil del atleta y respeta ESTRICTAMENTE sus días disponibles, horarios y lugar de entrenamiento. NUNCA programes una sesión en un día que el atleta no ha indicado como disponible. Si el perfil indica "lunes no disponible" o "solo box martes y jueves", respeta eso sin excepciones. La disponibilidad es una restricción inamovible, no una sugerencia.
+${debilidadesAtleta&&debilidadesAtleta.length>0?`
+🎯 DEBILIDADES DEL ATLETA — TENER EN CUENTA AL PLANIFICAR:
+${debilidadesAtleta.map(d=>`- ${d.ejercicio}: ${d.descripcion}`).join("\n")}
+Incorpora trabajo específico para estas debilidades cuando sea coherente con el bloque actual.`:""}
 ${planSemana&&planSemana.sessions?`
 📅 PLAN SEMANAL ACTUAL EN "MI PLAN" — ESTA ES LA ÚNICA FUENTE DE VERDAD:
 Bloque: ${planSemana.block_name} · Semana ${planSemana.week_number}${planSemana.total_weeks_block?` de ${planSemana.total_weeks_block}`:""}
@@ -593,6 +598,7 @@ export default function Forge() {
         setObjetivoPrincipal((u as any).objetivo_principal||{});
         setHistorialMarcas((u as any).historial_marcas||[]);
         setAnalisisBloques((u as any).analisis_bloques||[]);
+        setDebilidades((u as any).debilidades||[]);
         setFechaRegistro((u as any).created_at||null);
         cargarEquipos(u.codigo);
         cargarPlanSemanal(u.codigo);
@@ -621,6 +627,7 @@ const [historialFisiologico,setHistorialFisiologico]=useState<{fecha:string;hrv?
 const [distribucionSemanal,setDistribucionSemanal]=useState<string>("");
 const [objetivoPrincipal,setObjetivoPrincipal]=useState<{descripcion?:string;fecha?:string;tipo?:string}>({});
 const [planSemanal,setPlanSemanal]=useState<any>(null);
+const [debilidades,setDebilidades]=useState<{ejercicio:string;descripcion:string;fecha:string}[]>([]);
 const [historialMarcas,setHistorialMarcas]=useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
 const [analisisBloques,setAnalisisBloques]=useState<any[]>([]);
 const [athleteState,setAthleteState]=useState<Record<string,any>>({});
@@ -813,6 +820,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     setObjetivoPrincipal((u as any).objetivo_principal||{});
     setHistorialMarcas((u as any).historial_marcas||[]);
     setAnalisisBloques((u as any).analisis_bloques||[]);
+    setDebilidades((u as any).debilidades||[]);
     setFechaRegistro((u as any).created_at||null);
     cargarEquipos(u.codigo);
     cargarPlanSemanal(u.codigo);
@@ -918,6 +926,10 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       await apiCall({action:"actualizar_sesion_plan",codigo:codigoUsuario,datos:data});
       cargarPlanSemanal(codigoUsuario);
     });
+    await procesarTag("[DEBILIDAD:",11,async(data)=>{
+      await apiCall({action:"registrar_debilidad",codigo:codigoUsuario,datos:data});
+      setDebilidades(prev=>[...prev.filter(d=>d.ejercicio!==data.ejercicio),{...data,fecha:new Date().toISOString().split('T')[0]}]);
+    });
     await procesarTag("[EVENTO:",8,async(data)=>{
       await apiCall({action:"registrar_evento",codigo:codigoUsuario,datos:{evento:data}});
     });
@@ -1014,7 +1026,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       const esPlanificacionSemanal=texto.toLowerCase().includes("semana completa")||texto.toLowerCase().includes("planificacion semanal")||texto.toLowerCase().includes("plan semanal")||texto.toLowerCase().includes("toda la semana")||texto.toLowerCase().includes("generar semana");
       const esProgramacion=esPlanificacionSemanal||texto.toLowerCase().includes("programacion")||texto.toLowerCase().includes("rutina")||texto.toLowerCase().includes("semana")||texto.toLowerCase().includes("plan")||texto.toLowerCase().includes("sesion")||texto.toLowerCase().includes("entreno")||texto.toLowerCase().includes("wod")||texto.toLowerCase().includes("ejercicio")||texto.toLowerCase().includes("bloque")||texto.toLowerCase().includes("rehabilitacion")||texto.toLowerCase().includes("protocolo")||texto.toLowerCase().includes("fase");
       const mensajesContexto=esProgramacion?-6:-4;
-      const data=await apiCall({model:esPlanificacionSemanal?"claude-opus-4-8":"claude-sonnet-4-5",max_tokens:esPlanificacionSemanal?6000:esProgramacion?4000:2000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal,planSemanal)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:nuevoHist.slice(mensajesContexto).map(m=>({...m,content:typeof m.content==="string"?m.content:Array.isArray(m.content)?m.content:"[archivo]"}))},true);
+const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal,planSemanal,debilidades)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:nuevoHist},true);
       if(data.aborted) return;
       const respTextRaw2=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.");
       

@@ -86,7 +86,17 @@ export async function POST(req: NextRequest) {
         const {data: usuarioData} = await supabase.from("usuarios").select("ciclo_actual,notas_coach,datos_entrenamiento,estado_fisiologico,workout_history,historial_fisiologico,distribucion_semanal,objetivo_principal,historial_marcas,analisis_bloques").eq("codigo", codigo).single();
         const cicloActual = usuarioData?.ciclo_actual || {};
         const ultimos = datos.historial.slice(-6).map((m: any) => `${m.role === "user" ? "ATLETA" : "COACH"}: ${typeof m.content === "string" ? m.content.substring(0, 1500) : "[archivo]"}`).join("\n\n");
-        const soloUsuario = datos.historial.slice(-6).filter((m:any) => m.role === "user").map((m: any) => typeof m.content === "string" ? m.content.substring(0, 1500) : "").join("\n\n");
+        const extraerTextoContenido = (content: any): string => {
+          if (typeof content === "string") return content.substring(0, 1500);
+          if (Array.isArray(content)) {
+            const textoParte = content.find((c: any) => c.type === "text");
+            const tieneImagen = content.some((c: any) => c.type === "image");
+            const textoBase = textoParte?.text || "";
+            return tieneImagen ? `[USUARIO ADJUNTÓ UNA IMAGEN/CAPTURA - probablemente datos de reloj deportivo (Garmin/Oura/Apple Watch) con métricas de sueño, HRV, entrenamiento o similar] ${textoBase}`.substring(0, 1500) : textoBase.substring(0, 1500);
+          }
+          return "";
+        };
+        const soloUsuario = datos.historial.slice(-6).filter((m:any) => m.role === "user").map((m: any) => extraerTextoContenido(m.content)).join("\n\n");
 
         const extractPrompt = `Analiza esta conversación y extrae datos en JSON. Responde SOLO con JSON válido:
 {

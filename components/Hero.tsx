@@ -18,7 +18,9 @@ export default function Hero() {
 
         {/* NAVBAR */}
         <nav className="absolute top-8 left-0 right-0 flex items-center justify-between px-6">
-          <h1 className="text-2xl font-bold">Forge</h1>
+          git add .
+git commit -m "usar logo real de Forge en landing V2"
+git push
 
           <div className="hidden gap-10 text-sm text-zinc-300 lg:flex">
             <a href="#caracteristicas">Características</a>

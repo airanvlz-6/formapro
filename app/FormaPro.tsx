@@ -1656,7 +1656,7 @@ ${testStr}`}]});
                       🎯 Mi Atleta
                     </button>
                     <button onClick={()=>{setMostrarPerfil(!mostrarPerfil);setMostrarMarcas(false);setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
-                      👤 Mi perfil
+                      ⚙️ Ajustes
                     </button>
                   </div>
                 )}
@@ -1767,7 +1767,7 @@ ${testStr}`}]});
 
           {mostrarPerfil&&(
         <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:10,maxHeight:400,overflowY:"auto"}}>
-          <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:16,color:C.ink,marginBottom:16}}>Mi perfil</div>
+          <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:16,color:C.ink,marginBottom:16}}>Ajustes de cuenta</div>
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
 
             <div style={{background:C.bg,borderRadius:12,padding:"10px 14px"}}>

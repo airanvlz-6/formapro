@@ -628,6 +628,7 @@ const [distribucionSemanal,setDistribucionSemanal]=useState<string>("");
 const [objetivoPrincipal,setObjetivoPrincipal]=useState<{descripcion?:string;fecha?:string;tipo?:string}>({});
 const [planSemanal,setPlanSemanal]=useState<any>(null);
 const [debilidades,setDebilidades]=useState<{ejercicio:string;descripcion:string;fecha:string}[]>([]);
+const [mostrarCodigoReal,setMostrarCodigoReal]=useState(false);
 const [historialMarcas,setHistorialMarcas]=useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
 const [analisisBloques,setAnalisisBloques]=useState<any[]>([]);
 const [athleteState,setAthleteState]=useState<Record<string,any>>({});
@@ -1770,8 +1771,15 @@ ${testStr}`}]});
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
 
             <div style={{background:C.bg,borderRadius:12,padding:"10px 14px"}}>
-              <p style={{color:C.muted,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Código de acceso</p>
-              <p style={{color:accentColor,fontSize:15,fontWeight:700,letterSpacing:2}}>{codigoUsuario}</p>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <p style={{color:C.muted,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>Código de acceso</p>
+                  <p style={{color:accentColor,fontSize:15,fontWeight:700,letterSpacing:2}}>{mostrarCodigoReal?codigoUsuario:"••••••"}</p>
+                </div>
+                <button onClick={()=>setMostrarCodigoReal(!mostrarCodigoReal)} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,padding:"5px 10px",fontSize:11,color:C.muted,cursor:"pointer"}}>
+                  {mostrarCodigoReal?"Ocultar":"Ver"}
+                </button>
+              </div>
             </div>
             <div style={{background:C.bg,borderRadius:12,padding:"10px 14px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>

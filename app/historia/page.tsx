@@ -132,7 +132,7 @@ export default function Historia() {
           <img src="/logo-forge.png" alt="Forge" style={{width:40,height:40,objectFit:"contain"}}/>
           <div>
             <h1 style={{fontSize:20,fontWeight:700,color:C.ink,fontFamily:"Georgia,serif"}}>Mi Historia</h1>
-            <p style={{color:C.accent,fontSize:12,fontWeight:600}}>{codigo}</p>
+            <p style={{color:C.accent,fontSize:12,fontWeight:600}}>••••••</p>
           </div>
           <div style={{marginLeft:"auto",display:"flex",gap:8}}>
             <button onClick={()=>setMostrarFormulario(!mostrarFormulario)}

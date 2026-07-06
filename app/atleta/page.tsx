@@ -146,11 +146,33 @@ export default function MiAtleta() {
           </a>
         </div>
 
+        {/* Disponibilidad */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+          <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 10 }}>📅 Disponibilidad</p>
+          <p style={{ color: C.muted, fontSize: 13, lineHeight: 1.6 }}>{datos?.distribucion_semanal || datos?.perfil?.dias || "No especificada"}</p>
+        </div>
+
         {/* Lesiones */}
         {datos?.lesiones_actuales && (
           <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
             <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 10 }}>🩹 Lesiones</p>
             <p style={{ color: C.muted, fontSize: 13 }}>{datos.lesiones_actuales}</p>
+          </div>
+        )}
+
+        {/* Material */}
+        {datos?.perfil?.material && (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+            <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 10 }}>🏋️ Material disponible</p>
+            <p style={{ color: C.muted, fontSize: 13 }}>{Array.isArray(datos.perfil.material) ? datos.perfil.material.join(", ") : datos.perfil.material}</p>
+          </div>
+        )}
+
+        {/* Preferencias */}
+        {datos?.perfil?.lugar_entreno && (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+            <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 10 }}>📍 Preferencias</p>
+            <p style={{ color: C.muted, fontSize: 13 }}>{datos.perfil.lugar_entreno}</p>
           </div>
         )}
 

@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from "react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function Progreso() {
   const [codigo, setCodigo] = useState("");
@@ -8,6 +9,7 @@ export default function Progreso() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [iniciado, setIniciado] = useState(false);
+  const [metricaGrafico, setMetricaGrafico] = useState<"hrv"|"sueno">("hrv");
   const C = {
     bg: "#0D0D0D", card: "#1A1A1A", ink: "#F0EDE8", muted: "#9A9590",
     border: "#2A2A2A", accent: "#FF6B00"
@@ -174,35 +176,45 @@ useEffect(() => {
         {/* 2. Tendencias fisiologicas */}
         {histFisio.length >= 3 && (()=>{
           const ultimos = histFisio.slice(-7);
-          const hrvValues = ultimos.filter((e:any) => e.hrv).map((e:any) => e.hrv);
-          const suenoValues = ultimos.filter((e:any) => e.sueno).map((e:any) => e.sueno);
-          const mediaHrv = hrvValues.length>0?hrvValues.reduce((a:number,b:number)=>a+b,0)/hrvValues.length:0;
-          const mediaSueno = suenoValues.length>0?suenoValues.reduce((a:number,b:number)=>a+b,0)/suenoValues.length:0;
-          const umbralHrv = Math.max(10, mediaHrv*0.15);
-          const umbralSueno = 12;
-          // Comparar últimos 3 valores para ver dirección reciente real, no extremos de toda la ventana
-          const ultimosNHrv = hrvValues.slice(-3);
-          const ultimosNSueno = suenoValues.slice(-3);
-          const tendenciaHrv = ultimosNHrv.length>=3?(ultimosNHrv[2]-ultimosNHrv[0]>umbralHrv?"↑ Mejorando":ultimosNHrv[2]-ultimosNHrv[0]<-umbralHrv?"↓ Empeorando":"→ Estable"):"Sin datos";
-          const tendenciaSueno = ultimosNSueno.length>=3?(ultimosNSueno[2]-ultimosNSueno[0]>umbralSueno?"↑ Mejorando":ultimosNSueno[2]-ultimosNSueno[0]<-umbralSueno?"↓ Empeorando":"→ Estable"):"Sin datos";
-          const colorHrv = tendenciaHrv.includes("Mejorando")?"#4CAF50":tendenciaHrv.includes("Empeorando")?"#ff4444":C.muted;
-          const colorSueno = tendenciaSueno.includes("Mejorando")?"#4CAF50":tendenciaSueno.includes("Empeorando")?"#ff4444":C.muted;
-          const alerta = tendenciaHrv.includes("Empeorando") && tendenciaSueno.includes("Empeorando");
+          const hrvValues = ultimos.filter((e:any) => e.hrv).map((e:any) => ({fecha: new Date(e.fecha).toLocaleDateString("es-ES",{day:"numeric",month:"short"}), valor: e.hrv}));
+          const suenoValues = ultimos.filter((e:any) => e.sueno).map((e:any) => ({fecha: new Date(e.fecha).toLocaleDateString("es-ES",{day:"numeric",month:"short"}), valor: e.sueno}));
+          const datosActivos = metricaGrafico==="hrv" ? hrvValues : suenoValues;
+          const valoresSolo = datosActivos.map((d:{fecha:string;valor:number})=>d.valor);
+          const media = valoresSolo.length>0 ? Math.round(valoresSolo.reduce((a:number,b:number)=>a+b,0)/valoresSolo.length) : 0;
+          const ultimosN = valoresSolo.slice(-3);
+          const umbral = metricaGrafico==="hrv" ? Math.max(10, media*0.15) : 12;
+          const tendencia = ultimosN.length>=3?(ultimosN[2]-ultimosN[0]>umbral?"↑ Mejorando":ultimosN[2]-ultimosN[0]<-umbral?"↓ Fluctuando":"→ Estable"):"Sin datos suficientes";
+          const colorTendencia = tendencia.includes("Mejorando")?"#4CAF50":tendencia.includes("Fluctuando")?"#FF6B00":C.muted;
+
           return (
-            <div style={{ background: C.card, border: `1px solid ${alerta?"#ff4444":C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
-              <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 14 }}>📈 Tendencias ({ultimos.length} días)</p>
-              {hrvValues.length>=2 && <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
-                <span style={{ color:C.muted, fontSize:13 }}>HRV media</span>
-                <span style={{ color:colorHrv, fontSize:13, fontWeight:600 }}>{Math.round(hrvValues.reduce((a:number,b:number)=>a+b,0)/hrvValues.length)}ms — {tendenciaHrv}</span>
-              </div>}
-              {suenoValues.length>=2 && <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
-                <span style={{ color:C.muted, fontSize:13 }}>Sueño medio</span>
-                <span style={{ color:colorSueno, fontSize:13, fontWeight:600 }}>{Math.round(suenoValues.reduce((a:number,b:number)=>a+b,0)/suenoValues.length)}/100 — {tendenciaSueno}</span>
-              </div>}
-              {alerta && <div style={{ background:"#ff444420", borderRadius:10, padding:"10px 12px", marginTop:8 }}>
-                <p style={{ color:"#ff4444", fontSize:12, fontWeight:600 }}>⚠️ Tendencia negativa detectada</p>
-                <p style={{ color:C.muted, fontSize:12, marginTop:4 }}>Forge ha notificado al coach para ajustar tu carga de entrenamiento</p>
-              </div>}
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                <p style={{ color: C.ink, fontSize: 14, fontWeight: 700 }}>📈 Tendencias (7 días)</p>
+                <div style={{display:"flex",gap:6}}>
+                  <button onClick={()=>setMetricaGrafico("hrv")} style={{background:metricaGrafico==="hrv"?C.accent:C.bg,color:metricaGrafico==="hrv"?"#fff":C.muted,border:`1px solid ${metricaGrafico==="hrv"?C.accent:C.border}`,borderRadius:100,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer"}}>HRV</button>
+                  <button onClick={()=>setMetricaGrafico("sueno")} style={{background:metricaGrafico==="sueno"?C.accent:C.bg,color:metricaGrafico==="sueno"?"#fff":C.muted,border:`1px solid ${metricaGrafico==="sueno"?C.accent:C.border}`,borderRadius:100,padding:"4px 10px",fontSize:11,fontWeight:600,cursor:"pointer"}}>Sueño</button>
+                </div>
+              </div>
+
+              {datosActivos.length >= 2 ? (
+                <>
+                  <ResponsiveContainer width="100%" height={140}>
+                    <LineChart data={datosActivos}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={C.border}/>
+                      <XAxis dataKey="fecha" stroke={C.muted} fontSize={10}/>
+                      <YAxis stroke={C.muted} fontSize={10}/>
+                      <Tooltip contentStyle={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,fontSize:12}} labelStyle={{color:C.ink}}/>
+                      <Line type="monotone" dataKey="valor" stroke={C.accent} strokeWidth={2} dot={{fill:C.accent,r:3}}/>
+                    </LineChart>
+                  </ResponsiveContainer>
+                  <div style={{display:"flex",justifyContent:"space-between",marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
+                    <span style={{color:C.muted,fontSize:12}}>Media: {media}{metricaGrafico==="hrv"?"ms":"/100"}</span>
+                    <span style={{color:colorTendencia,fontSize:12,fontWeight:600}}>{tendencia}</span>
+                  </div>
+                </>
+              ) : (
+                <p style={{color:C.muted,fontSize:13,textAlign:"center",padding:"20px 0"}}>Necesitas más registros de {metricaGrafico==="hrv"?"HRV":"sueño"} para ver la tendencia.</p>
+              )}
             </div>
           );
         })()}

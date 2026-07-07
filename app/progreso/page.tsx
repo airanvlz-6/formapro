@@ -180,8 +180,11 @@ useEffect(() => {
           const mediaSueno = suenoValues.length>0?suenoValues.reduce((a:number,b:number)=>a+b,0)/suenoValues.length:0;
           const umbralHrv = Math.max(10, mediaHrv*0.15);
           const umbralSueno = 12;
-          const tendenciaHrv = hrvValues.length>=3?(hrvValues[hrvValues.length-1]-hrvValues[0]>umbralHrv?"↑ Mejorando":hrvValues[hrvValues.length-1]-hrvValues[0]<-umbralHrv?"↓ Empeorando":"→ Estable"):"Sin datos";
-          const tendenciaSueno = suenoValues.length>=3?(suenoValues[suenoValues.length-1]-suenoValues[0]>umbralSueno?"↑ Mejorando":suenoValues[suenoValues.length-1]-suenoValues[0]<-umbralSueno?"↓ Empeorando":"→ Estable"):"Sin datos";
+          // Comparar últimos 3 valores para ver dirección reciente real, no extremos de toda la ventana
+          const ultimosNHrv = hrvValues.slice(-3);
+          const ultimosNSueno = suenoValues.slice(-3);
+          const tendenciaHrv = ultimosNHrv.length>=3?(ultimosNHrv[2]-ultimosNHrv[0]>umbralHrv?"↑ Mejorando":ultimosNHrv[2]-ultimosNHrv[0]<-umbralHrv?"↓ Empeorando":"→ Estable"):"Sin datos";
+          const tendenciaSueno = ultimosNSueno.length>=3?(ultimosNSueno[2]-ultimosNSueno[0]>umbralSueno?"↑ Mejorando":ultimosNSueno[2]-ultimosNSueno[0]<-umbralSueno?"↓ Empeorando":"→ Estable"):"Sin datos";
           const colorHrv = tendenciaHrv.includes("Mejorando")?"#4CAF50":tendenciaHrv.includes("Empeorando")?"#ff4444":C.muted;
           const colorSueno = tendenciaSueno.includes("Mejorando")?"#4CAF50":tendenciaSueno.includes("Empeorando")?"#ff4444":C.muted;
           const alerta = tendenciaHrv.includes("Empeorando") && tendenciaSueno.includes("Empeorando");

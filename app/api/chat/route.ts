@@ -616,7 +616,7 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
   }
 
   if (action === "registrar_debilidad_dev") {
-    const { area, indicador, nombre_visible, diagnostico, estado, confianza, prioridad, evidencias, plan_accion, beneficio_esperado } = datos;
+    const { area, indicador, nombre_visible, diagnostico, estado, progreso, confianza, prioridad, evidencias, plan_accion, beneficio_esperado } = datos;
     const { data: usuarioActual } = await supabase.from("usuarios").select("athlete_development").eq("codigo", codigo).single();
     const devActual = usuarioActual?.athlete_development || [];
     const yaExiste = devActual.findIndex((d: any) => d.indicador?.toLowerCase() === indicador?.toLowerCase());
@@ -625,7 +625,8 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
       area, indicador,
       nombre_visible: nombre_visible || indicador,
       diagnostico: diagnostico || "",
-      estado: estado || "debilidad",
+      estado: estado || "activa",
+      progreso: progreso || 0,
       confianza: confianza || 60,
       prioridad: prioridad || "media",
       detectado: yaExiste >= 0 ? devActual[yaExiste].detectado : hoy,
@@ -646,20 +647,35 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
   }
 
   if (action === "actualizar_debilidad_dev") {
-    const { indicador, estado, confianza, nueva_evidencia } = datos;
+    const { indicador, estado, progreso, confianza, nueva_evidencia } = datos;
     const { data: usuarioActual } = await supabase.from("usuarios").select("athlete_development").eq("codigo", codigo).single();
     const devActual = usuarioActual?.athlete_development || [];
     const idx = devActual.findIndex((d: any) => d.indicador?.toLowerCase() === indicador?.toLowerCase());
     if (idx < 0) return NextResponse.json({ ok: true, mensaje: "No encontrado" });
     const devActualizado = [...devActual];
+    const estadoAnterior = devActualizado[idx].estado;
     devActualizado[idx] = {
       ...devActualizado[idx],
       estado: estado || devActualizado[idx].estado,
+      progreso: progreso !== undefined ? progreso : devActualizado[idx].progreso,
       confianza: confianza !== undefined ? confianza : devActualizado[idx].confianza,
       ultima_revision: new Date().toISOString().split('T')[0],
       evidencias: nueva_evidencia ? [...devActualizado[idx].evidencias, nueva_evidencia] : devActualizado[idx].evidencias
     };
     await supabase.from("usuarios").update({ athlete_development: devActualizado }).eq("codigo", codigo);
+
+    // Si pasó a resuelta, generar evento en Historia
+    if (estado === "resuelta" && estadoAnterior !== "resuelta") {
+      const diasTrabajado = Math.round((new Date().getTime() - new Date(devActualizado[idx].detectado).getTime()) / (24*60*60*1000));
+      await supabase.from("athlete_events").insert({
+        user_codigo: codigo,
+        date: new Date().toISOString().split('T')[0],
+        type: "block_end",
+        title: `🏆 Área de desarrollo completada: ${devActualizado[idx].nombre_visible}`,
+        data: { notas: `${diasTrabajado} días de trabajo. ${nueva_evidencia||""}` }
+      });
+    }
+
     return NextResponse.json({ ok: true });
   }
 

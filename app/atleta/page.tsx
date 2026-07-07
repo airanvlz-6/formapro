@@ -170,33 +170,60 @@ export default function MiAtleta() {
             <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>🎯 Áreas de desarrollo</p>
             {datos.athlete_development.map((d:any,i:number)=>{
               const colorEstado = d.estado==="resuelta"?"#4CAF50":d.estado==="en_progreso"?"#FFD700":"#FF6B00";
-              const labelEstado = d.estado==="resuelta"?"✅ Resuelta":d.estado==="en_progreso"?"⚡ En progreso":"🎯 Activa";
+              const labelEstado = d.estado==="resuelta"?"Resuelta":d.estado==="en_progreso"?"En progreso":"Activa";
+              const colorPrioridad = d.prioridad==="alta"?"#ff4444":d.prioridad==="baja"?C.muted:"#FF6B00";
+              const diasDetectado = Math.round((new Date().getTime()-new Date(d.detectado).getTime())/(24*60*60*1000));
               return (
-                <div key={i} style={{ background: C.bg, borderRadius: 12, padding: "12px 14px", marginBottom: i<datos.athlete_development.length-1?10:0 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                    <div>
-                      <p style={{ color: C.muted, fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>{d.area}</p>
-                      <p style={{ color: C.ink, fontSize: 14, fontWeight: 700 }}>{d.indicador}</p>
+                <div key={i} style={{ background: C.bg, borderRadius: 12, padding: "14px 16px", marginBottom: i<datos.athlete_development.length-1?12:0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <p style={{ color: C.ink, fontSize: 15, fontWeight: 700 }}>{d.nombre_visible || d.indicador}</p>
+                    <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                      <span style={{ color: colorEstado, fontSize: 11, fontWeight: 700 }}>● {labelEstado}</span>
                     </div>
-                    <span style={{ background: `${colorEstado}20`, color: colorEstado, fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 100 }}>{labelEstado}</span>
                   </div>
+
+                  {d.diagnostico && (
+                    <p style={{ color: C.muted, fontSize: 13, lineHeight: 1.6, marginBottom: 12 }}>{d.diagnostico}</p>
+                  )}
+
                   {d.evidencias?.length > 0 && (
-                    <div style={{ marginTop: 8 }}>
-                      <p style={{ color: C.muted, fontSize: 10, fontWeight: 600, marginBottom: 3 }}>EVIDENCIAS</p>
+                    <div style={{ marginBottom: 10 }}>
+                      <p style={{ color: C.muted, fontSize: 10, fontWeight: 700, textTransform:"uppercase", letterSpacing:1, marginBottom: 4 }}>Evidencias</p>
                       {d.evidencias.map((e:string,j:number)=>(
-                        <p key={j} style={{ color: C.muted, fontSize: 12, lineHeight: 1.5 }}>• {e}</p>
+                        <p key={j} style={{ color: C.muted, fontSize: 12, lineHeight: 1.6 }}>• {e}</p>
                       ))}
                     </div>
                   )}
+
                   {d.plan_accion?.length > 0 && (
-                    <div style={{ marginTop: 8 }}>
-                      <p style={{ color: C.accent, fontSize: 10, fontWeight: 600, marginBottom: 3 }}>PLAN DE ACCIÓN</p>
+                    <div style={{ marginBottom: 10 }}>
+                      <p style={{ color: C.accent, fontSize: 10, fontWeight: 700, textTransform:"uppercase", letterSpacing:1, marginBottom: 4 }}>Plan de acción</p>
                       {d.plan_accion.map((p:string,j:number)=>(
-                        <p key={j} style={{ color: C.ink, fontSize: 12, lineHeight: 1.5 }}>→ {p}</p>
+                        <p key={j} style={{ color: C.ink, fontSize: 12, lineHeight: 1.6 }}>→ {p}</p>
                       ))}
                     </div>
                   )}
-                  <p style={{ color: C.muted, fontSize: 10, marginTop: 8 }}>Detectado hace {Math.round((new Date().getTime()-new Date(d.detectado).getTime())/(24*60*60*1000))} días · Confianza {d.confianza}%</p>
+
+                  {d.beneficio_esperado?.length > 0 && (
+                    <div style={{ marginBottom: 12, background: "#4CAF5010", borderRadius: 8, padding: "8px 10px" }}>
+                      <p style={{ color: "#4CAF50", fontSize: 10, fontWeight: 700, marginBottom: 4 }}>Si mejoras esto probablemente conseguirás</p>
+                      {d.beneficio_esperado.map((b:string,j:number)=>(
+                        <p key={j} style={{ color: C.ink, fontSize: 12, lineHeight: 1.6 }}>✓ {b}</p>
+                      ))}
+                    </div>
+                  )}
+
+                  <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <div>
+                      <p style={{ color: C.muted, fontSize: 10 }}>Confianza del diagnóstico</p>
+                      <p style={{ color: C.ink, fontSize: 13, fontWeight: 700 }}>{d.confianza}%</p>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <p style={{ color: C.muted, fontSize: 10 }}>Prioridad</p>
+                      <p style={{ color: colorPrioridad, fontSize: 12, fontWeight: 700, textTransform:"uppercase" }}>{d.prioridad || "media"}</p>
+                    </div>
+                  </div>
+                  <p style={{ color: C.muted, fontSize: 10, marginTop: 8 }}>Detectado hace {diasDetectado} días</p>
                 </div>
               );
             })}

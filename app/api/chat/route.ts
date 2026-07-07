@@ -616,18 +616,23 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
   }
 
   if (action === "registrar_debilidad_dev") {
-    const { area, indicador, estado, confianza, evidencias, plan_accion } = datos;
+    const { area, indicador, nombre_visible, diagnostico, estado, confianza, prioridad, evidencias, plan_accion, beneficio_esperado } = datos;
     const { data: usuarioActual } = await supabase.from("usuarios").select("athlete_development").eq("codigo", codigo).single();
     const devActual = usuarioActual?.athlete_development || [];
     const yaExiste = devActual.findIndex((d: any) => d.indicador?.toLowerCase() === indicador?.toLowerCase());
     const hoy = new Date().toISOString().split('T')[0];
     const nuevaEntrada = {
-      area, indicador, estado: estado || "debilidad",
+      area, indicador,
+      nombre_visible: nombre_visible || indicador,
+      diagnostico: diagnostico || "",
+      estado: estado || "debilidad",
       confianza: confianza || 60,
+      prioridad: prioridad || "media",
       detectado: yaExiste >= 0 ? devActual[yaExiste].detectado : hoy,
       ultima_revision: hoy,
       evidencias: evidencias || [],
-      plan_accion: plan_accion || []
+      plan_accion: plan_accion || [],
+      beneficio_esperado: beneficio_esperado || []
     };
     let devActualizado;
     if (yaExiste >= 0) {

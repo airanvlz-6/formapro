@@ -90,6 +90,18 @@ export default function AdminPanel() {
               ))}
             </div>
 
+            {/* Activación */}
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+              <p style={{ fontSize: 13, fontWeight: 600, color: C.ink, marginBottom: 10 }}>🎯 Activación (1ª sesión completada)</p>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 8 }}>
+                <p style={{ fontSize: 28, fontWeight: 700, color: C.green, fontFamily: "Georgia, serif" }}>{datos.activados ?? 0} <span style={{fontSize:14,color:C.muted,fontWeight:400}}>de {datos.total ?? 0}</span></p>
+                <p style={{ fontSize: 20, fontWeight: 700, color: (datos.tasaActivacion??0)>=50?"#4CAF50":(datos.tasaActivacion??0)>=25?"#FF6B00":"#ff4444" }}>{datos.tasaActivacion ?? 0}%</p>
+              </div>
+              <div style={{ height: 8, background: C.border, borderRadius: 100 }}>
+                <div style={{ height: 8, borderRadius: 100, background: (datos.tasaActivacion??0)>=50?"#4CAF50":(datos.tasaActivacion??0)>=25?"#FF6B00":"#ff4444", width: `${datos.tasaActivacion ?? 0}%`, transition: "width 0.8s ease" }}/>
+              </div>
+            </div>
+
             {/* Nuevos esta semana */}
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
               <p style={{ fontSize: 13, fontWeight: 600, color: C.ink, marginBottom: 4 }}>📅 Nuevos esta semana</p>

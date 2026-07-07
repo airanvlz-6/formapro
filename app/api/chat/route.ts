@@ -15,6 +15,26 @@ export async function POST(req: NextRequest) {
 
   const { messages, system, model, max_tokens, action, codigo, datos, email, codigoConjunto } = await req.json();
 
+  // Rate limiting: máximo 30 peticiones por minuto por código
+  if (codigo && (action === undefined || messages)) {
+    const ahora = new Date();
+    const { data: rateLimitData } = await supabase.from("rate_limits").select("*").eq("codigo", codigo).single();
+    if (rateLimitData) {
+      const windowStart = new Date(rateLimitData.window_start);
+      const segundosTranscurridos = (ahora.getTime() - windowStart.getTime()) / 1000;
+      if (segundosTranscurridos < 60) {
+        if (rateLimitData.requests_count >= 30) {
+          return NextResponse.json({ error: "Demasiadas peticiones. Espera un momento e inténtalo de nuevo." }, { status: 429 });
+        }
+        await supabase.from("rate_limits").update({ requests_count: rateLimitData.requests_count + 1 }).eq("codigo", codigo);
+      } else {
+        await supabase.from("rate_limits").update({ requests_count: 1, window_start: ahora.toISOString() }).eq("codigo", codigo);
+      }
+    } else {
+      await supabase.from("rate_limits").insert({ codigo, requests_count: 1, window_start: ahora.toISOString() });
+    }
+  }
+
   // Guardar usuario nuevo
   if (action === "guardar_usuario") {
     const { data, error } = await supabase
@@ -841,16 +861,29 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     return NextResponse.json({ total, premium, activos, inactivos, enLimite, nuevosHoy, nuevosSemana, ultimos, unaVisita, recurrentes });
   }
 
-  // Llamada normal a la IA
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({ model, max_tokens, system, messages }),
-  });
+  // Llamada normal a la IA con timeout de 55 segundos
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 55000);
+  let response;
+  try {
+    response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({ model, max_tokens, system, messages }),
+      signal: controller.signal,
+    });
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === "AbortError") {
+      return NextResponse.json({ error: "La respuesta está tardando demasiado. Inténtalo de nuevo." }, { status: 504 });
+    }
+    throw err;
+  }
+  clearTimeout(timeoutId);
 
   const data = await response.json();
   return NextResponse.json(data);

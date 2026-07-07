@@ -840,7 +840,7 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     const inicioSemana = new Date(hoy);
     inicioSemana.setDate(hoy.getDate() - (hoy.getDay()===0?6:hoy.getDay()-1));
 
-    const { data: todos } = await supabase.from("usuarios").select("codigo,categoria,especialidad,premium,admin,created_at,updated_at,consultas_usadas,total_visitas,ultima_visita");
+    const { data: todos } = await supabase.from("usuarios").select("codigo,categoria,especialidad,premium,admin,created_at,updated_at,consultas_usadas,total_visitas,ultima_visita,primera_sesion_at");
     if (!todos) return NextResponse.json({ error: "Error" }, { status: 500 });
 
     const total = todos.length;
@@ -862,7 +862,11 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     const nuevosSemana = todos.filter((u: any) => u.created_at && new Date(u.created_at) >= inicioSemana).length;
     const ultimos = [...todos].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 10);
 
-    return NextResponse.json({ total, premium, activos, inactivos, enLimite, nuevosHoy, nuevosSemana, ultimos, unaVisita, recurrentes });
+    // Activación: usuarios que completaron al menos 1 sesión
+    const activados = todos.filter((u: any) => u.primera_sesion_at).length;
+    const tasaActivacion = total > 0 ? Math.round((activados / total) * 100) : 0;
+
+    return NextResponse.json({ total, premium, activos, inactivos, enLimite, nuevosHoy, nuevosSemana, ultimos, unaVisita, recurrentes, activados, tasaActivacion });
   }
 
   // Llamada normal a la IA con timeout de 55 segundos

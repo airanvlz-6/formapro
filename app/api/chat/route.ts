@@ -670,9 +670,9 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
       await supabase.from("athlete_events").insert({
         user_codigo: codigo,
         date: new Date().toISOString().split('T')[0],
-        type: "block_end",
-        title: `🏆 Área de desarrollo completada: ${devActualizado[idx].nombre_visible}`,
-        data: { notas: `${diasTrabajado} días de trabajo. ${nueva_evidencia||""}` }
+        type: "development_complete",
+        title: `${devActualizado[idx].nombre_visible} — ${diasTrabajado} días de trabajo`,
+        data: { notas: nueva_evidencia||"" }
       });
     }
 

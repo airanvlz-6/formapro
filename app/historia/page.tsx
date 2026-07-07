@@ -13,6 +13,7 @@ const TIPO_CONFIG: Record<string, {emoji:string;label:string;color:string}> = {
   objective_change: { emoji:"🎯", label:"Cambio de objetivo", color:"#CE93D8" },
   block_start: { emoji:"🚀", label:"Inicio de bloque", color:"#FF6B00" },
   block_end: { emoji:"✅", label:"Fin de bloque", color:"#4CAF50" },
+  development_complete: { emoji:"🏆", label:"Desarrollo completado", color:"#4CAF50" },
 };
 
 export default function Historia() {

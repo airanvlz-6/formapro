@@ -106,13 +106,15 @@ export async function POST(req: NextRequest) {
   "nueva_marca": "nueva marca en formato ejercicio:valor o vacío",
   "ciclo": {"bloque": "${cicloActual.bloque||"vacío"}", "semana": ${cicloActual.semana||"null"}, "totalSemanas": ${cicloActual.totalSemanas||"null"}, "objetivo": "${cicloActual.objetivo||"vacío"}"},
   "estado_fisiologico": {"hrv": null, "sueno": null, "rhr": null, "fatiga_aguda": null, "tendencia": null},
-INSTRUCCIONES PARA estado_fisiologico — SOLO SI el mensaje es específicamente un REPORTE DE MÉTRICAS DE SUEÑO/RECUPERACIÓN NOCTURNA (no un reporte de entrenamiento):
-- Detecta primero si el mensaje habla de SUEÑO NOCTURNO ("dormí", "métricas de sueño", "puntuación de sueño", "VFC durante la noche", "anoche"). Si el mensaje es sobre un ENTRENAMIENTO (FC durante ejercicio, rondas, series, WOD) NO extraigas nada de aquí — deja todos los valores null.
-- "hrv": SOLO si se menciona HRV/VFC nocturna explícitamente, no FC de entreno. Ejemplo válido: "VFC media durante la noche 92ms" → 92. Ejemplo INVÁLIDO (ignorar): "FC media durante el WOD 142bpm"
-- "sueno": SOLO puntuación de sueño 0-100 explícita. Ejemplo: "puntuación de sueño 93" → 93
-- "rhr": SOLO FC reposo o mínima NOCTURNA, nunca FC de entrenamiento. Ejemplo válido: "FC mínima durante la noche 43bpm"
-- "fatiga_aguda": NO estimes esto a partir de un reporte de entreno. Déjalo null salvo que el atleta hable explícitamente de fatiga general/sistémica fuera de contexto deportivo
-- Si hay CUALQUIER duda sobre si es sueño o entreno, deja TODO en null
+INSTRUCCIONES PARA estado_fisiologico — REGLA DE EXCLUSIÓN ESTRICTA:
+PASO 1 — Verifica si el mensaje contiene palabras que indican REPORTE DE ENTRENAMIENTO: "sesión realizada", "entreno", "WOD", "series", "reps", "rondas", "técnica", "durante el entreno", "durante la sesión", clean/snatch/squat/press/deadlift, o cualquier ejercicio nombrado.
+PASO 2 — Si el mensaje contiene CUALQUIERA de esas palabras de entrenamiento, incluso mezcladas con números de frecuencia cardíaca, DEJA TODOS los valores en null SIN EXCEPCIÓN, aunque el mensaje también mencione "frecuencia media" o "frecuencia máxima" — esos números son de FC DURANTE EL EJERCICIO, no de sueño/reposo, y NUNCA deben extraerse aquí.
+PASO 3 — SOLO extrae valores si el mensaje es EXCLUSIVAMENTE sobre sueño/recuperación nocturna, sin ninguna mención de entrenamiento, ejercicios o series. Palabras que confirman esto: "métricas de sueño", "dormí", "anoche", "puntuación de sueño", "durante la noche".
+- "hrv": SOLO de mensajes 100% sobre sueño. Ejemplo válido: mensaje que SOLO dice "VFC media durante la noche 92ms" sin mencionar ningún entreno.
+- "sueno": SOLO puntuación de sueño 0-100 en mensaje exclusivo de sueño.
+- "rhr": SOLO FC reposo/mínima nocturna en mensaje exclusivo de sueño.
+- "fatiga_aguda": déjalo SIEMPRE null salvo mensaje exclusivo sobre fatiga sistémica sin contexto de entreno específico.
+REGLA DE ORO: si el mensaje reporta una sesión de entrenamiento (aunque sea junto con números de FC), TODO en estado_fisiologico debe ser null.
 MENSAJES DEL ATLETA PARA ANALIZAR:
 ${soloUsuario}
   "sesion_completada": null,

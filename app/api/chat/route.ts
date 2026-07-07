@@ -615,19 +615,46 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     return NextResponse.json({ ok: true });
   }
 
-  if (action === "registrar_debilidad") {
-    const { ejercicio, descripcion } = datos;
-    const { data: usuarioActual } = await supabase.from("usuarios").select("debilidades").eq("codigo", codigo).single();
-    const debilidadesActuales = usuarioActual?.debilidades || [];
-    const yaExiste = debilidadesActuales.findIndex((d: any) => d.ejercicio === ejercicio);
-    let debilidadesActualizadas;
+  if (action === "registrar_debilidad_dev") {
+    const { area, indicador, estado, confianza, evidencias, plan_accion } = datos;
+    const { data: usuarioActual } = await supabase.from("usuarios").select("athlete_development").eq("codigo", codigo).single();
+    const devActual = usuarioActual?.athlete_development || [];
+    const yaExiste = devActual.findIndex((d: any) => d.indicador?.toLowerCase() === indicador?.toLowerCase());
+    const hoy = new Date().toISOString().split('T')[0];
+    const nuevaEntrada = {
+      area, indicador, estado: estado || "debilidad",
+      confianza: confianza || 60,
+      detectado: yaExiste >= 0 ? devActual[yaExiste].detectado : hoy,
+      ultima_revision: hoy,
+      evidencias: evidencias || [],
+      plan_accion: plan_accion || []
+    };
+    let devActualizado;
     if (yaExiste >= 0) {
-      debilidadesActualizadas = [...debilidadesActuales];
-      debilidadesActualizadas[yaExiste] = { ejercicio, descripcion, fecha: new Date().toISOString().split('T')[0] };
+      devActualizado = [...devActual];
+      devActualizado[yaExiste] = nuevaEntrada;
     } else {
-      debilidadesActualizadas = [...debilidadesActuales, { ejercicio, descripcion, fecha: new Date().toISOString().split('T')[0] }];
+      devActualizado = [...devActual, nuevaEntrada];
     }
-    await supabase.from("usuarios").update({ debilidades: debilidadesActualizadas }).eq("codigo", codigo);
+    await supabase.from("usuarios").update({ athlete_development: devActualizado }).eq("codigo", codigo);
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === "actualizar_debilidad_dev") {
+    const { indicador, estado, confianza, nueva_evidencia } = datos;
+    const { data: usuarioActual } = await supabase.from("usuarios").select("athlete_development").eq("codigo", codigo).single();
+    const devActual = usuarioActual?.athlete_development || [];
+    const idx = devActual.findIndex((d: any) => d.indicador?.toLowerCase() === indicador?.toLowerCase());
+    if (idx < 0) return NextResponse.json({ ok: true, mensaje: "No encontrado" });
+    const devActualizado = [...devActual];
+    devActualizado[idx] = {
+      ...devActualizado[idx],
+      estado: estado || devActualizado[idx].estado,
+      confianza: confianza !== undefined ? confianza : devActualizado[idx].confianza,
+      ultima_revision: new Date().toISOString().split('T')[0],
+      evidencias: nueva_evidencia ? [...devActualizado[idx].evidencias, nueva_evidencia] : devActualizado[idx].evidencias
+    };
+    await supabase.from("usuarios").update({ athlete_development: devActualizado }).eq("codigo", codigo);
     return NextResponse.json({ ok: true });
   }
 

@@ -929,9 +929,11 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       await apiCall({action:"actualizar_sesion_plan",codigo:codigoUsuario,datos:data});
       cargarPlanSemanal(codigoUsuario);
     });
-    await procesarTag("[DEBILIDAD:",11,async(data)=>{
-      await apiCall({action:"registrar_debilidad",codigo:codigoUsuario,datos:data});
-      setDebilidades(prev=>[...prev.filter(d=>d.ejercicio!==data.ejercicio),{...data,fecha:new Date().toISOString().split('T')[0]}]);
+    await procesarTag("[DEBILIDAD_DEV:",15,async(data)=>{
+      await apiCall({action:"registrar_debilidad_dev",codigo:codigoUsuario,datos:data});
+    });
+    await procesarTag("[ACTUALIZAR_DEBILIDAD:",22,async(data)=>{
+      await apiCall({action:"actualizar_debilidad_dev",codigo:codigoUsuario,datos:data});
     });
     await procesarTag("[EVENTO:",8,async(data)=>{
       await apiCall({action:"registrar_evento",codigo:codigoUsuario,datos:{evento:data}});

@@ -164,16 +164,42 @@ export default function MiAtleta() {
           </p>
         </div>
 
-        {/* Debilidades activas */}
-        {debilidades.length > 0 && (
+        {/* Desarrollo del atleta */}
+        {datos?.athlete_development?.length > 0 && (
           <div style={{ background: C.card, border: `1px solid #FF6B0060`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
-            <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 10 }}>🎯 Debilidades en trabajo</p>
-            {debilidades.map((d:any,i:number)=>(
-              <div key={i} style={{ padding: "8px 0", borderBottom: i<debilidades.length-1?`1px solid ${C.border}`:"none" }}>
-                <p style={{ color: C.accent, fontSize: 13, fontWeight: 600, textTransform: "capitalize" }}>{d.ejercicio.replace(/_/g,' ')}</p>
-                <p style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>{d.descripcion}</p>
-              </div>
-            ))}
+            <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>🎯 Áreas de desarrollo</p>
+            {datos.athlete_development.map((d:any,i:number)=>{
+              const colorEstado = d.estado==="resuelta"?"#4CAF50":d.estado==="en_progreso"?"#FFD700":"#FF6B00";
+              const labelEstado = d.estado==="resuelta"?"✅ Resuelta":d.estado==="en_progreso"?"⚡ En progreso":"🎯 Activa";
+              return (
+                <div key={i} style={{ background: C.bg, borderRadius: 12, padding: "12px 14px", marginBottom: i<datos.athlete_development.length-1?10:0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                    <div>
+                      <p style={{ color: C.muted, fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>{d.area}</p>
+                      <p style={{ color: C.ink, fontSize: 14, fontWeight: 700 }}>{d.indicador}</p>
+                    </div>
+                    <span style={{ background: `${colorEstado}20`, color: colorEstado, fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 100 }}>{labelEstado}</span>
+                  </div>
+                  {d.evidencias?.length > 0 && (
+                    <div style={{ marginTop: 8 }}>
+                      <p style={{ color: C.muted, fontSize: 10, fontWeight: 600, marginBottom: 3 }}>EVIDENCIAS</p>
+                      {d.evidencias.map((e:string,j:number)=>(
+                        <p key={j} style={{ color: C.muted, fontSize: 12, lineHeight: 1.5 }}>• {e}</p>
+                      ))}
+                    </div>
+                  )}
+                  {d.plan_accion?.length > 0 && (
+                    <div style={{ marginTop: 8 }}>
+                      <p style={{ color: C.accent, fontSize: 10, fontWeight: 600, marginBottom: 3 }}>PLAN DE ACCIÓN</p>
+                      {d.plan_accion.map((p:string,j:number)=>(
+                        <p key={j} style={{ color: C.ink, fontSize: 12, lineHeight: 1.5 }}>→ {p}</p>
+                      ))}
+                    </div>
+                  )}
+                  <p style={{ color: C.muted, fontSize: 10, marginTop: 8 }}>Detectado hace {Math.round((new Date().getTime()-new Date(d.detectado).getTime())/(24*60*60*1000))} días · Confianza {d.confianza}%</p>
+                </div>
+              );
+            })}
           </div>
         )}
 

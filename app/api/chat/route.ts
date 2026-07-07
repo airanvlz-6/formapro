@@ -454,8 +454,12 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
 
   if (action === "registrar_sesion") {
     const { sesion } = datos;
-    const { data: usuarioFresh } = await supabase.from("usuarios").select("workout_history").eq("codigo", codigo).single();
+    const { data: usuarioFresh } = await supabase.from("usuarios").select("workout_history,primera_sesion_at").eq("codigo", codigo).single();
     const workoutActual = usuarioFresh?.workout_history || [];
+    // Analytics: trackear primera sesión completada (métrica clave de activación)
+    if (!usuarioFresh?.primera_sesion_at && workoutActual.length === 0) {
+      await supabase.from("usuarios").update({ primera_sesion_at: new Date().toISOString() }).eq("codigo", codigo);
+    }
 
     // Calcular workout_id basado en la fecha de la sesión
     const fechaSesionObj = new Date(sesion.fecha || new Date().toISOString());

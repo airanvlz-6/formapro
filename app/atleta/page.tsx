@@ -153,13 +153,14 @@ export default function MiAtleta() {
             {(()=>{
               const dist = datos?.distribucion_semanal;
               if(!dist) return datos?.perfil?.dias || "No especificada";
+              const limpiar = (t:string) => t.replace(/_/g,' ').replace(/-/g,': ');
               if(typeof dist === "string" && dist.trim().startsWith("{")){
                 try{
                   const parsed = JSON.parse(dist);
-                  return Object.values(parsed).join(" — ");
+                  return Object.values(parsed).map((v:any)=>limpiar(String(v))).join(" — ");
                 }catch{ return datos?.perfil?.dias || "No especificada"; }
               }
-              return dist;
+              return limpiar(dist);
             })()}
           </p>
         </div>

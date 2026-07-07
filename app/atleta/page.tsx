@@ -170,17 +170,21 @@ export default function MiAtleta() {
           <div style={{ background: C.card, border: `1px solid #FF6B0060`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
             <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>🎯 Áreas de desarrollo</p>
             {datos.athlete_development.map((d:any,i:number)=>{
-              const colorEstado = d.estado==="resuelta"?"#4CAF50":d.estado==="en_progreso"?"#FFD700":"#FF6B00";
-              const labelEstado = d.estado==="resuelta"?"Resuelta":d.estado==="en_progreso"?"En progreso":"Activa";
+              const coloresEstado: Record<string,string> = {activa:"#FF6B00",en_intervencion:"#FF8C42",en_progreso:"#FFD700",validando:"#64B5F6",resuelta:"#4CAF50"};
+              const labelsEstado: Record<string,string> = {activa:"Activa",en_intervencion:"En intervención",en_progreso:"En progreso",validando:"Validando",resuelta:"Resuelta"};
+              const colorEstado = coloresEstado[d.estado] || "#FF6B00";
+              const labelEstado = labelsEstado[d.estado] || "Activa";
+              if(d.estado==="resuelta") return null;
               const colorPrioridad = d.prioridad==="alta"?"#ff4444":d.prioridad==="baja"?C.muted:"#FF6B00";
               const diasDetectado = Math.round((new Date().getTime()-new Date(d.detectado).getTime())/(24*60*60*1000));
               return (
                 <div key={i} style={{ background: C.bg, borderRadius: 12, padding: "14px 16px", marginBottom: i<datos.athlete_development.length-1?12:0 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                     <p style={{ color: C.ink, fontSize: 15, fontWeight: 700 }}>{d.nombre_visible || d.indicador}</p>
-                    <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                      <span style={{ color: colorEstado, fontSize: 11, fontWeight: 700 }}>● {labelEstado}</span>
-                    </div>
+                    <span style={{ color: colorEstado, fontSize: 11, fontWeight: 700 }}>● {labelEstado}</span>
+                  </div>
+                  <div style={{ height: 6, background: C.border, borderRadius: 100, marginBottom: 10 }}>
+                    <div style={{ height: 6, borderRadius: 100, background: colorEstado, width: `${d.progreso || 0}%`, transition: "width 0.8s ease" }}/>
                   </div>
 
                   {d.diagnostico && (

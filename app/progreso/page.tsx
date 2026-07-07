@@ -231,11 +231,16 @@ useEffect(() => {
             alertas.push({mensaje: `Has completado ${sesiones14} de ${esperadas14} sesiones esperadas en los últimos 14 días. La adherencia está cayendo.`, tipo: 'danger'});
           }
 
-          if(histFisio.length >= 5){
-            const ultimos5 = histFisio.slice(-5);
-            const hrvUltimos = ultimos5.filter((e:any)=>e.hrv).map((e:any)=>e.hrv);
-            if(hrvUltimos.length >= 4 && hrvUltimos[hrvUltimos.length-1] < hrvUltimos[0] - 8){
-              alertas.push({mensaje: `Tu HRV lleva ${hrvUltimos.length} días descendiendo. Forge ha notificado al coach para ajustar la carga.`, tipo: 'danger'});
+          if(histFisio.length >= 4){
+            const ultimos4 = histFisio.slice(-4);
+            const hrvUltimos = ultimos4.filter((e:any)=>e.hrv).map((e:any)=>e.hrv);
+            // Detectar descenso CONSECUTIVO real, no solo diferencia entre extremos
+            if(hrvUltimos.length >= 4){
+              const esDescensoConsecutivo = hrvUltimos[1]<hrvUltimos[0] && hrvUltimos[2]<hrvUltimos[1] && hrvUltimos[3]<hrvUltimos[2];
+              const caidaTotal = hrvUltimos[0] - hrvUltimos[hrvUltimos.length-1];
+              if(esDescensoConsecutivo && caidaTotal > 15){
+                alertas.push({mensaje: `Tu HRV lleva ${hrvUltimos.length} días consecutivos descendiendo (${hrvUltimos[0]}ms → ${hrvUltimos[hrvUltimos.length-1]}ms). Forge ha notificado al coach para ajustar la carga.`, tipo: 'danger'});
+              }
             }
           }
 

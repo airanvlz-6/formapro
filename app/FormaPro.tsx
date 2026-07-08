@@ -1374,7 +1374,7 @@ ${testStr}`}]});
         <div className="fade-up" style={{maxWidth:580,width:"100%"}}>
           <button onClick={()=>setPantalla("inicio")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14,marginBottom:28}}>Volver</button>
           <h2 style={{fontSize:"clamp(22px,5vw,30px)",color:C.ink,marginBottom:8}}>¿Qué tipo de atleta eres?</h2>
-          <p style={{color:C.muted,fontSize:14,marginBottom:6}}>Forge adaptará tu planificación, tus métricas, tu progreso y tu entrenador según el deporte que practiques.</p>
+          <p style={{color:C.muted,fontSize:14,marginBottom:6}}>Forge adaptará tu planificación, tus métricas y tu seguimiento según el deporte que practiques.</p>
           <p style={{color:C.muted,fontSize:12,marginBottom:28,fontStyle:"italic"}}>Podrás cambiar esta especialidad más adelante desde Mi Atleta.</p>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(240px, 1fr))",gap:14}}>
             {CATEGORIAS.map((c:Categoria)=>(

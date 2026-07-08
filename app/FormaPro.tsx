@@ -185,8 +185,15 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
   ],
 };
 
-const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "", memoria?: {lesiones?:string; plan?:string; notas?:string}, ciclo?: {bloque?:string; semana?:number; totalSemanas?:number; objetivo?:string}, psicologia?: {arousal?:string; confianza?:string; estres?:string; motivacion?:string; notas_mentales?:string}, premium?: boolean, athleteState?: Record<string,any>, datosEntreno?: Record<string,any>, estadoFisio?: {fatiga_aguda?:number;fatiga_cronica?:number;tendencia?:string;hrv?:number;sueno?:number;rhr?:number;adherencia?:number}, histFisio?: {fecha:string;hrv?:number;sueno?:number;rhr?:number}[], distribucion?: string, objetivo?: {descripcion?:string;fecha?:string;tipo?:string}, planSemana?: any, debilidadesAtleta?: {ejercicio:string;descripcion:string;fecha:string}[]) => {
+const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "", memoria?: {lesiones?:string; plan?:string; notas?:string}, ciclo?: {bloque?:string; semana?:number; totalSemanas?:number; objetivo?:string}, psicologia?: {arousal?:string; confianza?:string; estres?:string; motivacion?:string; notas_mentales?:string}, premium?: boolean, athleteState?: Record<string,any>, datosEntreno?: Record<string,any>, estadoFisio?: {fatiga_aguda?:number;fatiga_cronica?:number;tendencia?:string;hrv?:number;sueno?:number;rhr?:number;adherencia?:number}, histFisio?: {fecha:string;hrv?:number;sueno?:number;rhr?:number}[], distribucion?: string, objetivo?: {descripcion?:string;fecha?:string;tipo?:string}, planSemana?: any, debilidadesAtleta?: {ejercicio:string;descripcion:string;fecha:string}[], historialBloques?: any[]) => {
   const perfilStr = Object.entries(perfil).map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join("\n");
+  const bloquesLineas: string[] = [];
+  if(historialBloques && historialBloques.length>0){
+    for(const b of historialBloques){
+      bloquesLineas.push("- " + b.tipo_bloque + " (" + b.duracion_semanas + " semanas): adherencia " + b.adherencia + "%, fatiga " + b.fatiga_media + ", " + b.pr_obtenidos + " PRs, resultado: " + b.resultado_global);
+    }
+  }
+  const historialBloquesStr = bloquesLineas.join("\n");
   const marcasStr = marcas.length > 0 ? marcas.map(m => `- ${m.fecha}: ${m.valor}`).join("\n") : "Sin registros aún";
   const cicloStr = ciclo?.bloque ? `
 CICLO DE ENTRENAMIENTO ACTUAL:
@@ -332,6 +339,7 @@ ${debilidadesAtleta&&debilidadesAtleta.length>0?`
 🎯 DEBILIDADES DEL ATLETA — TENER EN CUENTA AL PLANIFICAR:
 ${debilidadesAtleta.map(d=>`- ${d.ejercicio}: ${d.descripcion}`).join("\n")}
 Incorpora trabajo específico para estas debilidades cuando sea coherente con el bloque actual.`:""}
+${historialBloques&&historialBloques.length>0?"📊 MEMORIA METODOLÓGICA — HISTORIAL DE BLOQUES ANTERIORES DE ESTE ATLETA:\n"+historialBloquesStr+"\nUSA esta información al diseñar nuevos bloques: repite duraciones y volúmenes que dieron resultado excelente o bueno con baja fatiga, evita repetir lo que generó fatiga muy alta o resultado deficiente. NUNCA violes principios científicos fijos por estos datos, solo ajusta parámetros adaptables.":""}
 ${planSemana&&planSemana.sessions?`
 📅 PLAN SEMANAL ACTUAL EN "MI PLAN" — ESTA ES LA ÚNICA FUENTE DE VERDAD:
 Bloque: ${planSemana.block_name} · Semana ${planSemana.week_number}${planSemana.total_weeks_block?` de ${planSemana.total_weeks_block}`:""}
@@ -1052,7 +1060,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       const esPlanificacionSemanal=texto.toLowerCase().includes("semana completa")||texto.toLowerCase().includes("planificacion semanal")||texto.toLowerCase().includes("plan semanal")||texto.toLowerCase().includes("toda la semana")||texto.toLowerCase().includes("generar semana");
       const esProgramacion=esPlanificacionSemanal||texto.toLowerCase().includes("programacion")||texto.toLowerCase().includes("rutina")||texto.toLowerCase().includes("semana")||texto.toLowerCase().includes("plan")||texto.toLowerCase().includes("sesion")||texto.toLowerCase().includes("entreno")||texto.toLowerCase().includes("wod")||texto.toLowerCase().includes("ejercicio")||texto.toLowerCase().includes("bloque")||texto.toLowerCase().includes("rehabilitacion")||texto.toLowerCase().includes("protocolo")||texto.toLowerCase().includes("fase");
       const mensajesContexto=esProgramacion?-6:-4;
-const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal,planSemanal,debilidades)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:nuevoHist},true);
+const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal,planSemanal,debilidades,blockOutcomes)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:nuevoHist},true);
       if(data.aborted) return;
       const respTextRaw2=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.");
       

@@ -25,9 +25,9 @@ export default function Footer() {
           <div>
             <h4 className="text-sm font-semibold text-white">Legal</h4>
             <div className="mt-4 flex flex-col gap-2 text-sm text-zinc-400">
-              <a href="#" className="hover:text-orange-400">Privacidad</a>
-              <a href="#" className="hover:text-orange-400">Cookies</a>
-              <a href="#" className="hover:text-orange-400">Términos</a>
+              <a href="/privacidad" className="hover:text-orange-400">Privacidad</a>
+              <a href="/cookies" className="hover:text-orange-400">Cookies</a>
+              <a href="/terminos" className="hover:text-orange-400">Términos</a>
             </div>
           </div>
         </div>

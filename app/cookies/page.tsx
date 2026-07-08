@@ -17,7 +17,7 @@ export default function Cookies() {
       <h2 style={{fontSize:20,marginBottom:8,color:"#fff"}}>4. Gestión de cookies</h2>
       <p style={{marginBottom:24}}>Puedes eliminar o bloquear las cookies desde la configuración de tu navegador. Ten en cuenta que esto puede afectar al funcionamiento de la aplicación, ya que no podrás mantener tu sesión iniciada.</p>
 
-      <a href="/v2" style={{color:"#8fbe9f",fontSize:14}}>← Volver a Forge</a>
+      <a href="/" style={{color:"#8fbe9f",fontSize:14}}>← Volver a Forge</a>
     </div>
     </div>
   );

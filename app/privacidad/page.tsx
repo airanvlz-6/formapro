@@ -26,7 +26,7 @@ export default function Privacidad() {
       <h2 style={{fontSize:20,marginBottom:8,color:"#fff"}}>7. Proveedores técnicos</h2>
       <p style={{marginBottom:24}}>Forge utiliza los siguientes proveedores: Supabase (base de datos, Irlanda), Vercel (hosting, EEUU — con garantías adecuadas), Anthropic (IA, EEUU — con garantías adecuadas), Stripe (pagos, EEUU — con garantías adecuadas).</p>
 
-      <a href="/v2" style={{color:"#8fbe9f",fontSize:14}}>← Volver a Forge</a>
+      <a href="/" style={{color:"#8fbe9f",fontSize:14}}>← Volver a Forge</a>
     </div>
     </div>
   );

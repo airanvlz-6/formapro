@@ -1326,20 +1326,21 @@ ${testStr}`}]});
               <div style={{fontSize:"clamp(10px,2vw,13px)",fontWeight:500,color:"#FF6B00",fontFamily:"'DM Sans',sans-serif",letterSpacing:"3px",textTransform:"uppercase"}}>AI Training Coach</div>
             </div>
           </div>
-          <p style={{color:C.muted,fontSize:17,lineHeight:1.65,marginBottom:8}}>Coach de entrenamiento personal. Siempre disponible, seguimiento de progreso y adaptado a tu vida.</p>
-          <p style={{color:C.muted,fontSize:14,marginBottom:32}}>Tu programa evoluciona contigo cada semana.</p>
-          <button className="btn-main" onClick={()=>setPantalla("categoria")} style={{background:"#FF6B00",color:"#fff",border:"none",borderRadius:14,padding:"16px 40px",fontSize:16,fontWeight:600,cursor:"pointer",width:"100%",maxWidth:360,marginBottom:20}}>
-            Crear mi programa
+          <p style={{color:C.muted,fontSize:17,lineHeight:1.65,marginBottom:4,fontWeight:600}}>No generamos entrenamientos. Construimos atletas.</p>
+          <p style={{color:C.muted,fontSize:15,lineHeight:1.65,marginBottom:8}}>Forge aprende quién eres, planifica cada semana según tu evolución y adapta tu entrenamiento utilizando tu historial, estado fisiológico y objetivos deportivos.</p>
+          <button className="btn-main" onClick={()=>setPantalla("categoria")} style={{background:"#FF6B00",color:"#fff",border:"none",borderRadius:14,padding:"16px 40px",fontSize:16,fontWeight:600,cursor:"pointer",width:"100%",maxWidth:360,marginTop:16,marginBottom:8}}>
+            Crear mi atleta
           </button>
+          <p style={{color:C.muted,fontSize:12,marginBottom:24}}>Empieza en menos de 3 minutos.</p>
           <div style={{maxWidth:360,margin:"0 auto"}}>
-            <p style={{color:C.muted,fontSize:13,marginBottom:10}}>Ya tienes un programa? Introduce tu codigo:</p>
+            <p style={{color:C.muted,fontSize:13,marginBottom:10}}>¿Ya tienes una cuenta Forge?</p>
             <div style={{display:"flex",gap:8}}>
-              <input value={codigoInput} onChange={e=>setCodigoInput(e.target.value.toUpperCase())} placeholder="FP-XXXXX"
+              <input value={codigoInput} onChange={e=>setCodigoInput(e.target.value.toUpperCase())} placeholder="Código Forge"
                 style={{flex:1,border:"2px solid #FF6B00",borderRadius:12,padding:"12px 14px",fontSize:15,color:"#F0EDE8",background:"#1A1A1A",letterSpacing:2,textAlign:"center"}}
                 onKeyDown={e=>e.key==="Enter"&&recuperarUsuario()}
               />
               <button id="btn-entrar" className="btn-main" onClick={recuperarUsuario} style={{background:C.accent,color:"#fff",border:"none",borderRadius:12,padding:"12px 18px",fontSize:14,fontWeight:600,cursor:"pointer"}}>
-                Entrar
+                Acceder
               </button>
             </div>
             {errorCodigo&&<p style={{color:C.warm,fontSize:12,marginTop:8}}>{errorCodigo}</p>}
@@ -1362,10 +1363,10 @@ ${testStr}`}]});
   </div>
 )}
           </div>
-          <p style={{color:C.muted,fontSize:12,marginTop:20}}>10 días de prueba gratuita · Sin registro</p>
-          <div style={{display:"flex",flexWrap:"wrap",gap:8,justifyContent:"center",marginTop:24}}>
-            {["Basado en ciencia","Adaptado a tu día a día","Múltiples disciplinas","Recuerda tu progreso"].map(t=>(
-              <span key={t} style={{background:C.tag,color:C.muted,borderRadius:100,padding:"5px 14px",fontSize:12}}>{t}</span>
+          <p style={{color:C.muted,fontSize:13,marginTop:20,fontWeight:500}}>Comienza gratis y deja que Forge aprenda de ti desde la primera sesión.</p>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,maxWidth:400,margin:"20px auto 0",textAlign:"left"}}>
+            {["Plan semanal personalizado","Seguimiento del progreso","Diario del atleta","Adaptación automática","Historial fisiológico","Coaching correctivo"].map(t=>(
+              <span key={t} style={{color:C.muted,fontSize:13,display:"flex",alignItems:"center",gap:6}}><span style={{color:C.accent}}>✓</span>{t}</span>
             ))}
           </div>
         </div>

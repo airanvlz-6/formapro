@@ -9,12 +9,10 @@ const C = {
 };
 
 const CATEGORIAS = [
-  { id: "carrera", emoji: "🏃", titulo: "Carrera", subtitulo: "Running & Trail", desc: "Para amantes del running o quienes se inician. Desde tu primer km hasta tu mejor marca.", color: "#1A3C5E", colorLight: "#E8EEF4" },
-  { id: "funcional", emoji: "⚡", titulo: "Funcional", subtitulo: "Fitness & Bienestar", desc: "Dinámico y adaptable. Ideal para mantenerse en forma, bajar de peso o sentirse mejor.", color: "#2D6A4F", colorLight: "#D8F3DC" },
-  { id: "hibrido", emoji: "🔄", titulo: "Hibrido", subtitulo: "Resistencia + Fuerza", desc: "Para atletas que buscan mejorar en resistencia y fuerza/potencia simultaneamente.", color: "#6B3FA0", colorLight: "#EDE7F6" },
-  { id: "fuerza", emoji: "🏋️", titulo: "Fuerza", subtitulo: "Powerlifting & Olimpico", desc: "Para quienes buscan aumentar marcas en levantamientos olímpicos o powerlifting.", color: "#B5300B", colorLight: "#FDECEA" },
-  { id: "grupos", emoji: "👥", titulo: "Box & Grupos", subtitulo: "Entrenadores & Coaches", desc: "Para coaches y boxes. Programa sesiones grupales adaptadas al nivel y material de tu grupo.", color: "#0F766E", colorLight: "#CCFBF1" },
-  { id: "rehabilitacion", emoji: "🩹", titulo: "Rehabilitación", subtitulo: "Recuperación de lesiones", desc: "Ejercicios de movilidad y fortalecimiento progresivo basados en evidencia científica para recuperar tu actividad.", color: "#B5300B", colorLight: "#FDECEA" },
+  { id: "funcional", emoji: "⚡", titulo: "Functional Training", subtitulo: "CrossFit · Hyrox · Fitness Funcional", desc: "Entrenamientos adaptados a tu nivel, estado fisiológico y puntos débiles para mejorar rendimiento, capacidad de trabajo y recuperación.", color: "#2D6A4F", colorLight: "#D8F3DC", etiqueta: "Más popular" },
+  { id: "carrera", emoji: "🏃", titulo: "Carrera", subtitulo: "Running & Trail", desc: "Planificación inteligente basada en ritmos, zonas de frecuencia cardíaca, volumen y objetivos. Forge adapta cada sesión según tu recuperación y evolución.", color: "#1A3C5E", colorLight: "#E8EEF4", etiqueta: "Especialidad" },
+  { id: "fuerza", emoji: "🏋️", titulo: "Fuerza", subtitulo: "Powerlifting · Halterofilia · Strongman", desc: "Desarrolla fuerza máxima mediante periodización, control de cargas, técnica y seguimiento continuo de tus marcas personales.", color: "#B5300B", colorLight: "#FDECEA", etiqueta: "Especialidad" },
+  { id: "hibrido", emoji: "🔄", titulo: "Híbrido", subtitulo: "Resistencia + Fuerza", desc: "Equilibra ambas capacidades sin interferencias, combinando sesiones para progresar en las dos disciplinas al mismo tiempo.", color: "#6B3FA0", colorLight: "#EDE7F6", etiqueta: "Avanzado" },
 ];
 
 const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string; opciones?: string[]; placeholder?: string}>> = {
@@ -1375,8 +1373,9 @@ ${testStr}`}]});
       {pantalla==="categoria"&&(
         <div className="fade-up" style={{maxWidth:580,width:"100%"}}>
           <button onClick={()=>setPantalla("inicio")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14,marginBottom:28}}>Volver</button>
-          <h2 style={{fontSize:"clamp(22px,5vw,30px)",color:C.ink,marginBottom:8}}>Cual es tu disciplina?</h2>
-          <p style={{color:C.muted,fontSize:14,marginBottom:28}}>Tu programa se construira desde cero segun lo que elijas.</p>
+          <h2 style={{fontSize:"clamp(22px,5vw,30px)",color:C.ink,marginBottom:8}}>¿Qué tipo de atleta eres?</h2>
+          <p style={{color:C.muted,fontSize:14,marginBottom:6}}>Forge adaptará tu planificación, tus métricas, tu progreso y tu entrenador según el deporte que practiques.</p>
+          <p style={{color:C.muted,fontSize:12,marginBottom:28,fontStyle:"italic"}}>Podrás cambiar esta especialidad más adelante desde Mi Atleta.</p>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(240px, 1fr))",gap:14}}>
             {CATEGORIAS.map((c:Categoria)=>(
               <div key={c.id} className="cat-card" onClick={()=>irACategoria(c.id)} style={{background:C.card,border:`2px solid ${C.border}`,borderRadius:20,padding:"24px 22px"}}>

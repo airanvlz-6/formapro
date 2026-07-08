@@ -29,7 +29,7 @@ export default function Terminos() {
       <h2 style={{fontSize:20,marginBottom:8,color:"#fff"}}>8. Contacto</h2>
       <p style={{marginBottom:24}}>Para cualquier duda sobre estos términos, escribe a coachforgeapp@gmail.com</p>
 
-      <a href="/" style={{color:"#8fbe9f",fontSize:14}}>← Volver a Forge</a>
+      <a href="/v2" style={{color:"#8fbe9f",fontSize:14}}>← Volver a Forge</a>
     </div>
     </div>
   );

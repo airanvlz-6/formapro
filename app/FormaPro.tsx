@@ -610,6 +610,7 @@ export default function Forge() {
         setFechaRegistro((u as any).created_at||null);
         cargarEquipos(u.codigo);
         cargarPlanSemanal(u.codigo);
+        cargarBlockOutcomes(u.codigo);
         apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
       },500);
     }
@@ -636,6 +637,7 @@ const [distribucionSemanal,setDistribucionSemanal]=useState<string>("");
 const [objetivoPrincipal,setObjetivoPrincipal]=useState<{descripcion?:string;fecha?:string;tipo?:string}>({});
 const [planSemanal,setPlanSemanal]=useState<any>(null);
 const [debilidades,setDebilidades]=useState<{ejercicio:string;descripcion:string;fecha:string}[]>([]);
+const [blockOutcomes,setBlockOutcomes]=useState<any[]>([]);
 const [mostrarCodigoReal,setMostrarCodigoReal]=useState(false);
 const [historialMarcas,setHistorialMarcas]=useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
 const [analisisBloques,setAnalisisBloques]=useState<any[]>([]);
@@ -663,6 +665,11 @@ const [codigoPersonal,setCodigoPersonal]=useState("");
 const [errorCodigoPersonal,setErrorCodigoPersonal]=useState("");
 const [emailInput,setEmailInput]=useState("");
 const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
+
+  const cargarBlockOutcomes=async(cod:string)=>{
+    const res=await apiCall({action:"obtener_block_outcomes",codigo:cod});
+    if(res?.outcomes) setBlockOutcomes(res.outcomes);
+  };
 
   const cargarPlanSemanal=async(cod:string)=>{
     const res=await apiCall({action:"obtener_plan_semana",codigo:cod});
@@ -833,6 +840,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     setFechaRegistro((u as any).created_at||null);
     cargarEquipos(u.codigo);
     cargarPlanSemanal(u.codigo);
+    cargarBlockOutcomes(u.codigo);
     apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
     // reanudarSesion eliminada para reducir consumo de tokens
   };
@@ -926,6 +934,13 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
 
     await procesarTag("[RESUMEN_SEMANA:",16,async(data)=>{
       await apiCall({action:"guardar_resumen_semana",codigo:codigoUsuario,datos:data});
+    });
+    await procesarTag("[BLOCK_OUTCOME:",15,async(data)=>{
+      await apiCall({action:"guardar_block_outcome",codigo:codigoUsuario,datos:data});
+      cargarBlockOutcomes(codigoUsuario);
+    });
+    await procesarTag("[INTERVENTION:",14,async(data)=>{
+      await apiCall({action:"guardar_intervention",codigo:codigoUsuario,datos:data});
     });
     await procesarTag("[PLAN:",6,async(data)=>{
       await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:data}});

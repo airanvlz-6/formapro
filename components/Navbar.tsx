@@ -4,7 +4,10 @@ export default function Navbar() {
       <img src="/logo-forge.png" alt="Forge" className="h-9 w-9 object-contain" />
 
       <div className="hidden gap-10 text-sm text-zinc-300 lg:flex">
+        <a href="#caracteristicas" className="hover:text-orange-400 transition">Características</a>
         <a href="#como-funciona" className="hover:text-orange-400 transition">Cómo funciona</a>
+        <a href="#equipos" className="hover:text-orange-400 transition">Equipos</a>
+        <a href="#precios" className="hover:text-orange-400 transition">Precios</a>
       </div>
 
       <div className="flex items-center gap-4">

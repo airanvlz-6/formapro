@@ -32,12 +32,12 @@ export default function Hero() {
               <h1 className="mt-10 text-5xl font-bold leading-tight text-white md:text-7xl">
                 El entrenador
                 <br />
-                que nunca deja
-                <span className="text-orange-500"> de conocerte</span>
+                que mejora
+                <span className="text-orange-500"> contigo</span>
               </h1>
 
               <p className="mx-auto mt-8 max-w-3xl text-xl leading-9 text-zinc-400">
-                Forge construye un modelo vivo de ti como atleta. Aprende de cada entrenamiento, identifica tus áreas de desarrollo y adapta la planificación para ayudarte a mejorar donde realmente importa.
+                Forge construye un modelo vivo de cada atleta. Aprende de tus entrenamientos, recuperación y resultados para adaptar tu planificación y tomar mejores decisiones con el paso del tiempo.
               </p>
 
               <div className="mt-12 flex flex-wrap justify-center gap-5">
@@ -49,6 +49,10 @@ export default function Hero() {
                   Ver demostración
                 </a>
               </div>
+
+              <p className="mt-6 text-sm text-zinc-500">
+                Cada entrenamiento mejora dos cosas: tu rendimiento y la capacidad de Forge para ayudarte.
+              </p>
             </motion.div>
 
             <FloatingPhones />

@@ -577,6 +577,27 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     return NextResponse.json({ plan: plan || null, weekStart });
   }
 
+  if (action === "guardar_block_outcome") {
+    const { tipo_bloque, duracion_semanas, objetivo, adherencia, fatiga_media, sesiones_completadas, pr_obtenidos, debilidades_resueltas, lesiones, resultado_global, fecha_inicio, fecha_fin } = datos;
+    await supabase.from("block_outcomes").insert({
+      user_codigo: codigo, tipo_bloque, duracion_semanas, objetivo, adherencia,
+      fatiga_media, sesiones_completadas, pr_obtenidos, debilidades_resueltas,
+      lesiones, resultado_global, fecha_inicio, fecha_fin
+    });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === "guardar_intervention") {
+    const { problema, accion, resultado, efectividad } = datos;
+    await supabase.from("interventions").insert({ user_codigo: codigo, problema, accion, resultado, efectividad });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === "obtener_block_outcomes") {
+    const { data: outcomes } = await supabase.from("block_outcomes").select("*").eq("user_codigo", codigo).order("fecha_fin", { ascending: false }).limit(10);
+    return NextResponse.json({ outcomes: outcomes || [] });
+  }
+
   if (action === "guardar_resumen_semana") {
     const { week_start, resumen, adherencia } = datos;
     await supabase.from("weekly_plan").update({ resumen_semana: resumen }).eq("user_codigo", codigo).eq("week_start", week_start);

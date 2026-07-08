@@ -9,10 +9,10 @@ const C = {
 };
 
 const CATEGORIAS = [
-  { id: "funcional", emoji: "⚡", titulo: "Functional Training", subtitulo: "CrossFit · Hyrox · Fitness Funcional", desc: "Entrenamientos adaptados a tu nivel, estado fisiológico y puntos débiles para mejorar rendimiento, capacidad de trabajo y recuperación.", color: "#2D6A4F", colorLight: "#D8F3DC", etiqueta: "Más popular" },
-  { id: "carrera", emoji: "🏃", titulo: "Carrera", subtitulo: "Running & Trail", desc: "Planificación inteligente basada en ritmos, zonas de frecuencia cardíaca, volumen y objetivos. Forge adapta cada sesión según tu recuperación y evolución.", color: "#1A3C5E", colorLight: "#E8EEF4", etiqueta: "Especialidad" },
-  { id: "fuerza", emoji: "🏋️", titulo: "Fuerza", subtitulo: "Powerlifting · Halterofilia · Strongman", desc: "Desarrolla fuerza máxima mediante periodización, control de cargas, técnica y seguimiento continuo de tus marcas personales.", color: "#B5300B", colorLight: "#FDECEA", etiqueta: "Especialidad" },
-  { id: "hibrido", emoji: "🔄", titulo: "Híbrido", subtitulo: "Resistencia + Fuerza", desc: "Equilibra ambas capacidades sin interferencias, combinando sesiones para progresar en las dos disciplinas al mismo tiempo.", color: "#6B3FA0", colorLight: "#EDE7F6", etiqueta: "Avanzado" },
+  { id: "funcional", emoji: "⚡", titulo: "Functional Training", subtitulo: "CrossFit · Hyrox · Fitness Funcional", desc: "Entrenamientos adaptados a tu nivel, estado fisiológico y puntos débiles para mejorar rendimiento, capacidad de trabajo y recuperación.", color: "#FF6B00", colorLight: "#FF6B0015", etiqueta: "Más popular" },
+  { id: "carrera", emoji: "🏃", titulo: "Carrera", subtitulo: "Running & Trail", desc: "Planificación inteligente basada en ritmos, zonas de frecuencia cardíaca, volumen y objetivos. Forge adapta cada sesión según tu recuperación y evolución.", color: "#FF8C42", colorLight: "#FF8C4215", etiqueta: "Especialidad" },
+  { id: "fuerza", emoji: "🏋️", titulo: "Fuerza", subtitulo: "Powerlifting · Halterofilia · Strongman", desc: "Desarrolla fuerza máxima mediante periodización, control de cargas, técnica y seguimiento continuo de tus marcas personales.", color: "#FF6B00", colorLight: "#FF6B0015", etiqueta: "Especialidad" },
+  { id: "hibrido", emoji: "🔄", titulo: "Híbrido", subtitulo: "Resistencia + Fuerza", desc: "Equilibra ambas capacidades sin interferencias, combinando sesiones para progresar en las dos disciplinas al mismo tiempo.", color: "#FF8C42", colorLight: "#FF8C4215", etiqueta: "Avanzado" },
 ];
 
 const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string; opciones?: string[]; placeholder?: string}>> = {

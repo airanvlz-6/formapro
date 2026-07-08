@@ -175,7 +175,7 @@ useEffect(() => {
 
         {/* 2. Tendencias fisiologicas */}
         {histFisio.length >= 3 && (()=>{
-          const ultimos = histFisio.slice(-7);
+          const ultimos = [...histFisio].sort((a:any,b:any)=>new Date(a.fecha).getTime()-new Date(b.fecha).getTime()).slice(-7);
           const hrvValues = ultimos.filter((e:any) => e.hrv).map((e:any) => ({fecha: new Date(e.fecha).toLocaleDateString("es-ES",{day:"numeric",month:"short"}), valor: e.hrv}));
           const suenoValues = ultimos.filter((e:any) => e.sueno).map((e:any) => ({fecha: new Date(e.fecha).toLocaleDateString("es-ES",{day:"numeric",month:"short"}), valor: e.sueno}));
           const datosActivos = metricaGrafico==="hrv" ? hrvValues : suenoValues;

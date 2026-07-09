@@ -617,7 +617,6 @@ export default function Forge() {
         cargarEquipos(u.codigo);
         cargarPlanSemanal(u.codigo);
         cargarBlockOutcomes(u.codigo);
-        if((u as any).is_beta_founder){ apiCall({action:"verificar_renovacion_beta",codigo:u.codigo}); }
         apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
       },500);
     }
@@ -644,9 +643,9 @@ const [distribucionSemanal,setDistribucionSemanal]=useState<string>("");
 const [objetivoPrincipal,setObjetivoPrincipal]=useState<{descripcion?:string;fecha?:string;tipo?:string}>({});
 const [planSemanal,setPlanSemanal]=useState<any>(null);
 const [debilidades,setDebilidades]=useState<{ejercicio:string;descripcion:string;fecha:string}[]>([]);
-const [betaFounderInfo,setBetaFounderInfo]=useState<{numero:number;maxSlots:number;meses:number}|null>(null);
 const [blockOutcomes,setBlockOutcomes]=useState<any[]>([]);
 const [mostrarCodigoReal,setMostrarCodigoReal]=useState(false);
+const [betaFounderInfo,setBetaFounderInfo]=useState<{numero:number;maxSlots:number;meses:number}|null>(null);
 const [historialMarcas,setHistorialMarcas]=useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
 const [analisisBloques,setAnalisisBloques]=useState<any[]>([]);
 const [athleteState,setAthleteState]=useState<Record<string,any>>({});
@@ -850,7 +849,6 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     cargarEquipos(u.codigo);
     cargarPlanSemanal(u.codigo);
     cargarBlockOutcomes(u.codigo);
-    if((u as any).is_beta_founder){ apiCall({action:"verificar_renovacion_beta",codigo:u.codigo}); }
     apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
     // reanudarSesion eliminada para reducir consumo de tokens
   };
@@ -1411,10 +1409,15 @@ ${testStr}`}]});
           <div style={{background:"#1A1A1A",borderRadius:24,padding:"32px 28px",maxWidth:400,width:"100%",textAlign:"center",border:"2px solid #FF6B00"}} onClick={e=>e.stopPropagation()}>
             <div style={{fontSize:48,marginBottom:12}}>🎉</div>
             <p style={{color:"#F0EDE8",fontSize:20,fontWeight:700,marginBottom:8}}>¡Bienvenido!</p>
-            <p style={{color:"#FF6B00",fontSize:16,fontWeight:700,marginBottom:16}}>Eres el Atleta Fundador #{betaFounderInfo.numero} de {betaFounderInfo.maxSlots}</p>
-            <p style={{color:"#9A9590",fontSize:14,lineHeight:1.6,marginBottom:24}}>Tendrás acceso Premium gratuito durante {betaFounderInfo.meses} meses por ayudarnos a construir Forge desde el origen.</p>
+            <p style={{color:"#FF6B00",fontSize:16,fontWeight:700,marginBottom:6}}>Eres el Atleta Fundador #{betaFounderInfo.numero} de {betaFounderInfo.maxSlots}</p>
+            <p style={{color:"#9A9590",fontSize:12,lineHeight:1.5,marginBottom:16}}>Eres uno de los {betaFounderInfo.maxSlots} atletas que ayudarán a construir el futuro de Forge.</p>
+            <p style={{color:"#9A9590",fontSize:14,lineHeight:1.6,marginBottom:16}}>Como agradecimiento por confiar en Forge desde sus inicios, disfrutarás de <strong>Premium gratuito durante {betaFounderInfo.meses} meses</strong>.</p>
+            <div style={{background:"#FF6B0015",borderRadius:12,padding:"12px 14px",marginBottom:24,textAlign:"left"}}>
+              <p style={{color:"#FF6B00",fontSize:12,fontWeight:700,marginBottom:6}}>🏅 Tu condición de Atleta Fundador</p>
+              <p style={{color:"#9A9590",fontSize:12,lineHeight:1.6}}>Tu insignia de <strong>Atleta Fundador</strong> será tuya para siempre. Para mantener el acceso Premium durante la beta solo te pedimos utilizar Forge como tu entrenador habitual, manteniendo una actividad regular (como referencia, unas 6 sesiones cada 30 días).</p>
+            </div>
             <button onClick={()=>setBetaFounderInfo(null)} style={{background:"#FF6B00",color:"#fff",border:"none",borderRadius:12,padding:"12px 32px",fontSize:14,fontWeight:600,cursor:"pointer"}}>
-              Continuar
+              Empezar mi entrenamiento
             </button>
           </div>
         </div>

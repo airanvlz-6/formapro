@@ -708,6 +708,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
       const prompt=`Genera una sesión conjunta para el equipo "${equipo.name}" (tipo: ${equipo.team_type}).\n\nATLETA A:\nPerfil: ${JSON.stringify(atletaA.perfil)}\nCiclo: ${JSON.stringify(atletaA.ciclo_actual)}\nLesiones: ${atletaA.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(atletaA.marcas_especificas)}\n\nATLETA B:\nPerfil: ${JSON.stringify(atletaB.perfil)}\nCiclo: ${JSON.stringify(atletaB.ciclo_actual)}\nLesiones: ${atletaB.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(atletaB.marcas_especificas)}\n\n${ratiosStr}\n\nREGLAS:\n1. La sesión respeta el bloque actual de CADA atleta\n2. Mismo estímulo, cargas y escalados individualizados\n3. Indica claramente qué hace cada atleta cuando difieren\n4. El plan individual de cada uno NO se rompe`;
       setMostrarEquipos(false);
       setMostrarMenu(false);
+      setMensajes(prev=>[...prev,{role:"assistant",content:`🔍 Analizando el equipo "${equipo.name}"...\n\n👤 Ciclo actual de cada atleta\n👤 Marcas y niveles individuales\n👤 Lesiones o limitaciones activas\n${usarRatios&&memoria.length>0?`📊 Ratios aprendidos de sesiones anteriores (${memoria.length})`:"📊 Primera sesión conjunta — sin ratios previos"}\n\nGenerando sesión personalizada para ambos...`}]);
       enviarSilencioso(prompt);
       await apiCall({action:"guardar_sesion_equipo",codigo:codigoUsuario,datos:{team_id:equipo.id,workout:prompt}});
     }

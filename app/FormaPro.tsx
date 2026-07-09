@@ -1684,7 +1684,7 @@ ${testStr}`}]});
                       📖 Mi historia
                     </button>
                     <button onClick={()=>{setMostrarEquipos(!mostrarEquipos);setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
-                      👥 Equipos
+                      👥 Forge Duo
                     </button>
                     <button onClick={()=>{window.open(`/atleta?codigo=${codigoUsuario}`,'_blank');setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
                       🎯 Mi Atleta
@@ -1700,7 +1700,7 @@ ${testStr}`}]});
 
           {mostrarEquipos&&(
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:10,maxHeight:450,overflowY:"auto"}}>
-              <p style={{color:C.ink,fontSize:14,fontWeight:700,marginBottom:12}}>👥 Mis equipos</p>
+              <p style={{color:C.ink,fontSize:14,fontWeight:700,marginBottom:12}}>👥 Forge Duo</p>
 
               {/* Equipos existentes */}
               {misEquipos.map((eq:any)=>(

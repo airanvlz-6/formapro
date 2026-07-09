@@ -377,10 +377,11 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
 
   if (action === "disolver_equipo") {
     const { team_id } = datos;
-    // Verificar que es el creador
+    // Verificar que el usuario es miembro del equipo (creador o invitado)
+    const { data: miembro } = await supabase.from("team_members").select("id").eq("team_id", team_id).eq("user_codigo", codigo).single();
     const { data: equipo } = await supabase.from("teams").select("created_by").eq("id", team_id).single();
-    if (equipo?.created_by !== codigo) return NextResponse.json({ error: "Solo el creador puede disolver el equipo" }, { status: 403 });
-    // Borrar en orden correcto para evitar violaciones de foreign key
+    if (!miembro && equipo?.created_by !== codigo) return NextResponse.json({ error: "No perteneces a este equipo" }, { status: 403 });
+    // Cualquier miembro puede salir/disolver — borrar en orden correcto para evitar violaciones de foreign key
     await supabase.from("codigos_conjuntos").delete().eq("team_id", team_id);
     await supabase.from("team_members").delete().eq("team_id", team_id);
     await supabase.from("team_sessions").delete().eq("team_id", team_id);

@@ -1722,8 +1722,12 @@ ${testStr}`}]});
                     </div>
                   )}
                     <button onClick={async()=>{
-                      if(!confirm(`¿Disolver el equipo "${eq.name}"?`)) return;
-                      await apiCall({action:"disolver_equipo",codigo:codigoUsuario,datos:{team_id:eq.id}});
+                      if(!confirm(`¿Salir de este equipo? Esta acción disuelve el equipo para ambos integrantes. ¿Confirmas?`)) return;
+                      const res=await apiCall({action:"disolver_equipo",codigo:codigoUsuario,datos:{team_id:eq.id}});
+                      if(res?.error){
+                        alert(res.error);
+                        return;
+                      }
                       setMisEquipos(prev=>prev.filter((e:any)=>e.id!==eq.id));
                     }} style={{background:"#ff444420",color:"#ff4444",border:"1px solid #ff444440",borderRadius:8,padding:"6px",fontSize:11,cursor:"pointer"}}>
                       🗑️

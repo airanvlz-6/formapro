@@ -2,17 +2,17 @@
 
 import { motion } from "framer-motion";
 
-interface BloqueProps {
+interface PasoProps {
   numero: string;
+  icono: string;
   titulo: string;
   texto: string;
-  checklist: string[];
   frase: string;
   imagen: string;
   invertido?: boolean;
 }
 
-function Bloque({ numero, titulo, texto, checklist, frase, imagen, invertido }: BloqueProps) {
+function Paso({ icono, titulo, texto, frase, imagen, invertido }: PasoProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
@@ -31,26 +31,11 @@ function Bloque({ numero, titulo, texto, checklist, frase, imagen, invertido }: 
         />
       </div>
       <div className="flex-1">
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-orange-500/30 bg-orange-500/10 text-sm font-bold text-orange-400">
-          {numero}
+        <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-orange-500/30 bg-orange-500/10 text-2xl">
+          {icono}
         </span>
         <h3 className="mt-4 text-3xl font-bold text-white">{titulo}</h3>
-        <p className="mt-4 text-lg leading-8 text-zinc-400">{texto}</p>
-        <div className="mt-6 space-y-2">
-          {checklist.map((item, i) => (
-            <motion.div
-              key={item}
-              initial={{ opacity: 0, x: -10 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.1, duration: 0.4 }}
-              className="flex items-center gap-2 text-zinc-300"
-            >
-              <span className="text-orange-500">✓</span>
-              {item}
-            </motion.div>
-          ))}
-        </div>
+        <div className="mt-4 text-lg leading-8 text-zinc-400 whitespace-pre-line">{texto}</div>
         <p className="mt-6 text-sm font-semibold uppercase tracking-wide text-orange-400">{frase}</p>
       </div>
     </motion.div>
@@ -81,58 +66,75 @@ export default function ComoFunciona() {
             Cómo funciona
           </span>
           <h2 className="mt-8 text-4xl font-bold text-white md:text-5xl">
-            Un entrenador no toma decisiones al azar.
-            <br />
-            Forge tampoco.
+            Así evoluciona tu entrenamiento
           </h2>
           <p className="mt-8 text-xl leading-9 text-zinc-400">
-            Antes de recomendar un entrenamiento, Forge entiende quién eres, planifica con criterio, aprende de cada sesión y utiliza ese conocimiento para seguir mejorando.
+            Forge no genera entrenamientos al azar. Construye un plan, aprende de cada sesión y adapta tu programación para ayudarte a progresar semana tras semana.
           </p>
         </div>
 
         <div className="mt-24 space-y-4">
-          <Bloque
+          <Paso
             numero="01"
-            titulo="Forge empieza por entender al atleta."
-            texto="No genera una rutina. Primero construye un perfil vivo con todo aquello que influye en tus entrenamientos."
-            checklist={["Objetivos deportivos", "Nivel actual", "Fortalezas", "Áreas de desarrollo", "Lesiones", "Material disponible", "Disponibilidad semanal"]}
-            frase="Nunca empieza desde cero."
+            icono="👤"
+            titulo="Crea tu perfil"
+            texto="Indica tu disciplina, nivel, objetivos, disponibilidad, material, marcas y posibles limitaciones.
+
+Forge crea un punto de partida totalmente personalizado."
+            frase="Todo empieza conociéndote."
             imagen="/landing/atleta.png"
           />
 
           <Flecha />
 
-          <Bloque
+          <Paso
             numero="02"
-            titulo="Después decide qué debes entrenar."
-            texto="Cada sesión forma parte de un bloque. Cada bloque tiene un objetivo. Cada cambio tiene una explicación."
-            checklist={["Planificación científica", "Adaptación diaria", "Cambios automáticos", "Explicación del entrenador", "Periodización inteligente"]}
-            frase="No improvisa. Planifica."
+            icono="🧠"
+            titulo="Diseña un plan completo"
+            texto="No recibirás un entrenamiento. Recibirás una planificación estructurada en ciclos, bloques, semanas y sesiones.
+
+Cada entrenamiento tiene un propósito dentro de tu objetivo."
+            frase="Nunca es al azar."
             imagen="/landing/plan.png"
             invertido
           />
 
           <Flecha />
 
-          <Bloque
+          <Paso
             numero="03"
-            titulo="Cada entrenamiento añade conocimiento."
-            texto="Tus entrenamientos no desaparecen en un historial. Se convierten en información útil para tomar mejores decisiones."
-            checklist={["Sueño", "HRV", "Sensaciones", "Cargas", "PR", "Eventos", "Adherencia"]}
-            frase="Todo queda conectado."
-            imagen="/landing/historia.png"
+            icono="💬"
+            titulo="Entrena y reporta"
+            texto={'Después de entrenar simplemente hablas con Forge como hablarías con un entrenador.\n\n"Dormí 6 horas." · "Hoy me noté muy cansado." · "El snatch salió mejor de lo esperado."\n\nForge interpreta toda esa información automáticamente.'}
+            frase="Sin formularios. Solo conversación."
+            imagen="/landing/chat.png"
           />
 
           <Flecha />
 
-          <Bloque
+          <Paso
             numero="04"
-            titulo="Forge evalúa el resultado de sus decisiones."
-            texto="Cuando termina un bloque, Forge analiza qué funcionó, qué no, y utiliza ese conocimiento para construir el siguiente."
-            checklist={["Rendimiento", "Fatiga", "Recuperación", "Bloques", "Estrategias", "Resultados", "Aprendizaje continuo"]}
-            frase="Cada bloque hace mejor al atleta... y también al entrenador."
+            icono="📈"
+            titulo="Forge aprende de ti"
+            texto="Forge recuerda entrenamientos, sueño, HRV, fatiga, lesiones, marcas, adherencia, debilidades, progresión y bloques anteriores.
+
+No vuelves a empezar desde cero cada conversación."
+            frase="Memoria real, no solo historial."
             imagen="/landing/progreso.png"
             invertido
+          />
+
+          <Flecha />
+
+          <Paso
+            numero="05"
+            icono="⚙️"
+            titulo="Ajusta tu planificación"
+            texto="Si tu recuperación empeora, Forge reduce la carga. Si progresas más rápido, aumenta el estímulo. Si aparece una limitación, la planificación cambia automáticamente.
+
+No necesitas modificar nada manualmente."
+            frase="La planificación reacciona por ti."
+            imagen="/landing/plan-modificado.png"
           />
         </div>
 
@@ -143,11 +145,28 @@ export default function ComoFunciona() {
           transition={{ duration: 0.8 }}
           className="mt-32 text-center"
         >
-          <p className="mx-auto max-w-2xl text-2xl font-semibold leading-relaxed text-white md:text-3xl">
-            Cada entrenamiento deja de ser un dato.
+          <p className="text-2xl font-bold text-white md:text-3xl">
+            Cada semana eres un atleta diferente.
             <br />
-            Se convierte en una mejor decisión para el siguiente.
+            Y Forge también.
           </p>
+          <p className="mx-auto mt-6 max-w-xl text-lg leading-8 text-zinc-400">
+            Tu planificación evoluciona contigo. No repite entrenamientos. No olvida lo que ocurrió. Aprende continuamente para ayudarte a progresar.
+          </p>
+
+          <div className="mx-auto mt-14 max-w-xs space-y-2 text-zinc-400">
+            {["Perfil", "Planificación", "Entrenamiento", "Reporte", "Aprendizaje", "Nuevo plan mejor"].map((p, i, arr) => (
+              <div key={p}>
+                <p className={i === arr.length - 1 ? "font-semibold text-white" : ""}>{p}</p>
+                {i < arr.length - 1 && <p className="text-orange-500">↓</p>}
+              </div>
+            ))}
+          </div>
+
+          <p className="mx-auto mt-16 max-w-2xl text-2xl font-semibold leading-relaxed text-white md:text-3xl">
+            Entrena. Aprende. Evoluciona. Repite.
+          </p>
+
           <a href="/app" className="mt-10 inline-block rounded-full bg-orange-500 px-8 py-4 font-semibold text-white transition hover:scale-105 hover:bg-orange-400">
             Empieza gratis
           </a>

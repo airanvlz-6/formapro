@@ -594,6 +594,42 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     return NextResponse.json({ ok: true });
   }
 
+  if (action === "verificar_renovacion_beta") {
+    const { data: usuario } = await supabase.from("usuarios").select("is_beta_founder,premium_until,ultima_renovacion_beta,workout_history").eq("codigo", codigo).single();
+    if (!usuario?.is_beta_founder) return NextResponse.json({ renovado: false, motivo: "no_es_founder" });
+
+    const ahora = new Date();
+    const premiumHasta = usuario.premium_until ? new Date(usuario.premium_until) : null;
+
+    if (usuario.ultima_renovacion_beta) {
+      const diasDesdeUltimaRenovacion = (ahora.getTime() - new Date(usuario.ultima_renovacion_beta).getTime()) / (24*60*60*1000);
+      if (diasDesdeUltimaRenovacion < 25) {
+        return NextResponse.json({ renovado: false, motivo: "ya_renovo_reciente" });
+      }
+    }
+
+    if (premiumHasta && premiumHasta.getTime() - ahora.getTime() > 3 * 24 * 60 * 60 * 1000) {
+      return NextResponse.json({ renovado: false, motivo: "aun_no_toca", dias_restantes: Math.ceil((premiumHasta.getTime() - ahora.getTime()) / (24*60*60*1000)) });
+    }
+
+    const hace30dias = new Date(ahora.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const workoutHistory = usuario.workout_history || [];
+    const sesionesRecientes = workoutHistory.filter((w: any) => new Date(w.fecha) >= hace30dias).length;
+    const activo = sesionesRecientes >= 6;
+
+    if (activo) {
+      const base = premiumHasta && premiumHasta.getTime() > ahora.getTime() ? new Date(premiumHasta) : new Date(ahora);
+      base.setMonth(base.getMonth() + 1);
+      await supabase.from("usuarios").update({
+        premium_until: base.toISOString(),
+        ultima_renovacion_beta: ahora.toISOString()
+      }).eq("codigo", codigo);
+      return NextResponse.json({ renovado: true, nueva_fecha: base.toISOString(), sesiones: sesionesRecientes });
+    } else {
+      return NextResponse.json({ renovado: false, motivo: "actividad_insuficiente", sesiones: sesionesRecientes, dias_restantes: premiumHasta ? Math.ceil((premiumHasta.getTime() - ahora.getTime()) / (24*60*60*1000)) : 0 });
+    }
+  }
+
   if (action === "verificar_activar_beta") {
     const { data: beta } = await supabase.from("beta_program").select("*").eq("id", 1).single();
     if (!beta || !beta.enabled) return NextResponse.json({ activado: false, motivo: "beta_inactiva" });

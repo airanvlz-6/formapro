@@ -617,6 +617,7 @@ export default function Forge() {
         cargarEquipos(u.codigo);
         cargarPlanSemanal(u.codigo);
         cargarBlockOutcomes(u.codigo);
+        if((u as any).is_beta_founder){ apiCall({action:"verificar_renovacion_beta",codigo:u.codigo}); }
         apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
       },500);
     }
@@ -849,6 +850,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     cargarEquipos(u.codigo);
     cargarPlanSemanal(u.codigo);
     cargarBlockOutcomes(u.codigo);
+    if((u as any).is_beta_founder){ apiCall({action:"verificar_renovacion_beta",codigo:u.codigo}); }
     apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
     // reanudarSesion eliminada para reducir consumo de tokens
   };

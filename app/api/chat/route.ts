@@ -594,6 +594,36 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     return NextResponse.json({ ok: true });
   }
 
+  if (action === "verificar_activar_beta") {
+    const { data: beta } = await supabase.from("beta_program").select("*").eq("id", 1).single();
+    if (!beta || !beta.enabled) return NextResponse.json({ activado: false, motivo: "beta_inactiva" });
+
+    const ahora = new Date();
+    const expirado = beta.expires_at && new Date(beta.expires_at) < ahora;
+    if (expirado) return NextResponse.json({ activado: false, motivo: "beta_expirada" });
+    if (beta.used_slots >= beta.max_slots) return NextResponse.json({ activado: false, motivo: "sin_plazas" });
+
+    // Verificar si el usuario ya es beta founder (no duplicar)
+    const { data: usuarioActual } = await supabase.from("usuarios").select("is_beta_founder").eq("codigo", codigo).single();
+    if (usuarioActual?.is_beta_founder) return NextResponse.json({ activado: false, motivo: "ya_es_founder" });
+
+    // Activar de forma atómica
+    const nuevoNumero = beta.used_slots + 1;
+    const premiumHasta = new Date(ahora);
+    premiumHasta.setMonth(premiumHasta.getMonth() + (beta.meses_premium || 6));
+
+    await supabase.from("beta_program").update({ used_slots: nuevoNumero }).eq("id", 1);
+    await supabase.from("usuarios").update({
+      is_beta_founder: true,
+      premium: true,
+      premium_until: premiumHasta.toISOString(),
+      joined_beta_at: ahora.toISOString(),
+      beta_number: nuevoNumero
+    }).eq("codigo", codigo);
+
+    return NextResponse.json({ activado: true, beta_number: nuevoNumero, max_slots: beta.max_slots, meses_premium: beta.meses_premium });
+  }
+
   if (action === "obtener_block_outcomes") {
     const { data: outcomes } = await supabase.from("block_outcomes").select("*").eq("user_codigo", codigo).order("fecha_fin", { ascending: false }).limit(10);
     return NextResponse.json({ outcomes: outcomes || [] });

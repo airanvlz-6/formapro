@@ -182,7 +182,7 @@ ${ultimos}`;
 if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).some(v => v !== null && typeof v !== 'object')) {
           const estadoActual = usuarioData?.estado_fisiologico || {};
           const historialActual = usuarioData?.historial_fisiologico || [];
-          const hoy = new Date().toISOString().split('T')[0];
+          const hoy = new Date().toLocaleDateString('en-CA', {timeZone: 'Europe/Madrid'});
           // Solo procesar si los valores son simples (no arrays ni objetos)
           const valoresSimples = Object.fromEntries(
             Object.entries(extracted.estado_fisiologico).filter(([k,v]) => 
@@ -499,17 +499,25 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
   }
 
   if (action === "registrar_metrica_pasada") {
-    const { fecha, hrv, sueno, rhr } = datos;
+    const { fecha: fechaRaw, hrv, sueno, rhr } = datos;
+    // Normalizar fecha a formato YYYY-MM-DD sin importar si viene con hora/timezone
+    const fecha = String(fechaRaw).split('T')[0];
     const { data: usuarioFresh } = await supabase.from("usuarios").select("historial_fisiologico").eq("codigo", codigo).single();
     const historialActual = usuarioFresh?.historial_fisiologico || [];
-    // No duplicar fechas
-    const yaExiste = historialActual.some((e:any) => e.fecha === fecha);
-    if(yaExiste) return NextResponse.json({ ok: true, mensaje: "Fecha ya registrada" });
+    // Normalizar también las fechas existentes al comparar, y actualizar si ya existe en vez de solo bloquear
+    const idxExistente = historialActual.findIndex((e:any) => String(e.fecha).split('T')[0] === fecha);
     const nuevaEntrada:any = { fecha };
     if(hrv) nuevaEntrada.hrv = hrv;
     if(sueno) nuevaEntrada.sueno = sueno;
     if(rhr) nuevaEntrada.rhr = rhr;
-    const historialActualizado = [...historialActual, nuevaEntrada].sort((a,b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()).slice(-30);
+    let historialActualizado;
+    if(idxExistente >= 0){
+      historialActualizado = [...historialActual];
+      historialActualizado[idxExistente] = { ...historialActual[idxExistente], ...nuevaEntrada, fecha };
+    } else {
+      historialActualizado = [...historialActual, nuevaEntrada];
+    }
+    historialActualizado = historialActualizado.sort((a,b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()).slice(-30);
     await supabase.from("usuarios").update({ historial_fisiologico: historialActualizado }).eq("codigo", codigo);
     return NextResponse.json({ ok: true });
   }

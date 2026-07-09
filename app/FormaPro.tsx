@@ -643,6 +643,7 @@ const [distribucionSemanal,setDistribucionSemanal]=useState<string>("");
 const [objetivoPrincipal,setObjetivoPrincipal]=useState<{descripcion?:string;fecha?:string;tipo?:string}>({});
 const [planSemanal,setPlanSemanal]=useState<any>(null);
 const [debilidades,setDebilidades]=useState<{ejercicio:string;descripcion:string;fecha:string}[]>([]);
+const [betaFounderInfo,setBetaFounderInfo]=useState<{numero:number;maxSlots:number;meses:number}|null>(null);
 const [blockOutcomes,setBlockOutcomes]=useState<any[]>([]);
 const [mostrarCodigoReal,setMostrarCodigoReal]=useState(false);
 const [historialMarcas,setHistorialMarcas]=useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
@@ -1261,6 +1262,10 @@ ${testStr}`}]});
           test_atleta:{...testAtleta,informe,fecha:new Date().toISOString()},
           test_atleta_fecha:new Date().toISOString()
         }});
+        const betaRes=await apiCall({action:"verificar_activar_beta",codigo:codigoUsuario});
+        if(betaRes?.activado){
+          setBetaFounderInfo({numero:betaRes.beta_number,maxSlots:betaRes.max_slots,meses:betaRes.meses_premium});
+        }
       }
     }catch{setResultadoTest({nivel:"Intermedio",puntuaciones:{resistencia:50,fuerza:50,tecnica:50,recuperacion:50,mental:50},fortalezas:["Constancia"],debilidades:["Datos insuficientes"],resumen:"No se pudo generar el informe completo."});}
     finally{setGenerando(false);}
@@ -1396,6 +1401,20 @@ ${testStr}`}]});
           <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,color:C.ink,marginBottom:8}}>Analizando tu perfil...</div>
           <p style={{color:C.muted,fontSize:14,marginBottom:24}}>El coach está generando tu informe de atleta personalizado</p>
           <div style={{display:"flex",gap:5,justifyContent:"center"}}>{[0,1,2].map(j=><div key={j} className="dot" style={{background:accentColor,animationDelay:`${j*0.2}s`}}/>)}</div>
+        </div>
+      )}
+
+      {betaFounderInfo&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:24}} onClick={()=>setBetaFounderInfo(null)}>
+          <div style={{background:"#1A1A1A",borderRadius:24,padding:"32px 28px",maxWidth:400,width:"100%",textAlign:"center",border:"2px solid #FF6B00"}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontSize:48,marginBottom:12}}>🎉</div>
+            <p style={{color:"#F0EDE8",fontSize:20,fontWeight:700,marginBottom:8}}>¡Bienvenido!</p>
+            <p style={{color:"#FF6B00",fontSize:16,fontWeight:700,marginBottom:16}}>Eres el Atleta Fundador #{betaFounderInfo.numero} de {betaFounderInfo.maxSlots}</p>
+            <p style={{color:"#9A9590",fontSize:14,lineHeight:1.6,marginBottom:24}}>Tendrás acceso Premium gratuito durante {betaFounderInfo.meses} meses por ayudarnos a construir Forge desde el origen.</p>
+            <button onClick={()=>setBetaFounderInfo(null)} style={{background:"#FF6B00",color:"#fff",border:"none",borderRadius:12,padding:"12px 32px",fontSize:14,fontWeight:600,cursor:"pointer"}}>
+              Continuar
+            </button>
+          </div>
         </div>
       )}
 

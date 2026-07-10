@@ -144,6 +144,10 @@ export default function Historia() {
               style={{background:C.card,color:C.ink,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 14px",fontSize:13,textDecoration:"none"}}>
               📊 Progreso
             </a>
+            <a href={`/atleta?codigo=${codigo}`}
+              style={{background:C.card,color:C.ink,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 14px",fontSize:13,textDecoration:"none"}}>
+              🎯 Atleta
+            </a>
             <a href={`/app?codigo=${codigo}`}
               style={{background:C.card,color:C.ink,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 14px",fontSize:13,textDecoration:"none"}}>
               💬 Coach

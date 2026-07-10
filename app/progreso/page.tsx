@@ -104,6 +104,7 @@ useEffect(() => {
           </div>
           <a href={`/plan?codigo=${codigo}`} style={{ background: C.card, color: C.ink, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 12px", fontSize: 13, textDecoration: "none" }}>📅</a>
           <a href={`/historia?codigo=${codigo}`} style={{ background: C.card, color: C.ink, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 12px", fontSize: 13, textDecoration: "none" }}>📖</a>
+          <a href={`/atleta?codigo=${codigo}`} style={{ background: C.card, color: C.ink, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 12px", fontSize: 13, textDecoration: "none" }}>🎯</a>
           <a href={`/app?codigo=${codigo}`} style={{ marginLeft: "auto", background: C.accent, color: "#fff", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
             💬 Coach
           </a>

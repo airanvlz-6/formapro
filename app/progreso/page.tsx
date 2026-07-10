@@ -10,6 +10,8 @@ export default function Progreso() {
   const [error, setError] = useState("");
   const [iniciado, setIniciado] = useState(false);
   const [metricaGrafico, setMetricaGrafico] = useState<"hrv"|"sueno">("hrv");
+  const [mostrarFormMetrica, setMostrarFormMetrica] = useState(false);
+  const [formMetrica, setFormMetrica] = useState({fecha:"",hrv:"",sueno:"",rhr:""});
   const C = {
     bg: "#0D0D0D", card: "#1A1A1A", ink: "#F0EDE8", muted: "#9A9590",
     border: "#2A2A2A", accent: "#FF6B00"
@@ -106,6 +108,48 @@ useEffect(() => {
             💬 Coach
           </a>
         </div>
+
+        {/* Boton registrar metricas */}
+        <button onClick={()=>setMostrarFormMetrica(!mostrarFormMetrica)} style={{ width: "100%", background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "12px", fontSize: 13, color: C.ink, cursor: "pointer", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+          ➕ Registrar métricas de un día
+        </button>
+
+        {mostrarFormMetrica && (
+          <div style={{ background: C.card, border: `1px solid ${C.accent}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+            <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Registrar métricas históricas</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <input type="date" value={formMetrica.fecha} onChange={e=>setFormMetrica(p=>({...p,fecha:e.target.value}))}
+                style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", fontSize: 13, color: C.ink, background: C.bg, fontFamily: "inherit" }}/>
+              <input type="number" value={formMetrica.hrv} onChange={e=>setFormMetrica(p=>({...p,hrv:e.target.value}))}
+                placeholder="HRV (ms)"
+                style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", fontSize: 13, color: C.ink, background: C.bg, fontFamily: "inherit" }}/>
+              <input type="number" value={formMetrica.sueno} onChange={e=>setFormMetrica(p=>({...p,sueno:e.target.value}))}
+                placeholder="Puntuación sueño (0-100)"
+                style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", fontSize: 13, color: C.ink, background: C.bg, fontFamily: "inherit" }}/>
+              <input type="number" value={formMetrica.rhr} onChange={e=>setFormMetrica(p=>({...p,rhr:e.target.value}))}
+                placeholder="FC reposo (bpm)"
+                style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", fontSize: 13, color: C.ink, background: C.bg, fontFamily: "inherit" }}/>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={async()=>{
+                  if(!formMetrica.fecha) return;
+                  await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+                    action:"registrar_metrica_pasada",
+                    codigo,
+                    datos:{fecha:formMetrica.fecha,hrv:formMetrica.hrv?parseInt(formMetrica.hrv):undefined,sueno:formMetrica.sueno?parseInt(formMetrica.sueno):undefined,rhr:formMetrica.rhr?parseInt(formMetrica.rhr):undefined}
+                  })});
+                  setFormMetrica({fecha:"",hrv:"",sueno:"",rhr:""});
+                  setMostrarFormMetrica(false);
+                  cargarDatos(codigo);
+                }} style={{ flex: 1, background: C.accent, color: "#fff", border: "none", borderRadius: 8, padding: "10px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  Guardar
+                </button>
+                <button onClick={()=>setMostrarFormMetrica(false)} style={{ background: "none", color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 14px", fontSize: 13, cursor: "pointer" }}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Stats */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>

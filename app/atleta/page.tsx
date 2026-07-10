@@ -80,6 +80,9 @@ export default function MiAtleta() {
             <h1 style={{ fontSize: 20, fontWeight: 700, color: C.ink, fontFamily: "Georgia, serif" }}>Mi Atleta</h1>
             <p style={{ color: C.accent, fontSize: 12, fontWeight: 600 }}>••••••</p>
           </div>
+          <a href={`/plan?codigo=${codigo}`} style={{ background: C.card, color: C.ink, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 12px", fontSize: 13, textDecoration: "none" }}>📅</a>
+          <a href={`/progreso?codigo=${codigo}`} style={{ background: C.card, color: C.ink, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 12px", fontSize: 13, textDecoration: "none" }}>📊</a>
+          <a href={`/historia?codigo=${codigo}`} style={{ background: C.card, color: C.ink, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 12px", fontSize: 13, textDecoration: "none" }}>📖</a>
           <a href={`/app?codigo=${codigo}`} style={{ marginLeft: "auto", background: C.accent, color: "#fff", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
             💬 Coach
           </a>

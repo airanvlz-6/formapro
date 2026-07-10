@@ -111,12 +111,12 @@ useEffect(() => {
 
         {/* Boton registrar metricas */}
         <button onClick={()=>setMostrarFormMetrica(!mostrarFormMetrica)} style={{ width: "100%", background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "12px", fontSize: 13, color: C.ink, cursor: "pointer", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-          ➕ Registrar métricas de un día
+          ➕ Crear tu historial fisiológico
         </button>
 
         {mostrarFormMetrica && (
           <div style={{ background: C.card, border: `1px solid ${C.accent}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
-            <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Registrar métricas históricas</p>
+            <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Crear tu historial fisiológico</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <input type="date" value={formMetrica.fecha} onChange={e=>setFormMetrica(p=>({...p,fecha:e.target.value}))}
                 style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", fontSize: 13, color: C.ink, background: C.bg, fontFamily: "inherit" }}/>

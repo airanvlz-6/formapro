@@ -613,6 +613,7 @@ export default function Forge() {
         cargarEquipos(u.codigo);
         cargarPlanSemanal(u.codigo);
         cargarBlockOutcomes(u.codigo);
+        cargarEstadoCanonico(u.codigo);
         if((u as any).is_beta_founder){ apiCall({action:"verificar_renovacion_beta",codigo:u.codigo}); }
         apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
       },500);
@@ -641,6 +642,7 @@ const [objetivoPrincipal,setObjetivoPrincipal]=useState<{descripcion?:string;fec
 const [planSemanal,setPlanSemanal]=useState<any>(null);
 const [debilidades,setDebilidades]=useState<{ejercicio:string;descripcion:string;fecha:string}[]>([]);
 const [blockOutcomes,setBlockOutcomes]=useState<any[]>([]);
+const [estadoCanonico,setEstadoCanonico]=useState<any>(null);
 const [mostrarCodigoReal,setMostrarCodigoReal]=useState(false);
 const [betaFounderInfo,setBetaFounderInfo]=useState<{numero:number;maxSlots:number;meses:number}|null>(null);
 const [historialMarcas,setHistorialMarcas]=useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
@@ -678,6 +680,11 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
   const cargarPlanSemanal=async(cod:string)=>{
     const res=await apiCall({action:"obtener_plan_semana",codigo:cod});
     if(res?.plan) setPlanSemanal(res.plan);
+  };
+
+  const cargarEstadoCanonico=async(cod:string)=>{
+    const res=await apiCall({action:"obtener_estado_canonico",codigo:cod});
+    if(res?.estado) setEstadoCanonico(res.estado);
   };
 
   const cargarEquipos=async(cod:string)=>{
@@ -846,6 +853,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     cargarEquipos(u.codigo);
     cargarPlanSemanal(u.codigo);
     cargarBlockOutcomes(u.codigo);
+    cargarEstadoCanonico(u.codigo);
     if((u as any).is_beta_founder){ apiCall({action:"verificar_renovacion_beta",codigo:u.codigo}); }
     apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
     // reanudarSesion eliminada para reducir consumo de tokens

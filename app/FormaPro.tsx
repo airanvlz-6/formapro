@@ -183,7 +183,7 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
   ],
 };
 
-const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "", memoria?: {lesiones?:string; plan?:string; notas?:string}, ciclo?: {bloque?:string; semana?:number; totalSemanas?:number; objetivo?:string}, psicologia?: {arousal?:string; confianza?:string; estres?:string; motivacion?:string; notas_mentales?:string}, premium?: boolean, athleteState?: Record<string,any>, datosEntreno?: Record<string,any>, estadoFisio?: {fatiga_aguda?:number;fatiga_cronica?:number;tendencia?:string;hrv?:number;sueno?:number;rhr?:number;adherencia?:number}, histFisio?: {fecha:string;hrv?:number;sueno?:number;rhr?:number}[], distribucion?: string, objetivo?: {descripcion?:string;fecha?:string;tipo?:string}, planSemana?: any, debilidadesAtleta?: {ejercicio:string;descripcion:string;fecha:string}[], historialBloques?: any[]) => {
+const buildPrompt = (cat: {id: string; titulo: string}, perfil: Record<string, string | string[]>, marcas: {fecha: string; valor: string}[] = [], historialResumen: string = "", memoria?: {lesiones?:string; plan?:string; notas?:string}, ciclo?: {bloque?:string; semana?:number; totalSemanas?:number; objetivo?:string}, psicologia?: {arousal?:string; confianza?:string; estres?:string; motivacion?:string; notas_mentales?:string}, premium?: boolean, athleteState?: Record<string,any>, datosEntreno?: Record<string,any>, estadoFisio?: {fatiga_aguda?:number;fatiga_cronica?:number;tendencia?:string;hrv?:number;sueno?:number;rhr?:number;adherencia?:number}, histFisio?: {fecha:string;hrv?:number;sueno?:number;rhr?:number}[], distribucion?: string, objetivo?: {descripcion?:string;fecha?:string;tipo?:string}, planSemana?: any, debilidadesAtleta?: {ejercicio:string;descripcion:string;fecha:string}[], historialBloques?: any[], estadoCanonico?: any) => {
   const perfilStr = Object.entries(perfil).map(([k, v]) => `- ${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join("\n");
   const bloquesLineas: string[] = [];
   if(historialBloques && historialBloques.length>0){
@@ -323,9 +323,15 @@ ESTADO FISIOLÓGICO ACTUAL:
 IMPORTANTE: Ajusta la intensidad y volumen de la sesión según este estado. HRV bajo (<50ms) o fatiga aguda alta (>80) = reduce intensidad. Sueño bajo (<60) = sesión de recuperación activa.`:""}
 ${athleteStateStr}
 
-FECHA HOY: ${new Date().toLocaleDateString("es-ES", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "Europe/Madrid" })}
-PROXIMOS 14 DIAS: ${Array.from({length:14},(_,i)=>{const d=new Date();d.setDate(d.getDate()+i+1);return d.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long",timeZone:"Europe/Madrid"});}).join(" | ")}
-🚨 FECHA Y TIEMPO — REGLAS CRÍTICAS: HOY es ${new Date().toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"Europe/Madrid"})}. Usa siempre esta fecha exacta, nunca la calcules por tu cuenta. El sueño reportado es SIEMPRE de la noche anterior — nunca puede ser "causado por" un entreno de hoy, porque ese entreno aún no había pasado cuando el atleta dormía. Si el atleta entrenó hoy y reporta sueño, ese sueño refleja cómo LLEGÓ a la sesión, no cómo se recuperó de ella.
+${estadoCanonico?`
+🔒 ESTADO CANÓNICO — FUENTE ÚNICA DE VERDAD, PRECALCULADA POR EL SERVIDOR (nunca la contradigas ni recalcules):
+Hoy es ${estadoCanonico.dia_semana_hoy} ${estadoCanonico.fecha_hoy}. Mañana es ${estadoCanonico.dia_semana_manana} ${estadoCanonico.fecha_manana}.
+${estadoCanonico.sesion_hoy?`Sesión de HOY: "${estadoCanonico.sesion_hoy.titulo}"${estadoCanonico.sesion_hoy.completada?" [YA COMPLETADA]":" [PENDIENTE]"}`:"Sin sesión programada para hoy en el plan."}
+${estadoCanonico.sesion_manana?`Sesión de MAÑANA: "${estadoCanonico.sesion_manana.titulo}"${estadoCanonico.sesion_manana.completada?" [YA COMPLETADA]":" [PENDIENTE]"}`:"Sin sesión programada para mañana en el plan."}
+${estadoCanonico.ultimo_registro_fisiologico?`Último registro fisiológico guardado: ${estadoCanonico.ultimo_registro_fisiologico.fecha} (HRV ${estadoCanonico.ultimo_registro_fisiologico.hrv||'-'}, sueño ${estadoCanonico.ultimo_registro_fisiologico.sueno||'-'})`:""}
+ESTAS FECHAS Y ESTADOS SON LA ÚNICA VERDAD. Nunca calcules fechas por tu cuenta cuando este bloque esté presente — solo interprétalo y explica.`:`
+FECHA HOY: ${new Date().toLocaleDateString("es-ES", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "Europe/Madrid" })}`}
+🚨 FECHA Y TIEMPO — REGLAS CRÍTICAS: El sueño reportado es SIEMPRE de la noche anterior — nunca puede ser "causado por" un entreno de hoy, porque ese entreno aún no había pasado cuando el atleta dormía. Si el atleta entrenó hoy y reporta sueño, ese sueño refleja cómo LLEGÓ a la sesión, no cómo se recuperó de ella.
 DISPONIBILIDAD DEL ATLETA — REGLA CRÍTICA: Antes de programar cualquier sesión, consulta el perfil del atleta y respeta ESTRICTAMENTE sus días disponibles, horarios y lugar de entrenamiento. NUNCA programes una sesión en un día que el atleta no ha indicado como disponible. Si el perfil indica "lunes no disponible" o "solo box martes y jueves", respeta eso sin excepciones. La disponibilidad es una restricción inamovible, no una sugerencia.
 ${debilidadesAtleta&&debilidadesAtleta.length>0?`
 🎯 DEBILIDADES DEL ATLETA — TENER EN CUENTA AL PLANIFICAR:

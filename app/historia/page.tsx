@@ -135,24 +135,14 @@ export default function Historia() {
             <h1 style={{fontSize:20,fontWeight:700,color:C.ink,fontFamily:"Georgia,serif"}}>Mi Historia</h1>
             <p style={{color:C.accent,fontSize:12,fontWeight:600}}>••••••</p>
           </div>
-          <div style={{marginLeft:"auto",display:"flex",gap:8}}>
-            <button onClick={()=>setMostrarFormulario(!mostrarFormulario)}
-              style={{background:C.accent,color:"#fff",border:"none",borderRadius:10,padding:"8px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
-              + Añadir
-            </button>
-            <a href={`/progreso?codigo=${codigo}`}
-              style={{background:C.card,color:C.ink,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 14px",fontSize:13,textDecoration:"none"}}>
-              📊 Progreso
-            </a>
-            <a href={`/atleta?codigo=${codigo}`}
-              style={{background:C.card,color:C.ink,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 14px",fontSize:13,textDecoration:"none"}}>
-              🎯 Atleta
-            </a>
-            <a href={`/app?codigo=${codigo}`}
-              style={{background:C.card,color:C.ink,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 14px",fontSize:13,textDecoration:"none"}}>
-              💬 Coach
-            </a>
-          </div>
+          <button onClick={()=>setMostrarFormulario(!mostrarFormulario)}
+            style={{marginLeft:"auto",background:C.card,color:C.ink,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 14px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+            + Añadir
+          </button>
+          <a href={`/app?codigo=${codigo}`}
+            style={{background:C.accent,color:"#fff",border:"none",borderRadius:10,padding:"8px 14px",fontSize:13,textDecoration:"none",fontWeight:600}}>
+            💬 Coach
+          </a>
         </div>
 
         {/* Formulario añadir evento */}
@@ -535,6 +525,12 @@ export default function Historia() {
             ))}
           </div>
         )}
+
+        {/* Navegacion contextual */}
+        <div style={{display:"flex",justifyContent:"space-between",gap:10,marginTop:24,paddingTop:20,borderTop:`1px solid ${C.border}`}}>
+          <a href={`/plan?codigo=${codigo}`} style={{color:C.muted,fontSize:13,textDecoration:"none",display:"flex",alignItems:"center",gap:4}}>← Mi Plan</a>
+          <a href={`/progreso?codigo=${codigo}`} style={{color:C.accent,fontSize:13,textDecoration:"none",fontWeight:600,display:"flex",alignItems:"center",gap:4}}>Mi Progreso →</a>
+        </div>
 
       </div>
     </div>

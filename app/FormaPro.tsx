@@ -369,12 +369,7 @@ ${({"carrera":`ESPECIALIDAD RUNNING: Ciclos 4sem (3 carga+1 descarga), progresio
 SEÑALES DE ALARMA: Si el usuario reporta dolor nocturno intenso, hormigueo/pérdida de sensibilidad, hinchazón súbita, fiebre, o dolor que no mejora en 2 semanas, recomienda firmemente acudir a un profesional sanitario.
 DISCLAIMER OBLIGATORIO: En el primer mensaje y cuando sea relevante, incluye: "⚠️ Estas recomendaciones están basadas en evidencia científica con fines orientativos y no sustituyen el diagnóstico ni tratamiento de un médico o fisioterapeuta. Si el dolor empeora o no mejora, consulta con un profesional sanitario."`}[cat.id]||"")}
 
-🔴🔴🔴 VERIFICACIÓN FINAL OBLIGATORIA ANTES DE RESPONDER — LEE ESTO ÚLTIMO:
-1. HOY es ${new Date().toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"Europe/Madrid"})}. Si vas a nombrar un día de la semana, verifica que coincide con esta fecha exacta.
-2. Si el mensaje del atleta habla SOLO de sueño/HRV/FC nocturna sin mencionar ningún entrenamiento, NO generes el tag [SESION:] bajo ninguna circunstancia.
-3. El sueño reportado es SIEMPRE de la noche anterior a hoy — nunca puede ser "causado por" o "recuperación de" un entrenamiento que el atleta haga hoy mismo.
-4. Si en el contexto ves que el día de hoy ya aparece como completado en el plan, no lo vuelvas a proponer.
-Revisa estos 4 puntos silenciosamente antes de escribir tu respuesta final.`;
+🔴 VERIFICACIÓN FINAL — revisa antes de responder: (1) ¿la fecha que voy a usar coincide con HOY indicado arriba? (2) si el mensaje es solo de sueño, ¿estoy evitando generar [SESION:]? (3) ¿el día de hoy ya está completado en el plan? Si es así, no lo repitas.`;
 };
 
 const ESPECIALIDADES: Record<string, string[]> = {
@@ -1700,21 +1695,20 @@ ${testStr}`}]});
                 </button>
                 {mostrarMenu&&(
                   <div style={{position:"absolute",right:0,top:"calc(100% + 6px)",background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:8,zIndex:100,minWidth:160,boxShadow:"0 4px 20px rgba(0,0,0,0.3)"}}>
-                    <button onClick={()=>{window.open(`/progreso?codigo=${codigoUsuario}`,'_blank');setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
-                      📊 Mi progreso
-                    </button>
                     <button onClick={()=>{window.open(`/plan?codigo=${codigoUsuario}`,'_blank');setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
                       📅 Mi plan
                     </button>
-                    
                     <button onClick={()=>{window.open(`/historia?codigo=${codigoUsuario}`,'_blank');setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
                       📖 Mi historia
                     </button>
-                    <button onClick={()=>{setMostrarEquipos(!mostrarEquipos);setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
-                      👥 Forge Duo
+                    <button onClick={()=>{window.open(`/progreso?codigo=${codigoUsuario}`,'_blank');setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
+                      📊 Mi progreso
                     </button>
                     <button onClick={()=>{window.open(`/atleta?codigo=${codigoUsuario}`,'_blank');setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
                       🎯 Mi Atleta
+                    </button>
+                    <button onClick={()=>{setMostrarEquipos(!mostrarEquipos);setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
+                      👥 Forge Duo
                     </button>
                     <button onClick={()=>{setMostrarPerfil(!mostrarPerfil);setMostrarMarcas(false);setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
                       ⚙️ Ajustes

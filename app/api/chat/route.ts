@@ -6,6 +6,56 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+async function generarEstadoCanonico(supabase: any, codigo: string) {
+  const DIAS_MAP = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+  const ahora = new Date();
+  const hoyStr = ahora.toLocaleDateString('en-CA', {timeZone: 'Europe/Madrid'});
+  const hoyFecha = new Date(hoyStr + 'T12:00:00');
+  const diaSemanaHoy = DIAS_MAP[hoyFecha.getDay()];
+  const mananaFecha = new Date(hoyFecha); mananaFecha.setDate(mananaFecha.getDate()+1);
+  const diaSemanaManana = DIAS_MAP[mananaFecha.getDay()];
+
+  const diaSemanaNum = hoyFecha.getDay() || 7;
+  const lunesFecha = new Date(hoyFecha); lunesFecha.setDate(hoyFecha.getDate() - diaSemanaNum + 1);
+  const weekStart = lunesFecha.toISOString().split('T')[0];
+
+  const { data: usuario } = await supabase.from("usuarios").select("ciclo_actual,estado_fisiologico,historial_fisiologico,objetivo_principal,debilidades,athlete_development").eq("codigo", codigo).single();
+  const { data: plan } = await supabase.from("weekly_plan").select("*").eq("user_codigo", codigo).eq("week_start", weekStart).single();
+
+  const normalizar = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  const sesionHoy = plan?.sessions?.find((s: any) => normalizar(s.dia) === normalizar(diaSemanaHoy));
+  const sesionManana = plan?.sessions?.find((s: any) => normalizar(s.dia) === normalizar(diaSemanaManana));
+
+  const histFisio = usuario?.historial_fisiologico || [];
+  const ultimoRegistroFisio = [...histFisio].sort((a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())[0];
+
+  const estado = {
+    fecha_hoy: hoyStr,
+    dia_semana_hoy: diaSemanaHoy,
+    dia_semana_manana: diaSemanaManana,
+    fecha_manana: mananaFecha.toISOString().split('T')[0],
+    ciclo: usuario?.ciclo_actual || null,
+    sesion_hoy: sesionHoy ? {
+      titulo: sesionHoy.titulo,
+      completada: !!sesionHoy.completada,
+      descripcion: sesionHoy.descripcion,
+      por_que: sesionHoy.por_que
+    } : null,
+    sesion_manana: sesionManana ? {
+      titulo: sesionManana.titulo,
+      completada: !!sesionManana.completada,
+      descripcion: sesionManana.descripcion,
+      por_que: sesionManana.por_que
+    } : null,
+    ultimo_registro_fisiologico: ultimoRegistroFisio || null,
+    objetivo_principal: usuario?.objetivo_principal || null,
+    debilidades_activas: (usuario?.athlete_development || []).filter((d: any) => d.estado !== "resuelta").map((d: any) => d.nombre_visible || d.indicador),
+    generado_at: ahora.toISOString()
+  };
+
+  return estado;
+}
+
 export async function POST(req: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
@@ -575,6 +625,11 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     const diaNombre = DIAS_MAP[fechaObj.getDay()].normalize("NFD").replace(/[\u0300-\u036f]/g,"");
     const sesionDia = plan.sessions.find((s:any) => s.dia.normalize("NFD").replace(/[\u0300-\u036f]/g,"") === diaNombre);
     return NextResponse.json({ sesion: sesionDia || null });
+  }
+
+  if (action === "obtener_estado_canonico") {
+    const estado = await generarEstadoCanonico(supabase, codigo);
+    return NextResponse.json({ estado });
   }
 
   if (action === "obtener_plan_semana") {

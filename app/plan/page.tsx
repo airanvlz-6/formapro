@@ -118,12 +118,7 @@ export default function Plan() {
             <h1 style={{fontSize:20,fontWeight:700,color:C.ink,fontFamily:"Georgia,serif"}}>Mi Plan</h1>
             <p style={{color:C.accent,fontSize:12,fontWeight:600}}>••••••</p>
           </div>
-          <div style={{marginLeft:"auto",display:"flex",gap:8}}>
-            <a href={`/progreso?codigo=${codigo}`} style={{background:C.card,color:C.ink,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 12px",fontSize:13,textDecoration:"none"}}>📊</a>
-            <a href={`/historia?codigo=${codigo}`} style={{background:C.card,color:C.ink,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 12px",fontSize:13,textDecoration:"none"}}>📖</a>
-            <a href={`/atleta?codigo=${codigo}`} style={{background:C.card,color:C.ink,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 12px",fontSize:13,textDecoration:"none"}}>🎯</a>
-            <a href={`/app?codigo=${codigo}`} style={{background:C.accent,color:"#fff",border:"none",borderRadius:10,padding:"8px 12px",fontSize:13,textDecoration:"none",fontWeight:600}}>💬 Coach</a>
-          </div>
+          <a href={`/app?codigo=${codigo}`} style={{marginLeft:"auto",background:C.accent,color:"#fff",border:"none",borderRadius:10,padding:"8px 12px",fontSize:13,textDecoration:"none",fontWeight:600}}>💬 Coach</a>
         </div>
 
         {!plan ? (
@@ -300,6 +295,12 @@ export default function Plan() {
             </div>
           </div>
         )}
+
+        {/* Navegacion contextual */}
+        <div style={{display:"flex",justifyContent:"space-between",gap:10,marginTop:24,paddingTop:20,borderTop:`1px solid ${C.border}`}}>
+          <a href={`/app?codigo=${codigo}`} style={{color:C.muted,fontSize:13,textDecoration:"none",display:"flex",alignItems:"center",gap:4}}>← Coach</a>
+          <a href={`/historia?codigo=${codigo}`} style={{color:C.accent,fontSize:13,textDecoration:"none",fontWeight:600,display:"flex",alignItems:"center",gap:4}}>Mi Historia →</a>
+        </div>
 
       </div>
     </div>

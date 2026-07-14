@@ -25,6 +25,7 @@ export default function Plan() {
   const [iniciado, setIniciado] = useState(false);
   const [error, setError] = useState("");
   const [sesionDetalle, setSesionDetalle] = useState<any>(null);
+  const [diaSeleccionadoIdx, setDiaSeleccionadoIdx] = useState<number|null>(null);
 
   const C = {
     bg:"#0D0D0D", card:"#1A1A1A", ink:"#F0EDE8", muted:"#9A9590",
@@ -186,8 +187,29 @@ export default function Plan() {
               </div>
             </div>
 
-            {/* Sesiones */}
-            {DIAS.map(dia => {
+            {/* Selector horizontal de dias */}
+            <div style={{display:"flex",gap:6,marginBottom:16,overflowX:"auto",paddingBottom:4}}>
+              {DIAS.map((dia,idx) => {
+                const esHoyHeader = dia === diaHoy;
+                const idxActivo = diaSeleccionadoIdx !== null ? diaSeleccionadoIdx : DIAS.findIndex(d=>d===diaHoy);
+                const activo = idx === idxActivo;
+                return (
+                  <button key={dia} onClick={()=>setDiaSeleccionadoIdx(idx)}
+                    style={{
+                      flex:1,minWidth:40,padding:"10px 4px",borderRadius:10,border:`1px solid ${activo?C.accent:C.border}`,
+                      background: activo?C.accent:C.card, cursor:"pointer", textAlign:"center", position:"relative"
+                    }}>
+                    <div style={{color:activo?"#fff":C.muted,fontSize:11,fontWeight:700,textTransform:"uppercase"}}>{dia.slice(0,1).toUpperCase()}</div>
+                    {esHoyHeader && <div style={{position:"absolute",top:2,right:2,width:5,height:5,borderRadius:"50%",background:activo?"#fff":C.accent}}/>}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Detalle del dia seleccionado */}
+            {(()=>{
+              const idxActivo = diaSeleccionadoIdx !== null ? diaSeleccionadoIdx : DIAS.findIndex(d=>d===diaHoy);
+              const dia = DIAS[idxActivo];
               const normalizar = (s:string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"");
               const sesion = sesiones.find((s:any) => normalizar(s.dia) === normalizar(dia));
               const esHoy = dia === diaHoy;
@@ -196,38 +218,37 @@ export default function Plan() {
               const esDescanso = esDescansoTotal;
 
               return (
-                <div key={dia} onClick={()=>sesion&&!esDescanso&&setSesionDetalle(sesion)}
+                <div onClick={()=>sesion&&!esDescanso&&setSesionDetalle(sesion)}
                   style={{
                     background: esHoy ? `${C.accent}15` : C.card,
                     border: `1px solid ${esHoy ? C.accent : sesion?.modificado ? "#FFD700" : C.border}`,
-                    borderRadius:12,
-                    padding:"12px 16px",
-                    marginBottom:8,
+                    borderRadius:14,
+                    padding:"16px 18px",
                     cursor: sesion && !esDescanso ? "pointer" : "default",
                     transition:"all 0.2s"
                   }}>
                   <div style={{display:"flex",alignItems:"center",gap:12}}>
-                    <div style={{width:36,height:36,borderRadius:10,background:`${config.color}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
+                    <div style={{width:44,height:44,borderRadius:12,background:`${config.color}20`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>
                       {config.emoji}
                     </div>
                     <div style={{flex:1}}>
-                      <div style={{display:"flex",alignItems:"center",gap:6}}>
-                        <span style={{color:esHoy?C.accent:C.muted,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1}}>{dia}</span>
+                      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+                        <span style={{color:esHoy?C.accent:C.muted,fontSize:12,fontWeight:700,textTransform:"uppercase",letterSpacing:1}}>{dia}</span>
                         {esHoy&&<span style={{background:C.accent,color:"#fff",fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:100}}>HOY</span>}
                         {sesion?.modificado&&<span style={{background:"#FFD70020",color:"#FFD700",fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:100}}>⚠️ Modificado</span>}
                       </div>
-                      <span style={{color:esDescanso?C.muted:C.ink,fontSize:13,fontWeight:esDescanso?400:600}}>
+                      <span style={{color:esDescanso?C.muted:C.ink,fontSize:15,fontWeight:esDescanso?400:600}}>
                         {sesion?.titulo || (esDescanso?"Descanso":"Sin sesión")}
                       </span>
                       {sesion?.completada && sesion?.descripcion_real && (
-                        <p style={{color:"#4CAF50",fontSize:10,marginTop:2}}>✅ Completada</p>
+                        <p style={{color:"#4CAF50",fontSize:11,marginTop:2}}>✅ Completada</p>
                       )}
                     </div>
-                    {sesion&&!esDescanso&&<span style={{color:C.muted,fontSize:16}}>›</span>}
+                    {sesion&&!esDescanso&&<span style={{color:C.muted,fontSize:18}}>›</span>}
                   </div>
                 </div>
               );
-            })}
+            })()}
           </>
         )}
 

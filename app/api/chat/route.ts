@@ -857,6 +857,13 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
 
   if (action === "registrar_evento") {
     const { evento } = datos;
+    // Deduplicación: verificar si ya existe un evento con mismo tipo+fecha+titulo similar
+    const { data: existentes } = await supabase.from("athlete_events").select("id,title").eq("user_codigo", codigo).eq("date", evento.date).eq("type", evento.type);
+    const tituloNormalizado = (evento.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const yaExiste = (existentes || []).some((e: any) => (e.title || "").toLowerCase().replace(/[^a-z0-9]/g, "") === tituloNormalizado);
+    if (yaExiste) {
+      return NextResponse.json({ ok: true, duplicado: true, mensaje: "Evento ya registrado, evitando duplicado" });
+    }
     const { error } = await supabase.from("athlete_events").insert({
       user_codigo: codigo,
       date: evento.date,

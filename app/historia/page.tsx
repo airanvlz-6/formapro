@@ -25,6 +25,7 @@ export default function Historia() {
   const [error, setError] = useState("");
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [nuevoEvento, setNuevoEvento] = useState({date:"",type:"workout",title:"",notas:""});
+  const [eventoEditando, setEventoEditando] = useState<any>(null);
 
   const C = {
     bg:"#0D0D0D", card:"#1A1A1A", ink:"#F0EDE8", muted:"#9A9590",
@@ -146,10 +147,10 @@ export default function Historia() {
           </a>
         </div>
 
-        {/* Formulario añadir evento */}
+        {/* Formulario añadir/editar evento */}
         {mostrarFormulario&&(
           <div style={{background:C.card,border:`1px solid ${C.accent}`,borderRadius:16,padding:"16px 18px",marginBottom:16}}>
-            <p style={{color:C.ink,fontSize:14,fontWeight:700,marginBottom:12}}>Registrar evento pasado</p>
+            <p style={{color:C.ink,fontSize:14,fontWeight:700,marginBottom:12}}>{eventoEditando?"Editar evento":"Registrar evento pasado"}</p>
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
               <input type="date" value={nuevoEvento.date} onChange={e=>setNuevoEvento(p=>({...p,date:e.target.value}))}
                 style={{border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 10px",fontSize:13,color:C.ink,background:C.bg,fontFamily:"inherit"}}/>
@@ -166,11 +167,24 @@ export default function Historia() {
                 placeholder="Notas adicionales (opcional)"
                 style={{border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 10px",fontSize:13,color:C.ink,background:C.bg,fontFamily:"inherit"}}/>
               <div style={{display:"flex",gap:8}}>
-                <button onClick={registrarEvento}
+                <button onClick={async()=>{
+                  if(eventoEditando){
+                    await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+                      action:"editar_evento",codigo,
+                      datos:{eventoId:eventoEditando.id,date:nuevoEvento.date,type:nuevoEvento.type,title:nuevoEvento.title,notas:nuevoEvento.notas}
+                    })});
+                    setEventoEditando(null);
+                  } else {
+                    await registrarEvento();
+                  }
+                  setNuevoEvento({date:"",type:"workout",title:"",notas:""});
+                  setMostrarFormulario(false);
+                  cargarDatos(codigo);
+                }}
                   style={{flex:1,background:C.accent,color:"#fff",border:"none",borderRadius:8,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
-                  Registrar
+                  {eventoEditando?"Guardar cambios":"Registrar"}
                 </button>
-                <button onClick={()=>setMostrarFormulario(false)}
+                <button onClick={()=>{setMostrarFormulario(false);setEventoEditando(null);setNuevoEvento({date:"",type:"workout",title:"",notas:""});}}
                   style={{background:"none",color:C.muted,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 14px",fontSize:13,cursor:"pointer"}}>
                   Cancelar
                 </button>
@@ -362,6 +376,14 @@ export default function Historia() {
                               <button onClick={()=>setMenuEventoAbierto(menuEventoAbierto===ev.id?null:ev.id)} style={{background:"none",border:"none",color:C.muted,fontSize:14,cursor:"pointer",padding:"2px 4px"}}>⋮</button>
                               {menuEventoAbierto===ev.id && (
                                 <div style={{position:"absolute",right:0,top:"100%",background:"#1C1C1C",border:`1px solid ${C.border}`,borderRadius:8,padding:4,zIndex:50,minWidth:110,boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>
+                                  <button onClick={()=>{
+                                    setEventoEditando(ev);
+                                    setNuevoEvento({date:ev.date,type:ev.type,title:ev.title,notas:ev.data?.notas||""});
+                                    setMenuEventoAbierto(null);
+                                    setMostrarFormulario(true);
+                                  }} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:12,padding:"6px 10px",cursor:"pointer",textAlign:"left",borderRadius:6}}>
+                                    ✏️ Editar
+                                  </button>
                                   <button onClick={async()=>{
                                     if(!confirm(`¿Eliminar "${ev.title}"?`)) return;
                                     await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"eliminar_evento",codigo,datos:{eventoId:ev.id}})});

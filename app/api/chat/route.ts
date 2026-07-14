@@ -947,6 +947,12 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     return NextResponse.json({ logros });
   }
 
+  if (action === "eliminar_evento") {
+    const { eventoId } = datos;
+    await supabase.from("athlete_events").delete().eq("id", eventoId).eq("user_codigo", codigo);
+    return NextResponse.json({ ok: true });
+  }
+
   if (action === "obtener_historia") {
     const { data: eventos } = await supabase
       .from("athlete_events")

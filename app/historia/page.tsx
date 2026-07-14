@@ -198,6 +198,13 @@ export default function Historia() {
             if(!eventosPorDia[key]) eventosPorDia[key]=[];
             eventosPorDia[key].push({...e, esEvento:true});
           });
+          historialFisiologico.forEach((f:any) => {
+            const key = String(f.fecha).split('T')[0];
+            if(!eventosPorDia[key]) eventosPorDia[key]=[];
+            // Solo añadir como item separado si ese día no tiene ya un workout (para no duplicar visualmente)
+            const yaHayWorkout = eventosPorDia[key].some((item:any)=>item.esWorkout);
+            if(!yaHayWorkout) eventosPorDia[key].push({...f, esFisiologia:true});
+          });
 
           const getIconosDia = (items:any[]) => {
             if(!items||items.length===0) return [];
@@ -205,6 +212,9 @@ export default function Historia() {
               if(item.esEvento){
                 const map:Record<string,string> = {race:"🏆",pr:"⚡",injury:"🩹",illness:"🤒",travel:"✈️",rest:"😴",objective_change:"🎯",block_start:"🚀",block_end:"✅"};
                 return map[item.type]||"📌";
+              }
+              if(item.esFisiologia){
+                return "🌙";
               }
               const tipo = (item.tipo||"").toLowerCase();
               if(tipo.includes("carrera")) return "🏃";
@@ -294,7 +304,7 @@ export default function Historia() {
                   )}
                 </div>
               )}
-              {diaSeleccionado.items.map((item:any,i:number)=>(
+              {diaSeleccionado.items.filter((item:any)=>!item.esFisiologia).map((item:any,i:number)=>(
                 <div key={i} style={{background:C.bg,borderRadius:12,padding:14,marginBottom:10}}>
                   {item.esEvento ? (
                     <>

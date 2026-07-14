@@ -52,6 +52,7 @@ export default function Historia() {
   const [diaSeleccionado, setDiaSeleccionado] = useState<any>(null);
   const [decisionDia, setDecisionDia] = useState<any>(null);
   const [logros, setLogros] = useState<any[]>([]);
+  const [menuEventoAbierto, setMenuEventoAbierto] = useState<string|null>(null);
   const [historialFisiologico, setHistorialFisiologico] = useState<any[]>([]);
 
   const cargarDatos = async(cod:string)=>{
@@ -340,6 +341,7 @@ export default function Historia() {
               </div>
               {evs.map((ev:any,i:number)=>{
                 const config = TIPO_CONFIG[ev.type] || {emoji:"📌",label:ev.type,color:C.accent};
+                const esManual = ev.data?.origen === "manual" || (!ev.data?.notas && ev.type !== "pr" && ev.type !== "block_end" && ev.type !== "development_complete");
                 return (
                   <div key={i} style={{display:"flex",gap:14,marginBottom:12,position:"relative"}}>
                     <div style={{display:"flex",flexDirection:"column",alignItems:"center"}}>
@@ -351,14 +353,34 @@ export default function Historia() {
                     <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",flex:1,marginBottom:i<evs.length-1?8:0}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
                         <span style={{color:C.ink,fontSize:14,fontWeight:600}}>{ev.title}</span>
-                        <span style={{color:C.muted,fontSize:11,flexShrink:0,marginLeft:8}}>
-                          {new Date(ev.date).toLocaleDateString("es-ES",{day:"numeric",month:"short"})}
-                        </span>
+                        <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0,marginLeft:8}}>
+                          <span style={{color:C.muted,fontSize:11}}>
+                            {new Date(ev.date).toLocaleDateString("es-ES",{day:"numeric",month:"short"})}
+                          </span>
+                          {ev.id && (
+                            <div style={{position:"relative"}}>
+                              <button onClick={()=>setMenuEventoAbierto(menuEventoAbierto===ev.id?null:ev.id)} style={{background:"none",border:"none",color:C.muted,fontSize:14,cursor:"pointer",padding:"2px 4px"}}>⋮</button>
+                              {menuEventoAbierto===ev.id && (
+                                <div style={{position:"absolute",right:0,top:"100%",background:"#1C1C1C",border:`1px solid ${C.border}`,borderRadius:8,padding:4,zIndex:50,minWidth:110,boxShadow:"0 4px 20px rgba(0,0,0,0.4)"}}>
+                                  <button onClick={async()=>{
+                                    if(!confirm(`¿Eliminar "${ev.title}"?`)) return;
+                                    await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"eliminar_evento",codigo,datos:{eventoId:ev.id}})});
+                                    setMenuEventoAbierto(null);
+                                    cargarDatos(codigo);
+                                  }} style={{width:"100%",background:"none",border:"none",color:"#ff4444",fontSize:12,padding:"6px 10px",cursor:"pointer",textAlign:"left",borderRadius:6}}>
+                                    🗑️ Eliminar
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <span style={{background:`${config.color}20`,color:config.color,fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:100}}>
                         {config.label}
                       </span>
                       {ev.data?.notas&&<p style={{color:C.muted,fontSize:12,marginTop:6}}>{ev.data.notas}</p>}
+                      {!esManual && <p style={{color:C.muted,fontSize:10,marginTop:6,fontStyle:"italic"}}>Generado automáticamente por Forge</p>}
                     </div>
                   </div>
                 );

@@ -239,7 +239,13 @@ export default function Plan() {
                 <h3 style={{color:C.ink,fontSize:16,fontWeight:700}}>{sesionDetalle.titulo}</h3>
                 <button onClick={()=>setSesionDetalle(null)} style={{background:"none",border:"none",color:C.muted,fontSize:20,cursor:"pointer"}}>✕</button>
               </div>
-{sesionDetalle.por_que && (
+{sesionDetalle.debilidad_relacionada && (
+                <div style={{background:"#4CAF5015",border:"1px solid #4CAF5040",borderRadius:10,padding:"8px 14px",marginBottom:12,display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:14}}>🎯</span>
+                  <p style={{color:"#4CAF50",fontSize:12,fontWeight:600}}>Trabaja: {sesionDetalle.debilidad_relacionada}</p>
+                </div>
+              )}
+              {sesionDetalle.por_que && (
                 <div style={{background:"#FF6B0015",border:"1px solid #FF6B0040",borderRadius:10,padding:"10px 14px",marginBottom:16}}>
                   <p style={{color:C.accent,fontSize:11,fontWeight:700,marginBottom:4}}>📌 Por qué esta sesión</p>
                   <p style={{color:"#D4D0CB",fontSize:13,lineHeight:1.6}}>{sesionDetalle.por_que}</p>

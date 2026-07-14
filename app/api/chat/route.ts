@@ -953,6 +953,15 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     return NextResponse.json({ ok: true });
   }
 
+  if (action === "editar_evento") {
+    const { eventoId, date, type, title, notas } = datos;
+    await supabase.from("athlete_events").update({
+      date, type, title,
+      data: { notas: notas || "" }
+    }).eq("id", eventoId).eq("user_codigo", codigo);
+    return NextResponse.json({ ok: true });
+  }
+
   if (action === "obtener_historia") {
     const { data: eventos } = await supabase
       .from("athlete_events")

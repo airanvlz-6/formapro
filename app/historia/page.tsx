@@ -357,7 +357,7 @@ export default function Historia() {
                           <span style={{color:C.muted,fontSize:11}}>
                             {new Date(ev.date).toLocaleDateString("es-ES",{day:"numeric",month:"short"})}
                           </span>
-                          {ev.id && (
+                          {ev.id && esManual && (
                             <div style={{position:"relative"}}>
                               <button onClick={()=>setMenuEventoAbierto(menuEventoAbierto===ev.id?null:ev.id)} style={{background:"none",border:"none",color:C.muted,fontSize:14,cursor:"pointer",padding:"2px 4px"}}>⋮</button>
                               {menuEventoAbierto===ev.id && (

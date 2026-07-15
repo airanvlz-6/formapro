@@ -1424,9 +1424,9 @@ ${testStr}`}]});
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:24}} onClick={()=>setBetaFounderInfo(null)}>
           <div style={{background:"#1A1A1A",borderRadius:24,padding:"32px 28px",maxWidth:400,width:"100%",textAlign:"center",border:"2px solid #FF6B00"}} onClick={e=>e.stopPropagation()}>
             <div style={{fontSize:48,marginBottom:12}}>🎉</div>
-            <p style={{color:"#F0EDE8",fontSize:20,fontWeight:700,marginBottom:8}}>¡Bienvenido!</p>
-            <p style={{color:"#FF6B00",fontSize:16,fontWeight:700,marginBottom:6}}>Eres el Atleta Fundador #{betaFounderInfo.numero} de {betaFounderInfo.maxSlots}</p>
-            <p style={{color:"#9A9590",fontSize:12,lineHeight:1.5,marginBottom:16}}>Eres uno de los {betaFounderInfo.maxSlots} atletas que ayudarán a construir el futuro de Forge.</p>
+            <p style={{color:"#F0EDE8",fontSize:20,fontWeight:700,marginBottom:8}}>¡Enhorabuena!</p>
+            <p style={{color:"#9A9590",fontSize:14,lineHeight:1.6,marginBottom:6}}>Ya formas parte de los {betaFounderInfo.maxSlots} Atletas Fundadores de Forge.</p>
+            <p style={{color:"#FF6B00",fontSize:18,fontWeight:800,marginBottom:16}}>Tu plaza es la #{betaFounderInfo.numero}</p>
             <p style={{color:"#9A9590",fontSize:14,lineHeight:1.6,marginBottom:16}}>Como agradecimiento por confiar en Forge desde sus inicios, disfrutarás de <strong>Premium gratuito durante {betaFounderInfo.meses} meses</strong>.</p>
             <div style={{background:"#FF6B0015",borderRadius:12,padding:"12px 14px",marginBottom:24,textAlign:"left"}}>
               <p style={{color:"#FF6B00",fontSize:12,fontWeight:700,marginBottom:6}}>🏅 Tu condición de Atleta Fundador</p>

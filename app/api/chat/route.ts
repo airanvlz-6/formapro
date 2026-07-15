@@ -745,6 +745,18 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
 
   if (action === "guardar_plan_semana") {
     const { plan } = datos;
+    // CORRECCIÓN DE RAÍZ: recalcular week_start correcto en el servidor, ignorando el que envió el modelo si es incorrecto
+    const ahoraServ = new Date();
+    const hoyServStr = ahoraServ.toLocaleDateString('en-CA', {timeZone: 'Europe/Madrid'});
+    const hoyServFecha = new Date(hoyServStr + 'T12:00:00');
+    const diaSemanaServ = hoyServFecha.getDay() || 7;
+    const lunesServ = new Date(hoyServFecha);
+    lunesServ.setDate(hoyServFecha.getDate() - diaSemanaServ + 1);
+    const weekStartCorrecto = lunesServ.toISOString().split('T')[0];
+    if (plan.week_start !== weekStartCorrecto) {
+      console.log(`CORRIGIENDO week_start: modelo envió ${plan.week_start}, correcto es ${weekStartCorrecto}`);
+      plan.week_start = weekStartCorrecto;
+    }
     // Preservar sesiones ya completadas si existen
     const { data: planExistente } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", plan.week_start).single();
     if (planExistente?.sessions) {

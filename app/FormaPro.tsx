@@ -594,7 +594,7 @@ export default function Forge() {
         setEspLabel(espLabelLoaded);
         setRespuestas(u.perfil);
         setMarcas(u.marcas||[]);setHistorial(u.historial||[]);
-        const historialLimpio=(u.historial?.slice(-6)||[]).map((m:any)=>typeof m.content==="string"?{...m,content:m.content.replace(/\n\n\[Fecha actual del sistema:.*?\]/,"")}:m);
+        const historialLimpio=(u.historial?.slice(-6)||[]).map((m:any)=>typeof m.content==="string"?{...m,content:m.content.replace(/\n\n\[Fecha actual del sistema:.*?\]/,"").replace(/\n\n\[Contexto temporal del mensaje:.*?\]/,"")}:m);
         setMensajes(historialLimpio);
         const consultasUsadas=Math.floor((u.historial?.length||0)/2);
         setMsgCount(consultasUsadas);setPantalla("chat");
@@ -831,7 +831,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     setEspLabel(espLabelLoaded);
     setRespuestas(u.perfil);
     setMarcas(u.marcas||[]);setHistorial(u.historial||[]);
-    const historialLimpio2=(u.historial?.slice(-6)||[]).map((m:any)=>typeof m.content==="string"?{...m,content:m.content.replace(/\n\n\[Fecha actual del sistema:.*?\]/,"")}:m);
+    const historialLimpio2=(u.historial?.slice(-6)||[]).map((m:any)=>typeof m.content==="string"?{...m,content:m.content.replace(/\n\n\[Fecha actual del sistema:.*?\]/,"").replace(/\n\n\[Contexto temporal del mensaje:.*?\]/,"")}:m);
     setMensajes(historialLimpio2);
     const consultasUsadas=Math.floor((u.historial?.length||0)/2);
     setMsgCount(consultasUsadas);setPantalla("chat");
@@ -1038,7 +1038,11 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
   const enviar=async(texto:string=input)=>{
     if((!texto.trim()&&imagenesAdjuntas.length===0)||cargando||bloqueado) return;
     const fechaHoyStr=new Date().toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"Europe/Madrid"});
-    const textoEnvio=(texto.trim()||"Analiza esta imagen o archivo y dame feedback en base a mi programacion.")+`\n\n[Fecha actual del sistema: ${fechaHoyStr}]`;
+    const textoLower=texto.toLowerCase();
+    const esMensajeSueno=/métricas de sueño|dormí|puntuación de sueño|durante la noche|sueño profundo|sueño rem/i.test(textoLower) && !/entren|wod|sesion realizada|serie|repeticion/i.test(textoLower);
+    const esMensajeEntreno=/entren|wod|sesion realizada|completé|terminé/i.test(textoLower);
+    const contextoTemporal=esMensajeSueno?"SUEÑO_NOCTURNO — este dato es de la noche ANTERIOR a hoy, ocurrió ANTES de cualquier entreno de hoy. NUNCA lo relaciones como consecuencia de un entreno de hoy mismo.":esMensajeEntreno?"REPORTE_ENTRENO — el atleta acaba de completar una sesión de hoy.":"CONSULTA_GENERAL";
+    const textoEnvio=(texto.trim()||"Analiza esta imagen o archivo y dame feedback en base a mi programacion.")+`\n\n[Fecha actual del sistema: ${fechaHoyStr}]\n[Contexto temporal del mensaje: ${contextoTemporal}]`;
     let contenidoUsuario:any=textoEnvio;
     if(imagenesAdjuntas.length>0){
       const contenido:any[]=imagenesAdjuntas.map(img=>{
@@ -1053,7 +1057,7 @@ await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:esp
       contenidoUsuario=contenido;
     }
     const nuevoHist=[...historial,{role:"user",content:contenidoUsuario}];
-    const textoSinFecha=textoEnvio.replace(/\n\n\[Fecha actual del sistema:.*?\]/,"");
+    const textoSinFecha=textoEnvio.replace(/\n\n\[Fecha actual del sistema:.*?\]/,"").replace(/\n\n\[Contexto temporal del mensaje:.*?\]/,"");
     const mensajeDisplay=imagenesAdjuntas.length>0?`📎 ${imagenesAdjuntas.length} archivo${imagenesAdjuntas.length>1?"s":""} adjunto${imagenesAdjuntas.length>1?"s":""}\n${textoSinFecha}`:textoSinFecha;
     setMensajes(prev=>[...prev,{role:"user",content:mensajeDisplay}]);
     setInput("");setImagenAdjunta(null);setImagenPreview(null);setImagenesAdjuntas([]);

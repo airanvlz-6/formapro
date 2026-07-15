@@ -141,7 +141,7 @@ export default function MiAtleta() {
           ) : (
             <p style={{ color: C.muted, fontSize: 13, marginBottom: 14 }}>Aún no has realizado tu evaluación inicial.</p>
           )}
-          <a href={`/app?codigo=${codigo}`} style={{ display: "block", background: C.accent, color: "#fff", borderRadius: 10, padding: "10px", fontSize: 13, fontWeight: 600, textDecoration: "none", textAlign: "center" }}>
+          <a href={`/app?codigo=${codigo}&test=1`} style={{ display: "block", background: C.accent, color: "#fff", borderRadius: 10, padding: "10px", fontSize: 13, fontWeight: 600, textDecoration: "none", textAlign: "center" }}>
             {test ? "Actualizar evaluación" : "Realizar evaluación"}
           </a>
         </div>

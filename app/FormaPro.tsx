@@ -597,7 +597,9 @@ export default function Forge() {
         const historialLimpio=(u.historial?.slice(-6)||[]).map((m:any)=>typeof m.content==="string"?{...m,content:m.content.replace(/\n*\[Fecha actual del sistema:[\s\S]*?\]/,"").replace(/\n*\[Contexto temporal del mensaje:[\s\S]*?\]/,"").trim()}:m);
         setMensajes(historialLimpio);
         const consultasUsadas=Math.floor((u.historial?.length||0)/2);
-        setMsgCount(consultasUsadas);setPantalla("chat");
+        setMsgCount(consultasUsadas);
+        const irATest=params.get("test")==="1";
+        setPantalla(irATest?"test":"chat");
         setEmailGuardado(!!u.email);
         setEsPremium(!!(u as any).premium);
         setEsAdmin(!!(u as any).admin);

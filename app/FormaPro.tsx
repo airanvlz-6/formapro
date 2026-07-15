@@ -594,7 +594,7 @@ export default function Forge() {
         setEspLabel(espLabelLoaded);
         setRespuestas(u.perfil);
         setMarcas(u.marcas||[]);setHistorial(u.historial||[]);
-        const historialLimpio=(u.historial?.slice(-6)||[]).map((m:any)=>typeof m.content==="string"?{...m,content:m.content.replace(/\n\n\[Fecha actual del sistema:.*?\]/,"").replace(/\n\n\[Contexto temporal del mensaje:.*?\]/,"")}:m);
+        const historialLimpio=(u.historial?.slice(-6)||[]).map((m:any)=>typeof m.content==="string"?{...m,content:m.content.replace(/\n*\[Fecha actual del sistema:[\s\S]*?\]/,"").replace(/\n*\[Contexto temporal del mensaje:[\s\S]*?\]/,"").trim()}:m);
         setMensajes(historialLimpio);
         const consultasUsadas=Math.floor((u.historial?.length||0)/2);
         setMsgCount(consultasUsadas);setPantalla("chat");
@@ -831,7 +831,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     setEspLabel(espLabelLoaded);
     setRespuestas(u.perfil);
     setMarcas(u.marcas||[]);setHistorial(u.historial||[]);
-    const historialLimpio2=(u.historial?.slice(-6)||[]).map((m:any)=>typeof m.content==="string"?{...m,content:m.content.replace(/\n\n\[Fecha actual del sistema:.*?\]/,"").replace(/\n\n\[Contexto temporal del mensaje:.*?\]/,"")}:m);
+    const historialLimpio2=(u.historial?.slice(-6)||[]).map((m:any)=>typeof m.content==="string"?{...m,content:m.content.replace(/\n*\[Fecha actual del sistema:[\s\S]*?\]/,"").replace(/\n*\[Contexto temporal del mensaje:[\s\S]*?\]/,"").trim()}:m);
     setMensajes(historialLimpio2);
     const consultasUsadas=Math.floor((u.historial?.length||0)/2);
     setMsgCount(consultasUsadas);setPantalla("chat");
@@ -1057,7 +1057,7 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
       contenidoUsuario=contenido;
     }
     const nuevoHist=[...historial,{role:"user",content:contenidoUsuario}];
-    const textoSinFecha=textoEnvio.replace(/\n\n\[Fecha actual del sistema:.*?\]/,"").replace(/\n\n\[Contexto temporal del mensaje:.*?\]/,"");
+    const textoSinFecha=textoEnvio.replace(/\n*\[Fecha actual del sistema:[\s\S]*?\]/,"").replace(/\n*\[Contexto temporal del mensaje:[\s\S]*?\]/,"").trim();
     const mensajeDisplay=imagenesAdjuntas.length>0?`📎 ${imagenesAdjuntas.length} archivo${imagenesAdjuntas.length>1?"s":""} adjunto${imagenesAdjuntas.length>1?"s":""}\n${textoSinFecha}`:textoSinFecha;
     setMensajes(prev=>[...prev,{role:"user",content:mensajeDisplay}]);
     setInput("");setImagenAdjunta(null);setImagenPreview(null);setImagenesAdjuntas([]);

@@ -655,6 +655,7 @@ const [blockOutcomes,setBlockOutcomes]=useState<any[]>([]);
 const [estadoCanonico,setEstadoCanonico]=useState<any>(null);
 const [mostrarCodigoReal,setMostrarCodigoReal]=useState(false);
 const [betaFounderInfo,setBetaFounderInfo]=useState<{numero:number;maxSlots:number;meses:number}|null>(null);
+const [estadoFounder,setEstadoFounder]=useState<any>(null);
 const [historialMarcas,setHistorialMarcas]=useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
 const [analisisBloques,setAnalisisBloques]=useState<any[]>([]);
 const [athleteState,setAthleteState]=useState<Record<string,any>>({});
@@ -1746,7 +1747,14 @@ ${testStr}`}]});
                     <a href="https://t.me/forgeapp_es" target="_blank" rel="noopener noreferrer" onClick={()=>setMostrarMenu(false)} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8,textDecoration:"none"}}>
                       🧪 Forge Labs
                     </a>
-                    <button onClick={()=>{setMostrarPerfil(!mostrarPerfil);setMostrarMarcas(false);setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
+                    <button onClick={async()=>{
+                      const nuevoEstado=!mostrarPerfil;
+                      setMostrarPerfil(nuevoEstado);setMostrarMarcas(false);setMostrarMenu(false);
+                      if(nuevoEstado&&codigoUsuario){
+                        const res=await apiCall({action:"obtener_estado_founder",codigo:codigoUsuario});
+                        if(res) setEstadoFounder(res);
+                      }
+                    }} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
                       ⚙️ Ajustes
                     </button>
                   </div>
@@ -1864,6 +1872,22 @@ ${testStr}`}]});
         <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:10,maxHeight:400,overflowY:"auto"}}>
           <div style={{fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:16,color:C.ink,marginBottom:16}}>Ajustes de cuenta</div>
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
+
+            {estadoFounder?.esFounder&&(
+              <div style={{background:"#FF6B0015",border:`1px solid ${accentColor}40`,borderRadius:12,padding:"14px"}}>
+                <p style={{color:accentColor,fontSize:12,fontWeight:700,marginBottom:8}}>🏅 Estado Fundador #{estadoFounder.betaNumber}</p>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,marginBottom:4}}>
+                  <span>Actividad este mes</span>
+                  <span>{estadoFounder.actividadTotal}/{estadoFounder.objetivoActividad}</span>
+                </div>
+                <div style={{height:6,background:C.border,borderRadius:100,marginBottom:8}}>
+                  <div style={{height:6,borderRadius:100,background:estadoFounder.renovacionAsegurada?"#4CAF50":accentColor,width:`${Math.min(100,(estadoFounder.actividadTotal/estadoFounder.objetivoActividad)*100)}%`,transition:"width 0.6s ease"}}/>
+                </div>
+                <p style={{color:estadoFounder.renovacionAsegurada?"#4CAF50":C.muted,fontSize:11,fontWeight:600}}>
+                  {estadoFounder.renovacionAsegurada?"✓ Renovación asegurada":`Quedan ${estadoFounder.diasRestantes} días para la revisión`}
+                </p>
+              </div>
+            )}
 
             <div style={{background:C.bg,borderRadius:12,padding:"10px 14px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>

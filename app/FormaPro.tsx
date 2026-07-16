@@ -1436,10 +1436,11 @@ ${testStr}`}]});
             <p style={{color:"#F0EDE8",fontSize:20,fontWeight:700,marginBottom:8}}>¡Enhorabuena!</p>
             <p style={{color:"#9A9590",fontSize:14,lineHeight:1.6,marginBottom:6}}>Ya formas parte de los {betaFounderInfo.maxSlots} Atletas Fundadores de Forge.</p>
             <p style={{color:"#FF6B00",fontSize:18,fontWeight:800,marginBottom:16}}>Tu plaza es la #{betaFounderInfo.numero}</p>
-            <p style={{color:"#9A9590",fontSize:14,lineHeight:1.6,marginBottom:16}}>Como agradecimiento por confiar en Forge desde sus inicios, disfrutarás de <strong>Premium gratuito durante {betaFounderInfo.meses} meses</strong>.</p>
+            <p style={{color:"#9A9590",fontSize:14,lineHeight:1.6,marginBottom:16}}>Como agradecimiento por confiar en Forge desde sus inicios, disfrutarás de <strong>Premium gratuito durante 3 meses</strong>.</p>
             <div style={{background:"#FF6B0015",borderRadius:12,padding:"12px 14px",marginBottom:16,textAlign:"left"}}>
               <p style={{color:"#FF6B00",fontSize:12,fontWeight:700,marginBottom:6}}>🏅 Tu condición de Atleta Fundador</p>
-              <p style={{color:"#9A9590",fontSize:12,lineHeight:1.6}}>Tu insignia de <strong>Atleta Fundador</strong> será tuya para siempre. Para mantener el acceso Premium durante la beta solo te pedimos utilizar Forge como tu entrenador habitual, manteniendo una actividad regular (como referencia, unas 6 sesiones cada 30 días).</p>
+              <p style={{color:"#9A9590",fontSize:12,lineHeight:1.6,marginBottom:8}}>Tu insignia de <strong>Atleta Fundador</strong> será tuya para siempre. Cada mes revisamos tu actividad (como referencia, unas 6 sesiones o uso regular del coach) para mantener el Premium activo.</p>
+              <p style={{color:"#9A9590",fontSize:12,lineHeight:1.6}}>Si completas los 3 meses con actividad, desbloqueas un <strong style={{color:"#FF6B00"}}>precio especial de por vida: 9,99€/mes</strong> (frente a los 14€/mes estándar).</p>
             </div>
             <div style={{background:"#1E5C3A20",border:"1px solid #1E5C3A60",borderRadius:12,padding:"14px",marginBottom:24,textAlign:"left"}}>
               <p style={{color:"#4CAF50",fontSize:12,fontWeight:700,marginBottom:6}}>🧪 Tu siguiente paso</p>

@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/revisar-founders",
+      "schedule": "0 6 * * *"
+    }
+  ]
+}

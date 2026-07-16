@@ -674,6 +674,35 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     return NextResponse.json({ ok: true });
   }
 
+  if (action === "obtener_estado_founder") {
+    const { data: usuario } = await supabase.from("usuarios").select("is_beta_founder,beta_number,premium_until,workout_history,historial_fisiologico,historial").eq("codigo", codigo).single();
+    if (!usuario?.is_beta_founder) return NextResponse.json({ esFounder: false });
+
+    const ahora = new Date();
+    const hace30dias = new Date(ahora.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const workoutHistory = usuario.workout_history || [];
+    const historialFisio = usuario.historial_fisiologico || [];
+    const historialChat = usuario.historial || [];
+
+    const sesionesRecientes = workoutHistory.filter((w: any) => new Date(w.fecha) >= hace30dias).length;
+    const registrosFisioRecientes = historialFisio.filter((f: any) => new Date(f.fecha) >= hace30dias).length;
+    const mensajesUsuarioRecientes = historialChat.filter((m: any) => m.role === "user").length;
+    const actividadTotal = sesionesRecientes + registrosFisioRecientes + Math.min(mensajesUsuarioRecientes, 10);
+
+    const premiumHasta = usuario.premium_until ? new Date(usuario.premium_until) : null;
+    const diasRestantes = premiumHasta ? Math.ceil((premiumHasta.getTime() - ahora.getTime()) / (24*60*60*1000)) : 0;
+
+    return NextResponse.json({
+      esFounder: true,
+      betaNumber: usuario.beta_number,
+      sesiones: sesionesRecientes,
+      actividadTotal: Math.min(actividadTotal, 10),
+      objetivoActividad: 10,
+      renovacionAsegurada: sesionesRecientes >= 6 || actividadTotal >= 10,
+      diasRestantes
+    });
+  }
+
   if (action === "verificar_renovacion_beta") {
     const { data: usuario } = await supabase.from("usuarios").select("is_beta_founder,premium_until,ultima_renovacion_beta,workout_history,historial_fisiologico,historial").eq("codigo", codigo).single();
     if (!usuario?.is_beta_founder) return NextResponse.json({ renovado: false, motivo: "no_es_founder" });

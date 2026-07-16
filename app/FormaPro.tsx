@@ -1288,6 +1288,7 @@ ${testStr}`}]});
         const betaRes=await apiCall({action:"verificar_activar_beta",codigo:codigoUsuario});
         if(betaRes?.activado){
           setBetaFounderInfo({numero:betaRes.beta_number,maxSlots:betaRes.max_slots,meses:betaRes.meses_premium});
+          setEsPremium(true);
         }
       }
     }catch{setResultadoTest({nivel:"Intermedio",puntuaciones:{resistencia:50,fuerza:50,tecnica:50,recuperacion:50,mental:50},fortalezas:["Constancia"],debilidades:["Datos insuficientes"],resumen:"No se pudo generar el informe completo."});}

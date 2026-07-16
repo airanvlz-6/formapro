@@ -27,7 +27,22 @@ async function generarEstadoCanonico(supabase: any, codigo: string) {
   const sesionManana = plan?.sessions?.find((s: any) => normalizar(s.dia) === normalizar(diaSemanaManana));
 
   const histFisio = usuario?.historial_fisiologico || [];
-  const ultimoRegistroFisio = [...histFisio].sort((a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())[0];
+  const ultimosRegistrosFisio = [...histFisio].sort((a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()).slice(0, 3);
+  const ultimoRegistroFisio = ultimosRegistrosFisio[0];
+
+  let tendenciaFisio = null;
+  if (ultimosRegistrosFisio.length >= 2) {
+    const suenoValores = ultimosRegistrosFisio.filter((r: any) => r.sueno).map((r: any) => r.sueno).reverse();
+    const hrvValores = ultimosRegistrosFisio.filter((r: any) => r.hrv).map((r: any) => r.hrv).reverse();
+    const esAscendente = (arr: number[]) => arr.length >= 2 && arr.every((v, i) => i === 0 || v >= arr[i - 1]);
+    const esDescendente = (arr: number[]) => arr.length >= 2 && arr.every((v, i) => i === 0 || v <= arr[i - 1]);
+    tendenciaFisio = {
+      ultimas_noches_sueno: suenoValores,
+      ultimas_noches_hrv: hrvValores,
+      sueno_tendencia: esAscendente(suenoValores) ? "ascendente" : esDescendente(suenoValores) ? "descendente" : "estable",
+      hrv_tendencia: esAscendente(hrvValores) ? "ascendente" : esDescendente(hrvValores) ? "descendente" : "estable"
+    };
+  }
 
   const estado = {
     fecha_hoy: hoyStr,
@@ -48,6 +63,7 @@ async function generarEstadoCanonico(supabase: any, codigo: string) {
       por_que: sesionManana.por_que
     } : null,
     ultimo_registro_fisiologico: ultimoRegistroFisio || null,
+    tendencia_fisiologica: tendenciaFisio,
     objetivo_principal: usuario?.objetivo_principal || null,
     debilidades_activas: (usuario?.athlete_development || []).filter((d: any) => d.estado !== "resuelta").map((d: any) => d.nombre_visible || d.indicador),
     generado_at: ahora.toISOString()

@@ -704,8 +704,13 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
   }
 
   if (action === "verificar_renovacion_beta") {
-    const { data: usuario } = await supabase.from("usuarios").select("is_beta_founder,premium_until,ultima_renovacion_beta,workout_history,historial_fisiologico,historial").eq("codigo", codigo).single();
+    const { data: usuario } = await supabase.from("usuarios").select("is_beta_founder,premium_until,ultima_renovacion_beta,workout_history,historial_fisiologico,historial,renovaciones_beta_completadas,precio_especial_founder").eq("codigo", codigo).single();
     if (!usuario?.is_beta_founder) return NextResponse.json({ renovado: false, motivo: "no_es_founder" });
+
+    // Si ya completó las 3 renovaciones, tiene precio especial de por vida — no se revisa más actividad para el Premium beta
+    if ((usuario.renovaciones_beta_completadas || 0) >= 3) {
+      return NextResponse.json({ renovado: false, motivo: "ciclo_completado", precio_especial: true });
+    }
 
     const ahora = new Date();
     const premiumHasta = usuario.premium_until ? new Date(usuario.premium_until) : null;
@@ -721,7 +726,6 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
       return NextResponse.json({ renovado: false, motivo: "aun_no_toca", dias_restantes: Math.ceil((premiumHasta.getTime() - ahora.getTime()) / (24*60*60*1000)) });
     }
 
-    // Actividad significativa: combinación de sesiones, registros fisiológicos y conversación con el coach
     const hace30dias = new Date(ahora.getTime() - 30 * 24 * 60 * 60 * 1000);
     const workoutHistory = usuario.workout_history || [];
     const historialFisio = usuario.historial_fisiologico || [];
@@ -729,23 +733,27 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
 
     const sesionesRecientes = workoutHistory.filter((w: any) => new Date(w.fecha) >= hace30dias).length;
     const registrosFisioRecientes = historialFisio.filter((f: any) => new Date(f.fecha) >= hace30dias).length;
-    // Contar mensajes del usuario en el historial de chat como proxy de interacciones (aproximado, ya que solo guardamos los últimos)
     const mensajesUsuarioRecientes = historialChat.filter((m: any) => m.role === "user").length;
 
     const actividadTotal = sesionesRecientes + registrosFisioRecientes + Math.min(mensajesUsuarioRecientes, 10);
-    // Activo si: 6+ sesiones, O 10+ acciones combinadas relevantes (sesiones + fisiología + conversación, con tope en conversación)
     const activo = sesionesRecientes >= 6 || actividadTotal >= 10;
 
     if (activo) {
+      const nuevasRenovaciones = (usuario.renovaciones_beta_completadas || 0) + 1;
       const base = premiumHasta && premiumHasta.getTime() > ahora.getTime() ? new Date(premiumHasta) : new Date(ahora);
       base.setMonth(base.getMonth() + 1);
+      const alcanzaPrecioEspecial = nuevasRenovaciones >= 3;
       await supabase.from("usuarios").update({
         premium_until: base.toISOString(),
-        ultima_renovacion_beta: ahora.toISOString()
+        ultima_renovacion_beta: ahora.toISOString(),
+        renovaciones_beta_completadas: nuevasRenovaciones,
+        precio_especial_founder: alcanzaPrecioEspecial
       }).eq("codigo", codigo);
-      return NextResponse.json({ renovado: true, nueva_fecha: base.toISOString(), sesiones: sesionesRecientes, actividad_total: actividadTotal });
+      return NextResponse.json({ renovado: true, nueva_fecha: base.toISOString(), sesiones: sesionesRecientes, actividad_total: actividadTotal, renovaciones_completadas: nuevasRenovaciones, precio_especial_desbloqueado: alcanzaPrecioEspecial });
     } else {
-      return NextResponse.json({ renovado: false, motivo: "actividad_insuficiente", sesiones: sesionesRecientes, actividad_total: actividadTotal, dias_restantes: premiumHasta ? Math.ceil((premiumHasta.getTime() - ahora.getTime()) / (24*60*60*1000)) : 0 });
+      // No cumplió actividad: pierde el estatus de Beta Founder (Premium) inmediatamente
+      await supabase.from("usuarios").update({ premium: false }).eq("codigo", codigo);
+      return NextResponse.json({ renovado: false, motivo: "actividad_insuficiente_perdio_premium", sesiones: sesionesRecientes, actividad_total: actividadTotal });
     }
   }
 

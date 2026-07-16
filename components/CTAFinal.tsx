@@ -31,6 +31,24 @@ export default function CTAFinal() {
           <p className="mt-5 text-zinc-400">Si entrenas para mejorar, Forge está diseñado para ti.</p>
         </motion.div>
 
+        {/* Forge Labs */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="mb-20 rounded-3xl border border-green-500/20 bg-green-500/[0.03] p-8 backdrop-blur-xl"
+        >
+          <span className="text-2xl">🧪</span>
+          <h3 className="mt-3 text-lg font-semibold text-white">¿Quieres ayudarnos a construir Forge?</h3>
+          <p className="mx-auto mt-3 max-w-md text-sm text-zinc-400">
+            Únete a Forge Labs, el club privado de Atletas Fundadores. Habla directamente con el creador, comparte tus ideas, reporta errores e influye en las próximas funciones.
+          </p>
+          <a href="https://t.me/forgeapp_es" target="_blank" rel="noopener noreferrer" className="mt-5 inline-block rounded-full bg-green-600 px-6 py-3 text-sm font-semibold text-white transition hover:scale-105 hover:bg-green-500">
+            Unirme a Forge Labs
+          </a>
+        </motion.div>
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}

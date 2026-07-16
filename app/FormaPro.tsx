@@ -1742,6 +1742,9 @@ ${testStr}`}]});
                     <button onClick={()=>{setMostrarEquipos(!mostrarEquipos);setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
                       👥 Forge Duo
                     </button>
+                    <a href="https://t.me/forgeapp_es" target="_blank" rel="noopener noreferrer" onClick={()=>setMostrarMenu(false)} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8,textDecoration:"none"}}>
+                      🧪 Forge Labs
+                    </a>
                     <button onClick={()=>{setMostrarPerfil(!mostrarPerfil);setMostrarMarcas(false);setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
                       ⚙️ Ajustes
                     </button>

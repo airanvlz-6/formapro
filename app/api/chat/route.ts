@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { render } from "@react-email/render";
+import { sendEmail } from "@/lib/email/sendEmail";
+import FounderEmail from "@/lib/email/templates/FounderEmail";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -783,6 +786,19 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
       joined_beta_at: ahora.toISOString(),
       beta_number: nuevoNumero
     }).eq("codigo", codigo);
+
+    // Enviar email de bienvenida Fundador (no bloqueante — si falla, no rompe la activación)
+    const { data: usuarioEmail } = await supabase.from("usuarios").select("email").eq("codigo", codigo).single();
+    if (usuarioEmail?.email) {
+      const html = await render(FounderEmail({ numero: nuevoNumero, maxSlots: beta.max_slots, meses: beta.meses_premium, codigoUsuario: codigo }));
+      sendEmail({
+        template: "founder_welcome",
+        to: usuarioEmail.email,
+        subject: `¡Enhorabuena! Eres el Atleta Fundador #${nuevoNumero} de Forge`,
+        html,
+        usuarioCodigo: codigo
+      }).catch(err => console.error("Error enviando email founder:", err));
+    }
 
     return NextResponse.json({ activado: true, beta_number: nuevoNumero, max_slots: beta.max_slots, meses_premium: beta.meses_premium });
   }

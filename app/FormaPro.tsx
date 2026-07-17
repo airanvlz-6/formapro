@@ -956,8 +956,14 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
           await callback(data);
         }catch{}
       }
-      // Eliminar el tag completo del texto, dejando lo que venga antes y después
-      const tagEndBracket=texto.indexOf("]",endIdx>=0?endIdx:tagStart);
+      // Eliminar el tag completo: el JSON termina en endIdx (posicion del '}' de cierre), el ']' del tag debe estar justo despues (permitiendo espacios)
+      let tagEndBracket=-1;
+      if(endIdx>=0){
+        let i=endIdx+1;
+        while(i<texto.length&&texto[i]===' ') i++;
+        if(texto[i]===']') tagEndBracket=i;
+      }
+      if(tagEndBracket<0) tagEndBracket=texto.indexOf("]",tagStart); // fallback al comportamiento anterior si algo falla
       const antes=texto.substring(0,tagStart).trim();
       const despues=tagEndBracket>=0?texto.substring(tagEndBracket+1).trim():"";
       texto=(antes+(despues?" "+despues:"")).trim();

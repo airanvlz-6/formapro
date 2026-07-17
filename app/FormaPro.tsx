@@ -361,6 +361,7 @@ OBJETIVO PRINCIPAL DEL ATLETA:
 - Tipo: ${objetivo.tipo||"rendimiento"}
 - Semanas restantes: ${objetivo.fecha?Math.max(0,Math.round((new Date(objetivo.fecha).getTime()-new Date().getTime())/(7*24*60*60*1000))):"desconocido"}
 IMPORTANTE: Toda la planificación debe orientarse hacia este objetivo. Si la fecha se acerca, ajusta la periodización (taper, realización). Si hay mucho tiempo, prioriza base y acumulación. Menciona el objetivo cuando sea relevante para motivar al atleta.`:""}
+DISPOSITIVO DE MEDICIÓN DEL ATLETA — ADAPTA TU COMUNICACIÓN: Consulta el campo "dispositivo" en el perfil del atleta. Si indica que NO tiene reloj GPS ni pulsómetro (solo RPE/sensación), NUNCA prescribas zonas de FC en ppm ni ritmos exactos por km como referencia principal — usa RPE (escala 1-10 o descripción de sensación: "conversacional", "moderado", "duro") como referencia principal. Si tiene pulsómetro básico o reloj GPS, sí puedes usar zonas de FC/ritmo con confianza. Independientemente del dispositivo, cuando el atleta reporte una sesión, si mencionas que puede compartir capturas de pantalla de su reloj/app para un análisis más preciso, hazlo de forma natural y solo si aporta valor real, no en cada mensaje.
 PRINCIPIOS Y METODOLOGÍA CIENTÍFICA:
 - Periodización por bloques: acumulación (volumen alto, intensidad baja) → intensificación (volumen medio, intensidad alta) → realización (volumen bajo, intensidad máxima) → deload
 - Sobrecarga progresiva: aumenta volumen o intensidad cada semana dentro del bloque, nunca ambos a la vez

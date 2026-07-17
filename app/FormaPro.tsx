@@ -1022,7 +1022,9 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
 
   const enviarSilencioso=async(texto:string)=>{
     if(!texto.trim()||cargando) return;
-    const nuevoHist=[...historial,{role:"user",content:texto.trim()}];
+    const fechaHoyStrSilencioso=new Date().toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"Europe/Madrid"});
+    const textoConFecha=texto.trim()+`\n\n[Fecha actual del sistema: ${fechaHoyStrSilencioso}]\n[Contexto temporal del mensaje: CONSULTA_GENERAL — este mensaje puede incluir ajustes de planificación, respeta siempre la fecha de HOY indicada arriba y en el ESTADO CANÓNICO, el plan generado corresponde a la semana ACTUAL que contiene HOY, nunca la próxima semana.]`;
+    const nuevoHist=[...historial,{role:"user",content:textoConFecha}];
     setCargando(true);setMsgCount(c=>c+1);
     const catObj=CATEGORIAS.find((c:Categoria)=>c.id===categoria)!;
     const esp=espKey||categoria!;
@@ -1032,10 +1034,10 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
       if(data.aborted) return;
       const respTextRaw=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.");
       const respText=await procesarTags(respTextRaw);
-      const hist=[...nuevoHist,{role:"assistant",content:respText}];
+      const histLimpio=[...historial,{role:"user",content:texto.trim()},{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);
-      setHistorial(hist);
-      if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:hist}});
+      setHistorial(histLimpio);
+      if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histLimpio}});
     }catch{}
     finally{setCargando(false);}
   };

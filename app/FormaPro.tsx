@@ -932,7 +932,12 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
     finally{setGenerando(false);setTimeout(()=>inputRef.current?.focus(),300);}
   };
 
-  const validarCoherenciaTemporal=(texto:string):string=>{
+  // FORGE VALIDATOR — capa de verificación determinista entre el LLM y el usuario.
+// El backend conoce la verdad (fecha, plan, estado); esta función corrige cualquier
+// afirmación del modelo que contradiga esa verdad, sin depender de que el LLM razone bien.
+// Empieza validando coherencia de día de la semana; diseñado para crecer con más reglas
+// (fisiología, entrenamiento del día, causalidad prohibida, bloque/ciclo) sin cambiar su forma.
+const forgeValidator=(texto:string):string=>{
     if(!estadoCanonico) return texto;
     const diaHoyReal=estadoCanonico.dia_semana_hoy;
     const diaMananaReal=estadoCanonico.dia_semana_manana;
@@ -1069,7 +1074,7 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
       const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal,planSemanal,debilidades,blockOutcomes,estadoCanonico)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:nuevoHist},true);
       if(data.aborted) return;
       const respTextRaw=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.");
-      const respTextValidado=validarCoherenciaTemporal(respTextRaw);
+      const respTextValidado=forgeValidator(respTextRaw);
       const respText=await procesarTags(respTextValidado);
       const histLimpio=[...historial,{role:"user",content:texto.trim()},{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);
@@ -1126,7 +1131,7 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
 const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal,planSemanal,debilidades,blockOutcomes,estadoCanonico)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:nuevoHist},true);
       if(data.aborted) return;
       const respTextRaw2Original=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.");
-      const respTextRaw2=validarCoherenciaTemporal(respTextRaw2Original);
+      const respTextRaw2=forgeValidator(respTextRaw2Original);
       
       // Extraer STATE_UPDATE primero (formato distinto, con cierre [/STATE_UPDATE])
       const stateMatch=respTextRaw2.match(/\[STATE_UPDATE\]([\s\S]*?)\[\/STATE_UPDATE\]/);

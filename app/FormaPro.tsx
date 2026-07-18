@@ -1125,7 +1125,8 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
       const mensajesContexto=esProgramacion?-6:-4;
 const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal,planSemanal,debilidades,blockOutcomes,estadoCanonico)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:nuevoHist},true);
       if(data.aborted) return;
-      const respTextRaw2=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.");
+      const respTextRaw2Original=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.");
+      const respTextRaw2=validarCoherenciaTemporal(respTextRaw2Original);
       
       // Extraer STATE_UPDATE primero (formato distinto, con cierre [/STATE_UPDATE])
       const stateMatch=respTextRaw2.match(/\[STATE_UPDATE\]([\s\S]*?)\[\/STATE_UPDATE\]/);

@@ -932,6 +932,30 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
     finally{setGenerando(false);setTimeout(()=>inputRef.current?.focus(),300);}
   };
 
+  const validarCoherenciaTemporal=(texto:string):string=>{
+    if(!estadoCanonico) return texto;
+    const diaHoyReal=estadoCanonico.dia_semana_hoy;
+    const diaMananaReal=estadoCanonico.dia_semana_manana;
+    const DIAS_SEMANA=["lunes","martes","miércoles","miercoles","jueves","viernes","sábado","sabado","domingo"];
+    let textoCorregido=texto;
+
+    // Buscar patrones "Hoy [dia]" o "hoy es [dia]" y corregir si no coincide con el dia real
+    DIAS_SEMANA.forEach(dia=>{
+      const normalizarDia=(d:string)=>d.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+      if(normalizarDia(dia)!==normalizarDia(diaHoyReal)){
+        // Reemplaza "Hoy [dia incorrecto]" por "Hoy [dia correcto]", preservando mayusculas iniciales
+        const regexHoy=new RegExp(`(hoy\\s+)${dia}\\b`,"gi");
+        textoCorregido=textoCorregido.replace(regexHoy,(match,p1)=>p1+diaHoyReal);
+      }
+      if(normalizarDia(dia)!==normalizarDia(diaMananaReal)){
+        const regexManana=new RegExp(`(mañana\\s+)${dia}\\b`,"gi");
+        textoCorregido=textoCorregido.replace(regexManana,(match,p1)=>p1+diaMananaReal);
+      }
+    });
+
+    return textoCorregido;
+  };
+
   const procesarTags=async(textoOriginal:string):Promise<string>=>{
     let texto=textoOriginal.replace(/\[STATE_UPDATE\][\s\S]*?\[\/STATE_UPDATE\]/g,"").trim();
 
@@ -1045,7 +1069,8 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
       const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal,planSemanal,debilidades,blockOutcomes,estadoCanonico)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:nuevoHist},true);
       if(data.aborted) return;
       const respTextRaw=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.");
-      const respText=await procesarTags(respTextRaw);
+      const respTextValidado=validarCoherenciaTemporal(respTextRaw);
+      const respText=await procesarTags(respTextValidado);
       const histLimpio=[...historial,{role:"user",content:texto.trim()},{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);
       setHistorial(histLimpio);

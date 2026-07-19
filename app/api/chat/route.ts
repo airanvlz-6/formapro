@@ -1134,9 +1134,9 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     return NextResponse.json({ total, premium, activos, inactivos, enLimite, nuevosHoy, nuevosSemana, ultimos, unaVisita, recurrentes, activados, tasaActivacion });
   }
 
-  // Llamada normal a la IA con timeout de 55 segundos
+  // Llamada normal a la IA con timeout de 120 segundos (aumentado por prompts largos con Estado Canonico + plan semanal completo)
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 55000);
+  const timeoutId = setTimeout(() => controller.abort(), 120000);
   let response;
   try {
     response = await fetch("https://api.anthropic.com/v1/messages", {

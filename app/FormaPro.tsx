@@ -961,7 +961,7 @@ const forgeValidator=(texto:string):string=>{
     return textoCorregido;
   };
 
-  const procesarTags=async(textoOriginal:string):Promise<string>=>{
+  const procesarTags=async(textoOriginal:string, esMensajeDeSueno:boolean=false):Promise<string>=>{
     let texto=textoOriginal.replace(/\[STATE_UPDATE\][\s\S]*?\[\/STATE_UPDATE\]/g,"").trim();
 
     const extraerJSON=(str:string, tagStart:number, prefixLen:number):{json:string|null,endIdx:number}=>{
@@ -1040,10 +1040,11 @@ const forgeValidator=(texto:string):string=>{
     });
 
     // SESION es especial: no se guarda automáticamente, se muestra el banner
+    // FORGE VALIDATOR: si el mensaje del usuario fue clasificado como sueño, NUNCA mostrar el banner de sesión aunque el modelo lo haya generado por error
     const sesionStart=texto.indexOf("[SESION:");
     if(sesionStart>=0){
       const {json,endIdx}=extraerJSON(texto,sesionStart,8);
-      if(json){
+      if(json && !esMensajeDeSueno){
         try{
           const sesionParsed=JSON.parse(json);
           const fechaSesionCheck=new Date(sesionParsed.fecha);
@@ -1076,13 +1077,14 @@ const forgeValidator=(texto:string):string=>{
     setCargando(true);setMsgCount(c=>c+1);
     const catObj=CATEGORIAS.find((c:Categoria)=>c.id===categoria)!;
     const esp=espKey||categoria!;
+    const esSuenoSilencioso=/métricas de sueño|dormí|puntuación de sueño|durante la noche|sueño profundo|sueño rem/i.test(texto.toLowerCase()) && !/entren|wod|sesion realizada|serie|repeticion/i.test(texto.toLowerCase());
     try{
       const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[archivo]"}...`).join("\n");
       const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal,planSemanal,debilidades,blockOutcomes,estadoCanonico)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:nuevoHist},true);
       if(data.aborted) return;
       const respTextRaw=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.");
       const respTextValidado=forgeValidator(respTextRaw);
-      const respText=await procesarTags(respTextValidado);
+      const respText=await procesarTags(respTextValidado, esSuenoSilencioso);
       const histLimpio=[...historial,{role:"user",content:texto.trim()},{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);
       setHistorial(histLimpio);
@@ -1151,7 +1153,7 @@ const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:build
         }catch{}
       }
 
-      const respText=await procesarTags(respTextRaw2);
+      const respText=await procesarTags(respTextRaw2, esSuenoParaResumen);
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);
       const histFinal=hist.length>=20?hist.slice(-10):hist;

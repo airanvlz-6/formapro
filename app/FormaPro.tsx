@@ -967,9 +967,16 @@ const forgeValidator=(texto:string):string=>{
     const extraerJSON=(str:string, tagStart:number, prefixLen:number):{json:string|null,endIdx:number}=>{
       const jsonStart=tagStart+prefixLen;
       let depth=0, endIdx=-1;
+      let dentroString=false;
+      let escapando=false;
       for(let i=jsonStart;i<str.length;i++){
-        if(str[i]==='{') depth++;
-        else if(str[i]==='}'){ depth--; if(depth===0){ endIdx=i; break; } }
+        const ch=str[i];
+        if(escapando){ escapando=false; continue; }
+        if(ch==='\\'){ escapando=true; continue; }
+        if(ch==='"'){ dentroString=!dentroString; continue; }
+        if(dentroString) continue; // ignorar llaves/corchetes que son solo texto dentro de un string
+        if(ch==='{') depth++;
+        else if(ch==='}'){ depth--; if(depth===0){ endIdx=i; break; } }
       }
       if(endIdx<0) return {json:null,endIdx:-1};
       return {json:str.substring(jsonStart,endIdx+1),endIdx};

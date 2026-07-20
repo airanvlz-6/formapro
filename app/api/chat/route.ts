@@ -751,6 +751,34 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
     }
   }
 
+  if (action === "verificar_persistencia_plan") {
+    // FORGE PERSISTENCE VALIDATOR — verifica que el plan realmente se guardo con estructura correcta
+    const { weekStart } = datos;
+    const { data: planGuardado } = await supabase.from("weekly_plan").select("week_start,sessions").eq("user_codigo", codigo).eq("week_start", weekStart).single();
+
+    if (!planGuardado) {
+      return NextResponse.json({ valido: false, motivo: "no_existe_plan" });
+    }
+    const sessions = planGuardado.sessions || [];
+    if (sessions.length !== 7) {
+      return NextResponse.json({ valido: false, motivo: "faltan_dias", dias_encontrados: sessions.length });
+    }
+    const diasEsperados = ["lunes","martes","miercoles","miércoles","jueves","viernes","sabado","sábado","domingo"];
+    const normalizar = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+    const diasUnicos = new Set(sessions.map((s: any) => normalizar(s.dia)));
+    const diasBase = ["lunes","martes","miercoles","jueves","viernes","sabado","domingo"];
+    const faltantes = diasBase.filter(d => !diasUnicos.has(d));
+    if (faltantes.length > 0) {
+      return NextResponse.json({ valido: false, motivo: "dias_faltantes", faltantes });
+    }
+    const sinDescripcion = sessions.filter((s: any) => !s.descripcion || s.descripcion.trim().length < 10);
+    if (sinDescripcion.length > 0) {
+      return NextResponse.json({ valido: false, motivo: "sesiones_incompletas", cantidad: sinDescripcion.length });
+    }
+
+    return NextResponse.json({ valido: true });
+  }
+
   if (action === "obtener_estado_canonico") {
     const estado = await generarEstadoCanonico(supabase, codigo);
     return NextResponse.json({ estado });

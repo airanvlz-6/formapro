@@ -646,6 +646,40 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     return NextResponse.json({ sesion: sesionDia || null });
   }
 
+  if (action === "analizar_bloque_semana") {
+    // FORGE ORCHESTRATOR — Paso 1: Block Analyzer. Solo decide estructura, no genera entrenamientos.
+    const estado = await generarEstadoCanonico(supabase, codigo);
+    const { data: usuarioAnalyzer } = await supabase.from("usuarios").select("ciclo_actual,athlete_development,distribucion_semanal").eq("codigo", codigo).single();
+
+    const debilidadesActivas = (usuarioAnalyzer?.athlete_development || []).filter((d: any) => d.estado !== "resuelta");
+    const debilidadPrioritaria = debilidadesActivas.sort((a: any, b: any) => (b.prioridad === "alta" ? 1 : 0) - (a.prioridad === "alta" ? 1 : 0))[0];
+
+    const analyzerPrompt = `Eres un analizador de bloques de entrenamiento. Tu ÚNICA tarea es devolver un JSON pequeño describiendo la estructura de la PRÓXIMA semana. NO generes entrenamientos ni sesiones detalladas.
+
+CONTEXTO:
+Ciclo actual: ${JSON.stringify(estado.ciclo)}
+Debilidad prioritaria activa: ${debilidadPrioritaria ? debilidadPrioritaria.nombre_visible : "ninguna"}
+Disponibilidad: ${usuarioAnalyzer?.distribucion_semanal || "no especificada"}
+
+Responde SOLO con este JSON, sin texto adicional ni markdown:
+{"tipo_semana":"acumulacion|intensificacion|realizacion|deload","objetivo":"frase corta del objetivo de esta semana","volumen_relativo":0.0-1.0,"intensidad_relativa":0.0-1.0,"debilidad_prioritaria":"nombre o null","dias_entreno_sugeridos":número}`;
+
+    try {
+      const analyzerRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 300, messages: [{ role: "user", content: analyzerPrompt }] }),
+      });
+      const analyzerData = await analyzerRes.json();
+      const analyzerTexto = analyzerData.content?.map((b: any) => b.text || "").join("") || "{}";
+      const analyzerClean = analyzerTexto.replace(/```json|```/g, "").trim();
+      const analisisBloque = JSON.parse(analyzerClean);
+      return NextResponse.json({ ok: true, analisis: analisisBloque });
+    } catch (err: any) {
+      return NextResponse.json({ error: "Error en Block Analyzer: " + err.message }, { status: 500 });
+    }
+  }
+
   if (action === "obtener_estado_canonico") {
     const estado = await generarEstadoCanonico(supabase, codigo);
     return NextResponse.json({ estado });

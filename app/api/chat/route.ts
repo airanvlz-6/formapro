@@ -680,6 +680,41 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
     }
   }
 
+  if (action === "planificar_semana") {
+    // FORGE ORCHESTRATOR — Paso 2: Week Planner. Recibe el analisis del Block Analyzer y decide QUE TIPO de sesion va cada dia, sin detalle.
+    const { analisis: analisisRecibido } = datos;
+    const { data: usuarioPlanner } = await supabase.from("usuarios").select("distribucion_semanal,especialidad,categoria").eq("codigo", codigo).single();
+
+    const plannerPrompt = `Eres un planificador semanal. Tu ÚNICA tarea es decidir QUÉ TIPO de sesión va cada día de la semana (lunes a domingo). NO escribas el contenido detallado de cada sesión, solo el tipo y un título breve.
+
+ANÁLISIS DEL BLOQUE:
+${JSON.stringify(analisisRecibido)}
+
+DISPONIBILIDAD DEL ATLETA:
+${usuarioPlanner?.distribucion_semanal || "sin restricciones especificadas, asume disponibilidad flexible"}
+
+ESPECIALIDAD: ${usuarioPlanner?.especialidad || usuarioPlanner?.categoria}
+
+Responde SOLO con este JSON, sin texto adicional ni markdown, con los 7 días (lunes a domingo):
+{"sessions":[{"dia":"lunes","tipo":"carrera|box|fuerza|descanso|otro","titulo_breve":"3-5 palabras describiendo la sesion"},{"dia":"martes",...},...]}
+Respeta la disponibilidad indicada. Si un día no tiene sesión, usa tipo "descanso".`;
+
+    try {
+      const plannerRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 500, messages: [{ role: "user", content: plannerPrompt }] }),
+      });
+      const plannerData = await plannerRes.json();
+      const plannerTexto = plannerData.content?.map((b: any) => b.text || "").join("") || "{}";
+      const plannerClean = plannerTexto.replace(/```json|```/g, "").trim();
+      const estructuraSemana = JSON.parse(plannerClean);
+      return NextResponse.json({ ok: true, estructura: estructuraSemana });
+    } catch (err: any) {
+      return NextResponse.json({ error: "Error en Week Planner: " + err.message }, { status: 500 });
+    }
+  }
+
   if (action === "obtener_estado_canonico") {
     const estado = await generarEstadoCanonico(supabase, codigo);
     return NextResponse.json({ estado });

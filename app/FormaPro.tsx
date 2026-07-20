@@ -659,6 +659,8 @@ const [planSemanal,setPlanSemanal]=useState<any>(null);
 const [debilidades,setDebilidades]=useState<{ejercicio:string;descripcion:string;fecha:string}[]>([]);
 const [blockOutcomes,setBlockOutcomes]=useState<any[]>([]);
 const [estadoCanonico,setEstadoCanonico]=useState<any>(null);
+const [mostrarBotonNuevaSemana,setMostrarBotonNuevaSemana]=useState(false);
+const [generandoSemana,setGenerandoSemana]=useState(false);
 const [mostrarCodigoReal,setMostrarCodigoReal]=useState(false);
 const [betaFounderInfo,setBetaFounderInfo]=useState<{numero:number;maxSlots:number;meses:number}|null>(null);
 const [estadoFounder,setEstadoFounder]=useState<any>(null);
@@ -702,6 +704,60 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
   const cargarEstadoCanonico=async(cod:string)=>{
     const res=await apiCall({action:"obtener_estado_canonico",codigo:cod});
     if(res?.estado) setEstadoCanonico(res.estado);
+  };
+
+  // FORGE ORCHESTRATOR — genera la semana completa en 3 pasos pequeños en vez de una llamada gigante
+  const orquestarGeneracionSemana=async():Promise<any>=>{
+    if(!codigoUsuario) return null;
+
+    // Paso 1: Block Analyzer
+    const analyzerRes=await apiCall({action:"analizar_bloque_semana",codigo:codigoUsuario});
+    if(!analyzerRes?.ok) return null;
+    const analisis=analyzerRes.analisis;
+
+    // Paso 2: Week Planner
+    const plannerRes=await apiCall({action:"planificar_semana",codigo:codigoUsuario,datos:{analisis}});
+    if(!plannerRes?.ok) return null;
+    const estructura=plannerRes.estructura;
+
+    // Paso 3: Session Builder, una llamada por dia
+    const sesionesCompletas:any[]=[];
+    for(const diaEstructura of estructura.sessions||[]){
+      if(diaEstructura.tipo==="descanso"){
+        sesionesCompletas.push({dia:diaEstructura.dia,tipo:"descanso",titulo:"Descanso",por_que:"Recuperación programada",descripcion:"Día de descanso — prioriza sueño, hidratación y nutrición."});
+        continue;
+      }
+      const builderRes=await apiCall({action:"construir_sesion_dia",codigo:codigoUsuario,datos:{
+        dia:diaEstructura.dia,
+        tipo:diaEstructura.tipo,
+        titulo_breve:diaEstructura.titulo_breve,
+        analisis,
+        debilidad_relacionada:analisis.debilidad_prioritaria
+      }});
+      if(builderRes?.ok) sesionesCompletas.push(builderRes.sesion);
+    }
+
+    // Calcular week_start correcto (el servidor tambien lo corrige, pero lo calculamos aqui para el objeto)
+    const hoy=new Date();
+    const diaSem=hoy.getDay()||7;
+    const lunes=new Date(hoy);
+    lunes.setDate(hoy.getDate()-diaSem+1);
+    const weekStart=lunes.toISOString().split('T')[0];
+
+    const planCompleto={
+      week_start:weekStart,
+      week_number:(cicloActual.semana||0)+1,
+      total_weeks_block:cicloActual.totalSemanas||null,
+      block_name:analisis.tipo_semana,
+      week_objective:analisis.objetivo,
+      sessions:sesionesCompletas
+    };
+
+    // Guardar el plan completo
+    await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planCompleto}});
+    cargarPlanSemanal(codigoUsuario);
+
+    return planCompleto;
   };
 
   const cargarEquipos=async(cod:string)=>{
@@ -1007,6 +1063,7 @@ const forgeValidator=(texto:string):string=>{
 
     await procesarTag("[RESUMEN_SEMANA:",16,async(data)=>{
       await apiCall({action:"guardar_resumen_semana",codigo:codigoUsuario,datos:data});
+      setMostrarBotonNuevaSemana(true);
     });
     await procesarTag("[BLOCK_OUTCOME:",15,async(data)=>{
       await apiCall({action:"guardar_block_outcome",codigo:codigoUsuario,datos:data});
@@ -2156,7 +2213,25 @@ ${testStr}`}]});
                 </div>
               </div>
             ))}
-            {cargando&&(
+            {mostrarBotonNuevaSemana&&!generandoSemana&&(
+              <div style={{display:"flex",justifyContent:"center",marginTop:4}}>
+                <button onClick={async()=>{
+                  setGenerandoSemana(true);
+                  setMostrarBotonNuevaSemana(false);
+                  setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu próxima semana paso a paso — analizando bloque, distribuyendo días y diseñando cada sesión..."}]);
+                  const plan=await orquestarGeneracionSemana();
+                  if(plan){
+                    setMensajes(prev=>[...prev,{role:"assistant",content:`✅ **Semana generada y guardada.**\n\nBloque: ${plan.block_name} — ${plan.week_objective}\n\nRevisa el detalle completo en **Mi Plan**. ¿Alguna duda?`}]);
+                  } else {
+                    setMensajes(prev=>[...prev,{role:"assistant",content:"⚠️ Hubo un problema generando la semana. Inténtalo de nuevo o dímelo directamente en el chat."}]);
+                  }
+                  setGenerandoSemana(false);
+                }} style={{background:accentColor,color:"#fff",border:"none",borderRadius:100,padding:"12px 28px",fontSize:14,fontWeight:600,cursor:"pointer"}}>
+                  🚀 Generar mi próxima semana
+                </button>
+              </div>
+            )}
+            {(cargando||generandoSemana)&&(
               <div style={{display:"flex",gap:12}}>
                 <div style={{width:36,height:36,borderRadius:12,background:cat.colorLight,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{cat.emoji}</div>
                 <div style={{background:C.bg,borderRadius:"4px 16px 16px 16px",padding:"14px 18px",display:"flex",gap:5,alignItems:"center"}}>

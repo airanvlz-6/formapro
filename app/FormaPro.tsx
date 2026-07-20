@@ -1,5 +1,6 @@
 'use client';
 import { useState, useRef, useEffect } from "react";
+import { aplicarTodasLasReglas } from "@/lib/validators/scientificRules";
 
 const C = {
   bg: "#0D0D0D", card: "#1A1A1A", ink: "#F0EDE8", muted: "#9A9590",
@@ -737,24 +738,19 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
       if(builderRes?.ok) sesionesCompletas.push(builderRes.sesion);
     }
 
-    // FORGE SCIENTIFIC VALIDATOR — reglas deterministas de metodologia, corrige sesiones antes de guardar
+    // FORGE SCIENTIFIC VALIDATOR — biblioteca de 10 reglas deterministas, corrige sesiones antes de guardar
     const esDeload=analisis.tipo_semana==="deload";
     const hayLesionLumbarActiva=/lumbar/i.test(memoriaCoach.lesiones||"") || debilidades.some(d=>/lumbar/i.test(d.descripcion||""));
 
-    sesionesCompletas.forEach((s:any,idx:number)=>{
-      // Regla 1: en semana deload, ninguna sesion deberia mencionar "aumentar volumen" o cargas maximas
-      if(esDeload && /aumenta(r|mos)?\s+(el\s+)?volumen|carga\s+maxima|nuevo\s+RM/i.test(s.descripcion||"")){
-        s.descripcion=(s.descripcion||"")+"\n\n⚠️ NOTA VALIDADOR: Esta semana es DELOAD — reduce intensidad/volumen un 30-40% respecto a la semana anterior, no la aumentes.";
-      }
-      // Regla 2: si hay lesion lumbar activa, evitar peso muerto pesado sin aviso
-      if(hayLesionLumbarActiva && /peso\s+muerto|deadlift/i.test(s.descripcion||"") && !/RDL|rumano|conservador|ligero|tecnica/i.test(s.descripcion||"")){
-        s.descripcion=(s.descripcion||"")+"\n\n⚠️ NOTA VALIDADOR: Hay una molestia lumbar activa registrada — prioriza variantes conservadoras (RDL, técnica ligera) sobre carga máxima en este movimiento.";
-      }
-      // Regla 3: evitar alta intensidad en dias consecutivos
-      const diaAnterior=sesionesCompletas[idx-1];
-      if(diaAnterior && /Z4|Z5|RPE\s*[89]|AMRAP|WOD/i.test(s.descripcion||"") && /Z4|Z5|RPE\s*[89]|AMRAP|WOD/i.test(diaAnterior.descripcion||"")){
-        s.descripcion=(s.descripcion||"")+"\n\n⚠️ NOTA VALIDADOR: El día anterior también fue de alta intensidad — vigila señales de fatiga acumulada y ajusta si es necesario.";
-      }
+    aplicarTodasLasReglas({
+      sesiones:sesionesCompletas,
+      analisis,
+      estructura,
+      esDeload,
+      hayLesionLumbarActiva,
+      estadoFisio:estadoFisiologico,
+      debilidadesActivas:debilidades,
+      historialFisiologico
     });
 
     // Calcular week_start correcto (el servidor tambien lo corrige, pero lo calculamos aqui para el objeto)

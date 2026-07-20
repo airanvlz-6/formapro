@@ -755,8 +755,20 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
 
     // Guardar el plan completo
     await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planCompleto}});
-    cargarPlanSemanal(codigoUsuario);
 
+    // FORGE PERSISTENCE VALIDATOR — verificar que realmente se guardo correctamente antes de confirmar exito
+    const validacion=await apiCall({action:"verificar_persistencia_plan",codigo:codigoUsuario,datos:{weekStart:planCompleto.week_start}});
+    if(!validacion?.valido){
+      // Reintento automatico una vez si la validacion falla
+      await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planCompleto}});
+      const segundaValidacion=await apiCall({action:"verificar_persistencia_plan",codigo:codigoUsuario,datos:{weekStart:planCompleto.week_start}});
+      if(!segundaValidacion?.valido){
+        cargarPlanSemanal(codigoUsuario);
+        return null; // Fallo confirmado tras reintento, se notifica error al usuario
+      }
+    }
+
+    cargarPlanSemanal(codigoUsuario);
     return planCompleto;
   };
 

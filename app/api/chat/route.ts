@@ -715,6 +715,42 @@ Respeta la disponibilidad indicada. Si un día no tiene sesión, usa tipo "desca
     }
   }
 
+  if (action === "construir_sesion_dia") {
+    // FORGE ORCHESTRATOR — Paso 3: Session Builder. Genera el contenido COMPLETO de UN solo dia.
+    const { dia, tipo, titulo_breve, analisis: analisisSesion, debilidad_relacionada } = datos;
+    const { data: usuarioBuilder } = await supabase.from("usuarios").select("especialidad,categoria,perfil,marcas_especificas,athlete_development").eq("codigo", codigo).single();
+
+    const debilidadInfo = (usuarioBuilder?.athlete_development || []).find((d: any) => d.nombre_visible === debilidad_relacionada);
+
+    const builderPrompt = `Eres un constructor de sesiones de entrenamiento. Tu ÚNICA tarea es escribir el contenido COMPLETO Y DETALLADO de UNA sola sesión de entrenamiento.
+
+DÍA: ${dia}
+TIPO DE SESIÓN: ${tipo}
+IDEA GENERAL: ${titulo_breve}
+CONTEXTO DEL BLOQUE: ${JSON.stringify(analisisSesion)}
+ESPECIALIDAD: ${usuarioBuilder?.especialidad || usuarioBuilder?.categoria}
+MARCAS DEL ATLETA: ${JSON.stringify(usuarioBuilder?.marcas_especificas || {})}
+${debilidadInfo ? `DEBILIDAD A TRABAJAR HOY: ${debilidadInfo.nombre_visible} — ${debilidadInfo.diagnostico}` : ""}
+
+Responde SOLO con este JSON, sin texto adicional ni markdown:
+{"titulo":"título breve y claro","por_que":"UNA frase explicando el propósito de esta sesión concreta","descripcion":"SESIÓN COMPLETA: Calentamiento: X. Bloque principal: Y (series, reps, intensidad, zonas FC si aplica). Vuelta a la calma: Z. Notas técnicas: W.","debilidad_relacionada":${debilidadInfo ? `"${debilidadInfo.nombre_visible}"` : "null"}}`;
+
+    try {
+      const builderRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 600, messages: [{ role: "user", content: builderPrompt }] }),
+      });
+      const builderData = await builderRes.json();
+      const builderTexto = builderData.content?.map((b: any) => b.text || "").join("") || "{}";
+      const builderClean = builderTexto.replace(/```json|```/g, "").trim();
+      const sesionCompleta = JSON.parse(builderClean);
+      return NextResponse.json({ ok: true, sesion: { dia, tipo, ...sesionCompleta } });
+    } catch (err: any) {
+      return NextResponse.json({ error: "Error en Session Builder: " + err.message }, { status: 500 });
+    }
+  }
+
   if (action === "obtener_estado_canonico") {
     const estado = await generarEstadoCanonico(supabase, codigo);
     return NextResponse.json({ estado });

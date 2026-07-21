@@ -1015,6 +1015,30 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
     return NextResponse.json({ ok: true });
   }
 
+  if (action === "registrar_aprendizaje") {
+    const { texto, puntos, categoria } = datos;
+    const { data: usuarioActual } = await supabase.from("usuarios").select("aprendizajes_atleta").eq("codigo", codigo).single();
+    const aprendizajesActuales = usuarioActual?.aprendizajes_atleta || [];
+
+    // Evitar duplicados: mismo texto ya registrado
+    const yaExiste = aprendizajesActuales.some((a: any) => a.texto?.toLowerCase().trim() === (texto || "").toLowerCase().trim());
+    if (yaExiste) {
+      return NextResponse.json({ ok: true, duplicado: true });
+    }
+
+    const nuevoAprendizaje = {
+      texto,
+      puntos: puntos || 2,
+      categoria: categoria || "general",
+      fecha: new Date().toISOString()
+    };
+    const actualizados = [...aprendizajesActuales, nuevoAprendizaje];
+    await supabase.from("usuarios").update({ aprendizajes_atleta: actualizados }).eq("codigo", codigo);
+
+    const totalPuntos = 40 + actualizados.reduce((sum: number, a: any) => sum + (a.puntos || 0), 0);
+    return NextResponse.json({ ok: true, nuevoAprendizaje, porcentajeTotal: Math.min(totalPuntos, 100) });
+  }
+
   if (action === "registrar_debilidad_dev") {
     const { area, indicador, nombre_visible, diagnostico, estado, progreso, confianza, prioridad, evidencias, plan_accion, beneficio_esperado } = datos;
     const { data: usuarioActual } = await supabase.from("usuarios").select("athlete_development").eq("codigo", codigo).single();

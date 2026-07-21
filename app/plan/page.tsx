@@ -162,9 +162,9 @@ export default function Plan() {
                 </div>
               )}
               {plan.week_objective && (
-                <div style={{background:C.bg,borderRadius:10,padding:"10px 12px",marginBottom:14}}>
-                  <p style={{color:C.muted,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:1,marginBottom:2}}>Objetivo de la semana</p>
-                  <p style={{color:C.ink,fontSize:13}}>{plan.week_objective}</p>
+                <div style={{background:`${C.accent}12`,border:`1px solid ${C.accent}30`,borderRadius:10,padding:"12px 14px",marginBottom:14}}>
+                  <p style={{color:C.accent,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>🎯 Objetivo del bloque</p>
+                  <p style={{color:C.ink,fontSize:13,lineHeight:1.6}}>Esta semana Forge priorizará {plan.week_objective.charAt(0).toLowerCase()+plan.week_objective.slice(1)}</p>
                 </div>
               )}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>

@@ -102,6 +102,10 @@ Mensaje: "${mensaje}"`;
   }
 }
 
+// Parametros configurables del Event Aggregator — ajustar aqui, sin tocar la logica interna
+const EVENT_CLOSE_WINDOW_MS = 15 * 60 * 1000; // tiempo de inactividad tras el cual un evento se considera cerrado definitivamente
+const EVENT_CORRECTION_WINDOW_MS = 3 * 60 * 1000; // ventana tras la extraccion durante la cual se permiten correcciones
+
 async function forgeEventAggregator(supabase: any, apiKey: string, codigo: string, mensajeActual: string): Promise<{ eventType: string; mensajesDelEvento: string[]; esCorreccion: boolean }> {
   const tipoDetectado = await clasificarMensajeEnBackend(apiKey, mensajeActual);
 
@@ -109,8 +113,8 @@ async function forgeEventAggregator(supabase: any, apiKey: string, codigo: strin
 
   const ahora = new Date();
   const msDesdeUltimaActividad = eventoActivo?.updated_at ? ahora.getTime() - new Date(eventoActivo.updated_at).getTime() : Infinity;
-  const eventoCerradoDefinitivo = msDesdeUltimaActividad > 15 * 60 * 1000; // 15 min: cierre definitivo
-  const dentroVentanaCorreccion = eventoActivo?.status === "extracted" && msDesdeUltimaActividad <= 3 * 60 * 1000; // 3 min: ventana de correccion tras extraccion
+  const eventoCerradoDefinitivo = msDesdeUltimaActividad > EVENT_CLOSE_WINDOW_MS;
+  const dentroVentanaCorreccion = eventoActivo?.status === "extracted" && msDesdeUltimaActividad <= EVENT_CORRECTION_WINDOW_MS;
 
   let mensajesEvento: string[];
   let esCorreccion = false;

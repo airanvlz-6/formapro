@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { render } from "@react-email/render";
+import { validateExtraction } from "@/lib/validators/extractionRules";
 import { sendEmail } from "@/lib/email/sendEmail";
 import FounderEmail from "@/lib/email/templates/FounderEmail";
 
@@ -337,7 +338,7 @@ ${ultimos}`;
         // Extraer solo el JSON válido
         const jsonMatch = clean.match(/\{[\s\S]*\}/);
         if (!jsonMatch) throw new Error("No JSON found");
-        const extracted = JSON.parse(jsonMatch[0]);
+        let extracted = JSON.parse(jsonMatch[0]);
         
 
         const updates: any = {};
@@ -349,17 +350,8 @@ ${ultimos}`;
           updates.ciclo_actual = { ...cicloActual, ...Object.fromEntries(Object.entries(extracted.ciclo).filter(([,v]) => v !== null)) };
         }
 
-// FORGE EXTRACTION VALIDATOR — verificacion deterministica: si el texto original no contiene
-        // palabras de sueño/HRV explicitamente, forzamos estado_fisiologico a null sin importar lo que
-        // haya generado el extractor. El LLM no puede inventar datos que no esten en el texto fuente.
-        const textoParaValidar = soloUsuario.toLowerCase();
-        const contieneMencionSueno = /sueño|dormí|hrv|vfc|frecuencia.*(noche|nocturna)|puntuaci[oó]n.*sueño/i.test(textoParaValidar);
-        if (extracted.estado_fisiologico && !contieneMencionSueno) {
-          extracted.estado_fisiologico = { hrv: null, sueno: null, rhr: null, fatiga_aguda: null, tendencia: null };
-        }
-        console.log("DEBUG EXTRACTOR — texto analizado:", soloUsuario);
-        console.log("DEBUG EXTRACTOR — contiene mencion sueno:", contieneMencionSueno);
-        console.log("DEBUG EXTRACTOR — estado_fisiologico FINAL (tras validador):", JSON.stringify(extracted.estado_fisiologico));
+// FORGE EXTRACTION VALIDATOR — el LLM propone, el backend verifica antes de persistir.
+        extracted = validateExtraction(extracted, soloUsuario);
         if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).some(v => v !== null && typeof v !== 'object')) {
           const estadoActual = usuarioData?.estado_fisiologico || {};
           const historialActual = usuarioData?.historial_fisiologico || [];

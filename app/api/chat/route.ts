@@ -243,7 +243,10 @@ export async function POST(req: NextRequest) {
           return "";
         };
         const ultimoMensajeUsuario = datos.historial.filter((m:any) => m.role === "user").slice(-1)[0];
-        const soloUsuario = ultimoMensajeUsuario ? extraerTextoContenido(ultimoMensajeUsuario.content) : "";
+        const textoUltimoMensaje = ultimoMensajeUsuario ? extraerTextoContenido(ultimoMensajeUsuario.content) : "";
+        // FORGE EVENT AGGREGATOR — el backend decide a que evento pertenece este mensaje y agrupa correctamente
+        const { eventType, mensajesDelEvento } = await forgeEventAggregator(supabase, apiKey!, codigo, textoUltimoMensaje);
+        const soloUsuario = mensajesDelEvento.join("\n\n");
 
         const extractPrompt = `Analiza esta conversación y extrae datos en JSON. Responde SOLO con JSON válido:
 {

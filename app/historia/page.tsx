@@ -412,6 +412,16 @@ export default function Historia() {
                         {config.label}
                       </span>
                       {ev.data?.notas&&<p style={{color:ev.type==="forge_insight"?C.ink:C.muted,fontSize:12,lineHeight:ev.type==="forge_insight"?1.7:1.5,marginTop:6,whiteSpace:"pre-line"}}>{ev.data.notas}</p>}
+                      {ev.type==="forge_insight" && ev.data?.nivel_conocimiento!==undefined && (
+                        <div style={{background:C.bg,borderRadius:10,padding:"10px 12px",marginTop:10,borderTop:`1px solid #4CAF5030`}}>
+                          <p style={{color:"#4CAF50",fontSize:11,fontWeight:700,marginBottom:4}}>🧠 Esta semana Forge ha actualizado tu conocimiento</p>
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <span style={{color:C.muted,fontSize:13,fontWeight:600}}>{ev.data.nivel_conocimiento_anterior}%</span>
+                            <span style={{color:"#4CAF50",fontSize:12}}>→</span>
+                            <span style={{color:"#4CAF50",fontSize:15,fontWeight:800}}>{ev.data.nivel_conocimiento}%</span>
+                          </div>
+                        </div>
+                      )}
                       {!esManual && <p style={{color:C.muted,fontSize:10,marginTop:6,fontStyle:"italic"}}>Generado automáticamente por Forge</p>}
                     </div>
                   </div>

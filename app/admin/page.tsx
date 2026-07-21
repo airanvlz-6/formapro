@@ -62,9 +62,14 @@ export default function AdminPanel() {
       <div style={{ maxWidth: 600, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
           <h1 style={{ fontFamily: "Georgia, serif", fontSize: 24, color: C.ink }}>⚡ Forge Admin</h1>
-          <button onClick={cargarDatos} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 14px", fontSize: 13, cursor: "pointer", color: C.muted }}>
-            🔄 Actualizar
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <a href="/event-inspector" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 14px", fontSize: 13, color: C.muted, textDecoration: "none" }}>
+              🔍 Event Inspector
+            </a>
+            <button onClick={cargarDatos} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 14px", fontSize: 13, cursor: "pointer", color: C.muted }}>
+              🔄 Actualizar
+            </button>
+          </div>
         </div>
 
         {cargando && <p style={{ color: C.muted, textAlign: "center" }}>Cargando datos...</p>}

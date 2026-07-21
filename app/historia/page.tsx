@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 const TIPO_CONFIG: Record<string, {emoji:string;label:string;color:string}> = {
+  forge_insight: { emoji:"🧠", label:"Forge Insight", color:"#4CAF50" },
   workout: { emoji:"🏋️", label:"Entrenamiento", color:"#FF6B00" },
   race: { emoji:"🏆", label:"Competición", color:"#FFD700" },
   pr: { emoji:"⚡", label:"Nuevo récord", color:"#4CAF50" },

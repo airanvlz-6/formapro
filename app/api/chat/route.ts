@@ -1079,6 +1079,8 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
     if (idx < 0) return NextResponse.json({ ok: true, mensaje: "No encontrado" });
     const devActualizado = [...devActual];
     const estadoAnterior = devActualizado[idx].estado;
+    const progresoAnterior = devActualizado[idx].progreso || 0;
+    const nombreVisible = devActualizado[idx].nombre_visible;
     devActualizado[idx] = {
       ...devActualizado[idx],
       estado: estado || devActualizado[idx].estado,
@@ -1101,7 +1103,7 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
       });
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, nombreVisible, progresoAnterior, progresoNuevo: devActualizado[idx].progreso });
   }
 
   if (action === "registrar_evento") {

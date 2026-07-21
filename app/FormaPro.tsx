@@ -2391,6 +2391,9 @@ ${testStr}`}]});
                       await apiCall({action:"marcar_sesion_completada",codigo:codigoUsuario,datos:{fecha:sesionPendiente.fecha,sesion:sesionPendiente}});
                       cargarPlanSemanal(codigoUsuario);
                       setSesionPendiente(null);
+                      if(res?.esPrimeraSesion){
+                        setMensajes(prev=>[...prev,{role:"assistant",content:"🎉 **¡Primer entrenamiento registrado!**\n\nYa has empezado a construir tu historial. A partir de ahora Forge aprenderá de cada sesión para adaptar las siguientes.\n\nRevisa tu evolución en **Mi Historia** cuando quieras."}]);
+                      }
                     }} style={{background:"#4CAF50",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>
                       {sesionPendiente.yaExiste ? "Actualizar" : "Registrar"}
                     </button>

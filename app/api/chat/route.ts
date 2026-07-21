@@ -75,6 +75,63 @@ async function generarEstadoCanonico(supabase: any, codigo: string) {
   return estado;
 }
 
+// FORGE EVENT AGGREGATOR — determina a que evento pertenece cada mensaje del usuario,
+// y entrega SOLO los mensajes de ese evento al extractor correspondiente. El backend
+// es la unica fuente de verdad: nunca depende del frontend para clasificar.
+async function clasificarMensajeEnBackend(apiKey: string, mensaje: string): Promise<string> {
+  const clasificarPrompt = `Clasifica este mensaje de un atleta a su coach en UNA sola categoría. Responde SOLO con una palabra, sin explicación:
+TRAINING_REPORT — si reporta haber completado un entrenamiento (menciona ejercicios, series, reps, sensaciones durante el esfuerzo, WOD, etc.)
+SLEEP_REPORT — si reporta EXCLUSIVAMENTE métricas de sueño/recuperación nocturna (HRV, horas dormidas, puntuación de sueño, sin mencionar entrenamiento)
+OTHER — cualquier otra cosa (preguntas, confirmaciones, charla general)
+
+Mensaje: "${mensaje}"`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-haiku-4-5", max_tokens: 10, messages: [{ role: "user", content: clasificarPrompt }] }),
+    });
+    const data = await res.json();
+    const texto = (data.content?.map((b: any) => b.text || "").join("") || "OTHER").trim().toUpperCase();
+    if (texto.includes("TRAINING")) return "TRAINING_REPORT";
+    if (texto.includes("SLEEP")) return "SLEEP_REPORT";
+    return "OTHER";
+  } catch {
+    return "OTHER";
+  }
+}
+
+async function forgeEventAggregator(supabase: any, apiKey: string, codigo: string, mensajeActual: string): Promise<{ eventType: string; mensajesDelEvento: string[] }> {
+  const tipoDetectado = await clasificarMensajeEnBackend(apiKey, mensajeActual);
+
+  const { data: eventoActivo } = await supabase.from("active_events").select("*").eq("user_codigo", codigo).single();
+
+  const ahora = new Date();
+  const eventoExpirado = eventoActivo?.updated_at && (ahora.getTime() - new Date(eventoActivo.updated_at).getTime()) > 15 * 60 * 1000; // 15 min sin actividad cierra el evento
+
+  let mensajesEvento: string[];
+
+  if (eventoActivo && !eventoExpirado && eventoActivo.event_type === tipoDetectado && tipoDetectado !== "OTHER") {
+    // Mismo evento continua: añadir mensaje a la lista existente
+    mensajesEvento = [...(eventoActivo.messages || []), mensajeActual];
+    await supabase.from("active_events").update({ messages: mensajesEvento, updated_at: ahora.toISOString() }).eq("user_codigo", codigo);
+  } else {
+    // Nuevo evento: cerrar el anterior (si habia) y abrir uno nuevo con solo este mensaje
+    mensajesEvento = [mensajeActual];
+    await supabase.from("active_events").upsert({
+      user_codigo: codigo,
+      event_id: `evt_${Date.now()}`,
+      event_type: tipoDetectado,
+      status: "collecting",
+      messages: mensajesEvento,
+      updated_at: ahora.toISOString()
+    });
+  }
+
+  return { eventType: tipoDetectado, mensajesDelEvento: mensajesEvento };
+}
+
 export async function POST(req: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
 

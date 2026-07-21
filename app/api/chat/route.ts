@@ -349,8 +349,17 @@ ${ultimos}`;
           updates.ciclo_actual = { ...cicloActual, ...Object.fromEntries(Object.entries(extracted.ciclo).filter(([,v]) => v !== null)) };
         }
 
-console.log("DEBUG EXTRACTOR — texto analizado:", soloUsuario);
-        console.log("DEBUG EXTRACTOR — estado_fisiologico devuelto:", JSON.stringify(extracted.estado_fisiologico));
+// FORGE EXTRACTION VALIDATOR — verificacion deterministica: si el texto original no contiene
+        // palabras de sueño/HRV explicitamente, forzamos estado_fisiologico a null sin importar lo que
+        // haya generado el extractor. El LLM no puede inventar datos que no esten en el texto fuente.
+        const textoParaValidar = soloUsuario.toLowerCase();
+        const contieneMencionSueno = /sueño|dormí|hrv|vfc|frecuencia.*(noche|nocturna)|puntuaci[oó]n.*sueño/i.test(textoParaValidar);
+        if (extracted.estado_fisiologico && !contieneMencionSueno) {
+          extracted.estado_fisiologico = { hrv: null, sueno: null, rhr: null, fatiga_aguda: null, tendencia: null };
+        }
+        console.log("DEBUG EXTRACTOR — texto analizado:", soloUsuario);
+        console.log("DEBUG EXTRACTOR — contiene mencion sueno:", contieneMencionSueno);
+        console.log("DEBUG EXTRACTOR — estado_fisiologico FINAL (tras validador):", JSON.stringify(extracted.estado_fisiologico));
         if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).some(v => v !== null && typeof v !== 'object')) {
           const estadoActual = usuarioData?.estado_fisiologico || {};
           const historialActual = usuarioData?.historial_fisiologico || [];

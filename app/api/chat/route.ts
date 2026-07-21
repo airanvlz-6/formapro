@@ -102,22 +102,34 @@ Mensaje: "${mensaje}"`;
   }
 }
 
-async function forgeEventAggregator(supabase: any, apiKey: string, codigo: string, mensajeActual: string): Promise<{ eventType: string; mensajesDelEvento: string[] }> {
+async function forgeEventAggregator(supabase: any, apiKey: string, codigo: string, mensajeActual: string): Promise<{ eventType: string; mensajesDelEvento: string[]; esCorreccion: boolean }> {
   const tipoDetectado = await clasificarMensajeEnBackend(apiKey, mensajeActual);
 
   const { data: eventoActivo } = await supabase.from("active_events").select("*").eq("user_codigo", codigo).single();
 
   const ahora = new Date();
-  const eventoExpirado = eventoActivo?.updated_at && (ahora.getTime() - new Date(eventoActivo.updated_at).getTime()) > 15 * 60 * 1000; // 15 min sin actividad cierra el evento
+  const msDesdeUltimaActividad = eventoActivo?.updated_at ? ahora.getTime() - new Date(eventoActivo.updated_at).getTime() : Infinity;
+  const eventoCerradoDefinitivo = msDesdeUltimaActividad > 15 * 60 * 1000; // 15 min: cierre definitivo
+  const dentroVentanaCorreccion = eventoActivo?.status === "extracted" && msDesdeUltimaActividad <= 3 * 60 * 1000; // 3 min: ventana de correccion tras extraccion
 
   let mensajesEvento: string[];
+  let esCorreccion = false;
 
-  if (eventoActivo && !eventoExpirado && eventoActivo.event_type === tipoDetectado && tipoDetectado !== "OTHER") {
-    // Mismo evento continua: añadir mensaje a la lista existente
+  const mismoTipoQueActivo = eventoActivo && eventoActivo.event_type === tipoDetectado && tipoDetectado !== "OTHER";
+
+  if (mismoTipoQueActivo && eventoActivo.status === "collecting" && !eventoCerradoDefinitivo) {
+    // Evento sigue en recoleccion activa: añadir mensaje normalmente
     mensajesEvento = [...(eventoActivo.messages || []), mensajeActual];
-    await supabase.from("active_events").update({ messages: mensajesEvento, updated_at: ahora.toISOString() }).eq("user_codigo", codigo);
+    await supabase.from("active_events").update({ messages: mensajesEvento, status: "collecting", updated_at: ahora.toISOString() }).eq("user_codigo", codigo);
+
+  } else if (mismoTipoQueActivo && dentroVentanaCorreccion) {
+    // Evento ya se extrajo, pero seguimos en ventana de correccion: reabrir para incluir el dato corregido
+    esCorreccion = true;
+    mensajesEvento = [...(eventoActivo.messages || []), mensajeActual];
+    await supabase.from("active_events").update({ messages: mensajesEvento, status: "collecting", updated_at: ahora.toISOString() }).eq("user_codigo", codigo);
+
   } else {
-    // Nuevo evento: cerrar el anterior (si habia) y abrir uno nuevo con solo este mensaje
+    // Nuevo evento: el anterior (si habia) queda cerrado implicitamente al ser sobreescrito
     mensajesEvento = [mensajeActual];
     await supabase.from("active_events").upsert({
       user_codigo: codigo,
@@ -129,7 +141,12 @@ async function forgeEventAggregator(supabase: any, apiKey: string, codigo: strin
     });
   }
 
-  return { eventType: tipoDetectado, mensajesDelEvento: mensajesEvento };
+  return { eventType: tipoDetectado, mensajesDelEvento: mensajesEvento, esCorreccion };
+}
+
+// Marca el evento activo como ya extraido, iniciando la ventana de correccion de 3 minutos
+async function marcarEventoComoExtraido(supabase: any, codigo: string) {
+  await supabase.from("active_events").update({ status: "extracted" }).eq("user_codigo", codigo);
 }
 
 export async function POST(req: NextRequest) {

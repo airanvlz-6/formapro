@@ -441,6 +441,8 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
         if (Object.keys(updates).length > 0) {
           await supabase.from("usuarios").update(updates).eq("codigo", codigo);
         }
+        // Marcar el evento como ya extraido, iniciando ventana de correccion de 3 minutos
+        await marcarEventoComoExtraido(supabase, codigo);
       } catch (e) {
         console.error("Error extraccion servidor:", e);
       }

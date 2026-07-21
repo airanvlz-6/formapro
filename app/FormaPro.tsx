@@ -664,6 +664,7 @@ const [estadoCanonico,setEstadoCanonico]=useState<any>(null);
 const [mostrarBotonNuevaSemana,setMostrarBotonNuevaSemana]=useState(false);
 const [generandoSemana,setGenerandoSemana]=useState(false);
 const [nuevoAprendizaje,setNuevoAprendizaje]=useState<{texto:string;porcentaje:number}|null>(null);
+const [progresoActualizado,setProgresoActualizado]=useState<{nombre:string;antes:number;despues:number}|null>(null);
 const [mostrarCodigoReal,setMostrarCodigoReal]=useState(false);
 const [betaFounderInfo,setBetaFounderInfo]=useState<{numero:number;maxSlots:number;meses:number}|null>(null);
 const [estadoFounder,setEstadoFounder]=useState<any>(null);
@@ -1120,7 +1121,10 @@ const forgeValidator=(texto:string):string=>{
       }
     });
     await procesarTag("[ACTUALIZAR_DEBILIDAD:",22,async(data)=>{
-      await apiCall({action:"actualizar_debilidad_dev",codigo:codigoUsuario,datos:data});
+      const res=await apiCall({action:"actualizar_debilidad_dev",codigo:codigoUsuario,datos:data});
+      if(res?.ok && res?.progresoNuevo!==undefined && res?.progresoAnterior!==undefined && res.progresoNuevo>res.progresoAnterior){
+        setProgresoActualizado({nombre:res.nombreVisible,antes:res.progresoAnterior,despues:res.progresoNuevo});
+      }
     });
     await procesarTag("[EVENTO:",8,async(data)=>{
       await apiCall({action:"registrar_evento",codigo:codigoUsuario,datos:{evento:data}});

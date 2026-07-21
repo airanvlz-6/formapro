@@ -2264,6 +2264,22 @@ ${testStr}`}]});
                 </div>
               </div>
             )}
+            {progresoActualizado&&(
+              <div className="msg-in" style={{display:"flex",justifyContent:"center",marginTop:4,marginBottom:4}}>
+                <div style={{background:`${accentColor}15`,border:`1px solid ${accentColor}60`,borderRadius:14,padding:"12px 16px",maxWidth:"85%",textAlign:"center"}}>
+                  <p style={{color:accentColor,fontSize:12,fontWeight:700,marginBottom:6}}>📈 Progreso actualizado</p>
+                  <p style={{color:C.ink,fontSize:13,fontWeight:600,marginBottom:8}}>{progresoActualizado.nombre}</p>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:8}}>
+                    <span style={{color:C.muted,fontSize:16,fontWeight:700}}>{progresoActualizado.antes}%</span>
+                    <span style={{color:accentColor,fontSize:14}}>→</span>
+                    <span style={{color:accentColor,fontSize:18,fontWeight:800}}>{progresoActualizado.despues}%</span>
+                  </div>
+                  <a href={`/atleta?codigo=${codigoUsuario}`} onClick={()=>setProgresoActualizado(null)} style={{color:accentColor,fontSize:12,fontWeight:600,textDecoration:"underline"}}>
+                    Ver en Mi Atleta →
+                  </a>
+                </div>
+              </div>
+            )}
             {mostrarBotonNuevaSemana&&!generandoSemana&&(
               <div style={{display:"flex",justifyContent:"center",marginTop:4}}>
                 <button onClick={async()=>{

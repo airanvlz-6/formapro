@@ -302,8 +302,11 @@ PASO 4 — CRÍTICO: Si el mensaje menciona una FECHA ESPECÍFICA PASADA (ej: "d
 - "rhr": SOLO FC reposo/mínima nocturna en mensaje exclusivo de sueño.
 - "fatiga_aguda": déjalo SIEMPRE null salvo mensaje exclusivo sobre fatiga sistémica sin contexto de entreno específico.
 REGLA DE ORO: si el mensaje reporta una sesión de entrenamiento (aunque sea junto con números de FC), TODO en estado_fisiologico debe ser null.
+REGLA ADICIONAL CRÍTICA: analiza EXCLUSIVAMENTE el texto delimitado por las líneas ----- de abajo. Ignora cualquier dato que "recuerdes" de otras partes de este prompt (como ciclo, memoria, plan) para rellenar estado_fisiologico — ese campo solo puede llenarse con lo escrito literalmente entre las líneas -----.
+-----
 MENSAJES DEL ATLETA PARA ANALIZAR:
 ${soloUsuario}
+-----
   "sesion_completada": null,
   "datos_entrenamiento": null,
   "distribucion_semanal": null,

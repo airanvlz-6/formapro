@@ -342,10 +342,19 @@ export default function Historia() {
 
         {/* 2. Timeline */}
         {eventos.length === 0 ? (
-          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"40px",textAlign:"center",marginBottom:16}}>
-            <p style={{fontSize:40,marginBottom:12}}>📖</p>
-            <p style={{color:C.ink,fontSize:16,fontWeight:600,marginBottom:8}}>Tu historia empieza aquí</p>
-            <p style={{color:C.muted,fontSize:13}}>Reporta entrenamientos, competiciones y logros al coach. Forge construirá tu historia deportiva automáticamente.</p>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"32px 24px",textAlign:"center",marginBottom:16}}>
+            <p style={{fontSize:36,marginBottom:12}}>📖</p>
+            <p style={{color:C.ink,fontSize:17,fontWeight:700,marginBottom:16}}>Tu historia empieza hoy</p>
+            <p style={{color:C.muted,fontSize:13,lineHeight:1.6,marginBottom:16}}>Aquí Forge irá construyendo automáticamente tu evolución. Con el tiempo aparecerán:</p>
+            <div style={{display:"flex",flexDirection:"column",gap:8,textAlign:"left",maxWidth:280,margin:"0 auto 16px"}}>
+              {[["🏆","Primer entrenamiento"],["📈","Cambios de bloque"],["💡","Forge Insights semanales"],["🎯","Objetivos alcanzados"],["🏅","Nuevos récords personales"],["📊","Tendencias fisiológicas"]].map(([emoji,texto])=>(
+                <div key={texto} style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:14}}>{emoji}</span>
+                  <span style={{color:C.ink,fontSize:13}}>{texto}</span>
+                </div>
+              ))}
+            </div>
+            <p style={{color:C.accent,fontSize:13,fontWeight:600}}>Todo se registrará automáticamente. Tú solo tendrás que entrenar.</p>
           </div>
         ) : (
           Object.entries(eventosPorMes).map(([mes, evs]) => (

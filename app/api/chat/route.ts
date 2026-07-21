@@ -945,13 +945,13 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
   if (action === "guardar_resumen_semana") {
     const { week_start, resumen, adherencia } = datos;
     await supabase.from("weekly_plan").update({ resumen_semana: resumen }).eq("user_codigo", codigo).eq("week_start", week_start);
-    // También lo guardamos como evento en la historia
+    // Forge Insight: conocimiento permanente del atleta, categoria propia distinta a eventos normales
     await supabase.from("athlete_events").insert({
       user_codigo: codigo,
       date: new Date().toISOString().split('T')[0],
-      type: "block_end",
-      title: `Resumen semanal — ${adherencia||""}`,
-      data: { notas: resumen }
+      type: "forge_insight",
+      title: `Forge Insight — Semana ${week_start}`,
+      data: { notas: resumen, adherencia: adherencia || "" }
     });
     return NextResponse.json({ ok: true });
   }

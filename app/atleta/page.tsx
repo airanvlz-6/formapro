@@ -166,6 +166,13 @@ export default function MiAtleta() {
         </div>
 
         {/* Desarrollo del atleta */}
+        {(!datos?.athlete_development || datos.athlete_development.length === 0) && (
+          <div style={{ background: C.card, border: `1px solid ${C.accent}60`, borderRadius: 16, padding: "18px 18px", marginBottom: 16 }}>
+            <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 10 }}>🎯 Áreas de desarrollo</p>
+            <p style={{ color: C.muted, fontSize: 13, lineHeight: 1.7, marginBottom: 12 }}>Aquí Forge detectará automáticamente fortalezas, debilidades y estancamientos según tu progreso.</p>
+            <p style={{ color: C.accent, fontSize: 13, fontWeight: 600 }}>Empieza entrenando tu primera semana.</p>
+          </div>
+        )}
         {datos?.athlete_development?.length > 0 && (
           <div style={{ background: C.card, border: `1px solid #FF6B0060`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
             <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>🎯 Áreas de desarrollo</p>

@@ -663,6 +663,7 @@ const [blockOutcomes,setBlockOutcomes]=useState<any[]>([]);
 const [estadoCanonico,setEstadoCanonico]=useState<any>(null);
 const [mostrarBotonNuevaSemana,setMostrarBotonNuevaSemana]=useState(false);
 const [generandoSemana,setGenerandoSemana]=useState(false);
+const [nuevoAprendizaje,setNuevoAprendizaje]=useState<{texto:string;porcentaje:number}|null>(null);
 const [mostrarCodigoReal,setMostrarCodigoReal]=useState(false);
 const [betaFounderInfo,setBetaFounderInfo]=useState<{numero:number;maxSlots:number;meses:number}|null>(null);
 const [estadoFounder,setEstadoFounder]=useState<any>(null);
@@ -1111,6 +1112,12 @@ const forgeValidator=(texto:string):string=>{
     });
     await procesarTag("[DEBILIDAD_DEV:",15,async(data)=>{
       await apiCall({action:"registrar_debilidad_dev",codigo:codigoUsuario,datos:data});
+    });
+    await procesarTag("[APRENDIZAJE:",13,async(data)=>{
+      const res=await apiCall({action:"registrar_aprendizaje",codigo:codigoUsuario,datos:data});
+      if(res?.ok && !res?.duplicado){
+        setNuevoAprendizaje({texto:data.texto,porcentaje:res.porcentajeTotal});
+      }
     });
     await procesarTag("[ACTUALIZAR_DEBILIDAD:",22,async(data)=>{
       await apiCall({action:"actualizar_debilidad_dev",codigo:codigoUsuario,datos:data});

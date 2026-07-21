@@ -374,7 +374,7 @@ export default function Historia() {
                       </div>
                       {i<evs.length-1&&<div style={{width:1,flex:1,background:C.border,marginTop:4}}/>}
                     </div>
-                    <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px",flex:1,marginBottom:i<evs.length-1?8:0}}>
+                    <div style={{background:ev.type==="forge_insight"?"#1A2A1A":C.card,border:`1px solid ${ev.type==="forge_insight"?"#4CAF5060":C.border}`,borderRadius:12,padding:"12px 14px",flex:1,marginBottom:i<evs.length-1?8:0}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
                         <span style={{color:C.ink,fontSize:14,fontWeight:600}}>{ev.title}</span>
                         <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0,marginLeft:8}}>
@@ -411,7 +411,7 @@ export default function Historia() {
                       <span style={{background:`${config.color}20`,color:config.color,fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:100}}>
                         {config.label}
                       </span>
-                      {ev.data?.notas&&<p style={{color:C.muted,fontSize:12,marginTop:6}}>{ev.data.notas}</p>}
+                      {ev.data?.notas&&<p style={{color:ev.type==="forge_insight"?C.ink:C.muted,fontSize:12,lineHeight:ev.type==="forge_insight"?1.7:1.5,marginTop:6,whiteSpace:"pre-line"}}>{ev.data.notas}</p>}
                       {!esManual && <p style={{color:C.muted,fontSize:10,marginTop:6,fontStyle:"italic"}}>Generado automáticamente por Forge</p>}
                     </div>
                   </div>

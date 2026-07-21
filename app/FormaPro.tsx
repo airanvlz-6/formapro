@@ -1606,38 +1606,38 @@ ${testStr}`}]});
       {pantalla==="informe_test"&&cat&&resultadoTest&&(
         <div className="fade-up" style={{width:"100%",maxWidth:"100%",overflowY:"auto"}}>
           <div id="informe-test" style={{background:C.bg,padding:"16px",borderRadius:20,width:"100%"}}>
-          <div style={{background:cat.colorLight,borderRadius:20,padding:"24px 20px",marginBottom:16,textAlign:"center"}}>
-            <div style={{fontSize:40,marginBottom:8}}>{cat.emoji}</div>
-            <div style={{fontFamily:"'Playfair Display',serif",fontSize:24,fontWeight:700,color:C.ink,marginBottom:4}}>Informe de Atleta</div>
-            <div style={{background:accentColor,color:"#fff",borderRadius:100,padding:"6px 20px",fontSize:14,fontWeight:700,display:"inline-block",marginBottom:8}}>
+          <div style={{textAlign:"center",marginBottom:24}}>
+            <div style={{fontSize:36,marginBottom:10}}>🧠</div>
+            <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,fontWeight:700,color:C.ink,marginBottom:6}}>Hemos analizado tu perfil de atleta</div>
+            <div style={{background:accentColor,color:"#fff",borderRadius:100,padding:"5px 18px",fontSize:13,fontWeight:700,display:"inline-block"}}>
               {resultadoTest.nivel}
             </div>
-            <p style={{color:C.muted,fontSize:13,lineHeight:1.6}}>{resultadoTest.resumen}</p>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16,alignItems:"start"}}>
-            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px",gridColumn:"1 / -1"}}>
-              <div style={{fontFamily:"'Playfair Display',serif",fontSize:16,fontWeight:700,color:C.ink,marginBottom:14}}>Análisis de rendimiento</div>
-              {Object.entries(resultadoTest.puntuaciones).map(([key,val])=>(
-                <div key={key} style={{marginBottom:12}}>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                    <span style={{fontSize:14,color:C.ink,fontWeight:500,textTransform:"capitalize"}}>{key}</span>
-                    <span style={{fontSize:14,color:accentColor,fontWeight:700}}>{val}%</span>
-                  </div>
-                  <div style={{height:8,background:C.border,borderRadius:100}}>
-                    <div style={{height:8,borderRadius:100,background:accentColor,width:`${val}%`,transition:"width 0.8s ease"}}/>
-                  </div>
-                </div>
-              ))}
+
+          <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
+            <div style={{background:"#1A2A1A",border:"1px solid #4CAF5040",borderRadius:16,padding:"16px 18px"}}>
+              <p style={{color:"#4CAF50",fontSize:12,fontWeight:700,marginBottom:6}}>💪 Tu punto fuerte</p>
+              <p style={{color:C.ink,fontSize:15,fontWeight:600}}>{resultadoTest.fortalezas?.[0]||"Constancia"}</p>
             </div>
-            <div style={{background:"#D8F3DC",borderRadius:14,padding:"16px"}}>
-              <div style={{fontSize:14,fontWeight:700,color:"#2D6A4F",marginBottom:10}}>💪 Fortalezas</div>
-              {resultadoTest.fortalezas.map((f,i)=><div key={i} style={{fontSize:13,color:"#2D6A4F",marginBottom:6,lineHeight:1.4}}>✓ {f}</div>)}
+            <div style={{background:C.accentLight,border:`1px solid ${accentColor}40`,borderRadius:16,padding:"16px 18px"}}>
+              <p style={{color:accentColor,fontSize:12,fontWeight:700,marginBottom:6}}>🎯 Lo primero que vamos a mejorar</p>
+              <p style={{color:C.ink,fontSize:15,fontWeight:600}}>{resultadoTest.debilidades?.[0]||"Datos insuficientes"}</p>
             </div>
-            <div style={{background:"#FDF0EB",borderRadius:14,padding:"16px"}}>
-              <div style={{fontSize:14,fontWeight:700,color:C.warm,marginBottom:10}}>🎯 A mejorar</div>
-              {resultadoTest.debilidades.map((d,i)=><div key={i} style={{fontSize:13,color:C.warm,marginBottom:6,lineHeight:1.4}}>→ {d}</div>)}
+            {resultadoTest.debilidades?.[1] && (
+              <div style={{background:"#2A1A1A",border:"1px solid #ff444440",borderRadius:16,padding:"16px 18px"}}>
+                <p style={{color:"#ff6b6b",fontSize:12,fontWeight:700,marginBottom:6}}>⚠️ Lo que vigilaremos</p>
+                <p style={{color:C.ink,fontSize:15,fontWeight:600}}>{resultadoTest.debilidades[1]}</p>
+              </div>
+            )}
+            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px"}}>
+              <p style={{color:C.muted,fontSize:12,fontWeight:700,marginBottom:6}}>📅 Primer bloque</p>
+              <p style={{color:C.ink,fontSize:15,fontWeight:600}}>Acumulación · 4 semanas</p>
             </div>
           </div>
+
+          <p style={{color:C.muted,fontSize:13,lineHeight:1.7,textAlign:"center",marginBottom:20,padding:"0 8px"}}>
+            Forge ya ha tomado cientos de decisiones para construir un plan específico para ti. A partir de ahora solo tienes que entrenar y reportar.
+          </p>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             <button className="btn-main" onClick={()=>{

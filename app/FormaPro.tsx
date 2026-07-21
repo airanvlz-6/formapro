@@ -1171,13 +1171,15 @@ const forgeValidator=(texto:string):string=>{
     const fechaHoyStrSilencioso=new Date().toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"Europe/Madrid"});
     const textoConFecha=texto.trim()+`\n\n[Fecha actual del sistema: ${fechaHoyStrSilencioso}]\n[Contexto temporal del mensaje: CONSULTA_GENERAL — este mensaje puede incluir ajustes de planificación, respeta siempre la fecha de HOY indicada arriba y en el ESTADO CANÓNICO, el plan generado corresponde a la semana ACTUAL que contiene HOY, nunca la próxima semana.]`;
     const nuevoHist=[...historial,{role:"user",content:textoConFecha}];
+    // CONTEXT ISOLATION: solo los ultimos 3 mensajes reales como contexto conversacional
+    const mensajesParaAPI=nuevoHist.slice(-3);
     setCargando(true);setMsgCount(c=>c+1);
     const catObj=CATEGORIAS.find((c:Categoria)=>c.id===categoria)!;
     const esp=espKey||categoria!;
     const esSuenoSilencioso=/métricas de sueño|dormí|puntuación de sueño|durante la noche|sueño profundo|sueño rem/i.test(texto.toLowerCase()) && !/entren|wod|sesion realizada|serie|repeticion/i.test(texto.toLowerCase());
     try{
       const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[archivo]"}...`).join("\n");
-      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal,planSemanal,debilidades,blockOutcomes,estadoCanonico)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:nuevoHist},true);
+      const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal,planSemanal,debilidades,blockOutcomes,estadoCanonico)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:mensajesParaAPI},true);
       if(data.aborted) return;
       const respTextRaw=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.");
       const respTextValidado=forgeValidator(respTextRaw);
@@ -1212,6 +1214,10 @@ const forgeValidator=(texto:string):string=>{
       contenidoUsuario=contenido;
     }
     const nuevoHist=[...historial,{role:"user",content:contenidoUsuario}];
+    // CONTEXT ISOLATION: el Coach solo ve los ultimos 3 mensajes reales como conversacion inmediata.
+    // Toda la memoria real (Estado Canonico, athlete_development, historial_fisiologico, workout_history)
+    // ya viaja por su cuenta en el system prompt — el historial de chat NO debe ser la fuente de memoria.
+    const mensajesParaAPI=nuevoHist.slice(-3);
     const textoSinFecha=textoEnvio.replace(/\n*\[Fecha actual del sistema:[\s\S]*?\]/,"").replace(/\n*\[Contexto temporal del mensaje:[\s\S]*?\]/,"").trim();
     const mensajeDisplay=imagenesAdjuntas.length>0?`📎 ${imagenesAdjuntas.length} archivo${imagenesAdjuntas.length>1?"s":""} adjunto${imagenesAdjuntas.length>1?"s":""}\n${textoSinFecha}`:textoSinFecha;
     setMensajes(prev=>[...prev,{role:"user",content:mensajeDisplay}]);
@@ -1234,7 +1240,9 @@ const forgeValidator=(texto:string):string=>{
       const esPlanificacionSemanal=texto.toLowerCase().includes("semana completa")||texto.toLowerCase().includes("planificacion semanal")||texto.toLowerCase().includes("plan semanal")||texto.toLowerCase().includes("toda la semana")||texto.toLowerCase().includes("generar semana");
       const esProgramacion=esPlanificacionSemanal||texto.toLowerCase().includes("programacion")||texto.toLowerCase().includes("rutina")||texto.toLowerCase().includes("semana")||texto.toLowerCase().includes("plan")||texto.toLowerCase().includes("sesion")||texto.toLowerCase().includes("entreno")||texto.toLowerCase().includes("wod")||texto.toLowerCase().includes("ejercicio")||texto.toLowerCase().includes("bloque")||texto.toLowerCase().includes("rehabilitacion")||texto.toLowerCase().includes("protocolo")||texto.toLowerCase().includes("fase");
       const mensajesContexto=esProgramacion?-6:-4;
-const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal,planSemanal,debilidades,blockOutcomes,estadoCanonico)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:nuevoHist},true);
+      // CONTEXT ISOLATION: solo los ultimos 3 mensajes reales como contexto conversacional inmediato
+      const mensajesParaAPI2=nuevoHist.slice(-3);
+const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal,planSemanal,debilidades,blockOutcomes,estadoCanonico)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:mensajesParaAPI2},true);
       if(data.aborted) return;
       const respTextRaw2Original=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.");
       const respTextRaw2=forgeValidator(respTextRaw2Original);

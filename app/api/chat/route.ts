@@ -527,8 +527,9 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     const { sesion } = datos;
     const { data: usuarioFresh } = await supabase.from("usuarios").select("workout_history,primera_sesion_at").eq("codigo", codigo).single();
     const workoutActual = usuarioFresh?.workout_history || [];
+    const esPrimeraSesionGlobal = !usuarioFresh?.primera_sesion_at && workoutActual.length === 0;
     // Analytics: trackear primera sesión completada (métrica clave de activación)
-    if (!usuarioFresh?.primera_sesion_at && workoutActual.length === 0) {
+    if (esPrimeraSesionGlobal) {
       await supabase.from("usuarios").update({ primera_sesion_at: new Date().toISOString() }).eq("codigo", codigo);
     }
 
@@ -565,7 +566,7 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
     }
 
     await supabase.from("usuarios").update({ workout_history: workoutActualizado }).eq("codigo", codigo);
-    return NextResponse.json({ ok: true, actualizado: indiceExistente >= 0 });
+    return NextResponse.json({ ok: true, actualizado: indiceExistente >= 0, esPrimeraSesion: esPrimeraSesionGlobal });
   }
 
   if (action === "registrar_metrica_pasada") {

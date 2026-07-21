@@ -2249,6 +2249,17 @@ ${testStr}`}]});
                 </div>
               </div>
             ))}
+            {nuevoAprendizaje&&(
+              <div className="msg-in" style={{display:"flex",justifyContent:"center",marginTop:4,marginBottom:4}}>
+                <div style={{background:"#1E5C3A20",border:"1px solid #1E5C3A60",borderRadius:14,padding:"12px 16px",maxWidth:"85%",textAlign:"center"}}>
+                  <p style={{color:"#4CAF50",fontSize:12,fontWeight:700,marginBottom:4}}>🧠 Forge ha actualizado tu perfil</p>
+                  <p style={{color:C.ink,fontSize:13,lineHeight:1.5,marginBottom:8}}>{nuevoAprendizaje.texto}</p>
+                  <a href={`/atleta?codigo=${codigoUsuario}`} onClick={()=>setNuevoAprendizaje(null)} style={{color:"#4CAF50",fontSize:12,fontWeight:600,textDecoration:"underline"}}>
+                    Ver en Mi Atleta →
+                  </a>
+                </div>
+              </div>
+            )}
             {mostrarBotonNuevaSemana&&!generandoSemana&&(
               <div style={{display:"flex",justifyContent:"center",marginTop:4}}>
                 <button onClick={async()=>{

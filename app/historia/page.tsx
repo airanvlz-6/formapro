@@ -27,6 +27,7 @@ export default function Historia() {
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [nuevoEvento, setNuevoEvento] = useState({date:"",type:"workout",title:"",notas:""});
   const [eventoEditando, setEventoEditando] = useState<any>(null);
+  const [filtroTipo, setFiltroTipo] = useState<string>("todos");
 
   const C = {
     bg:"#0D0D0D", card:"#1A1A1A", ink:"#F0EDE8", muted:"#9A9590",
@@ -89,9 +90,10 @@ export default function Historia() {
     cargarDatos(codigo);
   };
 
-  // Agrupar eventos por año y mes
+  // Agrupar eventos por año y mes, respetando el filtro activo
+  const eventosFiltrados = filtroTipo==="todos" ? eventos : eventos.filter(e => e.type === filtroTipo);
   const eventosPorMes: Record<string, any[]> = {};
-  eventos.forEach(e => {
+  eventosFiltrados.forEach(e => {
     const key = e.date.substring(0,7);
     if(!eventosPorMes[key]) eventosPorMes[key] = [];
     eventosPorMes[key].push(e);
@@ -341,6 +343,18 @@ export default function Historia() {
           </div>
         )}
 
+        {/* Filtro de categoria */}
+        {eventos.length > 0 && (
+          <div style={{display:"flex",gap:6,marginBottom:16,overflowX:"auto",paddingBottom:2}}>
+            {[["todos","Todos"],["forge_insight","🧠 Forge Insights"],["workout","🏋️ Entrenamientos"],["pr","⚡ Récords"]].map(([valor,label])=>(
+              <button key={valor} onClick={()=>setFiltroTipo(valor)}
+                style={{flexShrink:0,background:filtroTipo===valor?C.accent:C.card,color:filtroTipo===valor?"#fff":C.muted,border:`1px solid ${filtroTipo===valor?C.accent:C.border}`,borderRadius:100,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* 2. Timeline */}
         {eventos.length === 0 ? (
           <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"32px 24px",textAlign:"center",marginBottom:16}}>
@@ -356,6 +370,11 @@ export default function Historia() {
               ))}
             </div>
             <p style={{color:C.accent,fontSize:13,fontWeight:600}}>Todo se registrará automáticamente. Tú solo tendrás que entrenar.</p>
+          </div>
+        ) : eventosFiltrados.length === 0 ? (
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"28px 24px",textAlign:"center",marginBottom:16}}>
+            <p style={{fontSize:28,marginBottom:10}}>🔍</p>
+            <p style={{color:C.ink,fontSize:14,fontWeight:600}}>Aún no hay eventos en esta categoría</p>
           </div>
         ) : (
           Object.entries(eventosPorMes).map(([mes, evs]) => (

@@ -148,8 +148,23 @@ async function forgeEventAggregator(supabase: any, apiKey: string, codigo: strin
   return { eventType: tipoDetectado, mensajesDelEvento: mensajesEvento, esCorreccion };
 }
 
-// Marca el evento activo como ya extraido, iniciando la ventana de correccion de 3 minutos
-async function marcarEventoComoExtraido(supabase: any, codigo: string) {
+// Marca el evento activo como ya extraido, iniciando la ventana de correccion de 3 minutos.
+// Ademas registra un log inmutable del evento para el Event Inspector (observabilidad).
+async function marcarEventoComoExtraido(supabase: any, codigo: string, extraccionExitosa: boolean) {
+  const { data: eventoActual } = await supabase.from("active_events").select("*").eq("user_codigo", codigo).single();
+  if (eventoActual) {
+    const yaEstabaExtraido = eventoActual.status === "extracted";
+    await supabase.from("event_log").insert({
+      user_codigo: codigo,
+      event_id: eventoActual.event_id,
+      event_type: eventoActual.event_type,
+      status: "extracted",
+      mensajes_count: (eventoActual.messages || []).length,
+      fue_correccion: yaEstabaExtraido,
+      extraccion_exitosa: extraccionExitosa,
+      closed_at: new Date().toISOString()
+    });
+  }
   await supabase.from("active_events").update({ status: "extracted" }).eq("user_codigo", codigo);
 }
 
@@ -446,7 +461,7 @@ if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).
           await supabase.from("usuarios").update(updates).eq("codigo", codigo);
         }
         // Marcar el evento como ya extraido, iniciando ventana de correccion de 3 minutos
-        await marcarEventoComoExtraido(supabase, codigo);
+        await marcarEventoComoExtraido(supabase, codigo, true);
       } catch (e) {
         console.error("Error extraccion servidor:", e);
       }
@@ -893,6 +908,12 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
     const { problema, accion, resultado, efectividad } = datos;
     await supabase.from("interventions").insert({ user_codigo: codigo, problema, accion, resultado, efectividad });
     return NextResponse.json({ ok: true });
+  }
+
+  if (action === "obtener_event_log") {
+    const { data: eventoActivo } = await supabase.from("active_events").select("*").eq("user_codigo", codigo).single();
+    const { data: eventosLog } = await supabase.from("event_log").select("*").eq("user_codigo", codigo).order("closed_at", { ascending: false }).limit(30);
+    return NextResponse.json({ eventoActivo: eventoActivo || null, historial: eventosLog || [] });
   }
 
   if (action === "obtener_estado_founder") {

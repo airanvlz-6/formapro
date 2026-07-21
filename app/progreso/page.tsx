@@ -468,10 +468,18 @@ useEffect(() => {
         
 
         {totalSesiones === 0 && (
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "32px", textAlign: "center" }}>
-            <p style={{ fontSize: 32, marginBottom: 12 }}>🏋️</p>
-            <p style={{ color: C.ink, fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Sin sesiones registradas aún</p>
-            <p style={{ color: C.muted, fontSize: 13 }}>Reporta tus entrenamientos al coach y aparecerán aquí automáticamente</p>
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "28px 24px", textAlign: "center" }}>
+            <p style={{ fontSize: 32, marginBottom: 12 }}>📊</p>
+            <p style={{ color: C.ink, fontSize: 16, fontWeight: 700, marginBottom: 14 }}>Próximamente verás aquí</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, textAlign: "left", maxWidth: 280, margin: "0 auto 14px" }}>
+              {[["📉","Evolución de tu carga de entrenamiento"],["❤️","Frecuencia cardiaca"],["🫀","HRV"],["😴","Calidad del sueño"],["🏃","Ritmos y volumen"],["💪","Tendencias de fuerza"]].map(([emoji,texto])=>(
+                <div key={texto} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 14 }}>{emoji}</span>
+                  <span style={{ color: C.ink, fontSize: 13 }}>{texto}</span>
+                </div>
+              ))}
+            </div>
+            <p style={{ color: C.accent, fontSize: 13, fontWeight: 600 }}>Necesitamos algunos entrenamientos para empezar a detectar patrones.</p>
           </div>
         )}
 

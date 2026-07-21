@@ -349,7 +349,9 @@ ${ultimos}`;
           updates.ciclo_actual = { ...cicloActual, ...Object.fromEntries(Object.entries(extracted.ciclo).filter(([,v]) => v !== null)) };
         }
 
-if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).some(v => v !== null && typeof v !== 'object')) {
+console.log("DEBUG EXTRACTOR — texto analizado:", soloUsuario);
+        console.log("DEBUG EXTRACTOR — estado_fisiologico devuelto:", JSON.stringify(extracted.estado_fisiologico));
+        if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).some(v => v !== null && typeof v !== 'object')) {
           const estadoActual = usuarioData?.estado_fisiologico || {};
           const historialActual = usuarioData?.historial_fisiologico || [];
           const hoy = new Date().toLocaleDateString('en-CA', {timeZone: 'Europe/Madrid'});

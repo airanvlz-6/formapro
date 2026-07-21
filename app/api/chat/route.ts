@@ -185,7 +185,8 @@ export async function POST(req: NextRequest) {
           }
           return "";
         };
-        const soloUsuario = datos.historial.slice(-6).filter((m:any) => m.role === "user").map((m: any) => extraerTextoContenido(m.content)).join("\n\n");
+        const ultimoMensajeUsuario = datos.historial.filter((m:any) => m.role === "user").slice(-1)[0];
+        const soloUsuario = ultimoMensajeUsuario ? extraerTextoContenido(ultimoMensajeUsuario.content) : "";
 
         const extractPrompt = `Analiza esta conversación y extrae datos en JSON. Responde SOLO con JSON válido:
 {

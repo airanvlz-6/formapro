@@ -945,15 +945,26 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
   if (action === "guardar_resumen_semana") {
     const { week_start, resumen, adherencia } = datos;
     await supabase.from("weekly_plan").update({ resumen_semana: resumen }).eq("user_codigo", codigo).eq("week_start", week_start);
+
+    // Calcular nivel de conocimiento actual (mismo criterio que en Mi Atleta: 40 base + puntos de aprendizajes)
+    const { data: usuarioConocimiento } = await supabase.from("usuarios").select("aprendizajes_atleta").eq("codigo", codigo).single();
+    const aprendizajesActuales = usuarioConocimiento?.aprendizajes_atleta || [];
+    const puntosActuales = aprendizajesActuales.reduce((sum: number, a: any) => sum + (a.puntos || 0), 0);
+    const nivelConocimientoActual = Math.min(40 + puntosActuales, 100);
+
+    // Buscar el ultimo Insight anterior para saber el nivel previo
+    const { data: ultimoInsight } = await supabase.from("athlete_events").select("data").eq("user_codigo", codigo).eq("type", "forge_insight").order("date", { ascending: false }).limit(1).single();
+    const nivelAnterior = ultimoInsight?.data?.nivel_conocimiento ?? nivelConocimientoActual;
+
     // Forge Insight: conocimiento permanente del atleta, categoria propia distinta a eventos normales
     await supabase.from("athlete_events").insert({
       user_codigo: codigo,
       date: new Date().toISOString().split('T')[0],
       type: "forge_insight",
       title: `Forge Insight — Semana ${week_start}`,
-      data: { notas: resumen, adherencia: adherencia || "" }
+      data: { notas: resumen, adherencia: adherencia || "", nivel_conocimiento: nivelConocimientoActual, nivel_conocimiento_anterior: nivelAnterior }
     });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, nivelConocimientoActual, nivelAnterior });
   }
 
   if (action === "guardar_plan_semana") {

@@ -149,6 +149,35 @@ async function forgeEventAggregator(supabase: any, apiKey: string, codigo: strin
   return { eventType: tipoDetectado, mensajesDelEvento: mensajesEvento, esCorreccion };
 }
 
+// FORGE CONTEXT BUILDER — construye el contexto conversacional que recibe el Coach.
+// En vez de "ultimos N mensajes" cronologicos, incluye: el evento activo actual completo,
+// el ultimo evento cerrado relevante (resumido via su event_context), y evita que el Coach
+// "olvide" un evento importante solo porque hubo conversacion intermedia.
+async function forgeContextBuilder(supabase: any, codigo: string, eventoActivoActual: { eventType: string; mensajesDelEvento: string[] }): Promise<string> {
+  const partes: string[] = [];
+
+  partes.push(`EVENTO ACTUAL (${eventoActivoActual.eventType}):\n${eventoActivoActual.mensajesDelEvento.join("\n")}`);
+
+  // Buscar el ultimo evento cerrado de tipo DIFERENTE al actual, que tenga event_context util
+  const { data: ultimosEventos } = await supabase
+    .from("event_log")
+    .select("event_type,event_context,closed_at")
+    .eq("user_codigo", codigo)
+    .neq("event_type", eventoActivoActual.eventType)
+    .order("closed_at", { ascending: false })
+    .limit(3);
+
+  const eventoRelevante = (ultimosEventos || []).find((e: any) => e.event_context?.summary);
+  if (eventoRelevante) {
+    const horasDesdeEvento = (Date.now() - new Date(eventoRelevante.closed_at).getTime()) / (60 * 60 * 1000);
+    if (horasDesdeEvento < 24) { // solo relevante si fue en las ultimas 24h
+      partes.push(`EVENTO ANTERIOR RELEVANTE (${eventoRelevante.event_type}, hace ${Math.round(horasDesdeEvento * 10) / 10}h): ${eventoRelevante.event_context.summary}`);
+    }
+  }
+
+  return partes.join("\n\n---\n\n");
+}
+
 // Genera una "fotografia contextual" estructurada del evento, usando una llamada pequeña
 // y dedicada (Haiku), separada del Coach principal. No da consejos, no inventa informacion.
 async function generarEventContext(apiKey: string, eventType: string, mensajes: string[]): Promise<any> {
@@ -922,6 +951,18 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
     }
 
     return NextResponse.json({ valido: true });
+  }
+
+  if (action === "procesar_mensaje_contexto") {
+    // Combina Event Aggregator + Context Builder en una sola llamada para el frontend
+    const { mensaje } = datos;
+    const resultadoAggregator = await forgeEventAggregator(supabase, apiKey!, codigo, mensaje);
+    const contextoConstruido = await forgeContextBuilder(supabase, codigo, resultadoAggregator);
+    return NextResponse.json({
+      eventType: resultadoAggregator.eventType,
+      esCorreccion: resultadoAggregator.esCorreccion,
+      contexto: contextoConstruido
+    });
   }
 
   if (action === "obtener_estado_canonico") {

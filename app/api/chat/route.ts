@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { render } from "@react-email/render";
 import { validateExtraction } from "@/lib/validators/extractionRules";
+import { buildAthleteKnowledge } from "@/lib/knowledge/athleteKnowledge";
 import { sendEmail } from "@/lib/email/sendEmail";
 import FounderEmail from "@/lib/email/templates/FounderEmail";
 
@@ -155,6 +156,16 @@ async function forgeEventAggregator(supabase: any, apiKey: string, codigo: strin
 // "olvide" un evento importante solo porque hubo conversacion intermedia.
 async function forgeContextBuilder(supabase: any, codigo: string, eventoActivoActual: { eventType: string; mensajesDelEvento: string[] }): Promise<string> {
   const partes: string[] = [];
+
+  // FORGE KNOWLEDGE ENGINE — informacion determinista, sin razonamiento, el Coach decide que hacer con ella
+  const knowledge = await buildAthleteKnowledge(codigo);
+  const lineasKnowledge: string[] = [];
+  if (knowledge.objective) lineasKnowledge.push(`Objetivo: ${knowledge.objective}`);
+  if (knowledge.block) lineasKnowledge.push(`Bloque: ${knowledge.block.bloque} — Semana ${knowledge.block.semana}/${knowledge.block.totalSemanas}`);
+  if (knowledge.weaknesses.length > 0) lineasKnowledge.push(`Debilidad activa: ${knowledge.weaknesses[0]}`);
+  if (knowledge.latestInsight) lineasKnowledge.push(`Último Insight: ${knowledge.latestInsight.substring(0, 150)}`);
+  if (knowledge.recovery?.hrv) lineasKnowledge.push(`Recuperación actual: HRV ${knowledge.recovery.hrv}ms, sueño ${knowledge.recovery.sueno}/100, tendencia ${knowledge.recovery.tendencia || "sin datos"}`);
+  if (lineasKnowledge.length > 0) partes.push(`FORGE KNOWLEDGE:\n${lineasKnowledge.join("\n")}`);
 
   partes.push(`EVENTO ACTUAL (${eventoActivoActual.eventType}):\n${eventoActivoActual.mensajesDelEvento.join("\n")}`);
 

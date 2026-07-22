@@ -149,12 +149,50 @@ async function forgeEventAggregator(supabase: any, apiKey: string, codigo: strin
   return { eventType: tipoDetectado, mensajesDelEvento: mensajesEvento, esCorreccion };
 }
 
+// Genera una "fotografia contextual" estructurada del evento, usando una llamada pequeña
+// y dedicada (Haiku), separada del Coach principal. No da consejos, no inventa informacion.
+async function generarEventContext(apiKey: string, eventType: string, mensajes: string[]): Promise<any> {
+  const textoEvento = mensajes.join("\n\n");
+  const prompt = `Resume este evento en una fotografia estructurada. NO des consejos. NO inventes informacion que no este en el texto. Responde SOLO con JSON valido, sin markdown:
+
+Tipo de evento: ${eventType}
+Texto del evento:
+${textoEvento}
+
+Formato de respuesta:
+{
+  "summary": "resumen en maximo 20 palabras de lo que ocurrio",
+  "status": "completed|reported|mentioned",
+  "entities": {
+    "workout": ["ejercicios mencionados, vacio si no aplica"],
+    "injuries": ["molestias o lesiones mencionadas, vacio si no aplica"],
+    "physiology": ["metricas mencionadas como hrv/sueno/fc, vacio si no aplica"]
+  }
+}`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 200, messages: [{ role: "user", content: prompt }] }),
+    });
+    const data = await res.json();
+    const texto = data.content?.map((b: any) => b.text || "").join("") || "{}";
+    const clean = texto.replace(/```json|```/g, "").trim();
+    return JSON.parse(clean);
+  } catch {
+    return null;
+  }
+}
+
 // Marca el evento activo como ya extraido, iniciando la ventana de correccion de 3 minutos.
-// Ademas registra un log inmutable del evento para el Event Inspector (observabilidad).
-async function marcarEventoComoExtraido(supabase: any, codigo: string, extraccionExitosa: boolean) {
+// Ademas registra un log inmutable del evento con su event_context (fotografia estructurada)
+// para el Event Inspector y para el futuro Forge Context Builder.
+async function marcarEventoComoExtraido(supabase: any, apiKey: string, codigo: string, extraccionExitosa: boolean) {
   const { data: eventoActual } = await supabase.from("active_events").select("*").eq("user_codigo", codigo).single();
   if (eventoActual) {
     const yaEstabaExtraido = eventoActual.status === "extracted";
+    const eventContext = await generarEventContext(apiKey, eventoActual.event_type, eventoActual.messages || []);
     await supabase.from("event_log").insert({
       user_codigo: codigo,
       event_id: eventoActual.event_id,
@@ -163,6 +201,7 @@ async function marcarEventoComoExtraido(supabase: any, codigo: string, extraccio
       mensajes_count: (eventoActual.messages || []).length,
       fue_correccion: yaEstabaExtraido,
       extraccion_exitosa: extraccionExitosa,
+      event_context: eventContext,
       closed_at: new Date().toISOString()
     });
   }
@@ -467,7 +506,7 @@ ${ultimos}`;
           await supabase.from("usuarios").update(updates).eq("codigo", codigo);
         }
         // Marcar el evento como ya extraido, iniciando ventana de correccion de 3 minutos
-        await marcarEventoComoExtraido(supabase, codigo, true);
+        await marcarEventoComoExtraido(supabase, apiKey!, codigo, true);
       } catch (e) {
         console.error("Error extraccion servidor:", e);
       }

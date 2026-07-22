@@ -1179,6 +1179,11 @@ const forgeValidator=(texto:string):string=>{
     const esSuenoSilencioso=/métricas de sueño|dormí|puntuación de sueño|durante la noche|sueño profundo|sueño rem/i.test(texto.toLowerCase()) && !/entren|wod|sesion realizada|serie|repeticion/i.test(texto.toLowerCase());
     try{
       const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[archivo]"}...`).join("\n");
+      const resContextoSilencioso=await apiCall({action:"procesar_mensaje_contexto",codigo:codigoUsuario,datos:{mensaje:textoConFecha}});
+      const contextoConstruidoSilencioso=resContextoSilencioso?.contexto||"";
+      const mensajesParaAPI=contextoConstruidoSilencioso
+        ? [{role:"user" as const,content:`[CONTEXTO DE EVENTOS RECIENTES]\n${contextoConstruidoSilencioso}`},{role:"assistant" as const,content:"Entendido, tengo el contexto."},{role:"user" as const,content:textoConFecha}]
+        : nuevoHist.slice(-3);
       const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal,planSemanal,debilidades,blockOutcomes,estadoCanonico)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:mensajesParaAPI},true);
       if(data.aborted) return;
       const respTextRaw=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.");

@@ -1571,11 +1571,8 @@ ${testStr}`}]});
       {pestanaBloqueada&&(
         <div className="fade-up" style={{maxWidth:420,width:"100%",textAlign:"center"}}>
           <div style={{fontSize:40,marginBottom:16}}>🔒</div>
-          <h2 style={{fontSize:20,color:C.ink,marginBottom:12}}>Forge ya está abierto en otra pestaña</h2>
-          <p style={{color:C.muted,fontSize:14,lineHeight:1.6,marginBottom:24}}>Para evitar incoherencias en tu planificación, solo una pestaña puede estar activa a la vez. Cierra esta pestaña y continúa en la otra, o recarga aquí para tomar el control.</p>
-          <button onClick={()=>window.location.reload()} style={{background:"#FF6B00",color:"#fff",border:"none",borderRadius:14,padding:"14px 32px",fontSize:15,fontWeight:600,cursor:"pointer"}}>
-            Continuar en esta pestaña
-          </button>
+          <h2 style={{fontSize:20,color:C.ink,marginBottom:12}}>Se ha abierto Forge en otra pestaña</h2>
+          <p style={{color:C.muted,fontSize:14,lineHeight:1.6,marginBottom:24}}>Esta pestaña ha pasado a modo bloqueado para proteger la coherencia de tu planificación.</p>
         </div>
       )}
 

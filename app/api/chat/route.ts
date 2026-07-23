@@ -1264,9 +1264,19 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
   }
 
   if (action === "actualizar_sesion_plan") {
-    const { week_start, dia, cambios, motivo, confidence } = datos;
+    const { dia, cambios, motivo, confidence } = datos;
+    // CORRECCIÓN DE RAÍZ: ignorar el week_start que envió el modelo (puede estar mal calculado)
+    // y usar siempre el de la semana actual real, igual que hacemos en guardar_plan_semana.
+    const ahoraMod = new Date();
+    const hoyModStr = ahoraMod.toLocaleDateString('en-CA', {timeZone: 'Europe/Madrid'});
+    const hoyModFecha = new Date(hoyModStr + 'T12:00:00');
+    const diaSemanaMod = hoyModFecha.getDay() || 7;
+    const lunesMod = new Date(hoyModFecha);
+    lunesMod.setDate(hoyModFecha.getDate() - diaSemanaMod + 1);
+    const week_start = lunesMod.toISOString().split('T')[0];
+
     const { data: planActual } = await supabase.from("weekly_plan").select("sessions,confidence").eq("user_codigo", codigo).eq("week_start", week_start).single();
-    if (!planActual) return NextResponse.json({ error: "Plan no encontrado" }, { status: 404 });
+    if (!planActual) return NextResponse.json({ error: "Plan no encontrado para la semana actual", week_start_usado: week_start }, { status: 404 });
     const sessions = planActual.sessions.map((s: any) => {
       if (s.dia === dia) {
         return { ...s, ...cambios, modificado: true, motivo_modificacion: motivo || "", modificado_at: new Date().toISOString() };

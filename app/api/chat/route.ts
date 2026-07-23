@@ -965,14 +965,27 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
   }
 
   if (action === "verificar_sesion_activa") {
-    // Consulta si hay OTRA sesion activa (con session_id DISTINTO al nuestro) Y REALMENTE VIVA.
-    // Si el session_id guardado es el mismo que el nuestro, es la propia pestaña, no hay conflicto.
+    // VERIFY (solo lectura, NUNCA escribe): distingue 3 casos claramente.
+    // 1. Nadie ha adquirido nunca -> sinDueñoRegistrado=true (unico caso donde el frontend puede auto-adquirir)
+    // 2. El dueño soy yo mismo -> haySesionActiva=false, no hacer nada
+    // 3. Otra sesion viva y distinta a la mia -> haySesionActiva=true, mostrar conflicto
     const { sessionId: miSessionId } = datos || {};
     const SESSION_ALIVE_THRESHOLD_MS = 60 * 1000;
     const { data: sesionActiva } = await supabase.from("active_sessions").select("*").eq("user_codigo", codigo).single();
-    const esOtraSesion = sesionActiva && sesionActiva.session_id !== miSessionId;
-    const estaViva = esOtraSesion && (Date.now() - new Date(sesionActiva.updated_at).getTime()) < SESSION_ALIVE_THRESHOLD_MS;
-    return NextResponse.json({ haySesionActiva: !!estaViva, sesionActiva: estaViva ? sesionActiva : null });
+
+    if (!sesionActiva) {
+      return NextResponse.json({ haySesionActiva: false, sinDueñoRegistrado: true, sesionActiva: null });
+    }
+    const soyElDueño = sesionActiva.session_id === miSessionId;
+    if (soyElDueño) {
+      return NextResponse.json({ haySesionActiva: false, sinDueñoRegistrado: false, sesionActiva: null });
+    }
+    const otraEstaViva = (Date.now() - new Date(sesionActiva.updated_at).getTime()) < SESSION_ALIVE_THRESHOLD_MS;
+    if (!otraEstaViva) {
+      // El otro dueño esta abandonado (sin heartbeat reciente) -> tratar como sin dueño registrado
+      return NextResponse.json({ haySesionActiva: false, sinDueñoRegistrado: true, sesionActiva: null });
+    }
+    return NextResponse.json({ haySesionActiva: true, sinDueñoRegistrado: false, sesionActiva });
   }
 
   if (action === "tomar_control_sesion") {

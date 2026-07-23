@@ -618,18 +618,17 @@ export default function Forge() {
     if(yaVerificoSesionRef.current) return;
     yaVerificoSesionRef.current=true;
 
+    // SOLO VERIFICA, NUNCA ADQUIERE. La adquisicion (acquireSession) es exclusivamente
+    // voluntaria: al cargar por primera vez si no hay dueño registrado, o al pulsar "Continuar aqui".
     const verificarYSolicitarControl=async()=>{
-      console.log("SESSION LOCK: verificando para codigo", codigoUsuario, "con sessionId", sessionIdRef.current);
       const res=await apiCall({action:"verificar_sesion_activa",codigo:codigoUsuario,datos:{sessionId:sessionIdRef.current}});
-      console.log("SESSION LOCK: respuesta verificar_sesion_activa:", res);
       if(res?.haySesionActiva){
-        console.log("SESSION LOCK: hay sesion activa, mostrando conflicto");
         setMostrarConflictoSesion(true);
-      } else {
-        console.log("SESSION LOCK: tomando control");
-        const resControl=await apiCall({action:"tomar_control_sesion",codigo:codigoUsuario,datos:{sessionId:sessionIdRef.current}});
-        console.log("SESSION LOCK: respuesta tomar_control_sesion completa:", JSON.stringify(resControl));
+      } else if(res?.sinDueñoRegistrado){
+        // Nadie es dueño aun (primera carga real de la app) — unica adquisicion automatica permitida
+        await apiCall({action:"tomar_control_sesion",codigo:codigoUsuario,datos:{sessionId:sessionIdRef.current}});
       }
+      // Si haySesionActiva=false porque el dueño soy YO, no hacer nada (ni adquirir ni bloquear)
     };
     verificarYSolicitarControl();
 

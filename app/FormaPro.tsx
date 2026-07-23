@@ -605,7 +605,7 @@ export default function Forge() {
       } else {
         console.log("SESSION LOCK: tomando control");
         const resControl=await apiCall({action:"tomar_control_sesion",codigo:codigoUsuario,datos:{sessionId:sessionIdRef.current}});
-        console.log("SESSION LOCK: respuesta tomar_control_sesion:", resControl);
+        console.log("SESSION LOCK: respuesta tomar_control_sesion completa:", JSON.stringify(resControl));
       }
     };
     verificarYSolicitarControl();

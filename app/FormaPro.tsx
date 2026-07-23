@@ -598,11 +598,15 @@ export default function Forge() {
     });
   };
   const sessionIdRef=useRef<string>(generarUUID());
+  const yaVerificoSesionRef=useRef<boolean>(false);
 
   // SESSION LOCK MANAGER: el backend arbitra cual pestaña tiene el control real.
   // Al detectar el codigo de usuario, verificamos si hay otra sesion activa antes de tomar el control.
   useEffect(()=>{
     if(!codigoUsuario) return;
+
+    if(yaVerificoSesionRef.current) return;
+    yaVerificoSesionRef.current=true;
 
     const verificarYSolicitarControl=async()=>{
       console.log("SESSION LOCK: verificando para codigo", codigoUsuario, "con sessionId", sessionIdRef.current);

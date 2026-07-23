@@ -588,7 +588,16 @@ export default function Forge() {
   const [codigoInput,setCodigoInput]=useState("");
   const [pestanaBloqueada,setPestanaBloqueada]=useState(false);
   const [mostrarConflictoSesion,setMostrarConflictoSesion]=useState(false);
-  const sessionIdRef=useRef<string>(`sess_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+  const generarUUID=():string=>{
+    if(typeof crypto!=="undefined"&&crypto.randomUUID) return crypto.randomUUID();
+    // Fallback simple con formato UUID v4 valido para navegadores antiguos
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,(c)=>{
+      const r=Math.random()*16|0;
+      const v=c==="x"?r:(r&0x3|0x8);
+      return v.toString(16);
+    });
+  };
+  const sessionIdRef=useRef<string>(generarUUID());
 
   // SESSION LOCK MANAGER: el backend arbitra cual pestaña tiene el control real.
   // Al detectar el codigo de usuario, verificamos si hay otra sesion activa antes de tomar el control.

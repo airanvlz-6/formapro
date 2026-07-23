@@ -597,7 +597,15 @@ export default function Forge() {
       return v.toString(16);
     });
   };
-  const sessionIdRef=useRef<string>(generarUUID());
+  const obtenerOCrearSessionId=():string=>{
+    if(typeof window==="undefined") return generarUUID();
+    const existente=sessionStorage.getItem("forge_session_id");
+    if(existente) return existente;
+    const nuevo=generarUUID();
+    sessionStorage.setItem("forge_session_id",nuevo);
+    return nuevo;
+  };
+  const sessionIdRef=useRef<string>(obtenerOCrearSessionId());
   const yaVerificoSesionRef=useRef<boolean>(false);
 
   // SESSION LOCK MANAGER: el backend arbitra cual pestaña tiene el control real.

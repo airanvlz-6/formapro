@@ -1970,16 +1970,16 @@ ${testStr}`}]});
                 </button>
                 {mostrarMenu&&(
                   <div style={{position:"absolute",right:0,top:"calc(100% + 6px)",background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:8,zIndex:100,minWidth:160,boxShadow:"0 4px 20px rgba(0,0,0,0.3)"}}>
-                    <button onClick={()=>{window.open(`/plan?codigo=${codigoUsuario}`,'_blank');setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
+                    <button onClick={()=>{window.location.href=`/plan?codigo=${codigoUsuario}`;}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
                       📅 Mi plan
                     </button>
-                    <button onClick={()=>{window.open(`/historia?codigo=${codigoUsuario}`,'_blank');setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
+                    <button onClick={()=>{window.location.href=`/historia?codigo=${codigoUsuario}`;}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
                       📖 Mi historia
                     </button>
-                    <button onClick={()=>{window.open(`/progreso?codigo=${codigoUsuario}`,'_blank');setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
+                    <button onClick={()=>{window.location.href=`/progreso?codigo=${codigoUsuario}`;}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
                       📊 Mi progreso
                     </button>
-                    <button onClick={()=>{window.open(`/atleta?codigo=${codigoUsuario}`,'_blank');setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
+                    <button onClick={()=>{window.location.href=`/atleta?codigo=${codigoUsuario}`;}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
                       🎯 Mi Atleta
                     </button>
                     <button onClick={()=>{setMostrarEquipos(!mostrarEquipos);setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>

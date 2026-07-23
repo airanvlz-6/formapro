@@ -586,6 +586,36 @@ export default function Forge() {
   const [msgCount,setMsgCount]=useState(0);
   const [codigoUsuario,setCodigoUsuario]=useState("");
   const [codigoInput,setCodigoInput]=useState("");
+  const [pestanaBloqueada,setPestanaBloqueada]=useState(false);
+  const [mostrarConflictoSesion,setMostrarConflictoSesion]=useState(false);
+  const sessionIdRef=useRef<string>(`sess_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+
+  // SESSION LOCK MANAGER: el backend arbitra cual pestaña tiene el control real.
+  // Al detectar el codigo de usuario, verificamos si hay otra sesion activa antes de tomar el control.
+  useEffect(()=>{
+    if(!codigoUsuario) return;
+
+    const verificarYSolicitarControl=async()=>{
+      const res=await apiCall({action:"verificar_sesion_activa",codigo:codigoUsuario});
+      if(res?.haySesionActiva){
+        setMostrarConflictoSesion(true);
+      } else {
+        await apiCall({action:"tomar_control_sesion",codigo:codigoUsuario,datos:{sessionId:sessionIdRef.current}});
+      }
+    };
+    verificarYSolicitarControl();
+
+    // Heartbeat cada 25 segundos: si dejamos de ser propietarios, bloqueamos esta pestaña
+    const interval=setInterval(async()=>{
+      const res=await apiCall({action:"heartbeat_sesion",codigo:codigoUsuario,datos:{sessionId:sessionIdRef.current}});
+      if(res?.ok===false){
+        setPestanaBloqueada(true);
+      }
+    },25000);
+
+    return ()=>clearInterval(interval);
+  },[codigoUsuario]);
+
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search);
     const codigoUrl=params.get("codigo");
@@ -1509,14 +1539,40 @@ ${testStr}`}]});
         .sugg:hover{opacity:0.75;}
       `}</style>
 
-      {pantalla==="cargando"&&(
+      {mostrarConflictoSesion&&(
+        <div className="fade-up" style={{maxWidth:420,width:"100%",textAlign:"center"}}>
+          <div style={{fontSize:40,marginBottom:16}}>🔒</div>
+          <h2 style={{fontSize:20,color:C.ink,marginBottom:12}}>Forge ya está abierto en otra pestaña</h2>
+          <p style={{color:C.muted,fontSize:14,lineHeight:1.6,marginBottom:24}}>Para evitar incoherencias en tu planificación, solo una pestaña puede estar activa a la vez.</p>
+          <button onClick={async()=>{
+            await apiCall({action:"tomar_control_sesion",codigo:codigoUsuario,datos:{sessionId:sessionIdRef.current}});
+            setMostrarConflictoSesion(false);
+          }} style={{background:"#FF6B00",color:"#fff",border:"none",borderRadius:14,padding:"14px 32px",fontSize:15,fontWeight:600,cursor:"pointer",width:"100%",maxWidth:300,marginBottom:12}}>
+            Continuar aquí
+          </button>
+          <p style={{color:C.muted,fontSize:12}}>La otra pestaña pasará a modo bloqueado</p>
+        </div>
+      )}
+
+      {pestanaBloqueada&&(
+        <div className="fade-up" style={{maxWidth:420,width:"100%",textAlign:"center"}}>
+          <div style={{fontSize:40,marginBottom:16}}>🔒</div>
+          <h2 style={{fontSize:20,color:C.ink,marginBottom:12}}>Forge ya está abierto en otra pestaña</h2>
+          <p style={{color:C.muted,fontSize:14,lineHeight:1.6,marginBottom:24}}>Para evitar incoherencias en tu planificación, solo una pestaña puede estar activa a la vez. Cierra esta pestaña y continúa en la otra, o recarga aquí para tomar el control.</p>
+          <button onClick={()=>window.location.reload()} style={{background:"#FF6B00",color:"#fff",border:"none",borderRadius:14,padding:"14px 32px",fontSize:15,fontWeight:600,cursor:"pointer"}}>
+            Continuar en esta pestaña
+          </button>
+        </div>
+      )}
+
+      {!pestanaBloqueada&&pantalla==="cargando"&&(
         <div className="fade-up" style={{textAlign:"center"}}>
           <div style={{fontSize:40,marginBottom:16}}>⚡</div>
           <p style={{color:C.muted,fontSize:15}}>Cargando tu sesion...</p>
         </div>
       )}
 
-      {pantalla==="inicio"&&(
+      {!pestanaBloqueada&&pantalla==="inicio"&&(
         <div className="fade-up" style={{maxWidth:520,width:"100%",textAlign:"center"}}>
           <div style={{marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
             <img src="/logo-forge.png" alt="Forge" style={{width:80,height:80,objectFit:"contain"}}/>

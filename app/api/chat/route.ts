@@ -964,6 +964,36 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
     return NextResponse.json({ valido: true });
   }
 
+  if (action === "verificar_sesion_activa") {
+    // Consulta si hay otra sesion activa, sin tomar el control todavia
+    const { data: sesionActiva } = await supabase.from("active_sessions").select("*").eq("user_codigo", codigo).single();
+    return NextResponse.json({ haySesionActiva: !!sesionActiva, sesionActiva: sesionActiva || null });
+  }
+
+  if (action === "tomar_control_sesion") {
+    // Esta pestaña toma el control explicitamente (el usuario confirmo "Continuar aqui")
+    const { sessionId } = datos;
+    const ahora = new Date().toISOString();
+    await supabase.from("active_sessions").upsert({
+      user_codigo: codigo,
+      session_id: sessionId,
+      owner_since: ahora,
+      updated_at: ahora
+    });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === "heartbeat_sesion") {
+    // Actualiza el heartbeat SOLO si esta sesion sigue siendo la propietaria del lock
+    const { sessionId } = datos;
+    const { data: sesionActual } = await supabase.from("active_sessions").select("session_id").eq("user_codigo", codigo).single();
+    if (sesionActual?.session_id !== sessionId) {
+      return NextResponse.json({ ok: false, motivo: "ya_no_eres_propietario" });
+    }
+    await supabase.from("active_sessions").update({ updated_at: new Date().toISOString() }).eq("user_codigo", codigo);
+    return NextResponse.json({ ok: true });
+  }
+
   if (action === "procesar_mensaje_contexto") {
     // Combina Event Aggregator + Context Builder en una sola llamada para el frontend
     const { mensaje } = datos;

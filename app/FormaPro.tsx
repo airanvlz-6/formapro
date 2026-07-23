@@ -620,7 +620,7 @@ export default function Forge() {
 
     const verificarYSolicitarControl=async()=>{
       console.log("SESSION LOCK: verificando para codigo", codigoUsuario, "con sessionId", sessionIdRef.current);
-      const res=await apiCall({action:"verificar_sesion_activa",codigo:codigoUsuario});
+      const res=await apiCall({action:"verificar_sesion_activa",codigo:codigoUsuario,datos:{sessionId:sessionIdRef.current}});
       console.log("SESSION LOCK: respuesta verificar_sesion_activa:", res);
       if(res?.haySesionActiva){
         console.log("SESSION LOCK: hay sesion activa, mostrando conflicto");

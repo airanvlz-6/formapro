@@ -965,11 +965,13 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
   }
 
   if (action === "verificar_sesion_activa") {
-    // Consulta si hay otra sesion activa Y REALMENTE VIVA (heartbeat reciente).
-    // Si la ultima actualizacion es muy antigua, la sesion se considera abandonada (pestaña cerrada sin avisar).
-    const SESSION_ALIVE_THRESHOLD_MS = 60 * 1000; // 60s: mas del doble del intervalo de heartbeat (25s)
+    // Consulta si hay OTRA sesion activa (con session_id DISTINTO al nuestro) Y REALMENTE VIVA.
+    // Si el session_id guardado es el mismo que el nuestro, es la propia pestaña, no hay conflicto.
+    const { sessionId: miSessionId } = datos || {};
+    const SESSION_ALIVE_THRESHOLD_MS = 60 * 1000;
     const { data: sesionActiva } = await supabase.from("active_sessions").select("*").eq("user_codigo", codigo).single();
-    const estaViva = sesionActiva && (Date.now() - new Date(sesionActiva.updated_at).getTime()) < SESSION_ALIVE_THRESHOLD_MS;
+    const esOtraSesion = sesionActiva && sesionActiva.session_id !== miSessionId;
+    const estaViva = esOtraSesion && (Date.now() - new Date(sesionActiva.updated_at).getTime()) < SESSION_ALIVE_THRESHOLD_MS;
     return NextResponse.json({ haySesionActiva: !!estaViva, sesionActiva: estaViva ? sesionActiva : null });
   }
 

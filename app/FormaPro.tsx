@@ -596,11 +596,16 @@ export default function Forge() {
     if(!codigoUsuario) return;
 
     const verificarYSolicitarControl=async()=>{
+      console.log("SESSION LOCK: verificando para codigo", codigoUsuario, "con sessionId", sessionIdRef.current);
       const res=await apiCall({action:"verificar_sesion_activa",codigo:codigoUsuario});
+      console.log("SESSION LOCK: respuesta verificar_sesion_activa:", res);
       if(res?.haySesionActiva){
+        console.log("SESSION LOCK: hay sesion activa, mostrando conflicto");
         setMostrarConflictoSesion(true);
       } else {
-        await apiCall({action:"tomar_control_sesion",codigo:codigoUsuario,datos:{sessionId:sessionIdRef.current}});
+        console.log("SESSION LOCK: tomando control");
+        const resControl=await apiCall({action:"tomar_control_sesion",codigo:codigoUsuario,datos:{sessionId:sessionIdRef.current}});
+        console.log("SESSION LOCK: respuesta tomar_control_sesion:", resControl);
       }
     };
     verificarYSolicitarControl();

@@ -1913,7 +1913,7 @@ ${testStr}`}]});
         </div>
       )}
 
-      {pantalla==="chat"&&cat&&(
+      {!mostrarConflictoSesion&&pantalla==="chat"&&cat&&(
         <div style={{width:"100%",maxWidth:700,display:"flex",flexDirection:"column",height:"100dvh",maxHeight:"100dvh",paddingTop:"max(50px, env(safe-area-inset-top))",paddingBottom:"max(16px, env(safe-area-inset-bottom))"}}>
           {codigoGuardado&&(
             <div style={{background:C.successLight,border:`1px solid ${C.success}33`,borderRadius:12,padding:"10px 16px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>

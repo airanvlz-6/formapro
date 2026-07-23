@@ -974,12 +974,16 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
     // Esta pestaña toma el control explicitamente (el usuario confirmo "Continuar aqui")
     const { sessionId } = datos;
     const ahora = new Date().toISOString();
-    await supabase.from("active_sessions").upsert({
+    const { error: errorUpsert } = await supabase.from("active_sessions").upsert({
       user_codigo: codigo,
       session_id: sessionId,
       owner_since: ahora,
       updated_at: ahora
     });
+    if (errorUpsert) {
+      console.error("ERROR upsert active_sessions:", errorUpsert);
+      return NextResponse.json({ ok: false, error: errorUpsert.message });
+    }
     return NextResponse.json({ ok: true });
   }
 

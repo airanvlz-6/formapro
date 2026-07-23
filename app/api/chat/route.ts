@@ -965,9 +965,12 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
   }
 
   if (action === "verificar_sesion_activa") {
-    // Consulta si hay otra sesion activa, sin tomar el control todavia
+    // Consulta si hay otra sesion activa Y REALMENTE VIVA (heartbeat reciente).
+    // Si la ultima actualizacion es muy antigua, la sesion se considera abandonada (pestaña cerrada sin avisar).
+    const SESSION_ALIVE_THRESHOLD_MS = 60 * 1000; // 60s: mas del doble del intervalo de heartbeat (25s)
     const { data: sesionActiva } = await supabase.from("active_sessions").select("*").eq("user_codigo", codigo).single();
-    return NextResponse.json({ haySesionActiva: !!sesionActiva, sesionActiva: sesionActiva || null });
+    const estaViva = sesionActiva && (Date.now() - new Date(sesionActiva.updated_at).getTime()) < SESSION_ALIVE_THRESHOLD_MS;
+    return NextResponse.json({ haySesionActiva: !!estaViva, sesionActiva: estaViva ? sesionActiva : null });
   }
 
   if (action === "tomar_control_sesion") {

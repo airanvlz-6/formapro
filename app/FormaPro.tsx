@@ -600,11 +600,9 @@ export default function Forge() {
   const obtenerOCrearSessionId=():string=>{
     if(typeof window==="undefined") return generarUUID();
     const existente=sessionStorage.getItem("forge_session_id");
-    console.log("SESSION STORAGE: valor existente al cargar pagina:", existente);
     if(existente) return existente;
     const nuevo=generarUUID();
     sessionStorage.setItem("forge_session_id",nuevo);
-    console.log("SESSION STORAGE: generado nuevo:", nuevo);
     return nuevo;
   };
   const sessionIdRef=useRef<string>(obtenerOCrearSessionId());

@@ -1309,18 +1309,30 @@ Incluye: adherencia (X/7 sesiones), tendencia fisiológica general, y una frase 
       console.log(`CORRIGIENDO week_start: modelo envió ${plan.week_start}, correcto es ${weekStartCorrecto}`);
       plan.week_start = weekStartCorrecto;
     }
-    // Preservar sesiones ya completadas si existen
-    const { data: planExistente } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", plan.week_start).single();
-    if (planExistente?.sessions) {
-      plan.sessions = plan.sessions.map((nuevaSesion: any) => {
-        const sesionExistente = planExistente.sessions.find((s: any) => s.dia === nuevaSesion.dia);
-        if (sesionExistente?.completada) {
-          // Mantener la sesión completada tal cual estaba, no sobrescribir
-          return sesionExistente;
-        }
-        return nuevaSesion;
-      });
+    // Preservar sesiones ya completadas SOLO si es la semana ACTUAL real (evita mezclar contenido
+    // entre una semana nueva y un registro parcial/viejo que pudiera existir con el mismo week_start
+    // por un intento anterior fallido del Orchestrator).
+    const hoyGuardadoStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+    const hoyGuardadoFecha = new Date(hoyGuardadoStr + 'T12:00:00');
+    const diaSemGuardado = hoyGuardadoFecha.getDay() || 7;
+    const lunesGuardado = new Date(hoyGuardadoFecha);
+    lunesGuardado.setDate(hoyGuardadoFecha.getDate() - diaSemGuardado + 1);
+    const weekStartActualReal = lunesGuardado.toISOString().split('T')[0];
+    const esSemanaActual = plan.week_start === weekStartActualReal;
+
+    if (esSemanaActual) {
+      const { data: planExistente } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", plan.week_start).single();
+      if (planExistente?.sessions) {
+        plan.sessions = plan.sessions.map((nuevaSesion: any) => {
+          const sesionExistente = planExistente.sessions.find((s: any) => s.dia === nuevaSesion.dia);
+          if (sesionExistente?.completada) {
+            return sesionExistente;
+          }
+          return nuevaSesion;
+        });
+      }
     }
+    // Si NO es la semana actual (es una semana futura nueva), se guarda tal cual, sin fusionar con nada existente
     const { error } = await supabase.from("weekly_plan").upsert({
       user_codigo: codigo,
       week_start: plan.week_start,

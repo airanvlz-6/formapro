@@ -768,24 +768,32 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
   // FORGE ORCHESTRATOR — genera la semana completa en 3 pasos pequeños en vez de una llamada gigante
   const orquestarGeneracionSemana=async():Promise<any>=>{
     if(!codigoUsuario) return null;
+    console.log("=== FORGE ORCHESTRATOR: INICIO ===");
 
     // Paso 1: Block Analyzer
+    console.log("ORCHESTRATOR Paso 1 — Block Analyzer: iniciando...");
     const analyzerRes=await apiCall({action:"analizar_bloque_semana",codigo:codigoUsuario});
-    if(!analyzerRes?.ok) return null;
+    console.log("ORCHESTRATOR Paso 1 — Block Analyzer: resultado:", JSON.stringify(analyzerRes));
+    if(!analyzerRes?.ok) { console.log("ORCHESTRATOR: FALLO en Block Analyzer, abortando"); return null; }
     const analisis=analyzerRes.analisis;
 
     // Paso 2: Week Planner
+    console.log("ORCHESTRATOR Paso 2 — Week Planner: iniciando con analisis:", JSON.stringify(analisis));
     const plannerRes=await apiCall({action:"planificar_semana",codigo:codigoUsuario,datos:{analisis}});
-    if(!plannerRes?.ok) return null;
+    console.log("ORCHESTRATOR Paso 2 — Week Planner: resultado:", JSON.stringify(plannerRes));
+    if(!plannerRes?.ok) { console.log("ORCHESTRATOR: FALLO en Week Planner, abortando"); return null; }
     const estructura=plannerRes.estructura;
 
     // Paso 3: Session Builder, una llamada por dia
+    console.log("ORCHESTRATOR Paso 3 — Session Builder: construyendo", (estructura.sessions||[]).length, "dias");
     const sesionesCompletas:any[]=[];
     for(const diaEstructura of estructura.sessions||[]){
       if(diaEstructura.tipo==="descanso"){
+        console.log(`ORCHESTRATOR Paso 3 — ${diaEstructura.dia}: descanso, sin llamada al builder`);
         sesionesCompletas.push({dia:diaEstructura.dia,tipo:"descanso",titulo:"Descanso",por_que:"Recuperación programada",descripcion:"Día de descanso — prioriza sueño, hidratación y nutrición."});
         continue;
       }
+      console.log(`ORCHESTRATOR Paso 3 — ${diaEstructura.dia}: construyendo sesion tipo ${diaEstructura.tipo}...`);
       const builderRes=await apiCall({action:"construir_sesion_dia",codigo:codigoUsuario,datos:{
         dia:diaEstructura.dia,
         tipo:diaEstructura.tipo,
@@ -793,8 +801,11 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
         analisis,
         debilidad_relacionada:analisis.debilidad_prioritaria
       }});
+      console.log(`ORCHESTRATOR Paso 3 — ${diaEstructura.dia}: resultado:`, JSON.stringify(builderRes));
       if(builderRes?.ok) sesionesCompletas.push(builderRes.sesion);
+      else console.log(`ORCHESTRATOR Paso 3 — ${diaEstructura.dia}: FALLO, dia omitido`);
     }
+    console.log("ORCHESTRATOR: sesiones completas construidas:", sesionesCompletas.length, "de 7 esperadas");
 
     // FORGE SCIENTIFIC VALIDATOR — biblioteca de 10 reglas deterministas, corrige sesiones antes de guardar
     const esDeload=analisis.tipo_semana==="deload";
@@ -828,20 +839,25 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     };
 
     // Guardar el plan completo
+    console.log("ORCHESTRATOR: guardando plan completo:", JSON.stringify(planCompleto));
     await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planCompleto}});
 
     // FORGE PERSISTENCE VALIDATOR — verificar que realmente se guardo correctamente antes de confirmar exito
+    console.log("ORCHESTRATOR: verificando persistencia para week_start:", planCompleto.week_start);
     const validacion=await apiCall({action:"verificar_persistencia_plan",codigo:codigoUsuario,datos:{weekStart:planCompleto.week_start}});
+    console.log("ORCHESTRATOR: resultado verificacion persistencia:", JSON.stringify(validacion));
     if(!validacion?.valido){
-      // Reintento automatico una vez si la validacion falla
+      console.log("ORCHESTRATOR: validacion fallo, motivo:", validacion?.motivo, "— reintentando guardado...");
       await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planCompleto}});
       const segundaValidacion=await apiCall({action:"verificar_persistencia_plan",codigo:codigoUsuario,datos:{weekStart:planCompleto.week_start}});
+      console.log("ORCHESTRATOR: resultado segunda verificacion:", JSON.stringify(segundaValidacion));
       if(!segundaValidacion?.valido){
+        console.log("=== ORCHESTRATOR: FALLO DEFINITIVO tras reintento ===");
         cargarPlanSemanal(codigoUsuario);
-        return null; // Fallo confirmado tras reintento, se notifica error al usuario
+        return null;
       }
     }
-
+    console.log("=== FORGE ORCHESTRATOR: EXITO COMPLETO ===");
     cargarPlanSemanal(codigoUsuario);
     return planCompleto;
   };

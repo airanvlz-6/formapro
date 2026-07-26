@@ -936,6 +936,35 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
     }
   }
 
+  if (action === "verificar_semana_completa_sin_cierre") {
+    // Deteccion determinista: si las 7 sesiones estan completadas pero NO existe ya un forge_insight
+    // para esta semana, el cierre debe forzarse — sin depender de que el modelo genere el tag.
+    const ahoraCierre = new Date();
+    const hoyCierreStr = ahoraCierre.toLocaleDateString('en-CA', {timeZone: 'Europe/Madrid'});
+    const hoyCierreFecha = new Date(hoyCierreStr + 'T12:00:00');
+    const diaSemCierre = hoyCierreFecha.getDay() || 7;
+    const lunesCierre = new Date(hoyCierreFecha);
+    lunesCierre.setDate(hoyCierreFecha.getDate() - diaSemCierre + 1);
+    const weekStartCierre = lunesCierre.toISOString().split('T')[0];
+
+    const { data: planSemana } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", weekStartCierre).single();
+    if (!planSemana) return NextResponse.json({ semanaCompleta: false });
+
+    const sessions = planSemana.sessions || [];
+    const todasCompletadas = sessions.length === 7 && sessions.every((s: any) => s.completada === true || s.tipo === "descanso");
+
+    if (!todasCompletadas) return NextResponse.json({ semanaCompleta: false });
+
+    // Verificar si ya existe un forge_insight para esta semana especifica
+    const { data: insightExistente } = await supabase.from("athlete_events").select("id").eq("user_codigo", codigo).eq("type", "forge_insight").ilike("title", `%${weekStartCierre}%`).limit(1);
+
+    if (insightExistente && insightExistente.length > 0) {
+      return NextResponse.json({ semanaCompleta: true, yaCerrada: true });
+    }
+
+    return NextResponse.json({ semanaCompleta: true, yaCerrada: false, weekStart: weekStartCierre });
+  }
+
   if (action === "verificar_persistencia_plan") {
     // FORGE PERSISTENCE VALIDATOR — verifica que el plan realmente se guardo con estructura correcta
     const { weekStart } = datos;

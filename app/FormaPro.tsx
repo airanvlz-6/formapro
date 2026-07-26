@@ -1269,7 +1269,16 @@ const forgeValidator=(texto:string):string=>{
       const histLimpio=[...historial,{role:"user",content:texto.trim()},{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);
       setHistorial(histLimpio);
-      if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histLimpio}});
+      if(codigoUsuario){
+        apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histLimpio}});
+        if(!mostrarBotonNuevaSemana){
+          apiCall({action:"verificar_semana_completa_sin_cierre",codigo:codigoUsuario}).then((resCierre)=>{
+            if(resCierre?.semanaCompleta && !resCierre?.yaCerrada){
+              setMostrarBotonNuevaSemana(true);
+            }
+          });
+        }
+      }
     }catch{}
     finally{setCargando(false);}
   };

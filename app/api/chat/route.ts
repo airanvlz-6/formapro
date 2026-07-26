@@ -858,7 +858,9 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
       const analyzerData = await analyzerRes.json();
       const analyzerTexto = analyzerData.content?.map((b: any) => b.text || "").join("") || "{}";
       const analyzerClean = analyzerTexto.replace(/```json|```/g, "").trim();
-      const analisisBloque = JSON.parse(analyzerClean);
+      const analyzerMatch = analyzerClean.match(/\{[\s\S]*\}/);
+      if (!analyzerMatch) throw new Error("Block Analyzer no devolvio JSON valido");
+      const analisisBloque = JSON.parse(analyzerMatch[0]);
       return NextResponse.json({ ok: true, analisis: analisisBloque });
     } catch (err: any) {
       return NextResponse.json({ error: "Error en Block Analyzer: " + err.message }, { status: 500 });
@@ -893,7 +895,10 @@ Respeta la disponibilidad indicada. Si un día no tiene sesión, usa tipo "desca
       const plannerData = await plannerRes.json();
       const plannerTexto = plannerData.content?.map((b: any) => b.text || "").join("") || "{}";
       const plannerClean = plannerTexto.replace(/```json|```/g, "").trim();
-      const estructuraSemana = JSON.parse(plannerClean);
+      // Parsing robusto: extraer solo el bloque JSON aunque venga rodeado de texto conversacional
+      const plannerMatch = plannerClean.match(/\{[\s\S]*\}/);
+      if (!plannerMatch) throw new Error("Week Planner no devolvio JSON valido");
+      const estructuraSemana = JSON.parse(plannerMatch[0]);
       return NextResponse.json({ ok: true, estructura: estructuraSemana });
     } catch (err: any) {
       return NextResponse.json({ error: "Error en Week Planner: " + err.message }, { status: 500 });
@@ -929,7 +934,9 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
       const builderData = await builderRes.json();
       const builderTexto = builderData.content?.map((b: any) => b.text || "").join("") || "{}";
       const builderClean = builderTexto.replace(/```json|```/g, "").trim();
-      const sesionCompleta = JSON.parse(builderClean);
+      const builderMatch = builderClean.match(/\{[\s\S]*\}/);
+      if (!builderMatch) throw new Error("Session Builder no devolvio JSON valido");
+      const sesionCompleta = JSON.parse(builderMatch[0]);
       return NextResponse.json({ ok: true, sesion: { dia, tipo, ...sesionCompleta } });
     } catch (err: any) {
       return NextResponse.json({ error: "Error en Session Builder: " + err.message }, { status: 500 });

@@ -938,7 +938,7 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
 
   if (action === "verificar_semana_completa_sin_cierre") {
     // Deteccion determinista: si las 7 sesiones estan completadas pero NO existe ya un forge_insight
-    // para esta semana, el cierre debe forzarse — sin depender de que el modelo genere el tag.
+    // para esta semana, generamos el Insight AQUI MISMO — sin depender de que el modelo genere el tag.
     const ahoraCierre = new Date();
     const hoyCierreStr = ahoraCierre.toLocaleDateString('en-CA', {timeZone: 'Europe/Madrid'});
     const hoyCierreFecha = new Date(hoyCierreStr + 'T12:00:00');
@@ -955,14 +955,52 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
 
     if (!todasCompletadas) return NextResponse.json({ semanaCompleta: false });
 
-    // Verificar si ya existe un forge_insight para esta semana especifica
     const { data: insightExistente } = await supabase.from("athlete_events").select("id").eq("user_codigo", codigo).eq("type", "forge_insight").ilike("title", `%${weekStartCierre}%`).limit(1);
 
     if (insightExistente && insightExistente.length > 0) {
       return NextResponse.json({ semanaCompleta: true, yaCerrada: true });
     }
 
-    return NextResponse.json({ semanaCompleta: true, yaCerrada: false, weekStart: weekStartCierre });
+    // Generar el Forge Insight automaticamente con una llamada dedicada, basado en datos reales
+    const { data: usuarioInsight } = await supabase.from("usuarios").select("athlete_development,historial_fisiologico").eq("codigo", codigo).single();
+    const sesionesResumen = sessions.filter((s: any) => s.tipo !== "descanso").map((s: any) => `${s.dia}: ${s.titulo_real || s.titulo}${s.descripcion_real ? ' — ' + s.descripcion_real.substring(0, 100) : ''}`).join("\n");
+    const histFisioSemana = (usuarioInsight?.historial_fisiologico || []).slice(-7);
+    const debilidadesActivas = (usuarioInsight?.athlete_development || []).filter((d: any) => d.estado !== "resuelta").map((d: any) => d.nombre_visible);
+
+    const insightPrompt = `Eres Forge generando el resumen semanal (Forge Insight) de un atleta. Basándote SOLO en estos datos reales, escribe un resumen de 5-6 líneas máximo, en español, tono cercano y profesional:
+
+SESIONES COMPLETADAS ESTA SEMANA:
+${sesionesResumen}
+
+TENDENCIA FISIOLÓGICA (últimos registros):
+${JSON.stringify(histFisioSemana)}
+
+DEBILIDADES ACTIVAS:
+${debilidadesActivas.join(", ") || "ninguna registrada"}
+
+Incluye: adherencia (X/7 sesiones), tendencia fisiológica general, y una frase sobre el ajuste para la semana siguiente. NO inventes datos que no estén arriba.`;
+
+    let resumenGenerado = "Semana completada con éxito.";
+    try {
+      const insightRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 400, messages: [{ role: "user", content: insightPrompt }] }),
+      });
+      const insightData = await insightRes.json();
+      resumenGenerado = insightData.content?.map((b: any) => b.text || "").join("") || resumenGenerado;
+    } catch {}
+
+    const puntosActuales = (usuarioInsight?.athlete_development || []).length; // placeholder simple, se puede refinar
+    await supabase.from("athlete_events").insert({
+      user_codigo: codigo,
+      date: hoyCierreStr,
+      type: "forge_insight",
+      title: `Forge Insight — Semana ${weekStartCierre}`,
+      data: { notas: resumenGenerado, adherencia: `${sessions.filter((s:any)=>s.completada).length}/7`, generado_automaticamente: true }
+    });
+
+    return NextResponse.json({ semanaCompleta: true, yaCerrada: false, weekStart: weekStartCierre, insightGenerado: true });
   }
 
   if (action === "verificar_persistencia_plan") {

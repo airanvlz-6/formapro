@@ -1371,9 +1371,12 @@ const forgeValidator=(texto:string):string=>{
       // FORGE INTENT CLASSIFIER: si detecta una consulta de dato existente (familia READ) con confianza alta,
       // el dato inmutable exacto se antepone al mensaje del usuario para que el Coach lo reproduzca fielmente.
       const datoInmutableRecibido=resContexto?.datoInmutable;
+      // FORGE CAPABILITY INJECTION — Principio 7: el Coach solo puede mencionar lo que su intent autoriza.
+      // Se inyecta SIEMPRE, incluso cuando no hay dato inmutable (ej: COACHING no puede mencionar nada estructurado).
+      const instruccionCapacidadesRecibida=resContexto?.instruccionCapacidades||"";
       const contenidoConDato=datoInmutableRecibido
-        ? `[DATO INMUTABLE — ${datoInmutableRecibido.tipo}: ${JSON.stringify(datoInmutableRecibido.valor)}]\n[INSTRUCCIÓN: Esto es una consulta de un dato ya existente, no una petición de planificación. Reproduce el dato anterior fielmente, sin modificar ningún número ni ejercicio. Puedes añadir contexto o motivación DESPUÉS.]\n\n${contenidoUsuario}`
-        : contenidoUsuario;
+        ? `[DATO INMUTABLE — ${datoInmutableRecibido.tipo}: ${JSON.stringify(datoInmutableRecibido.valor)}]\n[INSTRUCCIÓN: Esto es una consulta de un dato ya existente, no una petición de planificación. Reproduce el dato anterior fielmente, sin modificar ningún número ni ejercicio. Puedes añadir contexto o motivación DESPUÉS.]\n\n${instruccionCapacidadesRecibida}\n\n${contenidoUsuario}`
+        : `${instruccionCapacidadesRecibida}\n\n${contenidoUsuario}`;
       const mensajesParaAPI2=contextoConstruido
         ? [{role:"user" as const,content:`[CONTEXTO DE EVENTOS RECIENTES]\n${contextoConstruido}`},{role:"assistant" as const,content:"Entendido, tengo el contexto."},{role:"user" as const,content:contenidoConDato}]
         : [{role:"user" as const,content:contenidoConDato}];

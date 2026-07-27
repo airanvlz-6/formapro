@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { render } from "@react-email/render";
 import { validateExtraction } from "@/lib/validators/extractionRules";
 import { buildAthleteKnowledge, knowledgeRouter } from "@/lib/knowledge/athleteKnowledge";
-import { getResponseMode, buildStaticResponse } from "@/lib/response/responseEngine";
+import { getResponseMode, buildStaticResponse, getCapabilities, buildCapabilityInstruction } from "@/lib/response/responseEngine";
 import { sendEmail } from "@/lib/email/sendEmail";
 import FounderEmail from "@/lib/email/templates/FounderEmail";
 
@@ -1233,6 +1233,10 @@ Si NO hay evidencia suficientemente clara, responde SOLO con:
       respuestaEstatica = buildStaticResponse(clasificacion.intent, datoInmutable);
     }
 
+    // FORGE CAPABILITY INJECTION — Principio 7: el Coach solo puede mencionar lo que su intent autoriza.
+    const capacidades = getCapabilities(clasificacion.intent);
+    const instruccionCapacidades = buildCapabilityInstruction(capacidades);
+
     return NextResponse.json({
       eventType: resultadoAggregator.eventType,
       esCorreccion: resultadoAggregator.esCorreccion,
@@ -1240,7 +1244,8 @@ Si NO hay evidencia suficientemente clara, responde SOLO con:
       clasificacion,
       datoInmutable,
       modoRespuesta,
-      respuestaEstatica
+      respuestaEstatica,
+      instruccionCapacidades
     });
   }
 

@@ -50,10 +50,54 @@ export function buildStaticResponse(intent: string, data: any): string | null {
     case "BENCHMARK": {
       const marca = data?.valor;
       if (!marca) return "No tengo ninguna marca registrada para ese ejercicio todavía.";
-      if (Array.isArray(marca)) return null; // caso de lista completa, mejor dejar que el LLM lo resuma
+      if (Array.isArray(marca)) return null;
       return `Tu última marca registrada: **${marca.ejercicio}: ${marca.valor}** (${marca.fecha})`;
     }
     default:
-      return null; // Este intent no tiene plantilla STATIC definida
+      return null;
   }
+}
+
+// FORGE CAPABILITY REGISTRY — define que puede MENCIONAR el Coach en su respuesta segun el intent.
+// Principio 7 del Forge Truth Principle: el Coach nunca introduce informacion estructurada por
+// iniciativa propia. Solo puede mencionar lo que el intent detectado le autoriza explicitamente.
+export interface Capabilities {
+  canMentionPlan: boolean;
+  canMentionBenchmarks: boolean;
+  canMentionInsights: boolean;
+  canMentionPhysiology: boolean;
+}
+
+const NONE: Capabilities = { canMentionPlan: false, canMentionBenchmarks: false, canMentionInsights: false, canMentionPhysiology: false };
+
+export const INTENT_CAPABILITIES: Record<string, Capabilities> = {
+  PLAN_HOY: { ...NONE, canMentionPlan: true },
+  PLAN_MANANA: { ...NONE, canMentionPlan: true },
+  PLAN_SEMANA: { ...NONE, canMentionPlan: true },
+  BENCHMARK: { ...NONE, canMentionBenchmarks: true },
+  OBJETIVO: { ...NONE },
+  DEBILIDADES: { ...NONE },
+  ULTIMO_INSIGHT: { ...NONE, canMentionInsights: true },
+  HISTORIAL_FISIOLOGICO: { ...NONE, canMentionPhysiology: true },
+  REPORTE_ENTRENO: { ...NONE, canMentionPlan: true, canMentionPhysiology: true },
+  REPORTE_SUENO: { ...NONE, canMentionPhysiology: true },
+  MODIFICAR_PLAN: { ...NONE, canMentionPlan: true },
+  COACHING: { ...NONE },
+  META: { ...NONE },
+  OTRO: { ...NONE }
+};
+
+export function getCapabilities(intent: string): Capabilities {
+  return INTENT_CAPABILITIES[intent] || NONE;
+}
+
+// Genera el bloque de texto que se inyecta en el prompt, dejando explicito que puede y que NO puede mencionar
+export function buildCapabilityInstruction(capabilities: Capabilities): string {
+  const lineas = [
+    `PLAN/SESIONES: ${capabilities.canMentionPlan ? "SI puedes mencionar" : "NO menciones ninguna sesion, ejercicio, serie, repeticion o peso"}`,
+    `BENCHMARKS/PRs: ${capabilities.canMentionBenchmarks ? "SI puedes mencionar" : "NO menciones ninguna marca personal o PR"}`,
+    `FORGE INSIGHTS: ${capabilities.canMentionInsights ? "SI puedes mencionar" : "NO menciones ningun resumen semanal previo"}`,
+    `FISIOLOGIA (HRV/sueño): ${capabilities.canMentionPhysiology ? "SI puedes mencionar" : "NO menciones HRV, sueño, ni ninguna metrica fisiologica"}`
+  ];
+  return `CAPACIDADES DE ESTA RESPUESTA (regla estricta, no violar):\n${lineas.join("\n")}\nSi no tienes autorizacion para mencionar algo, no lo menciones aunque lo consideres relevante o util — limita tu respuesta a conversacion, explicacion o motivacion.`;
 }

@@ -1354,8 +1354,10 @@ const forgeValidator=(texto:string):string=>{
       // directamente y terminamos aqui, sin llamar al Coach en absoluto. Cero coste, cero latencia, cero riesgo.
       if(resContexto?.modoRespuesta==="STATIC" && resContexto?.respuestaEstatica){
         const mensajeDisplayEstatico=texto.trim();
+        // Prefijo interno [FORGE_STATIC] para que el render lo muestre con diseño distintivo (dato verificado)
+        const respuestaConMarcador=`[FORGE_STATIC]${resContexto.respuestaEstatica}`;
         setMensajes(prev=>[...prev,{role:"user",content:mensajeDisplayEstatico}]);
-        setMensajes(prev=>[...prev,{role:"assistant",content:resContexto.respuestaEstatica}]);
+        setMensajes(prev=>[...prev,{role:"assistant",content:respuestaConMarcador}]);
         setInput("");
         if(inputRef.current){inputRef.current.style.height="auto";}
         const histConEstatico=[...historial,{role:"user",content:texto.trim()},{role:"assistant",content:resContexto.respuestaEstatica}];
@@ -2415,18 +2417,28 @@ ${testStr}`}]});
                 </div>
               </div>
             )}
-            {mensajes.map((msg,i)=>(
+            {mensajes.map((msg,i)=>{
+              const esRespuestaEstatica=msg.role==="assistant"&&typeof msg.content==="string"&&msg.content.startsWith("[FORGE_STATIC]");
+              const contenidoLimpio=esRespuestaEstatica?msg.content.replace("[FORGE_STATIC]",""):msg.content;
+              return (
               <div key={i} className="msg-in" style={{display:"flex",justifyContent:msg.role==="user"?"flex-end":"flex-start",gap:10,alignItems:"flex-start",animationDelay:`${Math.min(i*0.05,0.3)}s`}}>
                 {msg.role==="assistant"&&(
                   <div style={{width:32,height:32,borderRadius:10,overflow:"hidden",flexShrink:0}}>
                     <img src="/logo-forge.png" alt="Forge" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
                   </div>
                 )}
-                <div style={{maxWidth:"80%",padding:"13px 17px",borderRadius:msg.role==="user"?"16px 4px 16px 16px":"4px 16px 16px 16px",background:msg.role==="user"?"#FF6B00":C.card,color:msg.role==="user"?"#fff":C.ink,border:msg.role==="assistant"?`1px solid ${C.border}`:"none"}}>
-                  {msg.role==="assistant"?<MensajeTexto texto={msg.content}/>:<p style={{fontSize:14,lineHeight:1.6}}>{msg.content}</p>}
+                <div style={{maxWidth:"80%",padding:"13px 17px",borderRadius:msg.role==="user"?"16px 4px 16px 16px":"4px 16px 16px 16px",background:msg.role==="user"?"#FF6B00":esRespuestaEstatica?"#0D1F1A":C.card,color:msg.role==="user"?"#fff":C.ink,border:msg.role==="assistant"?(esRespuestaEstatica?"1px solid #4CAF5060":`1px solid ${C.border}`):"none"}}>
+                  {esRespuestaEstatica&&(
+                    <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:8}}>
+                      <span style={{fontSize:12}}>✓</span>
+                      <span style={{color:"#4CAF50",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:0.5}}>Dato verificado de Mi Plan</span>
+                    </div>
+                  )}
+                  {msg.role==="assistant"?<MensajeTexto texto={contenidoLimpio}/>:<p style={{fontSize:14,lineHeight:1.6}}>{msg.content}</p>}
                 </div>
               </div>
-            ))}
+              );
+            })}
             {nuevoAprendizaje&&(
               <div className="msg-in" style={{display:"flex",justifyContent:"center",marginTop:4,marginBottom:4}}>
                 <div style={{background:"#1E5C3A20",border:"1px solid #1E5C3A60",borderRadius:14,padding:"12px 16px",maxWidth:"85%",textAlign:"center"}}>

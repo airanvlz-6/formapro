@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { render } from "@react-email/render";
 import { validateExtraction } from "@/lib/validators/extractionRules";
 import { buildAthleteKnowledge, knowledgeRouter } from "@/lib/knowledge/athleteKnowledge";
+import { getResponseMode, buildStaticResponse } from "@/lib/response/responseEngine";
 import { sendEmail } from "@/lib/email/sendEmail";
 import FounderEmail from "@/lib/email/templates/FounderEmail";
 
@@ -1169,12 +1170,23 @@ Incluye: adherencia (X/7 sesiones), tendencia fisiológica general, y una frase 
       }
     }
 
+    // FORGE RESPONSE ENGINE — si el intent tiene modo STATIC y hay dato disponible, componemos
+    // la respuesta directamente aqui, SIN llamar al Coach en absoluto. Ahorra tokens, latencia y
+    // elimina cualquier posibilidad de alucinacion en el dato mas critico.
+    const modoRespuesta = getResponseMode(clasificacion.intent);
+    let respuestaEstatica: string | null = null;
+    if (modoRespuesta === "STATIC" && datoInmutable) {
+      respuestaEstatica = buildStaticResponse(clasificacion.intent, datoInmutable);
+    }
+
     return NextResponse.json({
       eventType: resultadoAggregator.eventType,
       esCorreccion: resultadoAggregator.esCorreccion,
       contexto: contextoConstruido,
       clasificacion,
-      datoInmutable
+      datoInmutable,
+      modoRespuesta,
+      respuestaEstatica
     });
   }
 

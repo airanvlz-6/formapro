@@ -1338,6 +1338,22 @@ const forgeValidator=(texto:string):string=>{
       // real (evento activo + evento anterior relevante) y lo inyectamos como un mensaje de contexto,
       // seguido solo del mensaje actual del usuario — evita perder el hilo de eventos importantes.
       const resContexto=await apiCall({action:"procesar_mensaje_contexto",codigo:codigoUsuario,datos:{mensaje:textoEnvio}});
+
+      // FORGE RESPONSE ENGINE — si el backend ya compuso una respuesta STATIC (sin LLM), la mostramos
+      // directamente y terminamos aqui, sin llamar al Coach en absoluto. Cero coste, cero latencia, cero riesgo.
+      if(resContexto?.modoRespuesta==="STATIC" && resContexto?.respuestaEstatica){
+        const mensajeDisplayEstatico=texto.trim();
+        setMensajes(prev=>[...prev,{role:"user",content:mensajeDisplayEstatico}]);
+        setMensajes(prev=>[...prev,{role:"assistant",content:resContexto.respuestaEstatica}]);
+        setInput("");
+        if(inputRef.current){inputRef.current.style.height="auto";}
+        const histConEstatico=[...historial,{role:"user",content:texto.trim()},{role:"assistant",content:resContexto.respuestaEstatica}];
+        setHistorial(histConEstatico);
+        if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histConEstatico}});
+        setCargando(false);
+        return;
+      }
+
       const contextoConstruido=resContexto?.contexto||"";
       // FORGE INTENT CLASSIFIER: si detecta una consulta de dato existente (familia READ) con confianza alta,
       // el dato inmutable exacto se antepone al mensaje del usuario para que el Coach lo reproduzca fielmente.

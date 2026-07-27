@@ -1,9 +1,46 @@
-# FORGE TRUTH PRINCIPLE
+# Executive Summary — Forge Truth Principle
 
-**Principio fundamental:**
-Toda información que exista de forma estructurada en Forge tiene prioridad absoluta sobre cualquier razonamiento del LLM.
+Forge no es un chatbot que responde utilizando un LLM.
 
-## Reglas derivadas
+Forge es un sistema experto compuesto por múltiples componentes especializados, donde el LLM actúa únicamente como interfaz conversacional cuando realmente aporta valor.
+
+Toda la arquitectura del sistema se rige por los siguientes principios:
+
+**1. El LLM nunca es la fuente de verdad**
+Los modelos de lenguaje pueden razonar, explicar y conversar, pero nunca son la autoridad sobre los datos del atleta. La verdad siempre reside en los sistemas deterministas de Forge.
+
+**2. Toda verdad estructurada tiene prioridad**
+Si un dato existe en una fuente estructurada (Estado Canónico, Knowledge Engine, Mi Plan, Benchmarks, Forge Insights, Historial Fisiológico...), esa información tiene prioridad absoluta sobre cualquier razonamiento del modelo. El LLM nunca debe regenerar información que Forge ya conoce.
+
+**3. Un componente, una responsabilidad**
+Cada componente tiene un propósito único y claramente definido:
+- Event Aggregator clasifica eventos.
+- Extractor extrae información.
+- Validators verifican coherencia.
+- Knowledge Engine proporciona conocimiento.
+- Response Engine decide cómo responder.
+- El Coach conversa con el atleta.
+
+Ningún componente invade la responsabilidad de otro.
+
+**4. Primero seleccionar, después generar**
+Antes de generar una respuesta, Forge selecciona el contexto relevante. El modelo nunca recibe información masiva "por si acaso". Cada respuesta utiliza únicamente el contexto necesario para esa intención concreta.
+
+**5. Validar siempre antes de persistir**
+Toda información generada por un LLM debe considerarse provisional hasta ser verificada. Los Validators son responsables de proteger la coherencia científica, temporal y estructural del sistema antes de guardar cualquier dato.
+
+**6. Los motores deportivos generan conocimiento; el Coach lo comunica**
+La inteligencia deportiva reside en los motores especializados de Forge. El Coach no inventa datos ni toma decisiones que ya han sido resueltas por los sistemas deterministas. Su responsabilidad es explicar, motivar y comunicar ese conocimiento al atleta de forma natural.
+
+## Consecuencia arquitectónica
+
+En Forge: los datos deterministas gobiernan el sistema. Los modelos de lenguaje únicamente los interpretan y los comunican cuando es necesario.
+
+Todo nuevo componente, motor o funcionalidad deberá respetar estos principios antes de ser incorporado a la arquitectura.
+
+---
+
+# Detalle de las reglas derivadas
 
 **Regla 1 — Nunca regenerar datos existentes.**
 Si un dato ya vive en una fuente determinista (Estado Canónico, Knowledge Engine, base de datos), ningún componente debe volver a generarlo desde el razonamiento de un LLM.
@@ -16,18 +53,6 @@ El razonamiento libre (modo LLM) se reserva exclusivamente para preguntas de coa
 
 **Regla 4 — El Validator protege la verdad existente.**
 Cuando existe una fuente de verdad determinista, cualquier componente de validación (Forge Validator, Scientific Validator, Extraction Validator) tiene la responsabilidad de detectar y corregir cualquier desviación del LLM respecto a esa fuente.
-
-## La IA como módulo, no como sistema
-
-Este principio implica un cambio de posición: el LLM deja de ser el centro de Forge y pasa a ser un módulo más, especializado en comunicación y razonamiento abierto, rodeado de componentes deterministas que garantizan la verdad.
-
-Cuando lleguen nuevos dominios (nutrición, prevención de lesiones, potencia, etc.), el patrón se repite siempre igual:
-
-```
-[Dominio] Engine (fuente de verdad determinista)
-        ↓
-   Coach (explica/interpreta, nunca decide)
-```
 
 ---
 
@@ -62,3 +87,19 @@ Registro central de cada intent soportado: su fuente de verdad y su modo de resp
 6. Añadir la fila correspondiente a esta tabla
 
 Ningún otro componente necesita cambiar.
+
+---
+
+# Checklist arquitectónico
+
+Antes de crear un nuevo componente, motor o funcionalidad, responde estas preguntas:
+
+- ¿Esta información ya existe en Forge?
+- ¿Debe ser determinista o puede depender del razonamiento del LLM?
+- ¿Qué componente será la fuente de verdad?
+- ¿Quién valida este dato?
+- ¿Quién puede modificarlo?
+- ¿Quién solo puede leerlo?
+- ¿Puede reutilizar una capacidad existente del Capability Registry?
+
+Si cualquier nueva funcionalidad supera estas preguntas con respuestas claras, es muy probable que encaje con la filosofía de Forge sin introducir deuda técnica ni romper el Forge Truth Principle.

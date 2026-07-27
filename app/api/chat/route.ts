@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { render } from "@react-email/render";
 import { validateExtraction } from "@/lib/validators/extractionRules";
-import { buildAthleteKnowledge } from "@/lib/knowledge/athleteKnowledge";
+import { buildAthleteKnowledge, knowledgeRouter } from "@/lib/knowledge/athleteKnowledge";
 import { sendEmail } from "@/lib/email/sendEmail";
 import FounderEmail from "@/lib/email/templates/FounderEmail";
 
@@ -1154,26 +1154,18 @@ Incluye: adherencia (X/7 sesiones), tendencia fisiológica general, y una frase 
     const resultadoAggregator = await forgeEventAggregator(supabase, apiKey!, codigo, mensaje);
     const contextoConstruido = await forgeContextBuilder(supabase, codigo, resultadoAggregator);
 
-    // Si la familia es READ y la confianza es alta, adjuntamos el dato inmutable exacto correspondiente
+    // FORGE KNOWLEDGE ROUTER — cada intent sabe exactamente que funcion del Knowledge Engine consultar.
+    // El Coach ya no busca informacion por si mismo, la recibe ya resuelta segun la intencion detectada.
     let datoInmutable: any = null;
     if (clasificacion.familia === "READ" && clasificacion.confidence >= 0.6) {
-      const estado = await generarEstadoCanonico(supabase, codigo);
-      switch (clasificacion.intent) {
-        case "PLAN_HOY":
-          datoInmutable = { tipo: "sesion_hoy", valor: estado.sesion_hoy };
-          break;
-        case "PLAN_MANANA":
-          datoInmutable = { tipo: "sesion_manana", valor: estado.sesion_manana };
-          break;
-        case "OBJETIVO":
-          datoInmutable = { tipo: "objetivo_principal", valor: estado.objetivo_principal };
-          break;
-        case "DEBILIDADES":
-          datoInmutable = { tipo: "debilidades_activas", valor: estado.debilidades_activas };
-          break;
-        case "HISTORIAL_FISIOLOGICO":
-          datoInmutable = { tipo: "tendencia_fisiologica", valor: estado.tendencia_fisiologica };
-          break;
+      if (clasificacion.intent === "PLAN_HOY" || clasificacion.intent === "PLAN_MANANA") {
+        // Estos dos viven en el Estado Canonico (ya calculado), no en el Knowledge Engine
+        const estado = await generarEstadoCanonico(supabase, codigo);
+        datoInmutable = clasificacion.intent === "PLAN_HOY"
+          ? { tipo: "sesion_hoy", valor: estado.sesion_hoy }
+          : { tipo: "sesion_manana", valor: estado.sesion_manana };
+      } else {
+        datoInmutable = await knowledgeRouter(codigo, clasificacion.intent);
       }
     }
 

@@ -6,7 +6,6 @@
 
 export type ResponseMode = "STATIC" | "HYBRID" | "LLM";
 
-// Registro de que modo corresponde a cada intent. Añadir un intent nuevo = añadir una linea aqui.
 export const INTENT_RESPONSE_MODE: Record<string, ResponseMode> = {
   PLAN_HOY: "STATIC",
   PLAN_MANANA: "STATIC",
@@ -28,18 +27,34 @@ export function getResponseMode(intent: string): ResponseMode {
   return INTENT_RESPONSE_MODE[intent] || "LLM";
 }
 
-// Construye la respuesta STATIC (plantilla pura, sin LLM) para los intents mas simples y deterministas.
+// Formatea la descripcion de una sesion separando sus bloques tipicos en parrafos independientes.
+function formatearDescripcionSesion(descripcion: string): string {
+  if (!descripcion) return "";
+  const etiquetas = ["Calentamiento", "Bloque principal", "Finisher", "Vuelta a la calma", "Notas técnicas", "Notas tecnicas"];
+  let formateado = descripcion;
+  etiquetas.forEach(etiqueta => {
+    const regex = new RegExp(`(?<!^)(${etiqueta}:)`, "g");
+    formateado = formateado.replace(regex, `\n\n**$1**`);
+  });
+  etiquetas.forEach(etiqueta => {
+    if (formateado.trimStart().startsWith(`${etiqueta}:`)) {
+      formateado = formateado.replace(`${etiqueta}:`, `**${etiqueta}:**`);
+    }
+  });
+  return formateado.trim();
+}
+
 export function buildStaticResponse(intent: string, data: any): string | null {
   switch (intent) {
     case "PLAN_HOY": {
       const sesion = data?.valor;
       if (!sesion) return "Hoy no tienes ninguna sesión programada en Mi Plan.";
-      return `Hoy tienes programado:\n\n**${sesion.titulo}**\n\n${sesion.descripcion}`;
+      return `Hoy tienes programado:\n\n## ${sesion.titulo}\n\n${formatearDescripcionSesion(sesion.descripcion)}`;
     }
     case "PLAN_MANANA": {
       const sesion = data?.valor;
       if (!sesion) return "Mañana no tienes ninguna sesión programada en Mi Plan.";
-      return `Mañana tienes programado:\n\n**${sesion.titulo}**\n\n${sesion.descripcion}`;
+      return `Mañana tienes programado:\n\n## ${sesion.titulo}\n\n${formatearDescripcionSesion(sesion.descripcion)}`;
     }
     case "PLAN_SEMANA": {
       const plan = data?.valor;
@@ -58,9 +73,6 @@ export function buildStaticResponse(intent: string, data: any): string | null {
   }
 }
 
-// FORGE CAPABILITY REGISTRY — define que puede MENCIONAR el Coach en su respuesta segun el intent.
-// Principio 7 del Forge Truth Principle: el Coach nunca introduce informacion estructurada por
-// iniciativa propia. Solo puede mencionar lo que el intent detectado le autoriza explicitamente.
 export interface Capabilities {
   canMentionPlan: boolean;
   canMentionBenchmarks: boolean;
@@ -91,7 +103,6 @@ export function getCapabilities(intent: string): Capabilities {
   return INTENT_CAPABILITIES[intent] || NONE;
 }
 
-// Genera el bloque de texto que se inyecta en el prompt, dejando explicito que puede y que NO puede mencionar
 export function buildCapabilityInstruction(capabilities: Capabilities): string {
   const lineas = [
     `PLAN/SESIONES: ${capabilities.canMentionPlan ? "SI puedes mencionar" : "NO menciones ninguna sesion, ejercicio, serie, repeticion o peso"}`,

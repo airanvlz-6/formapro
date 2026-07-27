@@ -32,6 +32,9 @@ Toda información generada por un LLM debe considerarse provisional hasta ser ve
 **6. Los motores deportivos generan conocimiento; el Coach lo comunica**
 La inteligencia deportiva reside en los motores especializados de Forge. El Coach no inventa datos ni toma decisiones que ya han sido resueltas por los sistemas deterministas. Su responsabilidad es explicar, motivar y comunicar ese conocimiento al atleta de forma natural.
 
+**7. El Coach nunca introduce información estructurada por iniciativa propia**
+El Coach puede explicar, motivar, interpretar, felicitar y responder — pero no puede introducir sesiones, pesos, ejercicios, PRs, benchmarks, HRV, sueño ni Insights salvo que esas piezas hayan sido inyectadas explícitamente por el Response Engine para ese intent concreto (Capability Injection). No se corrige después de que el modelo hable: se le impide tener la posibilidad de hacerlo desde el propio prompt.
+
 ## Consecuencia arquitectónica
 
 En Forge: los datos deterministas gobiernan el sistema. Los modelos de lenguaje únicamente los interpretan y los comunican cuando es necesario.

@@ -1290,18 +1290,10 @@ const forgeValidator=(texto:string):string=>{
     const textoLower=texto.toLowerCase();
     const esMensajeSueno=/métricas de sueño|dormí|puntuación de sueño|durante la noche|sueño profundo|sueño rem/i.test(textoLower) && !/entren|wod|sesion realizada|serie|repeticion/i.test(textoLower);
     const esMensajeEntreno=/entren|wod|sesion realizada|completé|terminé/i.test(textoLower);
-    // FORGE INTENT ROUTER — deteccion determinista de "consulta de dato existente" (no razonamiento).
-    // Si el usuario pregunta que toca hoy/mañana, el Coach NUNCA debe inventarlo: recibe el dato exacto.
-    const esConsultaPlanHoyManana=/qu[eé]\s+(toca|tengo|hay)|entreno de hoy|sesion de hoy|entreno de mañana|sesion de mañana|que.*toca/i.test(textoLower) && !esMensajeEntreno;
-    // FORGE INTENT ROUTER — ampliacion: consulta de objetivo principal y debilidades activas.
-    // Mismo principio: son datos ya existentes, el Coach no debe "recordarlos" sino recibirlos exactos.
-    const esConsultaObjetivo=/cu[aá]l es mi objetivo|mi objetivo (actual|principal)|para qu[eé] estoy entrenando/i.test(textoLower);
-    const esConsultaDebilidades=/qu[eé] debilidades tengo|mis debilidades|[aá]reas de desarrollo|en qu[eé] estoy trabajando/i.test(textoLower);
-    const contextoTemporal=esMensajeSueno?"SUEÑO_NOCTURNO — este dato es de la noche ANTERIOR a hoy, ocurrió ANTES de cualquier entreno de hoy. NUNCA lo relaciones como consecuencia de un entreno de hoy mismo.":esMensajeEntreno?"REPORTE_ENTRENO — el atleta acaba de completar una sesión de hoy.":esConsultaPlanHoyManana?"CONSULTA_PLAN_EXISTENTE — el atleta pregunta qué toca hoy/mañana. Esto es una CONSULTA DE UN DATO YA EXISTENTE, no una petición de planificación. A continuación se incluye el dato EXACTO de Mi Plan — DEBES reproducirlo literalmente (mismos ejercicios, series, reps, pesos, estructura), sin modificar ni un solo número. Puedes añadir contexto o motivación DESPUÉS de reproducirlo fielmente, pero nunca antes ni en su lugar.":(esConsultaObjetivo||esConsultaDebilidades)?"CONSULTA_DATO_EXISTENTE — el atleta pregunta por un dato ya registrado (objetivo o debilidades activas). Usa EXCLUSIVAMENTE el dato inmutable proporcionado abajo, no inventes ni modifiques nada.":"CONSULTA_GENERAL";
-    const datosSesionExacta=esConsultaPlanHoyManana&&estadoCanonico?`\n\n[DATO INMUTABLE — SESIÓN DE HOY (${estadoCanonico.dia_semana_hoy}): ${JSON.stringify(estadoCanonico.sesion_hoy)}]\n[DATO INMUTABLE — SESIÓN DE MAÑANA (${estadoCanonico.dia_semana_manana}): ${JSON.stringify(estadoCanonico.sesion_manana)}]`:"";
-    const datosObjetivoExacto=esConsultaObjetivo&&estadoCanonico?`\n\n[DATO INMUTABLE — OBJETIVO PRINCIPAL: ${JSON.stringify(estadoCanonico.objetivo_principal)}]`:"";
-    const datosDebilidadesExacto=esConsultaDebilidades&&estadoCanonico?`\n\n[DATO INMUTABLE — DEBILIDADES ACTIVAS: ${JSON.stringify(estadoCanonico.debilidades_activas)}]`:"";
-    const textoEnvio=(texto.trim()||"Analiza esta imagen o archivo y dame feedback en base a mi programacion.")+`\n\n[Fecha actual del sistema: ${fechaHoyStr}]\n[Contexto temporal del mensaje: ${contextoTemporal}]${datosSesionExacta}${datosObjetivoExacto}${datosDebilidadesExacto}`;
+    // NOTA: la deteccion de "consulta de dato existente" (plan hoy/mañana, objetivo, debilidades) ya no
+    // usa regex — el Forge Intent Classifier (Haiku) lo determina en procesar_mensaje_contexto, mas abajo.
+    const contextoTemporal=esMensajeSueno?"SUEÑO_NOCTURNO — este dato es de la noche ANTERIOR a hoy, ocurrió ANTES de cualquier entreno de hoy. NUNCA lo relaciones como consecuencia de un entreno de hoy mismo.":esMensajeEntreno?"REPORTE_ENTRENO — el atleta acaba de completar una sesión de hoy.":"CONSULTA_GENERAL";
+    const textoEnvio=(texto.trim()||"Analiza esta imagen o archivo y dame feedback en base a mi programacion.")+`\n\n[Fecha actual del sistema: ${fechaHoyStr}]\n[Contexto temporal del mensaje: ${contextoTemporal}]`;
     let contenidoUsuario:any=textoEnvio;
     if(imagenesAdjuntas.length>0){
       const contenido:any[]=imagenesAdjuntas.map(img=>{

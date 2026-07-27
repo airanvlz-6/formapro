@@ -1120,7 +1120,8 @@ const forgeValidator=(texto:string):string=>{
   };
 
   const procesarTags=async(textoOriginal:string, esMensajeDeSueno:boolean=false):Promise<string>=>{
-    let texto=textoOriginal.replace(/\[STATE_UPDATE\][\s\S]*?\[\/STATE_UPDATE\]/g,"").trim();
+    // Limpieza de residuos de markdown/JSON que el modelo a veces genera antes del tag real (ej: "```json" suelto)
+    let texto=textoOriginal.replace(/\[STATE_UPDATE\][\s\S]*?\[\/STATE_UPDATE\]/g,"").replace(/```json|```/gi,"").trim();
 
     const extraerJSON=(str:string, tagStart:number, prefixLen:number):{json:string|null,endIdx:number}=>{
       const jsonStart=tagStart+prefixLen;
@@ -1289,8 +1290,12 @@ const forgeValidator=(texto:string):string=>{
     const textoLower=texto.toLowerCase();
     const esMensajeSueno=/métricas de sueño|dormí|puntuación de sueño|durante la noche|sueño profundo|sueño rem/i.test(textoLower) && !/entren|wod|sesion realizada|serie|repeticion/i.test(textoLower);
     const esMensajeEntreno=/entren|wod|sesion realizada|completé|terminé/i.test(textoLower);
-    const contextoTemporal=esMensajeSueno?"SUEÑO_NOCTURNO — este dato es de la noche ANTERIOR a hoy, ocurrió ANTES de cualquier entreno de hoy. NUNCA lo relaciones como consecuencia de un entreno de hoy mismo.":esMensajeEntreno?"REPORTE_ENTRENO — el atleta acaba de completar una sesión de hoy.":"CONSULTA_GENERAL";
-    const textoEnvio=(texto.trim()||"Analiza esta imagen o archivo y dame feedback en base a mi programacion.")+`\n\n[Fecha actual del sistema: ${fechaHoyStr}]\n[Contexto temporal del mensaje: ${contextoTemporal}]`;
+    // FORGE INTENT ROUTER — deteccion determinista de "consulta de dato existente" (no razonamiento).
+    // Si el usuario pregunta que toca hoy/mañana, el Coach NUNCA debe inventarlo: recibe el dato exacto.
+    const esConsultaPlanHoyManana=/qu[eé]\s+(toca|tengo|hay)|entreno de hoy|sesion de hoy|entreno de mañana|sesion de mañana|que.*toca/i.test(textoLower) && !esMensajeEntreno;
+    const contextoTemporal=esMensajeSueno?"SUEÑO_NOCTURNO — este dato es de la noche ANTERIOR a hoy, ocurrió ANTES de cualquier entreno de hoy. NUNCA lo relaciones como consecuencia de un entreno de hoy mismo.":esMensajeEntreno?"REPORTE_ENTRENO — el atleta acaba de completar una sesión de hoy.":esConsultaPlanHoyManana?"CONSULTA_PLAN_EXISTENTE — el atleta pregunta qué toca hoy/mañana. Esto es una CONSULTA DE UN DATO YA EXISTENTE, no una petición de planificación. A continuación se incluye el dato EXACTO de Mi Plan — DEBES reproducirlo literalmente (mismos ejercicios, series, reps, pesos, estructura), sin modificar ni un solo número. Puedes añadir contexto o motivación DESPUÉS de reproducirlo fielmente, pero nunca antes ni en su lugar.":"CONSULTA_GENERAL";
+    const datosSesionExacta=esConsultaPlanHoyManana&&estadoCanonico?`\n\n[DATO INMUTABLE — SESIÓN DE HOY (${estadoCanonico.dia_semana_hoy}): ${JSON.stringify(estadoCanonico.sesion_hoy)}]\n[DATO INMUTABLE — SESIÓN DE MAÑANA (${estadoCanonico.dia_semana_manana}): ${JSON.stringify(estadoCanonico.sesion_manana)}]`:"";
+    const textoEnvio=(texto.trim()||"Analiza esta imagen o archivo y dame feedback en base a mi programacion.")+`\n\n[Fecha actual del sistema: ${fechaHoyStr}]\n[Contexto temporal del mensaje: ${contextoTemporal}]${datosSesionExacta}`;
     let contenidoUsuario:any=textoEnvio;
     if(imagenesAdjuntas.length>0){
       const contenido:any[]=imagenesAdjuntas.map(img=>{

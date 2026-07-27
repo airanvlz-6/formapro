@@ -1065,6 +1065,57 @@ Incluye: adherencia (X/7 sesiones), tendencia fisiológica general, y una frase 
       data: { notas: resumenGenerado, adherencia: `${sessions.filter((s:any)=>s.completada).length}/7`, generado_automaticamente: true }
     });
 
+    // FORGE DISCOVERY ENGINE (v1) — analiza el historial completo (no solo esta semana) buscando
+    // UN patron real con evidencia suficiente. Si no hay evidencia clara, NO genera nada — nunca inventa.
+    const { data: usuarioDiscovery } = await supabase.from("usuarios").select("workout_history,historial_fisiologico").eq("codigo", codigo).single();
+    const historialCompleto = (usuarioDiscovery?.workout_history || []).slice(-20);
+    const fisioCompleto = (usuarioDiscovery?.historial_fisiologico || []).slice(-20);
+
+    const discoveryPrompt = `Eres el Forge Discovery Engine. Tu única tarea es analizar estos datos reales de un atleta y buscar UN patrón genuino y verificable — nunca inventes uno si no hay evidencia clara.
+
+HISTORIAL DE ENTRENOS (últimos 20):
+${JSON.stringify(historialCompleto.map((w: any) => ({ tipo: w.tipo, fecha: w.fecha, sensacion: w.sensacion })))}
+
+HISTORIAL FISIOLÓGICO (últimos 20 días):
+${JSON.stringify(fisioCompleto)}
+
+Busca patrones como: relación entre tipo de entreno y sensación/recuperación posterior, relación entre sueño y rendimiento, tendencias de mejora en algún tipo de sesión, correlaciones entre HRV y tipo de sesión previa.
+
+Si encuentras un patrón CLARO con al menos 3 puntos de datos que lo respalden, responde SOLO con este JSON:
+{"hay_patron": true, "descubrimiento": "frase corta en primera persona desde Forge, ej: He detectado que recuperas mejor tras sesiones de fuerza que tras intervalos largos", "categoria": "recuperacion|rendimiento|sueno|entrenamiento", "confianza": 0-100}
+
+Si NO hay evidencia suficientemente clara, responde SOLO con:
+{"hay_patron": false}`;
+
+    try {
+      const discoveryRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 300, messages: [{ role: "user", content: discoveryPrompt }] }),
+      });
+      const discoveryData = await discoveryRes.json();
+      const discoveryTexto = discoveryData.content?.map((b: any) => b.text || "").join("") || "{}";
+      const discoveryClean = discoveryTexto.replace(/```json|```/gi, "").trim();
+      const discoveryMatch = discoveryClean.match(/\{[\s\S]*\}/);
+      if (discoveryMatch) {
+        const discoveryResult = JSON.parse(discoveryMatch[0]);
+        if (discoveryResult.hay_patron && discoveryResult.descubrimiento) {
+          // Evitar duplicados: no guardar si ya existe un descubrimiento muy similar reciente
+          const { data: descubrimientosRecientes } = await supabase.from("forge_discoveries").select("descubrimiento").eq("user_codigo", codigo).order("created_at", { ascending: false }).limit(5);
+          const yaExisteSimilar = (descubrimientosRecientes || []).some((d: any) => d.descubrimiento?.toLowerCase().includes(discoveryResult.descubrimiento.toLowerCase().substring(0, 30)));
+          if (!yaExisteSimilar) {
+            await supabase.from("forge_discoveries").insert({
+              user_codigo: codigo,
+              descubrimiento: discoveryResult.descubrimiento,
+              categoria: discoveryResult.categoria || "general",
+              confianza: discoveryResult.confianza || 50,
+              visto: false
+            });
+          }
+        }
+      }
+    } catch {}
+
     return NextResponse.json({ semanaCompleta: true, yaCerrada: false, weekStart: weekStartCierre, insightGenerado: true });
   }
 

@@ -1347,9 +1347,15 @@ const forgeValidator=(texto:string):string=>{
       // seguido solo del mensaje actual del usuario — evita perder el hilo de eventos importantes.
       const resContexto=await apiCall({action:"procesar_mensaje_contexto",codigo:codigoUsuario,datos:{mensaje:textoEnvio}});
       const contextoConstruido=resContexto?.contexto||"";
+      // FORGE INTENT CLASSIFIER: si detecta una consulta de dato existente (familia READ) con confianza alta,
+      // el dato inmutable exacto se antepone al mensaje del usuario para que el Coach lo reproduzca fielmente.
+      const datoInmutableRecibido=resContexto?.datoInmutable;
+      const contenidoConDato=datoInmutableRecibido
+        ? `[DATO INMUTABLE — ${datoInmutableRecibido.tipo}: ${JSON.stringify(datoInmutableRecibido.valor)}]\n[INSTRUCCIÓN: Esto es una consulta de un dato ya existente, no una petición de planificación. Reproduce el dato anterior fielmente, sin modificar ningún número ni ejercicio. Puedes añadir contexto o motivación DESPUÉS.]\n\n${contenidoUsuario}`
+        : contenidoUsuario;
       const mensajesParaAPI2=contextoConstruido
-        ? [{role:"user" as const,content:`[CONTEXTO DE EVENTOS RECIENTES]\n${contextoConstruido}`},{role:"assistant" as const,content:"Entendido, tengo el contexto."},{role:"user" as const,content:contenidoUsuario}]
-        : nuevoHist.slice(-3);
+        ? [{role:"user" as const,content:`[CONTEXTO DE EVENTOS RECIENTES]\n${contextoConstruido}`},{role:"assistant" as const,content:"Entendido, tengo el contexto."},{role:"user" as const,content:contenidoConDato}]
+        : [{role:"user" as const,content:contenidoConDato}];
 const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal,planSemanal,debilidades,blockOutcomes,estadoCanonico)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:mensajesParaAPI2},true);
       if(data.aborted) return;
       const respTextRaw2Original=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.");

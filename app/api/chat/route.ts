@@ -1241,6 +1241,15 @@ Si NO hay evidencia suficientemente clara, responde SOLO con:
     });
   }
 
+  if (action === "obtener_descubrimiento_pendiente") {
+    // Devuelve el descubrimiento mas reciente no visto, y lo marca como visto en el mismo paso
+    const { data: descubrimiento } = await supabase.from("forge_discoveries").select("*").eq("user_codigo", codigo).eq("visto", false).order("created_at", { ascending: false }).limit(1).single();
+    if (descubrimiento) {
+      await supabase.from("forge_discoveries").update({ visto: true }).eq("id", descubrimiento.id);
+    }
+    return NextResponse.json({ descubrimiento: descubrimiento || null });
+  }
+
   if (action === "obtener_estado_canonico") {
     const estado = await generarEstadoCanonico(supabase, codigo);
     return NextResponse.json({ estado });

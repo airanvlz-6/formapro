@@ -687,6 +687,7 @@ export default function Forge() {
         cargarPlanSemanal(u.codigo);
         cargarBlockOutcomes(u.codigo);
         cargarEstadoCanonico(u.codigo);
+        verificarDescubrimientoPendiente(u.codigo);
         if((u as any).is_beta_founder){ apiCall({action:"verificar_renovacion_beta",codigo:u.codigo}); }
         apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
       },500);
@@ -720,6 +721,7 @@ const [mostrarBotonNuevaSemana,setMostrarBotonNuevaSemana]=useState(false);
 const [generandoSemana,setGenerandoSemana]=useState(false);
 const [nuevoAprendizaje,setNuevoAprendizaje]=useState<{texto:string;porcentaje:number}|null>(null);
 const [progresoActualizado,setProgresoActualizado]=useState<{nombre:string;antes:number;despues:number}|null>(null);
+const [descubrimientoPendiente,setDescubrimientoPendiente]=useState<{descubrimiento:string;categoria:string;confianza:number}|null>(null);
 const [mostrarCodigoReal,setMostrarCodigoReal]=useState(false);
 const [betaFounderInfo,setBetaFounderInfo]=useState<{numero:number;maxSlots:number;meses:number}|null>(null);
 const [estadoFounder,setEstadoFounder]=useState<any>(null);
@@ -763,6 +765,14 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
   const cargarEstadoCanonico=async(cod:string)=>{
     const res=await apiCall({action:"obtener_estado_canonico",codigo:cod});
     if(res?.estado) setEstadoCanonico(res.estado);
+  };
+
+  // FORGE DISCOVERY ENGINE — verifica si hay un descubrimiento pendiente de mostrar al abrir el chat
+  const verificarDescubrimientoPendiente=async(cod:string)=>{
+    const res=await apiCall({action:"obtener_descubrimiento_pendiente",codigo:cod});
+    if(res?.descubrimiento){
+      setDescubrimientoPendiente(res.descubrimiento);
+    }
   };
 
   // FORGE ORCHESTRATOR — genera la semana completa en 3 pasos pequeños en vez de una llamada gigante
@@ -1029,6 +1039,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     cargarPlanSemanal(u.codigo);
     cargarBlockOutcomes(u.codigo);
     cargarEstadoCanonico(u.codigo);
+    verificarDescubrimientoPendiente(u.codigo);
     if((u as any).is_beta_founder){ apiCall({action:"verificar_renovacion_beta",codigo:u.codigo}); }
     apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
     // reanudarSesion eliminada para reducir consumo de tokens
@@ -2385,6 +2396,16 @@ ${testStr}`}]});
           )}
 
           <div style={{flex:1,overflowY:"auto",background:C.card,borderRadius:20,border:`1px solid ${C.border}`,padding:"20px 18px",display:"flex",flexDirection:"column",gap:18}}>
+            {descubrimientoPendiente&&(
+              <div className="fade-up" style={{display:"flex",justifyContent:"center",marginBottom:4}}>
+                <div onClick={()=>setDescubrimientoPendiente(null)} style={{cursor:"pointer",background:"linear-gradient(135deg, #1A2A1A, #1A1A2A)",border:"1px solid #4CAF5080",borderRadius:16,padding:"18px 20px",maxWidth:"90%",textAlign:"center",boxShadow:"0 4px 20px rgba(76,175,80,0.15)"}}>
+                  <p style={{fontSize:24,marginBottom:8}}>✨</p>
+                  <p style={{color:"#4CAF50",fontSize:12,fontWeight:700,marginBottom:8,textTransform:"uppercase",letterSpacing:1}}>Forge ha hecho un descubrimiento</p>
+                  <p style={{color:C.ink,fontSize:14,lineHeight:1.6}}>{descubrimientoPendiente.descubrimiento}</p>
+                  <p style={{color:C.muted,fontSize:11,marginTop:10}}>Toca para continuar</p>
+                </div>
+              </div>
+            )}
             {generando&&(
               <div style={{display:"flex",gap:12}}>
                 <div style={{width:36,height:36,borderRadius:12,background:cat.colorLight,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{cat.emoji}</div>

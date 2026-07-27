@@ -77,6 +77,63 @@ async function generarEstadoCanonico(supabase: any, codigo: string) {
   return estado;
 }
 
+// FORGE INTENT CLASSIFIER — clasifica el mensaje del usuario por FAMILIA de intencion,
+// no por evento. Esto determina si el mensaje es una consulta (READ), un registro (WRITE),
+// una modificacion de planificacion (PLAN), una pregunta de coaching (COACHING), o algo
+// de configuracion/cuenta (META). Cada familia se procesa de forma distinta.
+interface IntentClassification {
+  intent: "PLAN_HOY" | "PLAN_MANANA" | "PLAN_SEMANA" | "ULTIMO_INSIGHT" | "BENCHMARK" | "OBJETIVO" | "DEBILIDADES" | "HISTORIAL_FISIOLOGICO" | "REPORTE_ENTRENO" | "REPORTE_SUENO" | "MODIFICAR_PLAN" | "COACHING" | "META" | "OTRO";
+  familia: "READ" | "WRITE" | "PLAN" | "COACHING" | "META";
+  confidence: number;
+}
+
+async function clasificarIntencion(apiKey: string, mensaje: string): Promise<IntentClassification> {
+  const prompt = `Clasifica este mensaje de un atleta a su coach de entrenamiento. Responde SOLO con JSON, sin texto adicional ni markdown.
+
+INTENCIONES POSIBLES Y SU FAMILIA:
+- PLAN_HOY (familia READ): pregunta qué toca hoy, qué entreno tiene hoy
+- PLAN_MANANA (familia READ): pregunta qué toca mañana
+- PLAN_SEMANA (familia READ): pregunta por el resto de la semana o el plan completo
+- ULTIMO_INSIGHT (familia READ): pregunta por su último resumen semanal o progreso reciente
+- BENCHMARK (familia READ): pregunta por una marca personal, PR, o resultado de un benchmark concreto
+- OBJETIVO (familia READ): pregunta cuál es su objetivo principal
+- DEBILIDADES (familia READ): pregunta qué debilidades o áreas de desarrollo tiene activas
+- HISTORIAL_FISIOLOGICO (familia READ): pregunta por su HRV, sueño, o tendencia fisiológica reciente
+- REPORTE_ENTRENO (familia WRITE): reporta haber completado un entrenamiento
+- REPORTE_SUENO (familia WRITE): reporta métricas de sueño/recuperación nocturna
+- MODIFICAR_PLAN (familia PLAN): pide cambiar, mover, o ajustar una sesión o su disponibilidad
+- COACHING (familia COACHING): pregunta abierta que requiere razonamiento (por qué, cómo mejorar, qué opinas, explicación técnica)
+- META (familia META): preguntas sobre la cuenta, premium, configuración de Forge, no sobre entrenamiento
+- OTRO (familia COACHING): cualquier cosa que no encaje claramente en las anteriores
+
+Mensaje: "${mensaje}"
+
+Responde con este formato exacto:
+{"intent":"NOMBRE_INTENCION","familia":"READ|WRITE|PLAN|COACHING|META","confidence":0.0-1.0}`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 100, messages: [{ role: "user", content: prompt }] }),
+    });
+    const data = await res.json();
+    const texto = data.content?.map((b: any) => b.text || "").join("") || "{}";
+    const clean = texto.replace(/```json|```/gi, "").trim();
+    const match = clean.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("No JSON valido");
+    const resultado = JSON.parse(match[0]);
+    return {
+      intent: resultado.intent || "OTRO",
+      familia: resultado.familia || "COACHING",
+      confidence: typeof resultado.confidence === "number" ? resultado.confidence : 0.5
+    };
+  } catch {
+    // Fallback seguro: si el clasificador falla, tratamos como COACHING (el LLM razona normalmente, sin dato inmutable forzado)
+    return { intent: "OTRO", familia: "COACHING", confidence: 0 };
+  }
+}
+
 // FORGE EVENT AGGREGATOR — determina a que evento pertenece cada mensaje del usuario,
 // y entrega SOLO los mensajes de ese evento al extractor correspondiente. El backend
 // es la unica fuente de verdad: nunca depende del frontend para clasificar.
@@ -1091,14 +1148,41 @@ Incluye: adherencia (X/7 sesiones), tendencia fisiológica general, y una frase 
   }
 
   if (action === "procesar_mensaje_contexto") {
-    // Combina Event Aggregator + Context Builder en una sola llamada para el frontend
+    // Combina Intent Classifier + Event Aggregator + Context Builder en una sola llamada.
     const { mensaje } = datos;
+    const clasificacion = await clasificarIntencion(apiKey!, mensaje);
     const resultadoAggregator = await forgeEventAggregator(supabase, apiKey!, codigo, mensaje);
     const contextoConstruido = await forgeContextBuilder(supabase, codigo, resultadoAggregator);
+
+    // Si la familia es READ y la confianza es alta, adjuntamos el dato inmutable exacto correspondiente
+    let datoInmutable: any = null;
+    if (clasificacion.familia === "READ" && clasificacion.confidence >= 0.6) {
+      const estado = await generarEstadoCanonico(supabase, codigo);
+      switch (clasificacion.intent) {
+        case "PLAN_HOY":
+          datoInmutable = { tipo: "sesion_hoy", valor: estado.sesion_hoy };
+          break;
+        case "PLAN_MANANA":
+          datoInmutable = { tipo: "sesion_manana", valor: estado.sesion_manana };
+          break;
+        case "OBJETIVO":
+          datoInmutable = { tipo: "objetivo_principal", valor: estado.objetivo_principal };
+          break;
+        case "DEBILIDADES":
+          datoInmutable = { tipo: "debilidades_activas", valor: estado.debilidades_activas };
+          break;
+        case "HISTORIAL_FISIOLOGICO":
+          datoInmutable = { tipo: "tendencia_fisiologica", valor: estado.tendencia_fisiologica };
+          break;
+      }
+    }
+
     return NextResponse.json({
       eventType: resultadoAggregator.eventType,
       esCorreccion: resultadoAggregator.esCorreccion,
-      contexto: contextoConstruido
+      contexto: contextoConstruido,
+      clasificacion,
+      datoInmutable
     });
   }
 

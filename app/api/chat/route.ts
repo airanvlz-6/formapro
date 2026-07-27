@@ -1016,7 +1016,10 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
     if (!planSemana) return NextResponse.json({ semanaCompleta: false });
 
     const sessions = planSemana.sessions || [];
-    const todasCompletadas = sessions.length === 7 && sessions.every((s: any) => s.completada === true || s.tipo === "descanso");
+    // "descanso" (completo, sin ejercicios) NO requiere reporte y no cuenta para el total esperado.
+    // "descanso_activo" (con ejercicios sugeridos) SI requiere reporte, igual que cualquier sesion de entreno.
+    const sesionesQueRequierenReporte = sessions.filter((s: any) => s.tipo !== "descanso");
+    const todasCompletadas = sesionesQueRequierenReporte.length > 0 && sesionesQueRequierenReporte.every((s: any) => s.completada === true);
 
     if (!todasCompletadas) return NextResponse.json({ semanaCompleta: false });
 
@@ -1043,7 +1046,7 @@ ${JSON.stringify(histFisioSemana)}
 DEBILIDADES ACTIVAS:
 ${debilidadesActivas.join(", ") || "ninguna registrada"}
 
-Incluye: adherencia (X/7 sesiones), tendencia fisiológica general, y una frase sobre el ajuste para la semana siguiente. NO inventes datos que no estén arriba.`;
+Incluye: adherencia (X/${sesionesQueRequierenReporte.length} sesiones), tendencia fisiológica general, y una frase sobre el ajuste para la semana siguiente. NO inventes datos que no estén arriba.`;
 
     let resumenGenerado = "Semana completada con éxito.";
     try {
@@ -1062,7 +1065,7 @@ Incluye: adherencia (X/7 sesiones), tendencia fisiológica general, y una frase 
       date: hoyCierreStr,
       type: "forge_insight",
       title: `Forge Insight — Semana ${weekStartCierre}`,
-      data: { notas: resumenGenerado, adherencia: `${sessions.filter((s:any)=>s.completada).length}/7`, generado_automaticamente: true }
+      data: { notas: resumenGenerado, adherencia: `${sesionesQueRequierenReporte.filter((s:any)=>s.completada).length}/${sesionesQueRequierenReporte.length}`, generado_automaticamente: true }
     });
 
     // FORGE DISCOVERY ENGINE (v1) — analiza el historial completo (no solo esta semana) buscando

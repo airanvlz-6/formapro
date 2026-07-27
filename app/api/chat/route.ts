@@ -212,8 +212,66 @@ async function forgeEventAggregator(supabase: any, apiKey: string, codigo: strin
 // En vez de "ultimos N mensajes" cronologicos, incluye: el evento activo actual completo,
 // el ultimo evento cerrado relevante (resumido via su event_context), y evita que el Coach
 // "olvide" un evento importante solo porque hubo conversacion intermedia.
+// FORGE CONVERSATION MEMORY — hechos deterministas de lo que YA ha ocurrido HOY en la conversacion.
+// No es texto, son flags. Se reconstruye cada vez desde event_log + active_events del dia actual.
+// Resuelve la familia de bugs "el Coach pregunta algo que el usuario ya respondio esta misma conversacion".
+interface ConversationFacts {
+  trainingTodayReported: boolean;
+  sleepTodayReported: boolean;
+  todayPlanModified: boolean;
+  giOrHealthIssueReportedToday: boolean;
+}
+
+async function buildConversationFacts(supabase: any, codigo: string): Promise<ConversationFacts> {
+  const hoyStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+  const inicioHoy = new Date(hoyStr + 'T00:00:00').toISOString();
+
+  const { data: eventosHoy } = await supabase
+    .from("event_log")
+    .select("event_type,closed_at")
+    .eq("user_codigo", codigo)
+    .gte("closed_at", inicioHoy);
+
+  const { data: eventoActivoActual } = await supabase
+    .from("active_events")
+    .select("event_type,messages,updated_at")
+    .eq("user_codigo", codigo)
+    .single();
+
+  const eventosDeHoy = eventosHoy || [];
+  const tipoActivoEsHoy = eventoActivoActual && new Date(eventoActivoActual.updated_at) >= new Date(inicioHoy);
+
+  const huboTraining = eventosDeHoy.some((e: any) => e.event_type === "TRAINING_REPORT") || (tipoActivoEsHoy && eventoActivoActual.event_type === "TRAINING_REPORT");
+  const huboSueno = eventosDeHoy.some((e: any) => e.event_type === "SLEEP_REPORT") || (tipoActivoEsHoy && eventoActivoActual.event_type === "SLEEP_REPORT");
+
+  // Molestia de salud reportada hoy: heuristica simple sobre el texto del evento activo/reciente si es OTHER
+  const textoEventoActivo = (eventoActivoActual?.messages || []).join(" ").toLowerCase();
+  const huboMolestiaSalud = /est[oó]mago|gastrointestinal|malestar|dolor|molestia|mareo|fiebre|resfriado|gripe/i.test(textoEventoActivo) && tipoActivoEsHoy;
+
+  return {
+    trainingTodayReported: huboTraining,
+    sleepTodayReported: huboSueno,
+    todayPlanModified: false, // se amplia en el futuro conectando con actualizar_sesion_plan
+    giOrHealthIssueReportedToday: huboMolestiaSalud
+  };
+}
+
+function buildConversationFactsInstruction(facts: ConversationFacts): string {
+  const lineas: string[] = [];
+  if (facts.trainingTodayReported) lineas.push("✓ El entrenamiento de HOY ya fue reportado en esta conversación. NUNCA preguntes si podrá entrenar hoy ni si tiene pensado entrenar — ya ocurrió.");
+  if (facts.sleepTodayReported) lineas.push("✓ Las métricas de sueño de esta noche ya fueron reportadas en esta conversación.");
+  if (facts.giOrHealthIssueReportedToday) lineas.push("✓ El atleta ya mencionó una molestia de salud hoy — no le preguntes de nuevo si podrá entrenar, ya sabes que el entreno de hoy (si tocaba) ya se resolvió o se está gestionando.");
+  if (lineas.length === 0) return "";
+  return `HECHOS YA CONOCIDOS EN ESTA CONVERSACIÓN DE HOY (no los ignores ni preguntes de nuevo):\n${lineas.join("\n")}`;
+}
+
 async function forgeContextBuilder(supabase: any, codigo: string, eventoActivoActual: { eventType: string; mensajesDelEvento: string[] }): Promise<string> {
   const partes: string[] = [];
+
+  // FORGE CONVERSATION MEMORY — hechos ya conocidos de HOY, evita preguntas/recomendaciones repetidas
+  const facts = await buildConversationFacts(supabase, codigo);
+  const instruccionFacts = buildConversationFactsInstruction(facts);
+  if (instruccionFacts) partes.push(instruccionFacts);
 
   // FORGE KNOWLEDGE ENGINE — informacion determinista, sin razonamiento, el Coach decide que hacer con ella
   const knowledge = await buildAthleteKnowledge(codigo);

@@ -1814,15 +1814,32 @@ Incluye: adherencia (X/${sesionesQueRequierenReporte.length} sesiones), tendenci
     };
     await supabase.from("usuarios").update({ athlete_development: devActualizado }).eq("codigo", codigo);
 
-    // Si pasó a resuelta, generar evento en Historia
+    // FORGE TIMELINE NARRATIVA — si pasó a resuelta, generar evento en Historia + notificacion narrativa
+    // que conecta explicitamente el momento de deteccion con el de resolucion.
     if (estado === "resuelta" && estadoAnterior !== "resuelta") {
-      const diasTrabajado = Math.round((new Date().getTime() - new Date(devActualizado[idx].detectado).getTime()) / (24*60*60*1000));
+      const fechaDeteccion = new Date(devActualizado[idx].detectado);
+      const diasTrabajado = Math.round((new Date().getTime() - fechaDeteccion.getTime()) / (24*60*60*1000));
+      const mesesTrabajado = Math.round(diasTrabajado / 30);
+      const tiempoTexto = mesesTrabajado >= 1 ? `hace ${mesesTrabajado} ${mesesTrabajado === 1 ? "mes" : "meses"}` : `hace ${diasTrabajado} días`;
+
       await supabase.from("athlete_events").insert({
         user_codigo: codigo,
         date: new Date().toISOString().split('T')[0],
         type: "development_complete",
         title: `${devActualizado[idx].nombre_visible} — ${diasTrabajado} días de trabajo`,
         data: { notas: nueva_evidencia||"" }
+      });
+
+      // Narrativa conectando pasado y presente, mostrada con la misma notificacion tipo sorpresa
+      await supabase.from("forge_discoveries").insert({
+        user_codigo: codigo,
+        descubrimiento: `📖 ${tiempoTexto} detectamos que tu debilidad era ${devActualizado[idx].nombre_visible.toLowerCase()}. Hoy esa debilidad ya no aparece entre tus prioridades.`,
+        categoria: "timeline_narrativa",
+        nivel: "recomendacion",
+        confianza: 100,
+        puntos_evidencia: 0,
+        visto: false,
+        presentado_al_usuario: false
       });
     }
 

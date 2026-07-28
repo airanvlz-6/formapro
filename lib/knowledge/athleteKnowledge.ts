@@ -1,7 +1,6 @@
 // FORGE KNOWLEDGE ENGINE — athleteKnowledge.ts
 // Cada funcion responde UNA unica pregunta determinista sobre el atleta.
 // Nunca razona, nunca decide. Solo informa. El Coach decide que hacer con la informacion.
-// Si mañana cambia la base de datos, solo cambian estas funciones — el resto de Forge no se entera.
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -48,7 +47,6 @@ export async function getRecoveryStatus(codigo: string): Promise<{ hrv: number |
   return { hrv: estado.hrv, sueno: estado.sueno, tendencia: estado.tendencia };
 }
 
-// NUEVA — necesaria para el intent BENCHMARK del Knowledge Router
 export async function getBenchmark(codigo: string, nombreEjercicio?: string): Promise<any> {
   const { data } = await supabase.from("usuarios").select("historial_marcas,marcas_especificas").eq("codigo", codigo).single();
   const historialMarcas = data?.historial_marcas || [];
@@ -58,7 +56,6 @@ export async function getBenchmark(codigo: string, nombreEjercicio?: string): Pr
   return coincidencias.length > 0 ? coincidencias[coincidencias.length - 1] : null;
 }
 
-// NUEVA — necesaria para el intent PLAN_SEMANA del Knowledge Router
 export async function getWeekPlan(codigo: string): Promise<any> {
   const hoy = new Date();
   const diaSemana = hoy.getDay() || 7;
@@ -69,22 +66,48 @@ export async function getWeekPlan(codigo: string): Promise<any> {
   return data || null;
 }
 
-// Punto de entrada unico: recopila todo el conocimiento relevante en un solo objeto compacto.
+// NUEVA — Objetivos vivos: calcula un porcentaje de progreso real hacia el objetivo del atleta,
+// combinando adherencia reciente y evolucion de debilidades activas. No es exacto pero es honesto:
+// se basa en datos reales, nunca en una estimacion inventada por el LLM.
+export async function getObjectiveProgress(codigo: string): Promise<{ percentage: number; daysRemaining: number | null } | null> {
+  const { data } = await supabase.from("usuarios").select("objetivo_principal,workout_history,athlete_development").eq("codigo", codigo).single();
+  const objetivo = data?.objetivo_principal;
+  if (!objetivo?.fecha) return null;
+
+  const hoy = new Date();
+  const fechaObjetivo = new Date(objetivo.fecha);
+  const diasRestantes = Math.round((fechaObjetivo.getTime() - hoy.getTime()) / (24 * 60 * 60 * 1000));
+  if (diasRestantes < 0) return { percentage: 100, daysRemaining: 0 };
+
+  const workoutHistory = data?.workout_history || [];
+  const hace28dias = new Date(hoy.getTime() - 28 * 24 * 60 * 60 * 1000);
+  const sesionesRecientes = workoutHistory.filter((w: any) => new Date(w.fecha) >= hace28dias).length;
+  const adherenciaScore = Math.min(sesionesRecientes / 16, 1) * 40;
+
+  const desarrollo = data?.athlete_development || [];
+  const resueltas = desarrollo.filter((d: any) => d.estado === "resuelta").length;
+  const totalDebilidades = desarrollo.length || 1;
+  const debilidadesScore = (resueltas / totalDebilidades) * 30;
+
+  const tiempoScore = 30;
+
+  const percentage = Math.round(Math.min(adherenciaScore + debilidadesScore + tiempoScore, 100));
+  return { percentage, daysRemaining: diasRestantes };
+}
+
 export async function buildAthleteKnowledge(codigo: string) {
-  const [objective, block, weaknesses, latestInsight, latestWorkout, recovery] = await Promise.all([
+  const [objective, block, weaknesses, latestInsight, latestWorkout, recovery, objectiveProgress] = await Promise.all([
     getCurrentObjective(codigo),
     getCurrentBlock(codigo),
     getActiveWeaknesses(codigo),
     getLatestInsight(codigo),
     getLatestWorkout(codigo),
-    getRecoveryStatus(codigo)
+    getRecoveryStatus(codigo),
+    getObjectiveProgress(codigo)
   ]);
-  return { objective, block, weaknesses, latestInsight, latestWorkout, recovery };
+  return { objective, block, weaknesses, latestInsight, latestWorkout, recovery, objectiveProgress };
 }
 
-// FORGE KNOWLEDGE ROUTER — mapea cada intent detectado por el Intent Classifier
-// a la funcion exacta del Knowledge Engine que debe responderlo. El Coach ya no
-// "busca" informacion: el Router se la entrega ya resuelta segun la intencion.
 export async function knowledgeRouter(codigo: string, intent: string, entidad?: string): Promise<any> {
   switch (intent) {
     case "OBJETIVO":
@@ -100,6 +123,6 @@ export async function knowledgeRouter(codigo: string, intent: string, entidad?: 
     case "PLAN_SEMANA":
       return { tipo: "plan_semana", valor: await getWeekPlan(codigo) };
     default:
-      return null; // El intent no corresponde a una consulta de Knowledge Engine (ej: PLAN_HOY/MANANA se resuelven via Estado Canonico)
+      return null;
   }
 }

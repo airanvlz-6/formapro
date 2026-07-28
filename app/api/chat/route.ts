@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { render } from "@react-email/render";
 import { validateExtraction } from "@/lib/validators/extractionRules";
-import { buildAthleteKnowledge, knowledgeRouter } from "@/lib/knowledge/athleteKnowledge";
+import { buildAthleteKnowledge, knowledgeRouter, getObjectiveProgress } from "@/lib/knowledge/athleteKnowledge";
 import { getResponseMode, buildStaticResponse, getCapabilities, buildCapabilityInstruction } from "@/lib/response/responseEngine";
 import { sendEmail } from "@/lib/email/sendEmail";
 import FounderEmail from "@/lib/email/templates/FounderEmail";
@@ -1434,6 +1434,11 @@ Incluye: adherencia (X/${sesionesQueRequierenReporte.length} sesiones), tendenci
     const { data: eventoActivo } = await supabase.from("active_events").select("*").eq("user_codigo", codigo).single();
     const { data: eventosLog } = await supabase.from("event_log").select("*").eq("user_codigo", codigo).order("closed_at", { ascending: false }).limit(30);
     return NextResponse.json({ eventoActivo: eventoActivo || null, historial: eventosLog || [] });
+  }
+
+  if (action === "obtener_progreso_objetivo") {
+    const progreso = await getObjectiveProgress(codigo);
+    return NextResponse.json({ progreso });
   }
 
   if (action === "obtener_estado_founder") {

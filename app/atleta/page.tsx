@@ -5,6 +5,7 @@ export default function MiAtleta() {
   const [codigo, setCodigo] = useState("");
   const [autenticado, setAutenticado] = useState(false);
   const [datos, setDatos] = useState<any>(null);
+  const [progresoObjetivo, setProgresoObjetivo] = useState<{percentage:number;daysRemaining:number|null}|null>(null);
   const [cargando, setCargando] = useState(true);
   const [iniciado, setIniciado] = useState(false);
   const [error, setError] = useState("");
@@ -34,6 +35,10 @@ export default function MiAtleta() {
       if(data.error){ setError("Código no encontrado"); return; }
       setDatos(data.data);
       setAutenticado(true);
+      // Objetivos vivos: cargar el progreso real hacia el objetivo
+      const resProgreso = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"obtener_progreso_objetivo",codigo:cod})});
+      const dataProgreso = await resProgreso.json();
+      if(dataProgreso?.progreso) setProgresoObjetivo(dataProgreso.progreso);
     }catch{ setError("Error de conexión"); }
     finally{ setCargando(false); setIniciado(true); }
   };
@@ -140,9 +145,22 @@ export default function MiAtleta() {
               </div>
             )}
             {datos?.objetivo_principal?.descripcion && (
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ color: C.muted, fontSize: 13 }}>Objetivo</span>
-                <span style={{ color: C.ink, fontSize: 13, fontWeight: 600 }}>{datos.objetivo_principal.descripcion}</span>
+              <div style={{ marginBottom: progresoObjetivo ? 4 : 0 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: progresoObjetivo ? 8 : 0 }}>
+                  <span style={{ color: C.muted, fontSize: 13 }}>Objetivo</span>
+                  <span style={{ color: C.ink, fontSize: 13, fontWeight: 600, textAlign: "right" }}>{datos.objetivo_principal.descripcion}</span>
+                </div>
+                {progresoObjetivo && (
+                  <>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.accent, marginBottom: 4 }}>
+                      <span>Estás un {progresoObjetivo.percentage}% más cerca</span>
+                      {progresoObjetivo.daysRemaining !== null && <span>{progresoObjetivo.daysRemaining} días restantes</span>}
+                    </div>
+                    <div style={{ height: 6, background: C.border, borderRadius: 100 }}>
+                      <div style={{ height: 6, borderRadius: 100, background: C.accent, width: `${progresoObjetivo.percentage}%`, transition: "width 0.8s ease" }}/>
+                    </div>
+                  </>
+                )}
               </div>
             )}
             {datos?.perfil?.dias && (

@@ -688,6 +688,7 @@ export default function Forge() {
         cargarBlockOutcomes(u.codigo);
         cargarEstadoCanonico(u.codigo);
         verificarDescubrimientoPendiente(u.codigo);
+        verificarSaludoProactivo(u.codigo);
         if((u as any).is_beta_founder){ apiCall({action:"verificar_renovacion_beta",codigo:u.codigo}); }
         apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
       },500);
@@ -772,6 +773,14 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     const res=await apiCall({action:"obtener_descubrimiento_pendiente",codigo:cod});
     if(res?.descubrimiento){
       setDescubrimientoPendiente(res.descubrimiento);
+    }
+  };
+
+  // FORGE COACH PROACTIVO — si han pasado varios dias, Forge inicia con algo relevante en vez de esperar
+  const verificarSaludoProactivo=async(cod:string)=>{
+    const res=await apiCall({action:"obtener_saludo_proactivo",codigo:cod});
+    if(res?.saludo){
+      setMensajes(prev=>[...prev,{role:"assistant",content:res.saludo}]);
     }
   };
 
@@ -1040,6 +1049,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     cargarBlockOutcomes(u.codigo);
     cargarEstadoCanonico(u.codigo);
     verificarDescubrimientoPendiente(u.codigo);
+        verificarSaludoProactivo(u.codigo);
     if((u as any).is_beta_founder){ apiCall({action:"verificar_renovacion_beta",codigo:u.codigo}); }
     apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
     // reanudarSesion eliminada para reducir consumo de tokens

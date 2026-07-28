@@ -1459,6 +1459,26 @@ Incluye: adherencia (X/${sesionesQueRequierenReporte.length} sesiones), tendenci
     return NextResponse.json({ descubrimiento: descubrimiento || null });
   }
 
+  if (action === "obtener_saludo_proactivo") {
+    // FORGE COACH PROACTIVO — si han pasado varios dias sin actividad Y hay contenido relevante
+    // acumulado (insight reciente no comentado, tendencia relevante), Forge inicia con algo util
+    // en vez de esperar pasivamente. Es determinista: solo se activa si hay datos reales que ofrecer.
+    const { data: usuarioProactivo } = await supabase.from("usuarios").select("ultima_visita,historial_fisiologico").eq("codigo", codigo).single();
+    const ultimaVisita = usuarioProactivo?.ultima_visita ? new Date(usuarioProactivo.ultima_visita) : null;
+    const diasSinVisitar = ultimaVisita ? Math.floor((Date.now() - ultimaVisita.getTime()) / (24*60*60*1000)) : 0;
+
+    if (diasSinVisitar < 2) return NextResponse.json({ saludo: null }); // visita reciente, no hace falta ser proactivo
+
+    const { data: ultimoInsight } = await supabase.from("athlete_events").select("data,date").eq("user_codigo", codigo).eq("type", "forge_insight").order("date", { ascending: false }).limit(1).single();
+    if (!ultimoInsight) return NextResponse.json({ saludo: null });
+
+    const diasDesdeInsight = Math.floor((Date.now() - new Date(ultimoInsight.date).getTime()) / (24*60*60*1000));
+    if (diasDesdeInsight > 10) return NextResponse.json({ saludo: null }); // insight demasiado antiguo, ya no es relevante como saludo
+
+    const saludo = `He revisado tu última semana. ${ultimoInsight.data?.notas?.split('\n')[0] || 'Tengo información relevante para ti'} ¿Seguimos por ahí?`;
+    return NextResponse.json({ saludo });
+  }
+
   if (action === "obtener_estado_canonico") {
     const estado = await generarEstadoCanonico(supabase, codigo);
     return NextResponse.json({ estado });

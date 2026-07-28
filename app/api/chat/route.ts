@@ -347,6 +347,51 @@ async function forgeContextBuilder(supabase: any, codigo: string, eventoActivoAc
 // Nivel 2 PATRON_CONFIRMADO: "Tras N sesiones ya puedo afirmar..." (8+ puntos de datos, patron repetido)
 // Nivel 3 RECOMENDACION: "A partir de ahora adaptaré..." (patron confirmado + accion concreta derivada)
 // Regla estricta: prohibido usar "creo que" / "quizas" / "podria ser" — solo lenguaje de evidencia.
+// FORGE CELEBRATIONS ENGINE — deteccion 100% determinista (sin LLM) de hitos objetivos.
+// No solo PRs: constancia, semanas completas, recuperacion, adherencia sostenida.
+interface Celebration {
+  tipo: string;
+  mensaje: string;
+  emoji: string;
+}
+
+async function detectarCelebraciones(supabase: any, codigo: string): Promise<Celebration[]> {
+  const celebraciones: Celebration[] = [];
+  const { data } = await supabase.from("usuarios").select("workout_history,historial_fisiologico").eq("codigo", codigo).single();
+  const workoutHistory = data?.workout_history || [];
+  const fisioHistory = data?.historial_fisiologico || [];
+
+  // 1. Racha de semanas consecutivas con adherencia completa (usando athlete_events forge_insight)
+  const { data: insightsRecientes } = await supabase.from("athlete_events").select("data,date").eq("user_codigo", codigo).eq("type", "forge_insight").order("date", { ascending: false }).limit(4);
+  const semanasCompletas = (insightsRecientes || []).filter((i: any) => {
+    const adherencia = i.data?.adherencia || "";
+    const match = adherencia.match(/(\d+)\/(\d+)/);
+    return match && match[1] === match[2];
+  }).length;
+  if (semanasCompletas === 4) {
+    celebraciones.push({ tipo: "constancia", emoji: "🔥", mensaje: "4 semanas seguidas con adherencia completa. Esto ya no es suerte — es un hábito consolidado." });
+  } else if (semanasCompletas === 2) {
+    celebraciones.push({ tipo: "constancia", emoji: "💪", mensaje: "2 semanas seguidas completando el 100% de tus sesiones. Vas construyendo una racha real." });
+  }
+
+  // 2. Tendencia de recuperacion ascendente sostenida (HRV subiendo en las ultimas 5 mediciones)
+  const ultimosHRV = fisioHistory.slice(-5).map((f: any) => f.hrv).filter((v: any) => v !== null && v !== undefined);
+  if (ultimosHRV.length >= 5) {
+    const esAscendente = ultimosHRV.every((v: number, i: number) => i === 0 || v >= ultimosHRV[i - 1] - 5); // tolerancia pequeña
+    if (esAscendente && ultimosHRV[ultimosHRV.length - 1] > ultimosHRV[0]) {
+      celebraciones.push({ tipo: "recuperacion", emoji: "🧬", mensaje: `Tu HRV lleva 5 mediciones seguidas mejorando (${ultimosHRV[0]}ms → ${ultimosHRV[ultimosHRV.length - 1]}ms). Tu cuerpo está respondiendo muy bien al entrenamiento.` });
+    }
+  }
+
+  // 3. Volumen total de sesiones registradas (hitos redondos: 25, 50, 100)
+  const totalSesiones = workoutHistory.length;
+  if ([25, 50, 100, 150, 200].includes(totalSesiones)) {
+    celebraciones.push({ tipo: "volumen", emoji: "📊", mensaje: `Acabas de registrar tu sesión número ${totalSesiones} en Forge. Cada una ha construido el conocimiento que hoy tenemos sobre ti.` });
+  }
+
+  return celebraciones;
+}
+
 async function ejecutarDiscoveryEngine(supabase: any, apiKey: string, codigo: string): Promise<{ generado: boolean; nivel?: string }> {
   const { data: usuarioDiscovery } = await supabase.from("usuarios").select("workout_history,historial_fisiologico").eq("codigo", codigo).single();
   const historialCompleto = (usuarioDiscovery?.workout_history || []).slice(-30);
@@ -1243,6 +1288,21 @@ Incluye: adherencia (X/${sesionesQueRequierenReporte.length} sesiones), tendenci
       title: `Forge Insight — Semana ${weekStartCierre}`,
       data: { notas: resumenGenerado, adherencia: `${sesionesQueRequierenReporte.filter((s:any)=>s.completada).length}/${sesionesQueRequierenReporte.length}`, generado_automaticamente: true }
     });
+
+    // FORGE CELEBRATIONS ENGINE — hitos objetivos deterministas (constancia, recuperacion, volumen)
+    const celebraciones = await detectarCelebraciones(supabase, codigo);
+    for (const cel of celebraciones) {
+      await supabase.from("forge_discoveries").insert({
+        user_codigo: codigo,
+        descubrimiento: `${cel.emoji} ${cel.mensaje}`,
+        categoria: `celebracion_${cel.tipo}`,
+        nivel: "celebracion",
+        confianza: 100,
+        puntos_evidencia: 0,
+        visto: false,
+        presentado_al_usuario: false
+      });
+    }
 
     // FORGE DISCOVERY ENGINE (v2) — se ejecuta tambien al cerrar cada semana, ademas de poder
     // dispararse de forma independiente via la accion "ejecutar_discovery_engine"

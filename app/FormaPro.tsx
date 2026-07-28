@@ -2602,6 +2602,11 @@ ${testStr}`}]});
                       setSesionPendiente(null);
                       if(res?.esPrimeraSesion){
                         setMensajes(prev=>[...prev,{role:"assistant",content:"🎉 **¡Primer entrenamiento registrado!**\n\nYa has empezado a construir tu historial. A partir de ahora Forge aprenderá de cada sesión para adaptar las siguientes.\n\nRevisa tu evolución en **Mi Historia** cuando quieras."}]);
+                      } else {
+                        // FORGE DISCOVERY ENGINE — se ejecuta en segundo plano tras cada entreno reportado
+                        // (no bloquea al usuario, no espera respuesta). Con suficientes datos, puede
+                        // generar un descubrimiento que se mostrara la proxima vez que abra el chat.
+                        apiCall({action:"ejecutar_discovery_engine",codigo:codigoUsuario});
                       }
                     }} style={{background:"#4CAF50",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>
                       {sesionPendiente.yaExiste ? "Actualizar" : "Registrar"}

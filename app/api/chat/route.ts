@@ -1213,8 +1213,10 @@ Si NO hay evidencia suficientemente clara, responde SOLO con:
     // 1. Nadie ha adquirido nunca -> sinDueñoRegistrado=true (unico caso donde el frontend puede auto-adquirir)
     // 2. El dueño soy yo mismo -> haySesionActiva=false, no hacer nada
     // 3. Otra sesion viva y distinta a la mia -> haySesionActiva=true, mostrar conflicto
+    // NOTA: "viva" ahora se basa en ACTIVIDAD REAL (last_message_at), no solo heartbeat — una pestaña
+    // abierta en background (ej: movil sin usar) no debe bloquear indefinidamente a otras pestañas.
     const { sessionId: miSessionId } = datos || {};
-    const SESSION_ALIVE_THRESHOLD_MS = 60 * 1000;
+    const SESSION_REAL_ACTIVITY_THRESHOLD_MS = 45 * 60 * 1000; // 45 min sin enviar ningun mensaje real
     const { data: sesionActiva } = await supabase.from("active_sessions").select("*").eq("user_codigo", codigo).single();
 
     if (!sesionActiva) {
@@ -1224,9 +1226,10 @@ Si NO hay evidencia suficientemente clara, responde SOLO con:
     if (soyElDueño) {
       return NextResponse.json({ haySesionActiva: false, sinDueñoRegistrado: false, sesionActiva: null });
     }
-    const otraEstaViva = (Date.now() - new Date(sesionActiva.updated_at).getTime()) < SESSION_ALIVE_THRESHOLD_MS;
+    const ultimaActividadReal = sesionActiva.last_message_at || sesionActiva.owner_since;
+    const otraEstaViva = (Date.now() - new Date(ultimaActividadReal).getTime()) < SESSION_REAL_ACTIVITY_THRESHOLD_MS;
     if (!otraEstaViva) {
-      // El otro dueño esta abandonado (sin heartbeat reciente) -> tratar como sin dueño registrado
+      // El otro dueño no ha enviado ningun mensaje real en 45+ min -> tratar como sin dueño registrado
       return NextResponse.json({ haySesionActiva: false, sinDueñoRegistrado: true, sesionActiva: null });
     }
     return NextResponse.json({ haySesionActiva: true, sinDueñoRegistrado: false, sesionActiva });
@@ -1262,7 +1265,9 @@ Si NO hay evidencia suficientemente clara, responde SOLO con:
 
   if (action === "procesar_mensaje_contexto") {
     // Combina Intent Classifier + Event Aggregator + Context Builder en una sola llamada.
+    // Tambien registra ACTIVIDAD REAL (envio de mensaje) para el timeout de sesion abandonada.
     const { mensaje } = datos;
+    supabase.from("active_sessions").update({ last_message_at: new Date().toISOString() }).eq("user_codigo", codigo).then(() => {});
     const clasificacion = await clasificarIntencion(apiKey!, mensaje);
     const resultadoAggregator = await forgeEventAggregator(supabase, apiKey!, codigo, mensaje);
     const contextoConstruido = await forgeContextBuilder(supabase, codigo, resultadoAggregator);

@@ -170,11 +170,24 @@ const EVENT_CORRECTION_WINDOW_MS = 3 * 60 * 1000; // ventana tras la extraccion 
 // No importa el origen (banner, extractor, futura integracion Garmin/Strava): todos emiten
 // el mismo evento canonico, y los consumidores (Conversation Memory, Discovery Engine, etc.)
 // solo necesitan escuchar el evento, sin conocer quien lo produjo.
-async function emitirEventoForge(supabase: any, codigo: string, eventName: string, payload: any) {
+// REGLA: los eventos son INMUTABLES. Ningun consumidor debe modificar un evento ya emitido —
+// si algo cambia, se emite un evento nuevo.
+interface ForgeEventParams {
+  entityType?: string;
+  entityId?: string;
+  source: string;
+  payload: any;
+}
+
+async function emitirEventoForge(supabase: any, codigo: string, eventType: string, params: ForgeEventParams) {
   await supabase.from("forge_events").insert({
     user_codigo: codigo,
-    event_name: eventName,
-    payload
+    event_type: eventType,
+    entity_type: params.entityType || null,
+    entity_id: params.entityId || null,
+    source: params.source,
+    payload: params.payload,
+    version: 1
   });
 }
 
@@ -257,9 +270,9 @@ async function buildConversationFacts(supabase: any, codigo: string): Promise<Co
   // (banner, extractor, futuras integraciones). Esta es la fuente de verdad preferida.
   const { data: eventosPipelineHoy } = await supabase
     .from("forge_events")
-    .select("event_name,created_at")
+    .select("event_type,created_at")
     .eq("user_codigo", codigo)
-    .eq("event_name", "TrainingReported")
+    .eq("event_type", "WorkoutRegistered")
     .gte("created_at", inicioHoy);
   const huboTrainingPipeline = (eventosPipelineHoy || []).length > 0;
 
@@ -889,10 +902,15 @@ ${ultimos}`;
 
     await supabase.from("usuarios").update({ workout_history: workoutActualizado }).eq("codigo", codigo);
 
-    // FORGE EVENT PIPELINE — emitimos el evento canonico TrainingReported. Cualquier consumidor
-    // futuro (Discovery Engine, Knowledge Engine, Benchmarks) puede escuchar esto sin conocer
-    // que el origen fue el banner de registro.
-    await emitirEventoForge(supabase, codigo, "TrainingReported", { workout_id: workoutIdCalc, tipo: sesionNormalizada.tipo, fecha: sesionNormalizada.fecha });
+    // FORGE EVENT PIPELINE — emitimos el evento canonico WorkoutRegistered (confirmacion estructurada
+    // via banner, distinto de un futuro TrainingReported narrado en texto libre o WorkoutImported
+    // desde una integracion externa). Cualquier consumidor puede escucharlo sin conocer el origen.
+    await emitirEventoForge(supabase, codigo, "WorkoutRegistered", {
+      entityType: "Workout",
+      entityId: workoutIdCalc,
+      source: "banner",
+      payload: { tipo: sesionNormalizada.tipo, fecha: sesionNormalizada.fecha }
+    });
 
     return NextResponse.json({ ok: true, actualizado: indiceExistente >= 0, esPrimeraSesion: esPrimeraSesionGlobal });
   }

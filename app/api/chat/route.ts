@@ -241,7 +241,12 @@ async function buildConversationFacts(supabase: any, codigo: string): Promise<Co
   const eventosDeHoy = eventosHoy || [];
   const tipoActivoEsHoy = eventoActivoActual && new Date(eventoActivoActual.updated_at) >= new Date(inicioHoy);
 
-  const huboTraining = eventosDeHoy.some((e: any) => e.event_type === "TRAINING_REPORT") || (tipoActivoEsHoy && eventoActivoActual.event_type === "TRAINING_REPORT");
+  // El entreno de hoy puede haberse guardado via el banner [SESION:] directamente en workout_history,
+  // SIN pasar por el Event Aggregator — verificamos ambas fuentes para no depender de una sola via.
+  const { data: usuarioWorkout } = await supabase.from("usuarios").select("workout_history").eq("codigo", codigo).single();
+  const workoutHoy = (usuarioWorkout?.workout_history || []).some((w: any) => w.fecha?.startsWith(hoyStr));
+
+  const huboTraining = workoutHoy || eventosDeHoy.some((e: any) => e.event_type === "TRAINING_REPORT") || (tipoActivoEsHoy && eventoActivoActual.event_type === "TRAINING_REPORT");
   const huboSueno = eventosDeHoy.some((e: any) => e.event_type === "SLEEP_REPORT") || (tipoActivoEsHoy && eventoActivoActual.event_type === "SLEEP_REPORT");
 
   // Molestia de salud reportada hoy: heuristica simple sobre el texto del evento activo/reciente si es OTHER

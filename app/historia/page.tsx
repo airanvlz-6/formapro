@@ -601,7 +601,7 @@ export default function Historia() {
         {bloques.length > 0 && (
           <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
             <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 14 }}>📋 Historial de bloques</p>
-            {[...bloques].reverse().map((b:any, i:number) => (
+            {[...bloques].sort((a:any,b:any)=>new Date(b.fecha).getTime()-new Date(a.fecha).getTime()).map((b:any, i:number) => (
               <div key={i} style={{ padding: "12px 0", borderBottom: i < bloques.length-1 ? `1px solid ${C.border}` : "none" }}>
                 <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
                   <span style={{ color:C.ink, fontSize:13, fontWeight:700, textTransform:"capitalize" }}>{b.bloque_completado}</span>

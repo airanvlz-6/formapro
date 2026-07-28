@@ -342,6 +342,78 @@ async function forgeContextBuilder(supabase: any, codigo: string, eventoActivoAc
 
 // Genera una "fotografia contextual" estructurada del evento, usando una llamada pequeña
 // y dedicada (Haiku), separada del Coach principal. No da consejos, no inventa informacion.
+// FORGE DISCOVERY ENGINE (v2) — sistema de niveles de evidencia, nunca especula.
+// Nivel 1 OBSERVACION: "He detectado que..." (3+ puntos de datos)
+// Nivel 2 PATRON_CONFIRMADO: "Tras N sesiones ya puedo afirmar..." (8+ puntos de datos, patron repetido)
+// Nivel 3 RECOMENDACION: "A partir de ahora adaptaré..." (patron confirmado + accion concreta derivada)
+// Regla estricta: prohibido usar "creo que" / "quizas" / "podria ser" — solo lenguaje de evidencia.
+async function ejecutarDiscoveryEngine(supabase: any, apiKey: string, codigo: string): Promise<{ generado: boolean; nivel?: string }> {
+  const { data: usuarioDiscovery } = await supabase.from("usuarios").select("workout_history,historial_fisiologico").eq("codigo", codigo).single();
+  const historialCompleto = (usuarioDiscovery?.workout_history || []).slice(-30);
+  const fisioCompleto = (usuarioDiscovery?.historial_fisiologico || []).slice(-30);
+
+  if (historialCompleto.length < 3 && fisioCompleto.length < 3) {
+    return { generado: false }; // sin datos suficientes, ni lo intentamos
+  }
+
+  const discoveryPrompt = `Eres el Forge Discovery Engine. Analiza estos datos reales de un atleta y busca UN patrón genuino y verificable. NUNCA inventes uno si no hay evidencia clara. NUNCA uses "creo que", "quizás", "podría ser" — solo lenguaje de evidencia directa: "he detectado", "he confirmado", "ya tengo evidencia de".
+
+HISTORIAL DE ENTRENOS (hasta 30 últimos):
+${JSON.stringify(historialCompleto.map((w: any) => ({ tipo: w.tipo, fecha: w.fecha, sensacion: w.sensacion })))}
+
+HISTORIAL FISIOLÓGICO (hasta 30 últimos días):
+${JSON.stringify(fisioCompleto)}
+
+NIVELES DE EVIDENCIA (elige el nivel correcto según cuántos puntos de datos respaldan el patrón):
+- OBSERVACION (3-7 puntos de datos): un patrón inicial, aún acumulando evidencia. Lenguaje: "He detectado que..."
+- PATRON_CONFIRMADO (8+ puntos de datos consistentes): un patrón sólido y repetido. Lenguaje: "Tras X sesiones/días ya puedo confirmar que..."
+- RECOMENDACION (patrón confirmado + acción concreta derivable): no solo el patrón, sino qué harás distinto a partir de ahora. Lenguaje: "A partir de ahora adaptaré..."
+
+Busca patrones como: relación entre tipo de entreno y sensación/recuperación posterior, relación entre sueño y rendimiento, tendencias de mejora, correlaciones entre HRV y tipo de sesión previa, tolerancia a volumen o intensidad.
+
+Si encuentras un patrón con evidencia real, responde SOLO con este JSON:
+{"hay_patron": true, "nivel": "OBSERVACION|PATRON_CONFIRMADO|RECOMENDACION", "descubrimiento": "frase corta y natural usando el lenguaje de evidencia correcto para el nivel", "categoria": "recuperacion|rendimiento|sueno|entrenamiento", "puntos_evidencia": número real de puntos de datos que lo respaldan}
+
+Si NO hay evidencia suficientemente clara para ningún nivel, responde SOLO con:
+{"hay_patron": false}`;
+
+  try {
+    const discoveryRes = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 350, messages: [{ role: "user", content: discoveryPrompt }] }),
+    });
+    const discoveryData = await discoveryRes.json();
+    const discoveryTexto = discoveryData.content?.map((b: any) => b.text || "").join("") || "{}";
+    const discoveryClean = discoveryTexto.replace(/```json|```/gi, "").trim();
+    const discoveryMatch = discoveryClean.match(/\{[\s\S]*\}/);
+    if (!discoveryMatch) return { generado: false };
+
+    const discoveryResult = JSON.parse(discoveryMatch[0]);
+    if (!discoveryResult.hay_patron || !discoveryResult.descubrimiento) return { generado: false };
+
+    // Deduplicacion: no guardar si ya existe un descubrimiento muy similar reciente (ultimos 8)
+    const { data: descubrimientosRecientes } = await supabase.from("forge_discoveries").select("descubrimiento").eq("user_codigo", codigo).order("created_at", { ascending: false }).limit(8);
+    const yaExisteSimilar = (descubrimientosRecientes || []).some((d: any) => d.descubrimiento?.toLowerCase().includes(discoveryResult.descubrimiento.toLowerCase().substring(0, 30)));
+    if (yaExisteSimilar) return { generado: false };
+
+    await supabase.from("forge_discoveries").insert({
+      user_codigo: codigo,
+      descubrimiento: discoveryResult.descubrimiento,
+      categoria: discoveryResult.categoria || "general",
+      confianza: discoveryResult.puntos_evidencia >= 8 ? 85 : 60,
+      nivel: (discoveryResult.nivel || "observacion").toLowerCase(),
+      puntos_evidencia: discoveryResult.puntos_evidencia || 3,
+      visto: false,
+      presentado_al_usuario: false
+    });
+
+    return { generado: true, nivel: discoveryResult.nivel };
+  } catch {
+    return { generado: false };
+  }
+}
+
 async function generarEventContext(apiKey: string, eventType: string, mensajes: string[]): Promise<any> {
   const textoEvento = mensajes.join("\n\n");
   const prompt = `Resume este evento en una fotografia estructurada. NO des consejos. NO inventes informacion que no este en el texto. Responde SOLO con JSON valido, sin markdown:
@@ -1172,58 +1244,18 @@ Incluye: adherencia (X/${sesionesQueRequierenReporte.length} sesiones), tendenci
       data: { notas: resumenGenerado, adherencia: `${sesionesQueRequierenReporte.filter((s:any)=>s.completada).length}/${sesionesQueRequierenReporte.length}`, generado_automaticamente: true }
     });
 
-    // FORGE DISCOVERY ENGINE (v1) — analiza el historial completo (no solo esta semana) buscando
-    // UN patron real con evidencia suficiente. Si no hay evidencia clara, NO genera nada — nunca inventa.
-    const { data: usuarioDiscovery } = await supabase.from("usuarios").select("workout_history,historial_fisiologico").eq("codigo", codigo).single();
-    const historialCompleto = (usuarioDiscovery?.workout_history || []).slice(-20);
-    const fisioCompleto = (usuarioDiscovery?.historial_fisiologico || []).slice(-20);
-
-    const discoveryPrompt = `Eres el Forge Discovery Engine. Tu única tarea es analizar estos datos reales de un atleta y buscar UN patrón genuino y verificable — nunca inventes uno si no hay evidencia clara.
-
-HISTORIAL DE ENTRENOS (últimos 20):
-${JSON.stringify(historialCompleto.map((w: any) => ({ tipo: w.tipo, fecha: w.fecha, sensacion: w.sensacion })))}
-
-HISTORIAL FISIOLÓGICO (últimos 20 días):
-${JSON.stringify(fisioCompleto)}
-
-Busca patrones como: relación entre tipo de entreno y sensación/recuperación posterior, relación entre sueño y rendimiento, tendencias de mejora en algún tipo de sesión, correlaciones entre HRV y tipo de sesión previa.
-
-Si encuentras un patrón CLARO con al menos 3 puntos de datos que lo respalden, responde SOLO con este JSON:
-{"hay_patron": true, "descubrimiento": "frase corta en primera persona desde Forge, ej: He detectado que recuperas mejor tras sesiones de fuerza que tras intervalos largos", "categoria": "recuperacion|rendimiento|sueno|entrenamiento", "confianza": 0-100}
-
-Si NO hay evidencia suficientemente clara, responde SOLO con:
-{"hay_patron": false}`;
-
-    try {
-      const discoveryRes = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 300, messages: [{ role: "user", content: discoveryPrompt }] }),
-      });
-      const discoveryData = await discoveryRes.json();
-      const discoveryTexto = discoveryData.content?.map((b: any) => b.text || "").join("") || "{}";
-      const discoveryClean = discoveryTexto.replace(/```json|```/gi, "").trim();
-      const discoveryMatch = discoveryClean.match(/\{[\s\S]*\}/);
-      if (discoveryMatch) {
-        const discoveryResult = JSON.parse(discoveryMatch[0]);
-        if (discoveryResult.hay_patron && discoveryResult.descubrimiento) {
-          // Evitar duplicados: no guardar si ya existe un descubrimiento muy similar reciente
-          const { data: descubrimientosRecientes } = await supabase.from("forge_discoveries").select("descubrimiento").eq("user_codigo", codigo).order("created_at", { ascending: false }).limit(5);
-          const yaExisteSimilar = (descubrimientosRecientes || []).some((d: any) => d.descubrimiento?.toLowerCase().includes(discoveryResult.descubrimiento.toLowerCase().substring(0, 30)));
-          if (!yaExisteSimilar) {
-            await supabase.from("forge_discoveries").insert({
-              user_codigo: codigo,
-              descubrimiento: discoveryResult.descubrimiento,
-              categoria: discoveryResult.categoria || "general",
-              confianza: discoveryResult.confianza || 50,
-              visto: false
-            });
-          }
-        }
-      }
-    } catch {}
+    // FORGE DISCOVERY ENGINE (v2) — se ejecuta tambien al cerrar cada semana, ademas de poder
+    // dispararse de forma independiente via la accion "ejecutar_discovery_engine"
+    await ejecutarDiscoveryEngine(supabase, apiKey!, codigo);
 
     return NextResponse.json({ semanaCompleta: true, yaCerrada: false, weekStart: weekStartCierre, insightGenerado: true });
+  }
+
+  if (action === "ejecutar_discovery_engine") {
+    // Permite disparar el Discovery Engine de forma independiente (no solo al cierre de semana),
+    // por ejemplo tras varios entrenos reportados, para que Forge sorprenda con mas frecuencia.
+    const resultado = await ejecutarDiscoveryEngine(supabase, apiKey!, codigo);
+    return NextResponse.json(resultado);
   }
 
   if (action === "verificar_persistencia_plan") {

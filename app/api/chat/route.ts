@@ -166,6 +166,18 @@ Mensaje: "${mensaje}"`;
 const EVENT_CLOSE_WINDOW_MS = 15 * 60 * 1000; // tiempo de inactividad tras el cual un evento se considera cerrado definitivamente
 const EVENT_CORRECTION_WINDOW_MS = 3 * 60 * 1000; // ventana tras la extraccion durante la cual se permiten correcciones
 
+// FORGE EVENT PIPELINE (Fase 1) — punto unico de emision de eventos canonicos del atleta.
+// No importa el origen (banner, extractor, futura integracion Garmin/Strava): todos emiten
+// el mismo evento canonico, y los consumidores (Conversation Memory, Discovery Engine, etc.)
+// solo necesitan escuchar el evento, sin conocer quien lo produjo.
+async function emitirEventoForge(supabase: any, codigo: string, eventName: string, payload: any) {
+  await supabase.from("forge_events").insert({
+    user_codigo: codigo,
+    event_name: eventName,
+    payload
+  });
+}
+
 async function forgeEventAggregator(supabase: any, apiKey: string, codigo: string, mensajeActual: string): Promise<{ eventType: string; mensajesDelEvento: string[]; esCorreccion: boolean }> {
   const tipoDetectado = await clasificarMensajeEnBackend(apiKey, mensajeActual);
 
@@ -241,12 +253,17 @@ async function buildConversationFacts(supabase: any, codigo: string): Promise<Co
   const eventosDeHoy = eventosHoy || [];
   const tipoActivoEsHoy = eventoActivoActual && new Date(eventoActivoActual.updated_at) >= new Date(inicioHoy);
 
-  // El entreno de hoy puede haberse guardado via el banner [SESION:] directamente en workout_history,
-  // SIN pasar por el Event Aggregator — verificamos ambas fuentes para no depender de una sola via.
-  const { data: usuarioWorkout } = await supabase.from("usuarios").select("workout_history").eq("codigo", codigo).single();
-  const workoutHoy = (usuarioWorkout?.workout_history || []).some((w: any) => w.fecha?.startsWith(hoyStr));
+  // FORGE EVENT PIPELINE — consumimos el evento canonico TrainingReported, sin importar su origen
+  // (banner, extractor, futuras integraciones). Esta es la fuente de verdad preferida.
+  const { data: eventosPipelineHoy } = await supabase
+    .from("forge_events")
+    .select("event_name,created_at")
+    .eq("user_codigo", codigo)
+    .eq("event_name", "TrainingReported")
+    .gte("created_at", inicioHoy);
+  const huboTrainingPipeline = (eventosPipelineHoy || []).length > 0;
 
-  const huboTraining = workoutHoy || eventosDeHoy.some((e: any) => e.event_type === "TRAINING_REPORT") || (tipoActivoEsHoy && eventoActivoActual.event_type === "TRAINING_REPORT");
+  const huboTraining = huboTrainingPipeline || eventosDeHoy.some((e: any) => e.event_type === "TRAINING_REPORT") || (tipoActivoEsHoy && eventoActivoActual.event_type === "TRAINING_REPORT");
   const huboSueno = eventosDeHoy.some((e: any) => e.event_type === "SLEEP_REPORT") || (tipoActivoEsHoy && eventoActivoActual.event_type === "SLEEP_REPORT");
 
   // Molestia de salud reportada hoy: heuristica simple sobre el texto del evento activo/reciente si es OTHER
@@ -871,6 +888,12 @@ ${ultimos}`;
     }
 
     await supabase.from("usuarios").update({ workout_history: workoutActualizado }).eq("codigo", codigo);
+
+    // FORGE EVENT PIPELINE — emitimos el evento canonico TrainingReported. Cualquier consumidor
+    // futuro (Discovery Engine, Knowledge Engine, Benchmarks) puede escuchar esto sin conocer
+    // que el origen fue el banner de registro.
+    await emitirEventoForge(supabase, codigo, "TrainingReported", { workout_id: workoutIdCalc, tipo: sesionNormalizada.tipo, fecha: sesionNormalizada.fecha });
+
     return NextResponse.json({ ok: true, actualizado: indiceExistente >= 0, esPrimeraSesion: esPrimeraSesionGlobal });
   }
 

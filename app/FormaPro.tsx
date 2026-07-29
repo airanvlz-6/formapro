@@ -1022,7 +1022,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     const historialLimpio2=(u.historial?.slice(-6)||[]).map((m:any)=>typeof m.content==="string"?{...m,content:m.content.replace(/\n*\[Fecha actual del sistema:[\s\S]*?\]/,"").replace(/\n*\[Contexto temporal del mensaje:[\s\S]*?\]/,"").trim()}:m);
     setMensajes(historialLimpio2);
     const consultasUsadas=Math.floor((u.historial?.length||0)/2);
-    setMsgCount(consultasUsadas);setPantalla("chat");
+    setMsgCount(consultasUsadas);
     setEmailGuardado(!!u.email);
     setEsPremium(!!(u as any).premium);
     setEsAdmin(!!(u as any).admin);
@@ -1052,6 +1052,8 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
         verificarSaludoProactivo(u.codigo);
     if((u as any).is_beta_founder){ apiCall({action:"verificar_renovacion_beta",codigo:u.codigo}); }
     apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
+    // Punto de entrada principal: la pantalla "Hoy" (Daily Briefing) en vez del chat directo
+    window.location.href=`/hoy?codigo=${u.codigo}`;
     // reanudarSesion eliminada para reducir consumo de tokens
   };
 

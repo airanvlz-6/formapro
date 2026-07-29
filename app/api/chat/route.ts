@@ -1516,6 +1516,43 @@ Incluye: adherencia (X/${sesionesQueRequierenReporte.length} sesiones), tendenci
     return NextResponse.json({ eventoActivo: eventoActivo || null, historial: eventosLog || [] });
   }
 
+  if (action === "obtener_daily_briefing") {
+    // FORGE DAILY BRIEFING — agrega todo lo necesario para la pantalla "Hoy" en una sola llamada.
+    // Responde en <10s a: que ha pasado, que toca hoy, que ha aprendido Forge, como voy.
+    const estado = await generarEstadoCanonico(supabase, codigo);
+    const knowledge = await buildAthleteKnowledge(codigo);
+
+    const { data: usuarioBriefing } = await supabase.from("usuarios").select("aprendizajes_atleta,ciclo_actual").eq("codigo", codigo).single();
+    const aprendizajes = usuarioBriefing?.aprendizajes_atleta || [];
+    const puntosAprendizajes = aprendizajes.reduce((sum: number, a: any) => sum + (a.puntos || 0), 0);
+    const nivelConocimiento = Math.min(40 + puntosAprendizajes, 100);
+    const ultimoAprendizaje = aprendizajes.length > 0 ? aprendizajes[aprendizajes.length - 1].texto : null;
+
+    // Descubrimiento/celebracion mas reciente sin ver
+    const { data: descubrimiento } = await supabase.from("forge_discoveries").select("*").eq("user_codigo", codigo).eq("visto", false).order("created_at", { ascending: false }).limit(1).single();
+
+    // Debilidad con mayor progreso reciente (para "evolucion destacada")
+    const { data: usuarioDev } = await supabase.from("usuarios").select("athlete_development").eq("codigo", codigo).single();
+    const desarrollo = usuarioDev?.athlete_development || [];
+    const evolucionDestacada = desarrollo
+      .filter((d: any) => d.estado !== "resuelta" && d.progreso > 0)
+      .sort((a: any, b: any) => (b.progreso || 0) - (a.progreso || 0))[0] || null;
+
+    return NextResponse.json({
+      briefing: {
+        diaSemana: estado.dia_semana_hoy,
+        sesionHoy: estado.sesion_hoy,
+        nivelConocimiento,
+        ultimoAprendizaje,
+        descubrimiento: descubrimiento || null,
+        objetivo: knowledge.objective,
+        progresoObjetivo: knowledge.objectiveProgress,
+        evolucionDestacada,
+        ultimoInsight: knowledge.latestInsight
+      }
+    });
+  }
+
   if (action === "obtener_progreso_objetivo") {
     const progreso = await getObjectiveProgress(codigo);
     return NextResponse.json({ progreso });

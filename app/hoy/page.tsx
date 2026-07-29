@@ -9,6 +9,7 @@ export default function Hoy() {
   const [cargando, setCargando] = useState(true);
   const [iniciado, setIniciado] = useState(false);
   const [error, setError] = useState("");
+  const [mostrarMas, setMostrarMas] = useState(false);
 
   const C = {
     bg: "#0D0D0D", card: "#1A1A1A", ink: "#F0EDE8", muted: "#9A9590",
@@ -170,19 +171,38 @@ export default function Hoy() {
 
       </div>
 
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#141414", borderTop: `1px solid ${C.border}`, padding: "10px 16px calc(10px + env(safe-area-inset-bottom))", display: "flex", justifyContent: "space-around", maxWidth: 600, margin: "0 auto" }}>
+      {mostrarMas && (
+        <div onClick={() => setMostrarMas(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 40 }}>
+          <div onClick={e => e.stopPropagation()} style={{ position: "absolute", bottom: 74, left: 16, right: 16, maxWidth: 600, margin: "0 auto", background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 8 }}>
+            {[
+              { href: `/app?codigo=${codigo}`, icon: "💬", label: "Coach" },
+              { href: `/historia?codigo=${codigo}`, icon: "📖", label: "Mi Historia" },
+            ].map(item => (
+              <a key={item.label} href={item.href} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", textDecoration: "none", borderRadius: 10 }}>
+                <span style={{ fontSize: 18 }}>{item.icon}</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>{item.label}</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#141414", borderTop: `1px solid ${C.border}`, padding: "10px 16px calc(10px + env(safe-area-inset-bottom))", display: "flex", justifyContent: "space-around", maxWidth: 600, margin: "0 auto", zIndex: 41 }}>
         {[
           { href: `/hoy?codigo=${codigo}`, icon: "🏠", label: "Hoy", active: true },
           { href: `/progreso?codigo=${codigo}`, icon: "📈", label: "Progreso", active: false },
           { href: `/plan?codigo=${codigo}`, icon: "📅", label: "Plan", active: false },
           { href: `/atleta?codigo=${codigo}`, icon: "👤", label: "Atleta", active: false },
-          { href: `/app?codigo=${codigo}`, icon: "💬", label: "Coach", active: false },
         ].map(item => (
           <a key={item.label} href={item.href} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, textDecoration: "none", opacity: item.active ? 1 : 0.5 }}>
             <span style={{ fontSize: 20 }}>{item.icon}</span>
             <span style={{ fontSize: 10, fontWeight: 600, color: item.active ? C.accent : C.muted }}>{item.label}</span>
           </a>
         ))}
+        <button onClick={() => setMostrarMas(true)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, background: "none", border: "none", cursor: "pointer", opacity: 0.5 }}>
+          <span style={{ fontSize: 20 }}>☰</span>
+          <span style={{ fontSize: 10, fontWeight: 600, color: C.muted }}>Más</span>
+        </button>
       </div>
     </div>
   );

@@ -1116,29 +1116,38 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
   // FORGE VALIDATOR — capa de verificación determinista entre el LLM y el usuario.
 // El backend conoce la verdad (fecha, plan, estado); esta función corrige cualquier
 // afirmación del modelo que contradiga esa verdad, sin depender de que el LLM razone bien.
-// Empieza validando coherencia de día de la semana; diseñado para crecer con más reglas
-// (fisiología, entrenamiento del día, causalidad prohibida, bloque/ciclo) sin cambiar su forma.
+// v2: regex flexible que tolera variaciones naturales del lenguaje ("de hoy", "para mañana",
+// "hoy es", puntuacion intermedia) en vez de exigir "hoy [dia]" pegado literalmente.
 const forgeValidator=(texto:string):string=>{
-    if(!estadoCanonico) return texto;
+    console.log("FORGE VALIDATOR: estadoCanonico actual:", JSON.stringify(estadoCanonico));
+    if(!estadoCanonico){
+      console.log("FORGE VALIDATOR: estadoCanonico es null/undefined, VALIDATOR NO SE APLICA");
+      return texto;
+    }
     const diaHoyReal=estadoCanonico.dia_semana_hoy;
     const diaMananaReal=estadoCanonico.dia_semana_manana;
+    console.log("FORGE VALIDATOR: diaHoyReal:", diaHoyReal, "diaMananaReal:", diaMananaReal);
     const DIAS_SEMANA=["lunes","martes","miércoles","miercoles","jueves","viernes","sábado","sabado","domingo"];
     let textoCorregido=texto;
+    const normalizarDia=(d:string)=>d.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
 
-    // Buscar patrones "Hoy [dia]" o "hoy es [dia]" y corregir si no coincide con el dia real
     DIAS_SEMANA.forEach(dia=>{
-      const normalizarDia=(d:string)=>d.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
       if(normalizarDia(dia)!==normalizarDia(diaHoyReal)){
-        // Reemplaza "Hoy [dia incorrecto]" por "Hoy [dia correcto]", preservando mayusculas iniciales
-        const regexHoy=new RegExp(`(hoy\\s+)${dia}\\b`,"gi");
+        // Tolera hasta 2 palabras cortas entre "hoy" y el dia (ej: "hoy es", "de hoy", "hoy miercoles 29/7")
+        const regexHoy=new RegExp(`(\\bhoy\\b(?:\\s+\\w{1,4}){0,2}\\s+)${dia}\\b`,"gi");
         textoCorregido=textoCorregido.replace(regexHoy,(match,p1)=>p1+diaHoyReal);
       }
       if(normalizarDia(dia)!==normalizarDia(diaMananaReal)){
-        const regexManana=new RegExp(`(mañana\\s+)${dia}\\b`,"gi");
+        const regexManana=new RegExp(`(\\bma[nñ]ana\\b(?:\\s+\\w{1,4}){0,2}\\s+)${dia}\\b`,"gi");
         textoCorregido=textoCorregido.replace(regexManana,(match,p1)=>p1+diaMananaReal);
       }
     });
 
+    if(textoCorregido!==texto){
+      console.log("FORGE VALIDATOR: CORRIGIO el texto. Antes:", texto.substring(0,200), "Despues:", textoCorregido.substring(0,200));
+    } else {
+      console.log("FORGE VALIDATOR: no encontro nada que corregir");
+    }
     return textoCorregido;
   };
 

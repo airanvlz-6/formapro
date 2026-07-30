@@ -973,7 +973,7 @@ const [equipoSeleccionado,setEquipoSeleccionado]=useState<any>(null);
     };
   },[]);
 
-  useEffect(()=>{bottomRef.current?.scrollIntoView({behavior:"smooth"});},[mensajes,cargando,generando]);
+  useEffect(()=>{bottomRef.current?.scrollIntoView({behavior:"smooth"});},[mensajes,cargando,generando,pantalla]);
 
   const cat=categoria?CATEGORIAS.find((c:Categoria)=>c.id===categoria):null;
   const preguntas:Pregunta[]=(espKey?FORMULARIOS[espKey]:null)||(categoria?FORMULARIOS[categoria]:[])||[];

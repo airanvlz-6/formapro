@@ -178,6 +178,7 @@ export default function Hoy() {
               { href: `/app?codigo=${codigo}`, icon: "💬", label: "Coach" },
               { href: `/historia?codigo=${codigo}`, icon: "📖", label: "Mi Historia" },
               { href: "https://t.me/forgeapp_es", icon: "🧪", label: "Forge Labs", external: true },
+              { href: `/app?codigo=${codigo}&ajustes=1`, icon: "⚙️", label: "Ajustes" },
             ].map(item => (
               <a key={item.label} href={item.href} target={item.external ? "_blank" : undefined} rel={item.external ? "noopener noreferrer" : undefined} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", textDecoration: "none", borderRadius: 10 }}>
                 <span style={{ fontSize: 18 }}>{item.icon}</span>

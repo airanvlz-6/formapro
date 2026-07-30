@@ -726,6 +726,7 @@ const [descubrimientoPendiente,setDescubrimientoPendiente]=useState<{descubrimie
 const [mostrarCodigoReal,setMostrarCodigoReal]=useState(false);
 const [betaFounderInfo,setBetaFounderInfo]=useState<{numero:number;maxSlots:number;meses:number}|null>(null);
 const [estadoFounder,setEstadoFounder]=useState<any>(null);
+const [mostrarMasChat,setMostrarMasChat]=useState(false);
 const [historialMarcas,setHistorialMarcas]=useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
 const [analisisBloques,setAnalisisBloques]=useState<any[]>([]);
 const [athleteState,setAthleteState]=useState<Record<string,any>>({});
@@ -2665,6 +2666,44 @@ ${testStr}`}]});
             </>
           )}
         </div>
+      )}
+
+      {/* Navegacion inferior fija, consistente con el resto de la app */}
+      {pantalla==="chat"&&codigoUsuario&&(
+        <>
+          {mostrarMasChat&&(
+            <div onClick={()=>setMostrarMasChat(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:200}}>
+              <div onClick={e=>e.stopPropagation()} style={{position:"absolute",bottom:74,left:16,right:16,maxWidth:600,margin:"0 auto",background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:8}}>
+                {[
+                  {href:`/historia?codigo=${codigoUsuario}`,icon:"📖",label:"Mi Historia"},
+                  {href:"https://t.me/forgeapp_es",icon:"🧪",label:"Forge Labs",external:true},
+                ].map(item=>(
+                  <a key={item.label} href={item.href} target={item.external?"_blank":undefined} rel={item.external?"noopener noreferrer":undefined} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",textDecoration:"none",borderRadius:10}}>
+                    <span style={{fontSize:18}}>{item.icon}</span>
+                    <span style={{fontSize:14,fontWeight:600,color:C.ink}}>{item.label}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+          <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#141414",borderTop:`1px solid ${C.border}`,padding:"10px 16px calc(10px + env(safe-area-inset-bottom))",display:"flex",justifyContent:"space-around",maxWidth:600,margin:"0 auto",zIndex:201}}>
+            {[
+              {href:`/hoy?codigo=${codigoUsuario}`,icon:"🏠",label:"Hoy",active:false},
+              {href:`/progreso?codigo=${codigoUsuario}`,icon:"📈",label:"Progreso",active:false},
+              {href:`/plan?codigo=${codigoUsuario}`,icon:"📅",label:"Plan",active:false},
+              {href:`/atleta?codigo=${codigoUsuario}`,icon:"👤",label:"Atleta",active:false},
+            ].map(item=>(
+              <a key={item.label} href={item.href} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,textDecoration:"none",opacity:0.5}}>
+                <span style={{fontSize:20}}>{item.icon}</span>
+                <span style={{fontSize:10,fontWeight:600,color:C.muted}}>{item.label}</span>
+              </a>
+            ))}
+            <button onClick={()=>setMostrarMasChat(true)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",opacity:1}}>
+              <span style={{fontSize:20}}>☰</span>
+              <span style={{fontSize:10,fontWeight:600,color:C.accent}}>Más</span>
+            </button>
+          </div>
+        </>
       )}
     </div>
   );

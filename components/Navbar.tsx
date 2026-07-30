@@ -10,8 +10,8 @@ export default function Navbar() {
         <a href="#precios" className="hover:text-orange-400 transition">Precios</a>
       </div>
 
-      <div className="flex items-center gap-4">
-        <a href="/app" className="text-sm font-semibold text-white transition hover:text-orange-400 sm:font-normal sm:text-zinc-300">Entrar</a>
+      <div className="flex items-center gap-3">
+        <a href="/app" className="rounded-full border border-orange-500 px-5 py-2.5 text-sm font-semibold text-orange-400 transition hover:bg-orange-500/10 sm:border-transparent sm:px-0 sm:py-0 sm:text-zinc-300 sm:hover:text-white sm:hover:bg-transparent">Entrar</a>
         <a href="/app" className="hidden sm:block rounded-full border border-orange-500/30 bg-orange-500 px-6 py-3 text-sm font-semibold transition hover:bg-orange-400">
           Empieza gratis
         </a>

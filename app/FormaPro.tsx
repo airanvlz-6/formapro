@@ -665,6 +665,11 @@ export default function Forge() {
         setMsgCount(consultasUsadas);
         const irATest=params.get("test")==="1";
         setPantalla(irATest?"test":"chat");
+        if(params.get("ajustes")==="1"){
+          setMostrarPerfil(true);
+          const resFounder=await apiCall({action:"obtener_estado_founder",codigo:u.codigo});
+          if(resFounder) setEstadoFounder(resFounder);
+        }
         setEmailGuardado(!!u.email);
         setEsPremium(!!(u as any).premium);
         setEsAdmin(!!(u as any).admin);

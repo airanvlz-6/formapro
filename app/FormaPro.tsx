@@ -2067,41 +2067,16 @@ ${testStr}`}]});
                 {!esPremium&&!esAdmin&&<a href={`mailto:coachforgeapp@gmail.com?subject=Consulta Forge - ${codigoUsuario}&body=Hola, tengo una consulta sobre mi programación en Forge.`} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"6px 9px",fontSize:12,textDecoration:"none"}}>✉️</a>}
               </div>
               <div style={{position:"relative"}}>
-                <button onClick={()=>setMostrarMenu(!mostrarMenu)} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 12px",fontSize:13,color:"#fff",cursor:"pointer",fontWeight:600}}>
-                  ☰ Menú
+                <button onClick={async()=>{
+                  const nuevoEstado=!mostrarPerfil;
+                  setMostrarPerfil(nuevoEstado);setMostrarMarcas(false);
+                  if(nuevoEstado&&codigoUsuario){
+                    const res=await apiCall({action:"obtener_estado_founder",codigo:codigoUsuario});
+                    if(res) setEstadoFounder(res);
+                  }
+                }} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 12px",fontSize:13,color:"#fff",cursor:"pointer",fontWeight:600}}>
+                  ⚙️ Ajustes
                 </button>
-                {mostrarMenu&&(
-                  <div style={{position:"absolute",right:0,top:"calc(100% + 6px)",background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:8,zIndex:100,minWidth:160,boxShadow:"0 4px 20px rgba(0,0,0,0.3)"}}>
-                    <button onClick={()=>{window.location.href=`/plan?codigo=${codigoUsuario}`;}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
-                      📅 Mi plan
-                    </button>
-                    <button onClick={()=>{window.location.href=`/historia?codigo=${codigoUsuario}`;}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
-                      📖 Mi historia
-                    </button>
-                    <button onClick={()=>{window.location.href=`/progreso?codigo=${codigoUsuario}`;}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
-                      📊 Mi progreso
-                    </button>
-                    <button onClick={()=>{window.location.href=`/atleta?codigo=${codigoUsuario}`;}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
-                      🎯 Mi Atleta
-                    </button>
-                    <button onClick={()=>{setMostrarEquipos(!mostrarEquipos);setMostrarMenu(false);}} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
-                      👥 Forge Duo
-                    </button>
-                    <a href="https://t.me/forgeapp_es" target="_blank" rel="noopener noreferrer" onClick={()=>setMostrarMenu(false)} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8,textDecoration:"none"}}>
-                      🧪 Forge Labs
-                    </a>
-                    <button onClick={async()=>{
-                      const nuevoEstado=!mostrarPerfil;
-                      setMostrarPerfil(nuevoEstado);setMostrarMarcas(false);setMostrarMenu(false);
-                      if(nuevoEstado&&codigoUsuario){
-                        const res=await apiCall({action:"obtener_estado_founder",codigo:codigoUsuario});
-                        if(res) setEstadoFounder(res);
-                      }
-                    }} style={{width:"100%",background:"none",border:"none",color:C.ink,fontSize:13,padding:"8px 12px",cursor:"pointer",textAlign:"left",borderRadius:8,display:"flex",alignItems:"center",gap:8}}>
-                      ⚙️ Ajustes
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
           </div>

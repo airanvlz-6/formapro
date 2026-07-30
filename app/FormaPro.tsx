@@ -2067,17 +2067,7 @@ ${testStr}`}]});
                 {!esPremium&&!esAdmin&&<a href={`mailto:coachforgeapp@gmail.com?subject=Consulta Forge - ${codigoUsuario}&body=Hola, tengo una consulta sobre mi programación en Forge.`} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"6px 9px",fontSize:12,textDecoration:"none"}}>✉️</a>}
               </div>
               <div style={{position:"relative"}}>
-                <button onClick={async()=>{
-                  const nuevoEstado=!mostrarPerfil;
-                  setMostrarPerfil(nuevoEstado);setMostrarMarcas(false);
-                  if(nuevoEstado&&codigoUsuario){
-                    const res=await apiCall({action:"obtener_estado_founder",codigo:codigoUsuario});
-                    if(res) setEstadoFounder(res);
-                  }
-                }} style={{background:"#FF6B00",border:"none",borderRadius:10,padding:"6px 12px",fontSize:13,color:"#fff",cursor:"pointer",fontWeight:600}}>
-                  ⚙️ Ajustes
-                </button>
-              </div>
+                </div>
             </div>
           </div>
 
@@ -2649,15 +2639,26 @@ ${testStr}`}]});
           {mostrarMasChat&&(
             <div onClick={()=>setMostrarMasChat(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:200}}>
               <div onClick={e=>e.stopPropagation()} style={{position:"absolute",bottom:74,left:16,right:16,maxWidth:600,margin:"0 auto",background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:8}}>
-                {[
-                  {href:`/historia?codigo=${codigoUsuario}`,icon:"📖",label:"Mi Historia"},
-                  {href:"https://t.me/forgeapp_es",icon:"🧪",label:"Forge Labs",external:true},
-                ].map(item=>(
-                  <a key={item.label} href={item.href} target={item.external?"_blank":undefined} rel={item.external?"noopener noreferrer":undefined} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",textDecoration:"none",borderRadius:10}}>
-                    <span style={{fontSize:18}}>{item.icon}</span>
-                    <span style={{fontSize:14,fontWeight:600,color:C.ink}}>{item.label}</span>
-                  </a>
-                ))}
+                <a href={`/historia?codigo=${codigoUsuario}`} style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",textDecoration:"none",borderRadius:10}}>
+                  <span style={{fontSize:18}}>📖</span>
+                  <span style={{fontSize:14,fontWeight:600,color:C.ink}}>Mi Historia</span>
+                </a>
+                <a href="https://t.me/forgeapp_es" target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:12,padding:"12px 14px",textDecoration:"none",borderRadius:10}}>
+                  <span style={{fontSize:18}}>🧪</span>
+                  <span style={{fontSize:14,fontWeight:600,color:C.ink}}>Forge Labs</span>
+                </a>
+                <button onClick={async()=>{
+                  setMostrarMasChat(false);
+                  const nuevoEstado=!mostrarPerfil;
+                  setMostrarPerfil(nuevoEstado);setMostrarMarcas(false);
+                  if(nuevoEstado&&codigoUsuario){
+                    const res=await apiCall({action:"obtener_estado_founder",codigo:codigoUsuario});
+                    if(res) setEstadoFounder(res);
+                  }
+                }} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:"none",border:"none",cursor:"pointer",borderRadius:10,textAlign:"left"}}>
+                  <span style={{fontSize:18}}>⚙️</span>
+                  <span style={{fontSize:14,fontWeight:600,color:C.ink}}>Ajustes</span>
+                </button>
               </div>
             </div>
           )}

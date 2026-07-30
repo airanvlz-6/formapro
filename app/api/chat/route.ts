@@ -303,6 +303,14 @@ function buildConversationFactsInstruction(facts: ConversationFacts): string {
 async function forgeContextBuilder(supabase: any, codigo: string, eventoActivoActual: { eventType: string; mensajesDelEvento: string[] }): Promise<string> {
   const partes: string[] = [];
 
+  // FORGE PLANNED SESSION REFERENCE — SIEMPRE presente, sin importar el intent de la conversacion.
+  // Regla de capacidad (no de intent): si el Coach va a mencionar que sesion toca hoy/mañana,
+  // DEBE usar estos nombres exactos, nunca inventar contenido de sesion durante conversacion libre.
+  const estadoParaReferencia = await generarEstadoCanonico(supabase, codigo);
+  const tituloHoyRef = estadoParaReferencia.sesion_hoy?.titulo || "sin sesión programada";
+  const tituloMananaRef = estadoParaReferencia.sesion_manana?.titulo || "sin sesión programada";
+  partes.push(`REFERENCIA DE SESIONES PLANIFICADAS (dato inmutable, usar SIEMPRE que menciones qué toca hoy/mañana, nunca inventar otro contenido):\nHoy (${estadoParaReferencia.dia_semana_hoy}): ${tituloHoyRef}\nMañana (${estadoParaReferencia.dia_semana_manana}): ${tituloMananaRef}`);
+
   // FORGE CONVERSATION MEMORY — hechos ya conocidos de HOY, evita preguntas/recomendaciones repetidas
   const facts = await buildConversationFacts(supabase, codigo);
   const instruccionFacts = buildConversationFactsInstruction(facts);

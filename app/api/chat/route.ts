@@ -709,26 +709,26 @@ ${ultimos}`;
         extracted = validateExtraction(extracted, soloUsuario);
         if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).some(v => v !== null && typeof v !== 'object')) {
           const estadoActual = usuarioData?.estado_fisiologico || {};
-          const historialActual = usuarioData?.historial_fisiologico || [];
           const hoy = new Date().toLocaleDateString('en-CA', {timeZone: 'Europe/Madrid'});
-          // Solo procesar si los valores son simples (no arrays ni objetos)
           const valoresSimples = Object.fromEntries(
             Object.entries(extracted.estado_fisiologico).filter(([k,v]) => 
               v !== null && typeof v === 'number' && ['hrv','sueno','rhr','fatiga_aguda'].includes(k)
             )
           );
           if(Object.keys(valoresSimples).length > 0){
-            const entradaHoy = { fecha: hoy, ...valoresSimples };
-            const indiceHoy = historialActual.findIndex((e: any) => e.fecha === hoy);
+            // FIX CRITICO DE RAIZ: UPSERT atomico sobre physiology_records (user_codigo, fecha),
+            // elimina el patron read-modify-write que causaba que escrituras concurrentes se
+            // pisaran entre si y mezclaran datos de dias distintos. Postgres garantiza atomicidad
+            // en la clave primaria compuesta, sin necesidad de leer el estado previo.
+            const { error: errorUpsertFisio } = await supabase.from("physiology_records").upsert({
+              user_codigo: codigo,
+              fecha: hoy,
+              ...valoresSimples,
+              updated_at: new Date().toISOString()
+            }, { onConflict: "user_codigo,fecha" });
+            if (errorUpsertFisio) console.error("Error upsert physiology_records:", errorUpsertFisio);
+
             updates.estado_fisiologico = { ...estadoActual, ...valoresSimples };
-            if(indiceHoy >= 0){
-              // Actualizar entrada existente de hoy, mezclando datos nuevos con los que ya tenía
-              const historialActualizado = [...historialActual];
-              historialActualizado[indiceHoy] = { ...historialActual[indiceHoy], ...entradaHoy };
-              updates.historial_fisiologico = historialActualizado;
-            } else {
-              updates.historial_fisiologico = [...historialActual.slice(-29), entradaHoy];
-            }
           }
         }
 

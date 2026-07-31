@@ -725,17 +725,18 @@ ${ultimos}`;
             )
           );
           if(Object.keys(valoresSimples).length > 0){
-            // FIX CRITICO DE RAIZ: UPSERT atomico sobre physiology_records (user_codigo, fecha),
-            // elimina el patron read-modify-write que causaba que escrituras concurrentes se
-            // pisaran entre si y mezclaran datos de dias distintos. Postgres garantiza atomicidad
-            // en la clave primaria compuesta, sin necesidad de leer el estado previo.
-            const { error: errorUpsertFisio } = await supabase.from("physiology_records").upsert({
+            console.log("DEBUG PHYSIOLOGY UPSERT: intentando guardar", JSON.stringify({ user_codigo: codigo, fecha: hoy, ...valoresSimples }));
+            const { data: dataUpsertFisio, error: errorUpsertFisio } = await supabase.from("physiology_records").upsert({
               user_codigo: codigo,
               fecha: hoy,
               ...valoresSimples,
               updated_at: new Date().toISOString()
-            }, { onConflict: "user_codigo,fecha" });
-            if (errorUpsertFisio) console.error("Error upsert physiology_records:", errorUpsertFisio);
+            }, { onConflict: "user_codigo,fecha" }).select();
+            if (errorUpsertFisio) {
+              console.error("DEBUG PHYSIOLOGY UPSERT ERROR:", JSON.stringify(errorUpsertFisio));
+            } else {
+              console.log("DEBUG PHYSIOLOGY UPSERT EXITO:", JSON.stringify(dataUpsertFisio));
+            }
 
             updates.estado_fisiologico = { ...estadoActual, ...valoresSimples };
           }

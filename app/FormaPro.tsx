@@ -1401,9 +1401,21 @@ const forgeValidator=(texto:string):string=>{
       // FORGE CAPABILITY INJECTION — Principio 7: el Coach solo puede mencionar lo que su intent autoriza.
       // Se inyecta SIEMPRE, incluso cuando no hay dato inmutable (ej: COACHING no puede mencionar nada estructurado).
       const instruccionCapacidadesRecibida=resContexto?.instruccionCapacidades||"";
-      const contenidoConDato=datoInmutableRecibido
-        ? `[DATO INMUTABLE — ${datoInmutableRecibido.tipo}: ${JSON.stringify(datoInmutableRecibido.valor)}]\n[INSTRUCCIÓN: Esto es una consulta de un dato ya existente, no una petición de planificación. Reproduce el dato anterior fielmente, sin modificar ningún número ni ejercicio. Puedes añadir contexto o motivación DESPUÉS.]\n\n${instruccionCapacidadesRecibida}\n\n${contenidoUsuario}`
-        : `${instruccionCapacidadesRecibida}\n\n${contenidoUsuario}`;
+      // FIX CRITICO: cuando hay imagenes/PDFs adjuntos, contenidoUsuario es un ARRAY, no un string.
+      // Si lo metemos dentro de un template string se convierte en "[object Object]" y se pierde la imagen.
+      // Debemos preservar el array, anteponiendo el texto de instrucciones como un bloque de texto adicional.
+      const prefijoInstrucciones=datoInmutableRecibido
+        ? `[DATO INMUTABLE — ${datoInmutableRecibido.tipo}: ${JSON.stringify(datoInmutableRecibido.valor)}]\n[INSTRUCCIÓN: Esto es una consulta de un dato ya existente, no una petición de planificación. Reproduce el dato anterior fielmente, sin modificar ningún número ni ejercicio. Puedes añadir contexto o motivación DESPUÉS.]\n\n${instruccionCapacidadesRecibida}`
+        : instruccionCapacidadesRecibida;
+      let contenidoConDato:any;
+      if(Array.isArray(contenidoUsuario)){
+        // Preservar el array (imagenes/PDF) y anteponer las instrucciones como texto al bloque de texto existente
+        contenidoConDato=contenidoUsuario.map((bloque:any)=>
+          bloque.type==="text" ? {...bloque,text:`${prefijoInstrucciones}\n\n${bloque.text}`} : bloque
+        );
+      } else {
+        contenidoConDato=`${prefijoInstrucciones}\n\n${contenidoUsuario}`;
+      }
       const mensajesParaAPI2=contextoConstruido
         ? [{role:"user" as const,content:`[CONTEXTO DE EVENTOS RECIENTES]\n${contextoConstruido}`},{role:"assistant" as const,content:"Entendido, tengo el contexto."},{role:"user" as const,content:contenidoConDato}]
         : [{role:"user" as const,content:contenidoConDato}];

@@ -25,14 +25,17 @@ async function generarEstadoCanonico(supabase: any, codigo: string) {
   const lunesFecha = new Date(hoyFecha); lunesFecha.setDate(hoyFecha.getDate() - diaSemanaNum + 1);
   const weekStart = lunesFecha.toISOString().split('T')[0];
 
-  const { data: usuario } = await supabase.from("usuarios").select("ciclo_actual,estado_fisiologico,historial_fisiologico,objetivo_principal,debilidades,athlete_development").eq("codigo", codigo).single();
+  const { data: usuario } = await supabase.from("usuarios").select("ciclo_actual,estado_fisiologico,objetivo_principal,debilidades,athlete_development").eq("codigo", codigo).single();
   const { data: plan } = await supabase.from("weekly_plan").select("*").eq("user_codigo", codigo).eq("week_start", weekStart).single();
+  // FUENTE ATOMICA: physiology_records reemplaza el JSON historial_fisiologico, elimina RMW
+  const { data: fisioRecords } = await supabase.from("physiology_records").select("fecha,hrv,sueno,rhr,fatiga_aguda").eq("user_codigo", codigo).order("fecha", { ascending: false }).limit(30);
+  const historialFisiologicoAtomico = (fisioRecords || []).map((r: any) => ({ fecha: r.fecha, hrv: r.hrv, sueno: r.sueno, rhr: r.rhr, fatiga_aguda: r.fatiga_aguda }));
 
   const normalizar = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
   const sesionHoy = plan?.sessions?.find((s: any) => normalizar(s.dia) === normalizar(diaSemanaHoy));
   const sesionManana = plan?.sessions?.find((s: any) => normalizar(s.dia) === normalizar(diaSemanaManana));
 
-  const histFisio = usuario?.historial_fisiologico || [];
+  const histFisio = historialFisiologicoAtomico;
   const ultimosRegistrosFisio = [...histFisio].sort((a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()).slice(0, 3);
   const ultimoRegistroFisio = ultimosRegistrosFisio[0];
 

@@ -575,6 +575,12 @@ export async function POST(req: NextRequest) {
       .eq("codigo", codigo)
       .single();
     if (error) return NextResponse.json({ error: "Codigo no encontrado" }, { status: 404 });
+    // FUENTE ATOMICA: sobrescribir historial_fisiologico con los datos reales de physiology_records,
+    // que es la fuente de verdad desde el fix del patron read-modify-write.
+    const { data: fisioRecordsUsuario } = await supabase.from("physiology_records").select("fecha,hrv,sueno,rhr,fatiga_aguda").eq("user_codigo", codigo).order("fecha", { ascending: true }).limit(60);
+    if (fisioRecordsUsuario) {
+      data.historial_fisiologico = fisioRecordsUsuario.map((r: any) => ({ fecha: r.fecha, hrv: r.hrv, sueno: r.sueno, rhr: r.rhr, fatiga_aguda: r.fatiga_aguda }));
+    }
     return NextResponse.json({ data });
   }
 

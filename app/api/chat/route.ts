@@ -577,8 +577,7 @@ export async function POST(req: NextRequest) {
     if (error) return NextResponse.json({ error: "Codigo no encontrado" }, { status: 404 });
     // FUENTE ATOMICA: sobrescribir historial_fisiologico con los datos reales de physiology_records,
     // que es la fuente de verdad desde el fix del patron read-modify-write.
-    const { data: fisioRecordsUsuario, error: errorFisioRecords } = await supabase.from("physiology_records").select("fecha,hrv,sueno,rhr,fatiga_aguda").eq("user_codigo", codigo).order("fecha", { ascending: true }).limit(60);
-    console.log("DEBUG RECUPERAR_USUARIO: physiology_records count=", fisioRecordsUsuario?.length, "ultimo=", JSON.stringify(fisioRecordsUsuario?.[fisioRecordsUsuario.length-1]), "error=", JSON.stringify(errorFisioRecords));
+    const { data: fisioRecordsUsuario } = await supabase.from("physiology_records").select("fecha,hrv,sueno,rhr,fatiga_aguda").eq("user_codigo", codigo).order("fecha", { ascending: true }).limit(60);
     if (fisioRecordsUsuario) {
       data.historial_fisiologico = fisioRecordsUsuario.map((r: any) => ({ fecha: r.fecha, hrv: r.hrv, sueno: r.sueno, rhr: r.rhr, fatiga_aguda: r.fatiga_aguda }));
     }
@@ -629,9 +628,7 @@ export async function POST(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     // Extracción automática de memoria en el servidor cuando se guarda historial
-    console.log("CHECKPOINT 1: entra a actualizar_usuario, historial.length=", datos.historial?.length);
     if (datos.historial && Array.isArray(datos.historial) && datos.historial.length > 0) {
-      console.log("CHECKPOINT 1B: entra al bloque de extraccion");
       try {
         const {data: usuarioData} = await supabase.from("usuarios").select("ciclo_actual,notas_coach,datos_entrenamiento,estado_fisiologico,workout_history,historial_fisiologico,distribucion_semanal,objetivo_principal,historial_marcas,analisis_bloques").eq("codigo", codigo).single();
         const cicloActual = usuarioData?.ciclo_actual || {};
@@ -706,7 +703,6 @@ ${ultimos}`;
         const jsonMatch = clean.match(/\{[\s\S]*\}/);
         if (!jsonMatch) throw new Error("No JSON found");
         let extracted = JSON.parse(jsonMatch[0]);
-        console.log("CHECKPOINT 2: extractor devolvio, estado_fisiologico=", JSON.stringify(extracted.estado_fisiologico));
 
         const updates: any = {};
         if (extracted.lesiones) updates.lesiones_actuales = extracted.lesiones;
@@ -718,11 +714,8 @@ ${ultimos}`;
         }
 
 // FORGE EXTRACTION VALIDATOR — el LLM propone, el backend verifica antes de persistir.
-        console.log("DEBUG PRE-VALIDATOR: extracted.estado_fisiologico ANTES de validar:", JSON.stringify(extracted.estado_fisiologico));
         extracted = validateExtraction(extracted, soloUsuario);
-        console.log("DEBUG POST-VALIDATOR: extracted.estado_fisiologico DESPUES de validar:", JSON.stringify(extracted.estado_fisiologico));
         if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).some(v => v !== null && typeof v !== 'object')) {
-          console.log("DEBUG: entrando al bloque de guardado de estado_fisiologico");
           const estadoActual = usuarioData?.estado_fisiologico || {};
           const hoy = new Date().toLocaleDateString('en-CA', {timeZone: 'Europe/Madrid'});
           const valoresSimples = Object.fromEntries(
@@ -731,18 +724,13 @@ ${ultimos}`;
             )
           );
           if(Object.keys(valoresSimples).length > 0){
-            console.log("DEBUG PHYSIOLOGY UPSERT: intentando guardar", JSON.stringify({ user_codigo: codigo, fecha: hoy, ...valoresSimples }));
-            const { data: dataUpsertFisio, error: errorUpsertFisio } = await supabase.from("physiology_records").upsert({
+            const { error: errorUpsertFisio } = await supabase.from("physiology_records").upsert({
               user_codigo: codigo,
               fecha: hoy,
               ...valoresSimples,
               updated_at: new Date().toISOString()
-            }, { onConflict: "user_codigo,fecha" }).select();
-            if (errorUpsertFisio) {
-              console.error("DEBUG PHYSIOLOGY UPSERT ERROR:", JSON.stringify(errorUpsertFisio));
-            } else {
-              console.log("DEBUG PHYSIOLOGY UPSERT EXITO:", JSON.stringify(dataUpsertFisio));
-            }
+            }, { onConflict: "user_codigo,fecha" });
+            if (errorUpsertFisio) console.error("Error upsert physiology_records:", errorUpsertFisio);
 
             updates.estado_fisiologico = { ...estadoActual, ...valoresSimples };
           }

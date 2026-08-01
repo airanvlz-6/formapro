@@ -1125,14 +1125,9 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
 // v2: regex flexible que tolera variaciones naturales del lenguaje ("de hoy", "para mañana",
 // "hoy es", puntuacion intermedia) en vez de exigir "hoy [dia]" pegado literalmente.
 const forgeValidator=(texto:string):string=>{
-    console.log("FORGE VALIDATOR: estadoCanonico actual:", JSON.stringify(estadoCanonico));
-    if(!estadoCanonico){
-      console.log("FORGE VALIDATOR: estadoCanonico es null/undefined, VALIDATOR NO SE APLICA");
-      return texto;
-    }
+    if(!estadoCanonico) return texto;
     const diaHoyReal=estadoCanonico.dia_semana_hoy;
     const diaMananaReal=estadoCanonico.dia_semana_manana;
-    console.log("FORGE VALIDATOR: diaHoyReal:", diaHoyReal, "diaMananaReal:", diaMananaReal);
     const DIAS_SEMANA=["lunes","martes","miércoles","miercoles","jueves","viernes","sábado","sabado","domingo"];
     let textoCorregido=texto;
     const normalizarDia=(d:string)=>d.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
@@ -1149,11 +1144,6 @@ const forgeValidator=(texto:string):string=>{
       }
     });
 
-    if(textoCorregido!==texto){
-      console.log("FORGE VALIDATOR: CORRIGIO el texto. Antes:", texto.substring(0,200), "Despues:", textoCorregido.substring(0,200));
-    } else {
-      console.log("FORGE VALIDATOR: no encontro nada que corregir");
-    }
     return textoCorregido;
   };
 

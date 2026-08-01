@@ -628,7 +628,9 @@ export async function POST(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     // Extracción automática de memoria en el servidor cuando se guarda historial
+    console.log("CHECKPOINT 1: entra a actualizar_usuario, historial.length=", datos.historial?.length);
     if (datos.historial && Array.isArray(datos.historial) && datos.historial.length > 0) {
+      console.log("CHECKPOINT 1B: entra al bloque de extraccion");
       try {
         const {data: usuarioData} = await supabase.from("usuarios").select("ciclo_actual,notas_coach,datos_entrenamiento,estado_fisiologico,workout_history,historial_fisiologico,distribucion_semanal,objetivo_principal,historial_marcas,analisis_bloques").eq("codigo", codigo).single();
         const cicloActual = usuarioData?.ciclo_actual || {};
@@ -703,7 +705,7 @@ ${ultimos}`;
         const jsonMatch = clean.match(/\{[\s\S]*\}/);
         if (!jsonMatch) throw new Error("No JSON found");
         let extracted = JSON.parse(jsonMatch[0]);
-        
+        console.log("CHECKPOINT 2: extractor devolvio, estado_fisiologico=", JSON.stringify(extracted.estado_fisiologico));
 
         const updates: any = {};
         if (extracted.lesiones) updates.lesiones_actuales = extracted.lesiones;

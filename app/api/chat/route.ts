@@ -715,8 +715,11 @@ ${ultimos}`;
         }
 
 // FORGE EXTRACTION VALIDATOR — el LLM propone, el backend verifica antes de persistir.
+        console.log("DEBUG PRE-VALIDATOR: extracted.estado_fisiologico ANTES de validar:", JSON.stringify(extracted.estado_fisiologico));
         extracted = validateExtraction(extracted, soloUsuario);
+        console.log("DEBUG POST-VALIDATOR: extracted.estado_fisiologico DESPUES de validar:", JSON.stringify(extracted.estado_fisiologico));
         if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).some(v => v !== null && typeof v !== 'object')) {
+          console.log("DEBUG: entrando al bloque de guardado de estado_fisiologico");
           const estadoActual = usuarioData?.estado_fisiologico || {};
           const hoy = new Date().toLocaleDateString('en-CA', {timeZone: 'Europe/Madrid'});
           const valoresSimples = Object.fromEntries(

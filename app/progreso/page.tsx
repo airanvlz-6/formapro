@@ -41,6 +41,7 @@ useEffect(() => {
       });
       const data = await res.json();
       if (data.error) { setError("Código no encontrado"); return; }
+      console.log("FRONTEND historial recibido:", data.data?.historial_fisiologico?.length, JSON.stringify(data.data?.historial_fisiologico?.[data.data?.historial_fisiologico?.length-1]));
       setDatos(data.data);
       setAutenticado(true);
     } catch { setError("Error de conexión"); }
@@ -53,6 +54,7 @@ useEffect(() => {
   const datosEntreno = datos?.datos_entrenamiento || {};
   const [adherencia, setAdherencia] = useState<{adherencia7?:number;adherencia28?:number;adherenciaBloque?:number;diasSemana?:number}>({});
   const histFisio = datos?.historial_fisiologico || [];
+  console.log("GRAFICO histFisio:", histFisio.length, JSON.stringify(histFisio[histFisio.length-1]));
 
   useEffect(()=>{
     if(autenticado && codigo){

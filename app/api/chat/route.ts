@@ -1225,8 +1225,9 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
       const builderData = await builderRes.json();
       const builderTexto = builderData.content?.map((b: any) => b.text || "").join("") || "{}";
       const builderClean = builderTexto.replace(/```json|```/g, "").trim();
+      console.log("SESSION BUILDER RAW COMPLETO:", builderClean);
       const builderMatch = builderClean.match(/\{[\s\S]*\}/);
-      if (!builderMatch) throw new Error("Session Builder no devolvio JSON valido");
+      if (!builderMatch) throw new Error("Session Builder no devolvio JSON valido. RAW: " + builderClean.substring(0, 300));
       const sesionCompleta = JSON.parse(builderMatch[0]);
       return NextResponse.json({ ok: true, sesion: { dia, tipo, ...sesionCompleta } });
     } catch (err: any) {

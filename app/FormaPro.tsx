@@ -1278,6 +1278,7 @@ const forgeValidator=(texto:string):string=>{
   };
 
   const enviarSilencioso=async(texto:string)=>{
+    console.log("=== ENTRA A FUNCION enviarSilencioso() ===");
     if(!texto.trim()||cargando) return;
     const fechaHoyStrSilencioso=new Date().toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"Europe/Madrid"});
     const textoConFecha=texto.trim()+`\n\n[Fecha actual del sistema: ${fechaHoyStrSilencioso}]\n[Contexto temporal del mensaje: CONSULTA_GENERAL — este mensaje puede incluir ajustes de planificación, respeta siempre la fecha de HOY indicada arriba y en el ESTADO CANÓNICO, el plan generado corresponde a la semana ACTUAL que contiene HOY, nunca la próxima semana.]`;
@@ -1321,6 +1322,7 @@ const forgeValidator=(texto:string):string=>{
   };
 
   const enviar=async(texto:string=input)=>{
+    console.log("=== ENTRA A FUNCION enviar() ===");
     if((!texto.trim()&&imagenesAdjuntas.length===0)||cargando||bloqueado) return;
     const fechaHoyStr=new Date().toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"Europe/Madrid"});
     const textoLower=texto.toLowerCase();

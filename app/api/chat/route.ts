@@ -1744,10 +1744,17 @@ Incluye: adherencia (X/${sesionesQueRequierenReporte.length} sesiones), tendenci
     const diaSemanaServ = hoyServFecha.getDay() || 7;
     const lunesServ = new Date(hoyServFecha);
     lunesServ.setDate(hoyServFecha.getDate() - diaSemanaServ + 1);
-    const weekStartCorrecto = lunesServ.toISOString().split('T')[0];
-    if (plan.week_start !== weekStartCorrecto) {
-      console.log(`CORRIGIENDO week_start: modelo envió ${plan.week_start}, correcto es ${weekStartCorrecto}`);
-      plan.week_start = weekStartCorrecto;
+    // FIX CRITICO DE RAIZ: aceptar tanto la semana ACTUAL como la SIGUIENTE como validas — el Orchestrator
+    // genera legitimamente la semana siguiente, y forzar siempre "la actual" deshacia ese calculo correcto.
+    const weekStartActual = lunesServ.toISOString().split('T')[0];
+    const lunesSiguiente = new Date(lunesServ);
+    lunesSiguiente.setDate(lunesServ.getDate() + 7);
+    const weekStartSiguiente = lunesSiguiente.toISOString().split('T')[0];
+
+    if (plan.week_start !== weekStartActual && plan.week_start !== weekStartSiguiente) {
+      // Solo corregimos si el valor enviado no es ni la semana actual ni la siguiente (caso realmente erroneo)
+      console.log(`CORRIGIENDO week_start: modelo envió ${plan.week_start}, no coincide con actual (${weekStartActual}) ni siguiente (${weekStartSiguiente}). Usando actual.`);
+      plan.week_start = weekStartActual;
     }
     // Preservar sesiones ya completadas SOLO si es la semana ACTUAL real (evita mezclar contenido
     // entre una semana nueva y un registro parcial/viejo que pudiera existir con el mismo week_start

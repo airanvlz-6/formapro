@@ -1245,14 +1245,15 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
     lunesCierre.setDate(hoyCierreFecha.getDate() - diaSemCierre + 1);
     const weekStartCierre = lunesCierre.toISOString().split('T')[0];
 
+    console.log("VERIFICAR CIERRE: weekStartCierre calculado=", weekStartCierre);
     const { data: planSemana } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", weekStartCierre).single();
+    console.log("VERIFICAR CIERRE: planSemana encontrado?", !!planSemana);
     if (!planSemana) return NextResponse.json({ semanaCompleta: false });
 
     const sessions = planSemana.sessions || [];
-    // "descanso" (completo, sin ejercicios) NO requiere reporte y no cuenta para el total esperado.
-    // "descanso_activo" (con ejercicios sugeridos) SI requiere reporte, igual que cualquier sesion de entreno.
     const sesionesQueRequierenReporte = sessions.filter((s: any) => s.tipo !== "descanso");
     const todasCompletadas = sesionesQueRequierenReporte.length > 0 && sesionesQueRequierenReporte.every((s: any) => s.completada === true);
+    console.log("VERIFICAR CIERRE: sesionesQueRequierenReporte=", sesionesQueRequierenReporte.length, "todasCompletadas=", todasCompletadas, "detalle=", JSON.stringify(sesionesQueRequierenReporte.map((s:any)=>({dia:s.dia,tipo:s.tipo,completada:s.completada}))));
 
     if (!todasCompletadas) return NextResponse.json({ semanaCompleta: false });
 

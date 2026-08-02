@@ -1305,8 +1305,11 @@ const forgeValidator=(texto:string):string=>{
       setHistorial(histLimpio);
       if(codigoUsuario){
         apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histLimpio}});
+        console.log("FRONTEND: mostrarBotonNuevaSemana actual=", mostrarBotonNuevaSemana);
         if(!mostrarBotonNuevaSemana){
+          console.log("FRONTEND: llamando a verificar_semana_completa_sin_cierre");
           apiCall({action:"verificar_semana_completa_sin_cierre",codigo:codigoUsuario}).then((resCierre)=>{
+            console.log("FRONTEND: respuesta de verificar_semana_completa_sin_cierre:", JSON.stringify(resCierre));
             if(resCierre?.semanaCompleta && !resCierre?.yaCerrada){
               setMostrarBotonNuevaSemana(true);
             }

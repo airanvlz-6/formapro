@@ -1268,6 +1268,11 @@ const forgeValidator=(texto:string):string=>{
       texto=(antes+(despues?" "+despues:"")).trim();
     }
 
+    // RED DE SEGURIDAD GENERICA: elimina cualquier tag con formato [NOMBRE_EN_MAYUSCULAS:{...}] que el
+    // modelo haya podido inventar y que no exista en nuestra lista de tags conocidos y procesados arriba.
+    // Esto evita que tags inventados (ej: [MODIFICAR_DISPONIBILIDAD:...]) queden visibles como texto roto.
+    texto = texto.replace(/\[[A-Z_]+:\s*\{[\s\S]*?\}\s*\]/g, "").trim();
+
     if(!texto) texto="✅ Hecho. Puedes ver los detalles en las secciones correspondientes.";
     return texto;
   };

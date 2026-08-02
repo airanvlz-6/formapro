@@ -1221,7 +1221,7 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
       const builderRes = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 600, messages: [{ role: "user", content: builderPrompt }] }),
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1500, messages: [{ role: "user", content: builderPrompt }] }),
       });
       const builderData = await builderRes.json();
       const builderTexto = builderData.content?.map((b: any) => b.text || "").join("") || "{}";

@@ -847,12 +847,16 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
       historialFisiologico
     });
 
-    // Calcular week_start correcto (el servidor tambien lo corrige, pero lo calculamos aqui para el objeto)
+    // FIX CRITICO DE RAIZ: el Orchestrator siempre genera la PROXIMA semana, nunca la actual.
+    // Calculamos el lunes de la semana actual y le sumamos 7 dias, sin importar en que dia
+    // de la semana (incluido domingo) se ejecute esta generacion.
     const hoy=new Date();
     const diaSem=hoy.getDay()||7;
-    const lunes=new Date(hoy);
-    lunes.setDate(hoy.getDate()-diaSem+1);
-    const weekStart=lunes.toISOString().split('T')[0];
+    const lunesActual=new Date(hoy);
+    lunesActual.setDate(hoy.getDate()-diaSem+1);
+    const lunesProximaSemana=new Date(lunesActual);
+    lunesProximaSemana.setDate(lunesActual.getDate()+7);
+    const weekStart=lunesProximaSemana.toISOString().split('T')[0];
 
     const planCompleto={
       week_start:weekStart,

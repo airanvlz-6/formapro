@@ -1443,6 +1443,15 @@ const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:build
       if(hist.length>=20) compactarHistorial(hist);
       if(codigoUsuario){
         apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histFinal}});
+        // FIX CRITICO: esta verificacion solo existia en enviarSilencioso, nunca en enviar() (la funcion
+        // principal usada en el 99% de los mensajes). Por eso el cierre de semana nunca se disparaba.
+        if(!mostrarBotonNuevaSemana){
+          apiCall({action:"verificar_semana_completa_sin_cierre",codigo:codigoUsuario}).then((resCierre)=>{
+            if(resCierre?.semanaCompleta && !resCierre?.yaCerrada){
+              setMostrarBotonNuevaSemana(true);
+            }
+          });
+        }
         const extractarMemoria=async()=>{
           const cicloStr=cicloActual.bloque?`Ciclo en memoria: Bloque ${cicloActual.bloque}, Semana ${cicloActual.semana||"?"} de ${cicloActual.totalSemanas||"?"}, Objetivo: ${cicloActual.objetivo||"?"}`:"Sin ciclo definido aún";
           const extractPrompt=`Analiza esta conversación entre un atleta y su coach de entrenamiento y extrae datos en JSON.

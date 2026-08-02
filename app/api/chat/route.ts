@@ -1506,7 +1506,10 @@ Incluye: adherencia (X/${sesionesQueRequierenReporte.length} sesiones), tendenci
   }
 
   if (action === "obtener_plan_semana") {
-    const hoy = new Date();
+    // FIX CRITICO: usar timeZone explicito (igual que el resto del sistema), sin esto el servidor
+    // calcula en UTC, causando desfase con usuarios en Canarias/Madrid cerca de medianoche.
+    const hoyStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+    const hoy = new Date(hoyStr + 'T12:00:00');
     const diaSemana = hoy.getDay() || 7;
     const lunes = new Date(hoy);
     lunes.setDate(hoy.getDate() - diaSemana + 1);

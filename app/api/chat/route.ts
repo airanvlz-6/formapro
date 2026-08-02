@@ -86,7 +86,7 @@ async function generarEstadoCanonico(supabase: any, codigo: string) {
 // una modificacion de planificacion (PLAN), una pregunta de coaching (COACHING), o algo
 // de configuracion/cuenta (META). Cada familia se procesa de forma distinta.
 interface IntentClassification {
-  intent: "PLAN_HOY" | "PLAN_MANANA" | "PLAN_SEMANA" | "ULTIMO_INSIGHT" | "BENCHMARK" | "OBJETIVO" | "DEBILIDADES" | "HISTORIAL_FISIOLOGICO" | "REPORTE_ENTRENO" | "REPORTE_SUENO" | "MODIFICAR_PLAN" | "COACHING" | "META" | "OTRO";
+  intent: "PLAN_HOY" | "PLAN_MANANA" | "PLAN_SEMANA" | "ULTIMO_INSIGHT" | "BENCHMARK" | "OBJETIVO" | "DEBILIDADES" | "HISTORIAL_FISIOLOGICO" | "REPORTE_ENTRENO" | "REPORTE_SUENO" | "MODIFICAR_PLAN" | "GENERAR_SEMANA_COMPLETA" | "COACHING" | "META" | "OTRO";
   familia: "READ" | "WRITE" | "PLAN" | "COACHING" | "META";
   confidence: number;
 }
@@ -105,7 +105,8 @@ INTENCIONES POSIBLES Y SU FAMILIA:
 - HISTORIAL_FISIOLOGICO (familia READ): pregunta por su HRV, sueño, o tendencia fisiológica reciente
 - REPORTE_ENTRENO (familia WRITE): reporta haber completado un entrenamiento
 - REPORTE_SUENO (familia WRITE): reporta métricas de sueño/recuperación nocturna
-- MODIFICAR_PLAN (familia PLAN): pide cambiar, mover, o ajustar una sesión o su disponibilidad
+- MODIFICAR_PLAN (familia PLAN): pide cambiar, mover, o ajustar UNA sesion especifica o su disponibilidad puntual
+- GENERAR_SEMANA_COMPLETA (familia PLAN): pide generar, crear, planificar o preparar la SEMANA COMPLETA (7 dias) de entrenamiento, ya sea la proxima semana o una nueva planificacion completa
 - COACHING (familia COACHING): pregunta abierta que requiere razonamiento (por qué, cómo mejorar, qué opinas, explicación técnica)
 - META (familia META): preguntas sobre la cuenta, premium, configuración de Forge, no sobre entrenamiento
 - OTRO (familia COACHING): cualquier cosa que no encaje claramente en las anteriores
@@ -1452,6 +1453,11 @@ Incluye: adherencia (X/${sesionesQueRequierenReporte.length} sesiones), tendenci
     const capacidades = getCapabilities(clasificacion.intent);
     const instruccionCapacidades = buildCapabilityInstruction(capacidades);
 
+    // FORGE ORCHESTRATOR OWNERSHIP — la planificacion semanal completa es propiedad exclusiva
+    // del Orchestrator, nunca del Coach. Si el intent lo detecta, marcamos la respuesta para que
+    // el frontend dispare el Orchestrator directamente, sin que el LLM genere ningun [PLAN:] libre.
+    const debeDispararOrchestrator = clasificacion.intent === "GENERAR_SEMANA_COMPLETA" && clasificacion.confidence >= 0.6;
+
     return NextResponse.json({
       eventType: resultadoAggregator.eventType,
       esCorreccion: resultadoAggregator.esCorreccion,
@@ -1460,7 +1466,8 @@ Incluye: adherencia (X/${sesionesQueRequierenReporte.length} sesiones), tendenci
       datoInmutable,
       modoRespuesta,
       respuestaEstatica,
-      instruccionCapacidades
+      instruccionCapacidades,
+      debeDispararOrchestrator
     });
   }
 

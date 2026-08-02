@@ -1377,6 +1377,29 @@ const forgeValidator=(texto:string):string=>{
       // seguido solo del mensaje actual del usuario — evita perder el hilo de eventos importantes.
       const resContexto=await apiCall({action:"procesar_mensaje_contexto",codigo:codigoUsuario,datos:{mensaje:textoEnvio}});
 
+      // FORGE ORCHESTRATOR OWNERSHIP — la planificacion semanal completa es propiedad exclusiva del
+      // Orchestrator, nunca del Coach conversacional. Si el intent lo detecta, disparamos el mismo
+      // flujo que usa el boton oficial, de forma transparente — el usuario nunca nota la diferencia.
+      if(resContexto?.debeDispararOrchestrator){
+        const mensajeDisplayUsuario=texto.trim();
+        setMensajes(prev=>[...prev,{role:"user",content:mensajeDisplayUsuario}]);
+        setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu próxima semana paso a paso — analizando bloque, distribuyendo días y diseñando cada sesión..."}]);
+        setInput("");
+        if(inputRef.current){inputRef.current.style.height="auto";}
+        setCargando(false);
+        setGenerandoSemana(true);
+        const planGenerado=await orquestarGeneracionSemana();
+        setGenerandoSemana(false);
+        const respuestaFinal=planGenerado
+          ? `✅ Tu nueva semana está lista y guardada en Mi Plan.\n\n📌 ${planGenerado.week_objective || "Revisa cada sesión con su detalle completo."}\n\n¿Alguna duda sobre la semana o necesitas ajustar algo?`
+          : "⚠️ Hubo un problema generando la semana. Inténtalo de nuevo o dímelo directamente en el chat.";
+        setMensajes(prev=>[...prev.slice(0,-1),{role:"assistant",content:respuestaFinal}]);
+        const histConOrchestrator=[...historial,{role:"user",content:mensajeDisplayUsuario},{role:"assistant",content:respuestaFinal}];
+        setHistorial(histConOrchestrator);
+        if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histConOrchestrator}});
+        return;
+      }
+
       // FORGE RESPONSE ENGINE — si el backend ya compuso una respuesta STATIC (sin LLM), la mostramos
       // directamente y terminamos aqui, sin llamar al Coach en absoluto. Cero coste, cero latencia, cero riesgo.
       if(resContexto?.modoRespuesta==="STATIC" && resContexto?.respuestaEstatica){

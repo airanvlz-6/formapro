@@ -1381,11 +1381,9 @@ const forgeValidator=(texto:string):string=>{
       // Orchestrator, nunca del Coach conversacional. Si el intent lo detecta, disparamos el mismo
       // flujo que usa el boton oficial, de forma transparente — el usuario nunca nota la diferencia.
       if(resContexto?.debeDispararOrchestrator){
+        // NOTA: el mensaje del usuario ya se mostro al inicio de enviar(), no lo duplicamos aqui.
         const mensajeDisplayUsuario=texto.trim();
-        setMensajes(prev=>[...prev,{role:"user",content:mensajeDisplayUsuario}]);
         setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu próxima semana paso a paso — analizando bloque, distribuyendo días y diseñando cada sesión..."}]);
-        setInput("");
-        if(inputRef.current){inputRef.current.style.height="auto";}
         setCargando(false);
         setGenerandoSemana(true);
         const planGenerado=await orquestarGeneracionSemana();

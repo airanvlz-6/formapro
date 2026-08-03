@@ -1363,17 +1363,19 @@ ${diaSiguiente ? `Dia siguiente (${diaSiguiente.dia}): ${diaSiguiente.focus || d
 Si el dia anterior o siguiente tiene el mismo foco/intensidad que hoy, AJUSTA para dar variedad real
 (diferente ritmo, diferente distancia, diferente enfoque) — nunca generes dos dias casi identicos seguidos.
 
-IMPORTANTE — CONCISION Y CLARIDAD EJECUTABLE:
+IMPORTANTE — FORMATO VISUAL Y CLARIDAD EJECUTABLE:
 - Cada bloque va en su PROPIO campo del JSON, nunca mezclados en un solo texto.
-- Se CONCISO: 2-4 lineas por bloque maximo.
+- Empieza cada campo indicando la duracion estimada entre parentesis, ej: "(12 min)" al inicio del contenido.
+- Usa bullets con guion "-" para cada ejercicio o paso, uno por linea (usa \\n entre bullets).
+- Si el bloque principal tiene sub-partes (ej: fuerza + WOD), separalas claramente con "A)" y "B)" en
+  lineas distintas, cada una con su propio titulo breve.
 - Si usas un formato de WOD con nombre conocido (Death By, EMOM, AMRAP, For Time, Chipper), especifica
   SIEMPRE de forma inequivoca las reglas exactas: que se hace cada minuto/ronda, que pasa si no completas
   a tiempo, cuando termina. Un atleta debe poder ejecutar la sesion sin dudas sobre el formato.
-- Ejemplo correcto para Death By: "Death By Clean & Jerk 100kg: minuto 1 hazte 1 rep, minuto 2 hazte 2 reps,
-  minuto 3 hazte 3 reps... suma 1 rep cada minuto hasta que no completes las reps del minuto en el tiempo, ahi termina."
+- Se CONCISO en cada bullet, pero manten la estructura visual clara — prioriza claridad sobre brevedad extrema.
 
 Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARADOS para cada bloque:
-{"titulo":"título breve y claro","por_que":"UNA frase corta explicando el propósito de esta sesión concreta","calentamiento":"contenido del calentamiento, conciso","bloque_principal":"contenido del bloque principal con ejercicios/series/reps/carga y formato WOD explicado sin ambiguedad si aplica","vuelta_calma":"contenido de vuelta a la calma, conciso","debilidad_relacionada":${debilidadInfo ? `"${debilidadInfo.nombre_visible}"` : "null"}}`;
+{"titulo":"título breve y claro","por_que":"UNA frase corta explicando el propósito de esta sesión concreta","calentamiento":"(X min)\\n- bullet 1\\n- bullet 2","bloque_principal":"(X min)\\nA) [subtitulo]\\n- bullets\\n\\nB) [subtitulo]\\n- bullets (solo si hay sub-partes, si no una sola lista de bullets)","vuelta_calma":"(X min)\\n- bullet 1\\n- bullet 2","debilidad_relacionada":${debilidadInfo ? `"${debilidadInfo.nombre_visible}"` : "null"}}`;
 
     try {
       const builderRes = await fetch("https://api.anthropic.com/v1/messages", {

@@ -1231,8 +1231,12 @@ IGNORA COMPLETAMENTE las debilidades detectadas en el analisis semanal previo. M
 disciplina obligatoria, la fase del bloque, y la intensidad correspondiente. No conviertas esta sesión
 en trabajo específico de ninguna debilidad — es una sesión pura de ${disciplinaForzada} dentro del bloque actual.
 
-Responde SOLO con este JSON, sin texto adicional ni markdown:
-{"titulo":"título breve y claro de ${disciplinaForzada}","por_que":"UNA frase corta","descripcion":"Calentamiento: [breve]. Bloque principal: [contenido de ${disciplinaForzada}, conciso]. Vuelta a la calma: [breve].","debilidad_relacionada":null}`;
+Si usas un formato de WOD con nombre conocido (Death By, EMOM, AMRAP, For Time, Chipper), especifica
+SIEMPRE de forma inequivoca las reglas exactas: que se hace cada minuto/ronda, que pasa si no completas
+a tiempo, cuando termina. Un atleta debe poder ejecutar la sesion sin dudas sobre el formato.
+
+Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARADOS para cada bloque:
+{"titulo":"título breve y claro de ${disciplinaForzada}","por_que":"UNA frase corta","calentamiento":"contenido del calentamiento, conciso","bloque_principal":"contenido del bloque principal, sin ambiguedad en el formato","vuelta_calma":"contenido de vuelta a la calma, conciso","debilidad_relacionada":null}`;
 
     try {
       const forcedRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -1246,8 +1250,9 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
       const forcedMatch = forcedClean.match(/\{[\s\S]*\}/);
       if (!forcedMatch) throw new Error("Regeneracion forzada no devolvio JSON valido");
       let sesionForzada = JSON.parse(forcedMatch[0]);
+      const descripcionEnsambladaForzada = `**Calentamiento**\n${sesionForzada.calentamiento || ""}\n\n**Bloque principal**\n${sesionForzada.bloque_principal || ""}\n\n**Vuelta a la calma**\n${sesionForzada.vuelta_calma || ""}`;
 
-      const validacionCatalogo = validarCatalogoDisciplina(disciplinaForzada, sesionForzada.descripcion || "");
+      const validacionCatalogo = validarCatalogoDisciplina(disciplinaForzada, descripcionEnsambladaForzada);
       if (!validacionCatalogo.valido) {
         console.error("REGENERACION FORZADA: violacion de catalogo detectada:", validacionCatalogo.terminosProhibidosEncontrados);
       }
@@ -1257,7 +1262,10 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
         sesion: {
           dia,
           tipo: disciplinaForzada,
-          ...sesionForzada,
+          titulo: sesionForzada.titulo,
+          por_que: sesionForzada.por_que,
+          descripcion: descripcionEnsambladaForzada,
+          debilidad_relacionada: null,
           origen: "disciplina_forzada",
           disciplina_verificada: validacionCatalogo.valido
         }
@@ -1293,13 +1301,17 @@ ESPECIALIDAD: ${usuarioBuilder?.especialidad || usuarioBuilder?.categoria}
 MARCAS DEL ATLETA: ${JSON.stringify(usuarioBuilder?.marcas_especificas || {})}
 ${debilidadInfo ? `DEBILIDAD A TRABAJAR HOY: ${debilidadInfo.nombre_visible} — ${debilidadInfo.diagnostico}` : ""}
 
-IMPORTANTE — CONCISION: la descripcion es para que el atleta la lea en su movil antes de entrenar.
-Se CONCISO. Evita explicaciones extensas, tempos detallados innecesarios, o justificaciones largas.
-Cada bloque (Calentamiento/Principal/Vuelta a la calma) en 2-4 lineas maximo. Ejercicios con series/reps/carga
-de forma clara y directa, sin desarrollar cada detalle tecnico salvo que sea imprescindible para ejecutar bien.
+IMPORTANTE — CONCISION Y CLARIDAD EJECUTABLE:
+- Cada bloque va en su PROPIO campo del JSON, nunca mezclados en un solo texto.
+- Se CONCISO: 2-4 lineas por bloque maximo.
+- Si usas un formato de WOD con nombre conocido (Death By, EMOM, AMRAP, For Time, Chipper), especifica
+  SIEMPRE de forma inequivoca las reglas exactas: que se hace cada minuto/ronda, que pasa si no completas
+  a tiempo, cuando termina. Un atleta debe poder ejecutar la sesion sin dudas sobre el formato.
+- Ejemplo correcto para Death By: "Death By Clean & Jerk 100kg: minuto 1 hazte 1 rep, minuto 2 hazte 2 reps,
+  minuto 3 hazte 3 reps... suma 1 rep cada minuto hasta que no completes las reps del minuto en el tiempo, ahi termina."
 
-Responde SOLO con este JSON, sin texto adicional ni markdown:
-{"titulo":"título breve y claro","por_que":"UNA frase corta explicando el propósito de esta sesión concreta","descripcion":"Calentamiento: [breve]. Bloque principal: [ejercicios con series/reps/carga, conciso]. Vuelta a la calma: [breve].","debilidad_relacionada":${debilidadInfo ? `"${debilidadInfo.nombre_visible}"` : "null"}}`;
+Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARADOS para cada bloque:
+{"titulo":"título breve y claro","por_que":"UNA frase corta explicando el propósito de esta sesión concreta","calentamiento":"contenido del calentamiento, conciso","bloque_principal":"contenido del bloque principal con ejercicios/series/reps/carga y formato WOD explicado sin ambiguedad si aplica","vuelta_calma":"contenido de vuelta a la calma, conciso","debilidad_relacionada":${debilidadInfo ? `"${debilidadInfo.nombre_visible}"` : "null"}}`;
 
     try {
       const builderRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -1314,7 +1326,9 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
       const builderMatch = builderClean.match(/\{[\s\S]*\}/);
       if (!builderMatch) throw new Error("Session Builder no devolvio JSON valido. RAW: " + builderClean.substring(0, 300));
       const sesionCompleta = JSON.parse(builderMatch[0]);
-      return NextResponse.json({ ok: true, sesion: { dia, tipo, ...sesionCompleta } });
+      // Ensamblar los campos separados en la descripcion final con separacion clara de bloques
+      const descripcionEnsamblada = `**Calentamiento**\n${sesionCompleta.calentamiento || ""}\n\n**Bloque principal**\n${sesionCompleta.bloque_principal || ""}\n\n**Vuelta a la calma**\n${sesionCompleta.vuelta_calma || ""}`;
+      return NextResponse.json({ ok: true, sesion: { dia, tipo, titulo: sesionCompleta.titulo, por_que: sesionCompleta.por_que, descripcion: descripcionEnsamblada, debilidad_relacionada: sesionCompleta.debilidad_relacionada } });
     } catch (err: any) {
       return NextResponse.json({ error: "Error en Session Builder: " + err.message }, { status: 500 });
     }

@@ -1202,6 +1202,17 @@ ${usuarioPlanner?.distribucion_semanal || "sin restricciones especificadas, asum
 
 ESPECIALIDAD: ${usuarioPlanner?.especialidad || usuarioPlanner?.categoria}
 
+PRINCIPIOS DE PLANIFICACION (aplica tu criterio como entrenador experto, no sigas numeros fijos):
+- Prioriza siempre el objetivo principal y la especialidad del atleta como eje central de la semana.
+- Respeta la disponibilidad exactamente — nunca reinterpretes ni redistribuyas los dias indicados.
+- Una debilidad prioritaria NUNCA debe monopolizar toda la semana. Decide tu, como entrenador, cuantos
+  dias es razonable dedicarle segun su naturaleza e impacto — normalmente entre 1 y 3 dias, pero usa tu
+  criterio deportivo real, no un numero fijo predeterminado.
+- Evita colocar dos estimulos de intensidad maxima en dias consecutivos sin recuperacion entre medias.
+- Evita repetir el mismo foco/movimiento principal en dias consecutivos, salvo justificacion tecnica clara.
+- La disciplina propia de la especialidad (ej: halterofilia si es CrossFit, carrera si incluye running)
+  debe ocupar la mayor parte del volumen semanal — las debilidades son un complemento, nunca el centro.
+
 Responde SOLO con este JSON valido, sin texto adicional ni markdown, con los 7 dias (lunes a domingo). Para
 cada dia, ademas de tipo y titulo, define una INTENCION breve (focus, volumen, intensidad relativa, y si
 lleva condicionamiento metabolico) — esto es SOLO la intencion, NO el contenido detallado de la sesion.

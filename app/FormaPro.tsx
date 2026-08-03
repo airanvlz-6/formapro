@@ -829,6 +829,10 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
       });
     }
 
+    // NOTA: la distribucion de la debilidad prioritaria ya NO se fuerza con una regla fija (ej: "3 dias").
+    // El Week Planner decide con criterio, guiado por principios explicitos en su prompt (ver route.ts).
+    // El Week Integrity Validator evalua el resultado DESPUES, sin dictar el numero exacto de antemano.
+
     // FIX: preservar dias que YA tienen sesion completada en el plan actual de esta semana,
     // en vez de regenerarlos y perder/duplicar lo que el atleta ya reporto.
     const weekStartOrchestrator=(()=>{

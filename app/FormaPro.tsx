@@ -1,6 +1,7 @@
 'use client';
 import { useState, useRef, useEffect } from "react";
 import { aplicarTodasLasReglas } from "@/lib/validators/scientificRules";
+import { validarIntegridadSemana } from "@/lib/validators/weekIntegrityValidator";
 
 const C = {
   bg: "#0D0D0D", card: "#1A1A1A", ink: "#F0EDE8", muted: "#9A9590",
@@ -869,6 +870,55 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
       debilidadesActivas:debilidades,
       historialFisiologico
     });
+
+    // FORGE WEEK INTEGRITY VALIDATOR — verifica disponibilidad y variedad segun FORGE_SEMANA_CANONICA.md.
+    // Si detecta violaciones, regenera los dias problematicos con instruccion explicita de corregirlas.
+    console.log("WEEK INTEGRITY: verificando disponibilidad y variedad...");
+    const resultadoIntegridad=validarIntegridadSemana(sesionesCompletas, distribucionSemanal);
+    console.log("WEEK INTEGRITY: resultado:", JSON.stringify(resultadoIntegridad));
+
+    if(!resultadoIntegridad.valido && resultadoIntegridad.diasCorregir.length>0){
+      console.log("WEEK INTEGRITY: regenerando dias con violaciones:", resultadoIntegridad.diasCorregir);
+      const diasARegenerar=resultadoIntegridad.diasCorregir.filter((diaCorregir:string)=>
+        !diasYaCompletados.some((dc:any)=>dc.dia===diaCorregir)
+      );
+      const regeneraciones=await Promise.all(
+        diasARegenerar.map(async(diaCorregir:string)=>{
+          const estructuraDia=(estructura.sessions||[]).find((d:any)=>d.dia===diaCorregir);
+          if(!estructuraDia) return null;
+          // Determinar el tipo correcto segun distribucion_semanal para forzar la correccion
+          let tipoForzado=estructuraDia.tipo;
+          try{
+            const distParsed=typeof distribucionSemanal==="string"?JSON.parse(distribucionSemanal):distribucionSemanal;
+            const normalizar=(d:string)=>(d||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+            Object.entries(distParsed||{}).forEach(([clave,dias]:[string,any])=>{
+              if(clave==="observaciones"||!Array.isArray(dias)) return;
+              if(dias.some((d:string)=>normalizar(d)===normalizar(diaCorregir))){
+                tipoForzado=clave==="box"?"box":clave==="pista"?"carrera":clave;
+              }
+            });
+          }catch{}
+          const res=await apiCall({action:"construir_sesion_dia",codigo:codigoUsuario,datos:{
+            dia:diaCorregir,
+            tipo:tipoForzado,
+            titulo_breve:estructuraDia.titulo_breve,
+            focus:estructuraDia.focus,
+            volume:estructuraDia.volume,
+            intensity:estructuraDia.intensity,
+            conditioning:estructuraDia.conditioning,
+            analisis,
+            debilidad_relacionada:null // se fuerza null para romper la monopolizacion de la debilidad
+          }});
+          return res?.ok ? res.sesion : null;
+        })
+      );
+      regeneraciones.forEach((sesionRegenerada:any)=>{
+        if(!sesionRegenerada) return;
+        const idx=sesionesCompletas.findIndex((s:any)=>s.dia===sesionRegenerada.dia);
+        if(idx>=0) sesionesCompletas[idx]=sesionRegenerada;
+      });
+      console.log("WEEK INTEGRITY: dias regenerados:", regeneraciones.filter(Boolean).length);
+    }
 
     // FIX INTELIGENTE: si la semana ACTUAL ya tiene dias completados (el atleta ya empezo a vivirla),
     // el Orchestrator trabaja sobre ESA semana (completando/corrigiendo lo que falta).

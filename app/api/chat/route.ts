@@ -1192,40 +1192,43 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
     const { analisis: analisisRecibido } = datos;
     const { data: usuarioPlanner } = await supabase.from("usuarios").select("distribucion_semanal,especialidad,categoria").eq("codigo", codigo).single();
 
-    const plannerPrompt = `Eres un planificador semanal. Tu ÚNICA tarea es decidir QUÉ TIPO de sesión va cada día de la semana (lunes a domingo). NO escribas el contenido detallado de cada sesión, solo el tipo y un título breve.
+    // FORGE WEEKLY STRATEGY + BLUEPRINT (v2) — el modelo primero razona la ESTRATEGIA pura (sin ejercicios,
+    // sin dias), y solo despues traduce esa estrategia a un Blueprint dia por dia. Esto refleja como
+    // planifica un entrenador real: primero decide la curva de carga y las prioridades, despues asigna dias.
+    const plannerPrompt = `Eres un entrenador experto de ${usuarioPlanner?.especialidad || usuarioPlanner?.categoria} diseñando la estrategia de una semana completa de entrenamiento.
 
 ANÁLISIS DEL BLOQUE:
 ${JSON.stringify(analisisRecibido)}
 
-DISPONIBILIDAD DEL ATLETA:
+DISPONIBILIDAD DEL ATLETA (respetar exactamente, nunca reinterpretar):
 ${usuarioPlanner?.distribucion_semanal || "sin restricciones especificadas, asume disponibilidad flexible"}
 
-ESPECIALIDAD: ${usuarioPlanner?.especialidad || usuarioPlanner?.categoria}
+PROCESO EN DOS FASES:
 
-PRINCIPIOS DE PLANIFICACION (aplica tu criterio como entrenador experto, no sigas numeros fijos):
-- Prioriza siempre el objetivo principal y la especialidad del atleta como eje central de la semana.
-- Respeta la disponibilidad exactamente — nunca reinterpretes ni redistribuyas los dias indicados.
-- Una debilidad prioritaria NUNCA debe monopolizar toda la semana. Decide tu, como entrenador, cuantos
-  dias es razonable dedicarle segun su naturaleza e impacto — normalmente entre 1 y 3 dias, pero usa tu
-  criterio deportivo real, no un numero fijo predeterminado.
-- Evita colocar dos estimulos de intensidad maxima en dias consecutivos sin recuperacion entre medias.
-- Evita repetir el mismo foco/movimiento principal en dias consecutivos, salvo justificacion tecnica clara.
-- La disciplina propia de la especialidad (ej: halterofilia si es CrossFit, carrera si incluye running)
-  debe ocupar la mayor parte del volumen semanal — las debilidades son un complemento, nunca el centro.
+FASE 1 — ESTRATEGIA (razona esto PRIMERO, antes de pensar en dias concretos):
+- ¿Qué adaptación quieres producir en el atleta durante estos 7 dias?
+- ¿Qué cualidades hay que desarrollar y en qué proporción (potencia, motor/cardio, técnica, fuerza, resistencia)?
+- ¿Qué curva de carga tiene sentido (alta-media-alta-baja-media-alta-baja, o la que decidas)?
+- ¿Cuántos días merece la debilidad prioritaria según su naturaleza e impacto real — usa tu criterio,
+  nunca un número fijo predeterminado? ¿Cómo se integra sin monopolizar la semana?
+- ¿Qué restricciones de recuperación hay que respetar (no repetir el mismo tipo de fatiga en días consecutivos)?
 
-Responde SOLO con este JSON valido, sin texto adicional ni markdown, con los 7 dias (lunes a domingo). Para
-cada dia, ademas de tipo y titulo, define una INTENCION breve (focus, volumen, intensidad relativa, y si
-lleva condicionamiento metabolico) — esto es SOLO la intencion, NO el contenido detallado de la sesion.
-IMPORTANTE: en el campo intensity, si usas un rango de porcentaje escribelo como texto simple sin simbolo
-de porcentaje literal (ej: "75 a 80 por ciento RM" o "conversacional Z2"), para evitar romper el formato JSON.
-{"sessions":[{"dia":"lunes","tipo":"carrera|box|fuerza|descanso|otro","titulo_breve":"3-5 palabras","focus":"movimiento o cualidad principal","volume":"bajo|medio|alto","intensity":"descripcion breve sin simbolo %","conditioning":"ninguno|corto|largo"},{"dia":"martes","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"..."},{"dia":"miercoles","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"..."},{"dia":"jueves","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"..."},{"dia":"viernes","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"..."},{"dia":"sabado","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"..."},{"dia":"domingo","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"..."}]}
-Respeta la disponibilidad indicada. Si un dia no tiene sesion, usa tipo "descanso" (sin necesidad de focus/volume/intensity/conditioning).`;
+FASE 2 — BLUEPRINT (traduce la estrategia de la Fase 1 a cada día concreto):
+- Asigna cada día según la disponibilidad real del atleta.
+- Cada día debe indicar explícitamente su relación con el día anterior y siguiente (qué fatiga hereda, qué debe evitar).
+- La disciplina propia de la especialidad debe ocupar la mayor parte del volumen — las debilidades son complemento.
+
+IMPORTANTE: en el campo intensity, escribe el rango como texto simple sin símbolo % literal (ej: "75 a 80 por ciento RM").
+
+Responde SOLO con este JSON válido, sin texto adicional ni markdown, incluyendo AMBAS fases:
+{"strategy":{"adaptacion_buscada":"frase describiendo la adaptacion principal de la semana","cualidades_prioritarias":["cualidad1","cualidad2"],"dias_debilidad_prioritaria":número,"justificacion_debilidad":"por que ese numero de dias tiene sentido","restricciones_recuperacion":"que evitar en dias consecutivos"},"sessions":[{"dia":"lunes","tipo":"carrera|box|fuerza|descanso|otro","titulo_breve":"3-5 palabras","focus":"movimiento o cualidad principal","volume":"bajo|medio|alto","intensity":"descripcion breve sin simbolo %","conditioning":"ninguno|corto|largo","relacion_dia_anterior":"que hereda o evita del dia previo","trabaja_debilidad":true_o_false},{"dia":"martes","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"...","relacion_dia_anterior":"...","trabaja_debilidad":true_o_false},{"dia":"miercoles","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"...","relacion_dia_anterior":"...","trabaja_debilidad":true_o_false},{"dia":"jueves","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"...","relacion_dia_anterior":"...","trabaja_debilidad":true_o_false},{"dia":"viernes","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"...","relacion_dia_anterior":"...","trabaja_debilidad":true_o_false},{"dia":"sabado","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"...","relacion_dia_anterior":"...","trabaja_debilidad":true_o_false},{"dia":"domingo","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"...","relacion_dia_anterior":"...","trabaja_debilidad":true_o_false}]}
+Si un dia es descanso, usa tipo "descanso" (los demas campos pueden quedar vacios).`;
 
     try {
       const plannerRes = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 900, messages: [{ role: "user", content: plannerPrompt }] }),
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1800, messages: [{ role: "user", content: plannerPrompt }] }),
       });
       const plannerData = await plannerRes.json();
       const plannerTexto = plannerData.content?.map((b: any) => b.text || "").join("") || "{}";

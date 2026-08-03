@@ -1470,6 +1470,57 @@ Incluye: adherencia (X/${sesionesQueRequierenReporte.length} sesiones), tendenci
       data: { notas: resumenGenerado, adherencia: `${sesionesQueRequierenReporte.filter((s:any)=>s.completada).length}/${sesionesQueRequierenReporte.length}`, generado_automaticamente: true }
     });
 
+    // FORGE BLOCK WEEK SUMMARY — objeto ESTRUCTURADO (no narrativo) que la Strategy de la proxima
+    // semana leera para razonar progresion real dentro del bloque, en vez de partir de cero cada vez.
+    const { data: usuarioCicloSummary } = await supabase.from("usuarios").select("ciclo_actual").eq("codigo", codigo).single();
+    const cicloSummary = usuarioCicloSummary?.ciclo_actual || {};
+
+    const summaryPrompt = `Eres Forge analizando el resultado REAL de una semana de entrenamiento para generar un resumen ESTRUCTURADO
+que servira de memoria para planificar la siguiente semana del mismo bloque. NO es para el atleta, es para el sistema.
+
+SESIONES COMPLETADAS ESTA SEMANA:
+${sesionesResumen}
+
+TENDENCIA FISIOLOGICA:
+${JSON.stringify(histFisioSemana)}
+
+BLOQUE ACTUAL: ${JSON.stringify(cicloSummary)}
+
+Responde SOLO con este JSON, sin texto adicional ni markdown:
+{"objetivo_semanal":"cual era el objetivo real de esta semana segun las sesiones","resultado":"conseguido|parcial|no_conseguido","fatiga":"baja|media|alta","recuperacion":"buena|regular|mala","adaptaciones_conseguidas":["adaptacion1","adaptacion2"],"pendiente":["pendiente1","pendiente2"]}
+Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten respaldadas por las sesiones.`;
+
+    let summaryEstructurado: any = null;
+    try {
+      const summaryRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 400, messages: [{ role: "user", content: summaryPrompt }] }),
+      });
+      const summaryData = await summaryRes.json();
+      const summaryTexto = summaryData.content?.map((b: any) => b.text || "").join("") || "{}";
+      const summaryClean = summaryTexto.replace(/```json|```/g, "").trim();
+      const summaryMatch = summaryClean.match(/\{[\s\S]*\}/);
+      if (summaryMatch) summaryEstructurado = JSON.parse(summaryMatch[0]);
+    } catch (e) { console.error("Error generando BLOCK_WEEK_SUMMARY:", e); }
+
+    if (summaryEstructurado) {
+      await supabase.from("block_week_summary").upsert({
+        user_codigo: codigo,
+        week_start: weekStartCierre,
+        bloque: cicloSummary.bloque || null,
+        semana_del_bloque: cicloSummary.semana || null,
+        total_semanas_bloque: cicloSummary.totalSemanas || null,
+        objetivo_semanal: summaryEstructurado.objetivo_semanal || null,
+        resultado: summaryEstructurado.resultado || null,
+        fatiga: summaryEstructurado.fatiga || null,
+        recuperacion: summaryEstructurado.recuperacion || null,
+        adaptaciones_conseguidas: summaryEstructurado.adaptaciones_conseguidas || [],
+        pendiente: summaryEstructurado.pendiente || []
+      }, { onConflict: "user_codigo,week_start" });
+      console.log("BLOCK WEEK SUMMARY generado:", JSON.stringify(summaryEstructurado));
+    }
+
     // FORGE CELEBRATIONS ENGINE — hitos objetivos deterministas (constancia, recuperacion, volumen)
     const celebraciones = await detectarCelebraciones(supabase, codigo);
     for (const cel of celebraciones) {

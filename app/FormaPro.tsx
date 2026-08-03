@@ -809,11 +809,25 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     if(!plannerRes?.ok) { console.log("ORCHESTRATOR: FALLO en Week Planner, abortando"); return null; }
     const estructura=plannerRes.estructura;
 
+    // FIX: preservar dias que YA tienen sesion completada en el plan actual de esta semana,
+    // en vez de regenerarlos y perder/duplicar lo que el atleta ya reporto.
+    const weekStartOrchestrator=(()=>{
+      const hoyOrch=new Date();
+      const diaSemOrch=hoyOrch.getDay()||7;
+      const lunesOrch=new Date(hoyOrch);
+      lunesOrch.setDate(hoyOrch.getDate()-diaSemOrch+1);
+      return lunesOrch.toISOString().split('T')[0];
+    })();
+    const resPlanExistente=await apiCall({action:"obtener_plan_semana",codigo:codigoUsuario});
+    const sessionsExistentes=(resPlanExistente?.plan?.week_start===weekStartOrchestrator ? resPlanExistente.plan.sessions : []) || [];
+    const diasYaCompletados=sessionsExistentes.filter((s:any)=>s.completada===true);
+    console.log("ORCHESTRATOR: dias ya completados esta semana, se preservan:", JSON.stringify(diasYaCompletados.map((s:any)=>s.dia)));
+
     // Paso 3: Session Builder, TODAS las llamadas en PARALELO (Promise.all) en vez de secuencial.
     // Reduce el tiempo total de ~7x30s (210s) a ~30-40s, sin cambiar la arquitectura.
     console.log("ORCHESTRATOR Paso 3 — Session Builder: construyendo", (estructura.sessions||[]).length, "dias EN PARALELO");
-    const diasAConstruir=(estructura.sessions||[]).filter((d:any)=>d.tipo!=="descanso");
-    const diasDescanso=(estructura.sessions||[]).filter((d:any)=>d.tipo==="descanso");
+    const diasAConstruir=(estructura.sessions||[]).filter((d:any)=>d.tipo!=="descanso" && !diasYaCompletados.some((dc:any)=>dc.dia===d.dia));
+    const diasDescanso=(estructura.sessions||[]).filter((d:any)=>d.tipo==="descanso" && !diasYaCompletados.some((dc:any)=>dc.dia===d.dia));
 
     const resultadosParalelos=await Promise.all(
       diasAConstruir.map((diaEstructura:any)=>
@@ -835,6 +849,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     );
 
     const sesionesCompletas:any[]=[
+      ...diasYaCompletados,
       ...resultadosParalelos.filter((r:any)=>r?.ok).map((r:any)=>r.sesion),
       ...diasDescanso.map((d:any)=>({dia:d.dia,tipo:"descanso",titulo:"Descanso",por_que:"Recuperación programada",descripcion:"Día de descanso — prioriza sueño, hidratación y nutrición."}))
     ];

@@ -905,11 +905,16 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
             });
           }catch{}
           // FORGE RECOVERY PIPELINE — accion especializada con contexto aislado del analisis contaminado
+          const idxEnSemanaCorregir=(estructura.sessions||[]).findIndex((d:any)=>d.dia===diaCorregir);
+          const diaAnteriorCorregir=idxEnSemanaCorregir>0?(estructura.sessions||[])[idxEnSemanaCorregir-1]:null;
+          const diaSiguienteCorregir=idxEnSemanaCorregir<(estructura.sessions||[]).length-1?(estructura.sessions||[])[idxEnSemanaCorregir+1]:null;
           const res=await apiCall({action:"regenerar_sesion_disciplina_forzada",codigo:codigoUsuario,datos:{
             dia:diaCorregir,
             disciplinaForzada:tipoForzado,
             tituloBreve:estructuraDia.titulo_breve,
-            cicloActual
+            cicloActual,
+            diaAnterior:diaAnteriorCorregir,
+            diaSiguiente:diaSiguienteCorregir
           }});
           return res?.ok ? res.sesion : null;
         })

@@ -1234,9 +1234,11 @@ Respeta la disponibilidad indicada. Si un dia no tiene sesion, usa tipo "descans
     // recuperar una sesion que viola una restriccion canonica (disponibilidad). Ignora las debilidades
     // detectadas en el analisis semanal (que pueden estar contaminando la generacion), pero SI mantiene
     // fase/bloque/intensidad del ciclo, porque la sesion sigue perteneciendo al mismo bloque de entrenamiento.
-    const { dia, disciplinaForzada, tituloBreve, cicloActual: cicloRecibido } = datos;
+    const { dia, disciplinaForzada, tituloBreve, cicloActual: cicloRecibido, diaAnterior, diaSiguiente } = datos;
     const { data: usuarioBuilder2 } = await supabase.from("usuarios").select("especialidad,categoria,marcas_especificas,ciclo_actual").eq("codigo", codigo).single();
     const cicloParaContexto = cicloRecibido || usuarioBuilder2?.ciclo_actual || {};
+    const snapshotForzado = await buildAthleteSnapshot(supabase, codigo);
+    console.log(`REGENERACION FORZADA INPUT [${dia}] — Snapshot:`, JSON.stringify(snapshotForzado), "Dia anterior:", JSON.stringify(diaAnterior), "Dia siguiente:", JSON.stringify(diaSiguiente));
 
     const catalogoPrompt = buildCatalogoPrompt(disciplinaForzada);
 
@@ -1247,6 +1249,13 @@ IDEA GENERAL: ${tituloBreve || disciplinaForzada}
 ESPECIALIDAD DEL ATLETA: ${usuarioBuilder2?.especialidad || usuarioBuilder2?.categoria}
 MARCAS: ${JSON.stringify(usuarioBuilder2?.marcas_especificas || {})}
 FASE/BLOQUE ACTUAL (mantener coherencia con esto): ${JSON.stringify(cicloParaContexto)}
+
+ESTADO REAL RECIENTE DEL ATLETA: ${JSON.stringify(snapshotForzado)}
+
+CONTEXTO DE DIAS ADYACENTES (evita repetir el mismo estimulo/intensidad):
+${diaAnterior ? `Dia anterior (${diaAnterior.dia}): ${diaAnterior.focus || diaAnterior.titulo_breve}, intensidad ${diaAnterior.intensity || "no especificada"}` : "Sin dato"}
+${diaSiguiente ? `Dia siguiente (${diaSiguiente.dia}): ${diaSiguiente.focus || diaSiguiente.titulo_breve}, intensidad ${diaSiguiente.intensity || "no especificada"}` : "Sin dato"}
+Si el dia anterior/siguiente tiene contenido similar, AJUSTA para dar variedad real.
 
 ${catalogoPrompt}
 

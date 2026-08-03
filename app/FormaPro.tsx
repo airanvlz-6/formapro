@@ -830,9 +830,13 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     const diasAConstruir=(estructura.sessions||[]).filter((d:any)=>d.tipo!=="descanso" && !diasYaCompletados.some((dc:any)=>dc.dia===d.dia));
     const diasDescanso=(estructura.sessions||[]).filter((d:any)=>d.tipo==="descanso" && !diasYaCompletados.some((dc:any)=>dc.dia===d.dia));
 
+    const todasLasSesionesOrden=estructura.sessions||[];
     const resultadosParalelos=await Promise.all(
-      diasAConstruir.map((diaEstructura:any)=>
-        apiCall({action:"construir_sesion_dia",codigo:codigoUsuario,datos:{
+      diasAConstruir.map((diaEstructura:any)=>{
+        const idxEnSemana=todasLasSesionesOrden.findIndex((d:any)=>d.dia===diaEstructura.dia);
+        const diaAnterior=idxEnSemana>0?todasLasSesionesOrden[idxEnSemana-1]:null;
+        const diaSiguiente=idxEnSemana<todasLasSesionesOrden.length-1?todasLasSesionesOrden[idxEnSemana+1]:null;
+        return apiCall({action:"construir_sesion_dia",codigo:codigoUsuario,datos:{
           dia:diaEstructura.dia,
           tipo:diaEstructura.tipo,
           titulo_breve:diaEstructura.titulo_breve,
@@ -841,12 +845,14 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
           intensity:diaEstructura.intensity,
           conditioning:diaEstructura.conditioning,
           analisis,
-          debilidad_relacionada:analisis.debilidad_prioritaria
+          debilidad_relacionada:analisis.debilidad_prioritaria,
+          diaAnterior,
+          diaSiguiente
         }}).then((res:any)=>{
           console.log(`ORCHESTRATOR Paso 3 — ${diaEstructura.dia}: resultado:`, JSON.stringify(res));
           return res;
-        })
-      )
+        });
+      })
     );
 
     const sesionesCompletas:any[]=[

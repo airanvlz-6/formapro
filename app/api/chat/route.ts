@@ -1124,7 +1124,30 @@ ${ultimos}`;
     return NextResponse.json({ sesion: sesionDia || null });
   }
 
-  if (action === "analizar_bloque_semana") {
+  // FORGE ATHLETE SNAPSHOT — construye el estado real y auditable del atleta que TODOS los componentes
+// del Orchestrator deben recibir. Elimina la pregunta "¿esta usando mis datos?" haciendola verificable
+// en los logs. Incluye ultimas sesiones reales, volumen reciente por disciplina, y marcas.
+async function buildAthleteSnapshot(supabase: any, codigo: string) {
+  const { data: usuario } = await supabase.from("usuarios").select("workout_history,marcas_especificas,estado_fisiologico").eq("codigo", codigo).single();
+  const workoutHistory = usuario?.workout_history || [];
+  const ultimas5Sesiones = workoutHistory.slice(-5).map((w: any) => ({ tipo: w.tipo, fecha: w.fecha, sensacion: w.sensacion }));
+
+  const hace7dias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const sesionesUltimos7dias = workoutHistory.filter((w: any) => new Date(w.fecha) >= hace7dias);
+  const volumenCarrera = sesionesUltimos7dias.filter((w: any) => /carrera|running|z2|z3|z4|intervalo/i.test(w.tipo || "")).length;
+  const volumenBox = sesionesUltimos7dias.filter((w: any) => /box|crossfit|wod|halterofilia/i.test(w.tipo || "")).length;
+
+  return {
+    ultimas_5_sesiones: ultimas5Sesiones,
+    sesiones_ultimos_7_dias: sesionesUltimos7dias.length,
+    volumen_carrera_7dias: volumenCarrera,
+    volumen_box_7dias: volumenBox,
+    marcas: usuario?.marcas_especificas || {},
+    fatiga_actual: usuario?.estado_fisiologico?.fatiga_aguda || null
+  };
+}
+
+if (action === "analizar_bloque_semana") {
     // FORGE ORCHESTRATOR — Paso 1: Block Analyzer. Solo decide estructura, no genera entrenamientos.
     const estado = await generarEstadoCanonico(supabase, codigo);
     const { data: usuarioAnalyzer } = await supabase.from("usuarios").select("ciclo_actual,athlete_development,distribucion_semanal,categoria,especialidad,objetivo_principal,perfil").eq("codigo", codigo).single();
@@ -1277,10 +1300,14 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
 
   if (action === "construir_sesion_dia") {
     // FORGE ORCHESTRATOR — Paso 3: Session Builder. Genera el contenido COMPLETO de UN solo dia.
-    const { dia, tipo, titulo_breve, analisis: analisisSesion, debilidad_relacionada, focus, volume, intensity, conditioning } = datos;
+    const { dia, tipo, titulo_breve, analisis: analisisSesion, debilidad_relacionada, focus, volume, intensity, conditioning, diaAnterior, diaSiguiente } = datos;
     const { data: usuarioBuilder } = await supabase.from("usuarios").select("especialidad,categoria,perfil,marcas_especificas,athlete_development").eq("codigo", codigo).single();
 
     const debilidadInfo = (usuarioBuilder?.athlete_development || []).find((d: any) => d.nombre_visible === debilidad_relacionada);
+
+    // FORGE ATHLETE SNAPSHOT — contexto real y auditable del atleta, elimina la duda de "¿usa mis datos?"
+    const snapshot = await buildAthleteSnapshot(supabase, codigo);
+    console.log(`SESSION BUILDER INPUT [${dia}] — Snapshot:`, JSON.stringify(snapshot), "Dia anterior:", JSON.stringify(diaAnterior), "Dia siguiente:", JSON.stringify(diaSiguiente));
 
     // FORGE SESSION ENGINE (v1): el Session Builder ya no inventa la estructura desde cero.
     // Recibe la INTENCION exacta que ya decidio el Week Planner y solo la desarrolla en detalle.
@@ -1300,6 +1327,18 @@ CONTEXTO DEL BLOQUE: ${JSON.stringify(analisisSesion)}
 ESPECIALIDAD: ${usuarioBuilder?.especialidad || usuarioBuilder?.categoria}
 MARCAS DEL ATLETA: ${JSON.stringify(usuarioBuilder?.marcas_especificas || {})}
 ${debilidadInfo ? `DEBILIDAD A TRABAJAR HOY: ${debilidadInfo.nombre_visible} — ${debilidadInfo.diagnostico}` : ""}
+
+ESTADO REAL RECIENTE DEL ATLETA (usar para evitar repetir estimulos o sobrecargar):
+Ultimas 5 sesiones: ${JSON.stringify(snapshot.ultimas_5_sesiones)}
+Sesiones en los ultimos 7 dias: ${snapshot.sesiones_ultimos_7_dias}
+Volumen carrera ultimos 7 dias: ${snapshot.volumen_carrera_7dias} sesiones
+Volumen box ultimos 7 dias: ${snapshot.volumen_box_7dias} sesiones
+
+CONTEXTO DE DIAS ADYACENTES (evita repetir el mismo estimulo/intensidad en dias consecutivos):
+${diaAnterior ? `Dia anterior (${diaAnterior.dia}): ${diaAnterior.focus || diaAnterior.titulo_breve}, intensidad ${diaAnterior.intensity || "no especificada"}` : "Sin dato de dia anterior"}
+${diaSiguiente ? `Dia siguiente (${diaSiguiente.dia}): ${diaSiguiente.focus || diaSiguiente.titulo_breve}, intensidad ${diaSiguiente.intensity || "no especificada"}` : "Sin dato de dia siguiente"}
+Si el dia anterior o siguiente tiene el mismo foco/intensidad que hoy, AJUSTA para dar variedad real
+(diferente ritmo, diferente distancia, diferente enfoque) — nunca generes dos dias casi identicos seguidos.
 
 IMPORTANTE — CONCISION Y CLARIDAD EJECUTABLE:
 - Cada bloque va en su PROPIO campo del JSON, nunca mezclados en un solo texto.

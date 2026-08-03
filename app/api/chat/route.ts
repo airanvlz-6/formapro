@@ -1192,10 +1192,26 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
     const { analisis: analisisRecibido } = datos;
     const { data: usuarioPlanner } = await supabase.from("usuarios").select("distribucion_semanal,especialidad,categoria").eq("codigo", codigo).single();
 
+    // FORGE BLOCK MEMORY — el resumen estructurado de la semana ANTERIOR del mismo bloque, para que
+    // la Strategy pueda razonar progresion real en vez de partir de cero cada semana. Solo la mas reciente.
+    const { data: blockMemoryReciente } = await supabase.from("block_week_summary").select("*").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(1).single();
+    const blockMemoryTexto = blockMemoryReciente
+      ? `MEMORIA DEL BLOQUE (resultado de la semana anterior, semana ${blockMemoryReciente.semana_del_bloque}/${blockMemoryReciente.total_semanas_bloque} de ${blockMemoryReciente.bloque}):
+Objetivo que perseguia: ${blockMemoryReciente.objetivo_semanal}
+Resultado: ${blockMemoryReciente.resultado}
+Fatiga acumulada: ${blockMemoryReciente.fatiga}
+Recuperacion: ${blockMemoryReciente.recuperacion}
+Adaptaciones ya conseguidas: ${(blockMemoryReciente.adaptaciones_conseguidas || []).join(", ") || "ninguna registrada"}
+Pendiente de trabajar: ${(blockMemoryReciente.pendiente || []).join(", ") || "nada especifico"}
+USA ESTO para decidir si progresar (subir carga/intensidad) o consolidar (mantener) esta semana — no repitas la semana anterior desde cero.`
+      : "Sin memoria de semana anterior en este bloque (primera semana o sin datos previos) — diseña la estrategia desde el objetivo general.";
+
     // FORGE WEEKLY STRATEGY + BLUEPRINT (v2) — el modelo primero razona la ESTRATEGIA pura (sin ejercicios,
     // sin dias), y solo despues traduce esa estrategia a un Blueprint dia por dia. Esto refleja como
     // planifica un entrenador real: primero decide la curva de carga y las prioridades, despues asigna dias.
     const plannerPrompt = `Eres un entrenador experto de ${usuarioPlanner?.especialidad || usuarioPlanner?.categoria} diseñando la estrategia de una semana completa de entrenamiento.
+
+${blockMemoryTexto}
 
 ANÁLISIS DEL BLOQUE:
 ${JSON.stringify(analisisRecibido)}

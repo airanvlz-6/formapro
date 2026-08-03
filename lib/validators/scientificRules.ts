@@ -19,7 +19,7 @@ function regla001Deload(ctx: ContextoValidacion) {
   if (!ctx.esDeload) return;
   ctx.sesiones.forEach((s: any) => {
     if (/aumenta(r|mos)?\s+(el\s+)?volumen|carga\s+maxima|nuevo\s+RM/i.test(s.descripcion || "")) {
-      s.descripcion = (s.descripcion || "") + "\n\n⚠️ NOTA VALIDADOR [001-Deload]: Esta semana es DELOAD — reduce intensidad/volumen un 30-40% respecto a la semana anterior, no la aumentes.";
+      s.notas_validador = [...(s.notas_validador||[]), "[001-Deload]: Esta semana es DELOAD — reduce intensidad/volumen un 30-40% respecto a la semana anterior, no la aumentes."];
     }
   });
 }
@@ -29,7 +29,7 @@ function regla002Lumbar(ctx: ContextoValidacion) {
   if (!ctx.hayLesionLumbarActiva) return;
   ctx.sesiones.forEach((s: any) => {
     if (/peso\s+muerto|deadlift/i.test(s.descripcion || "") && !/RDL|rumano|conservador|ligero|tecnica/i.test(s.descripcion || "")) {
-      s.descripcion = (s.descripcion || "") + "\n\n⚠️ NOTA VALIDADOR [002-Lumbar]: Hay una molestia lumbar activa registrada — prioriza variantes conservadoras (RDL, técnica ligera) sobre carga máxima en este movimiento.";
+      s.notas_validador = [...(s.notas_validador||[]), "[002-Lumbar]: Hay una molestia lumbar activa registrada — prioriza variantes conservadoras (RDL, técnica ligera) sobre carga máxima en este movimiento."];
     }
   });
 }
@@ -39,7 +39,7 @@ function regla003IntensidadConsecutiva(ctx: ContextoValidacion) {
   ctx.sesiones.forEach((s: any, idx: number) => {
     const anterior = ctx.sesiones[idx - 1];
     if (anterior && /Z4|Z5|RPE\s*[89]|AMRAP|WOD/i.test(s.descripcion || "") && /Z4|Z5|RPE\s*[89]|AMRAP|WOD/i.test(anterior.descripcion || "")) {
-      s.descripcion = (s.descripcion || "") + "\n\n⚠️ NOTA VALIDADOR [003-Intensidad]: El día anterior también fue de alta intensidad — vigila señales de fatiga acumulada y ajusta si es necesario.";
+      s.notas_validador = [...(s.notas_validador||[]), "[003-Intensidad]: El día anterior también fue de alta intensidad — vigila señales de fatiga acumulada y ajusta si es necesario."];
     }
   });
 }
@@ -50,7 +50,7 @@ function regla004VolumenSemanal(ctx: ContextoValidacion) {
   const contarVolumen = (texto: string) => (texto.match(/\d+\s*x\s*\d+/g) || []).length;
   const volumenTotal = ctx.sesiones.reduce((acc: number, s: any) => acc + contarVolumen(s.descripcion || ""), 0);
   if (ctx.esDeload && volumenTotal > 25) {
-    ctx.sesiones[0].descripcion = (ctx.sesiones[0].descripcion || "") + `\n\n⚠️ NOTA VALIDADOR [004-Volumen]: El volumen total estimado de la semana (${volumenTotal} bloques series×reps) parece alto para una semana deload — revisa si corresponde reducirlo.`;
+    ctx.sesiones[0].notas_validador = [...(ctx.sesiones[0].notas_validador||[]), `[004-Volumen]: El volumen total estimado de la semana (${volumenTotal} bloques series×reps) parece alto para una semana deload — revisa si corresponde reducirlo.`];
   }
 }
 
@@ -62,7 +62,7 @@ function regla005ProgresionCargas(ctx: ContextoValidacion) {
       const max = Math.max(...pesos);
       const min = Math.min(...pesos);
       if (max > min * 1.5 && max - min > 30) {
-        s.descripcion = (s.descripcion || "") + `\n\n⚠️ NOTA VALIDADOR [005-Progresion]: Se detectan cargas muy dispares en la misma sesión (${min}kg a ${max}kg) — verifica que no sea un salto de progresión irreal.`;
+        s.notas_validador = [...(s.notas_validador||[]), `[005-Progresion]: Se detectan cargas muy dispares en la misma sesión (${min}kg a ${max}kg) — verifica que no sea un salto de progresión irreal.`];
       }
     }
   });
@@ -76,7 +76,7 @@ function regla006Recuperacion(ctx: ContextoValidacion) {
   if (!recuperacionBaja) return;
   ctx.sesiones.forEach((s: any, idx: number) => {
     if (idx === 0 && /VO2max|Z5|sprint/i.test(s.descripcion || "")) {
-      s.descripcion = (s.descripcion || "") + "\n\n⚠️ NOTA VALIDADOR [006-Recuperacion]: Los últimos indicadores de recuperación (HRV/sueño) están bajos — considera reducir la intensidad de esta sesión si persiste el estado al llegar el día.";
+      s.notas_validador = [...(s.notas_validador||[]), "[006-Recuperacion]: Los últimos indicadores de recuperación (HRV/sueño) están bajos — considera reducir la intensidad de esta sesión si persiste el estado al llegar el día."];
     }
   });
 }
@@ -88,7 +88,7 @@ function regla007ConsistenciaBloque(ctx: ContextoValidacion) {
   if (!esObjetivoRecuperacion) return;
   ctx.sesiones.forEach((s: any) => {
     if (/hero\s+wod|benchmark|competicion|test\s+de\s+fuerza\s+maxima/i.test(s.descripcion || "")) {
-      s.descripcion = (s.descripcion || "") + "\n\n⚠️ NOTA VALIDADOR [007-ConsistenciaBloque]: El objetivo de esta semana es recuperación, pero esta sesión parece de alta exigencia — verifica que sea coherente con el bloque.";
+      s.notas_validador = [...(s.notas_validador||[]), "[007-ConsistenciaBloque]: El objetivo de esta semana es recuperación, pero esta sesión parece de alta exigencia — verifica que sea coherente con el bloque."];
     }
   });
 }
@@ -102,7 +102,7 @@ function regla008ConsistenciaPlanner(ctx: ContextoValidacion) {
     const tipoPlaneado = (planeada.tipo || "").toLowerCase();
     const tipoReal = (s.tipo || "").toLowerCase();
     if (tipoPlaneado && tipoReal && tipoPlaneado !== tipoReal && tipoPlaneado !== "otro") {
-      s.descripcion = (s.descripcion || "") + `\n\n⚠️ NOTA VALIDADOR [008-ConsistenciaPlanner]: El planificador había decidido tipo "${tipoPlaneado}" para este día, pero la sesión generada es de tipo "${tipoReal}" — verifica coherencia.`;
+      s.notas_validador = [...(s.notas_validador||[]), `[008-ConsistenciaPlanner]: El planificador había decidido tipo "${tipoPlaneado}" para este día, pero la sesión generada es de tipo "${tipoReal}" — verifica coherencia.`];
     }
   });
 }
@@ -113,7 +113,7 @@ function regla009AthleteDevelopment(ctx: ContextoValidacion) {
   if (!debilidadPrioritaria) return;
   const algunaSesionLaTrabaja = ctx.sesiones.some((s: any) => s.debilidad_relacionada === debilidadPrioritaria);
   if (!algunaSesionLaTrabaja && ctx.sesiones.length > 0) {
-    ctx.sesiones[0].descripcion = (ctx.sesiones[0].descripcion || "") + `\n\n⚠️ NOTA VALIDADOR [009-AthleteDevelopment]: La debilidad prioritaria "${debilidadPrioritaria}" no aparece trabajada en ninguna sesión de esta semana — considera incluirla.`;
+    ctx.sesiones[0].notas_validador = [...(ctx.sesiones[0].notas_validador||[]), `[009-AthleteDevelopment]: La debilidad prioritaria "${debilidadPrioritaria}" no aparece trabajada en ninguna sesión de esta semana — considera incluirla.`];
   }
 }
 
@@ -132,7 +132,7 @@ function regla010RepeticionExcesiva(ctx: ContextoValidacion) {
     if (count >= 4) {
       const primeraSesion = ctx.sesiones.find((s: any) => extraerEjercicioPrincipal(s.descripcion || "") === ejercicio);
       if (primeraSesion) {
-        primeraSesion.descripcion = (primeraSesion.descripcion || "") + `\n\n⚠️ NOTA VALIDADOR [010-Repeticion]: "${ejercicio}" aparece ${count} veces esta semana — verifica que haya suficiente variedad de estímulos.`;
+        primeraSesion.notas_validador = [...(primeraSesion.notas_validador||[]), `[010-Repeticion]: "${ejercicio}" aparece ${count} veces esta semana — verifica que haya suficiente variedad de estímulos.`];
       }
     }
   });

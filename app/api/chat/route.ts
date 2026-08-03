@@ -1218,14 +1218,19 @@ ESPECIALIDAD: ${usuarioBuilder?.especialidad || usuarioBuilder?.categoria}
 MARCAS DEL ATLETA: ${JSON.stringify(usuarioBuilder?.marcas_especificas || {})}
 ${debilidadInfo ? `DEBILIDAD A TRABAJAR HOY: ${debilidadInfo.nombre_visible} — ${debilidadInfo.diagnostico}` : ""}
 
+IMPORTANTE — CONCISION: la descripcion es para que el atleta la lea en su movil antes de entrenar.
+Se CONCISO. Evita explicaciones extensas, tempos detallados innecesarios, o justificaciones largas.
+Cada bloque (Calentamiento/Principal/Vuelta a la calma) en 2-4 lineas maximo. Ejercicios con series/reps/carga
+de forma clara y directa, sin desarrollar cada detalle tecnico salvo que sea imprescindible para ejecutar bien.
+
 Responde SOLO con este JSON, sin texto adicional ni markdown:
-{"titulo":"título breve y claro","por_que":"UNA frase explicando el propósito de esta sesión concreta","descripcion":"SESIÓN COMPLETA: Calentamiento: X. Bloque principal: Y (series, reps, intensidad, zonas FC si aplica). Vuelta a la calma: Z. Notas técnicas: W.","debilidad_relacionada":${debilidadInfo ? `"${debilidadInfo.nombre_visible}"` : "null"}}`;
+{"titulo":"título breve y claro","por_que":"UNA frase corta explicando el propósito de esta sesión concreta","descripcion":"Calentamiento: [breve]. Bloque principal: [ejercicios con series/reps/carga, conciso]. Vuelta a la calma: [breve].","debilidad_relacionada":${debilidadInfo ? `"${debilidadInfo.nombre_visible}"` : "null"}}`;
 
     try {
       const builderRes = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1500, messages: [{ role: "user", content: builderPrompt }] }),
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 900, messages: [{ role: "user", content: builderPrompt }] }),
       });
       const builderData = await builderRes.json();
       const builderTexto = builderData.content?.map((b: any) => b.text || "").join("") || "{}";

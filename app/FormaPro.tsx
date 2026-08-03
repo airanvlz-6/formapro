@@ -809,27 +809,31 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     if(!plannerRes?.ok) { console.log("ORCHESTRATOR: FALLO en Week Planner, abortando"); return null; }
     const estructura=plannerRes.estructura;
 
-    // Paso 3: Session Builder, una llamada por dia
-    console.log("ORCHESTRATOR Paso 3 — Session Builder: construyendo", (estructura.sessions||[]).length, "dias");
-    const sesionesCompletas:any[]=[];
-    for(const diaEstructura of estructura.sessions||[]){
-      if(diaEstructura.tipo==="descanso"){
-        console.log(`ORCHESTRATOR Paso 3 — ${diaEstructura.dia}: descanso, sin llamada al builder`);
-        sesionesCompletas.push({dia:diaEstructura.dia,tipo:"descanso",titulo:"Descanso",por_que:"Recuperación programada",descripcion:"Día de descanso — prioriza sueño, hidratación y nutrición."});
-        continue;
-      }
-      console.log(`ORCHESTRATOR Paso 3 — ${diaEstructura.dia}: construyendo sesion tipo ${diaEstructura.tipo}...`);
-      const builderRes=await apiCall({action:"construir_sesion_dia",codigo:codigoUsuario,datos:{
-        dia:diaEstructura.dia,
-        tipo:diaEstructura.tipo,
-        titulo_breve:diaEstructura.titulo_breve,
-        analisis,
-        debilidad_relacionada:analisis.debilidad_prioritaria
-      }});
-      console.log(`ORCHESTRATOR Paso 3 — ${diaEstructura.dia}: resultado:`, JSON.stringify(builderRes));
-      if(builderRes?.ok) sesionesCompletas.push(builderRes.sesion);
-      else console.log(`ORCHESTRATOR Paso 3 — ${diaEstructura.dia}: FALLO, dia omitido`);
-    }
+    // Paso 3: Session Builder, TODAS las llamadas en PARALELO (Promise.all) en vez de secuencial.
+    // Reduce el tiempo total de ~7x30s (210s) a ~30-40s, sin cambiar la arquitectura.
+    console.log("ORCHESTRATOR Paso 3 — Session Builder: construyendo", (estructura.sessions||[]).length, "dias EN PARALELO");
+    const diasAConstruir=(estructura.sessions||[]).filter((d:any)=>d.tipo!=="descanso");
+    const diasDescanso=(estructura.sessions||[]).filter((d:any)=>d.tipo==="descanso");
+
+    const resultadosParalelos=await Promise.all(
+      diasAConstruir.map((diaEstructura:any)=>
+        apiCall({action:"construir_sesion_dia",codigo:codigoUsuario,datos:{
+          dia:diaEstructura.dia,
+          tipo:diaEstructura.tipo,
+          titulo_breve:diaEstructura.titulo_breve,
+          analisis,
+          debilidad_relacionada:analisis.debilidad_prioritaria
+        }}).then((res:any)=>{
+          console.log(`ORCHESTRATOR Paso 3 — ${diaEstructura.dia}: resultado:`, JSON.stringify(res));
+          return res;
+        })
+      )
+    );
+
+    const sesionesCompletas:any[]=[
+      ...resultadosParalelos.filter((r:any)=>r?.ok).map((r:any)=>r.sesion),
+      ...diasDescanso.map((d:any)=>({dia:d.dia,tipo:"descanso",titulo:"Descanso",por_que:"Recuperación programada",descripcion:"Día de descanso — prioriza sueño, hidratación y nutrición."}))
+    ];
     console.log("ORCHESTRATOR: sesiones completas construidas:", sesionesCompletas.length, "de 7 esperadas");
 
     // FORGE SCIENTIFIC VALIDATOR — biblioteca de 10 reglas deterministas, corrige sesiones antes de guardar

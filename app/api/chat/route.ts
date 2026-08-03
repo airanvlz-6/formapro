@@ -1323,7 +1323,7 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
 
   if (action === "construir_sesion_dia") {
     // FORGE ORCHESTRATOR — Paso 3: Session Builder. Genera el contenido COMPLETO de UN solo dia.
-    const { dia, tipo, titulo_breve, analisis: analisisSesion, debilidad_relacionada, focus, volume, intensity, conditioning, diaAnterior, diaSiguiente } = datos;
+    const { dia, tipo, titulo_breve, analisis: analisisSesion, debilidad_relacionada, focus, volume, intensity, conditioning, diaAnterior, diaSiguiente, trabaja_debilidad } = datos;
     const { data: usuarioBuilder } = await supabase.from("usuarios").select("especialidad,categoria,perfil,marcas_especificas,athlete_development").eq("codigo", codigo).single();
 
     const debilidadInfo = (usuarioBuilder?.athlete_development || []).find((d: any) => d.nombre_visible === debilidad_relacionada);
@@ -1390,7 +1390,11 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
       const sesionCompleta = JSON.parse(builderMatch[0]);
       // Ensamblar los campos separados en la descripcion final con separacion clara de bloques
       const descripcionEnsamblada = `**Calentamiento**\n${sesionCompleta.calentamiento || ""}\n\n**Bloque principal**\n${sesionCompleta.bloque_principal || ""}\n\n**Vuelta a la calma**\n${sesionCompleta.vuelta_calma || ""}`;
-      return NextResponse.json({ ok: true, sesion: { dia, tipo, titulo: sesionCompleta.titulo, por_que: sesionCompleta.por_que, descripcion: descripcionEnsamblada, debilidad_relacionada: sesionCompleta.debilidad_relacionada } });
+      // FIX DETERMINISTICO: el campo debilidad_relacionada NUNCA lo decide el LLM. Se deriva
+      // exclusivamente de "trabaja_debilidad" que ya decidio el Blueprint — nunca del criterio libre
+      // del Session Builder, evitando incoherencias semanticas para Discovery/Analytics futuros.
+      const debilidadFinal = trabaja_debilidad === true ? (debilidad_relacionada || null) : null;
+      return NextResponse.json({ ok: true, sesion: { dia, tipo, titulo: sesionCompleta.titulo, por_que: sesionCompleta.por_que, descripcion: descripcionEnsamblada, debilidad_relacionada: debilidadFinal } });
     } catch (err: any) {
       return NextResponse.json({ error: "Error en Session Builder: " + err.message }, { status: 500 });
     }

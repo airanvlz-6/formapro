@@ -878,6 +878,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
           conditioning:diaEstructura.conditioning,
           analisis,
           debilidad_relacionada:analisis.debilidad_prioritaria,
+          trabaja_debilidad:diaEstructura.trabaja_debilidad===true,
           diaAnterior,
           diaSiguiente
         }}).then((res:any)=>{

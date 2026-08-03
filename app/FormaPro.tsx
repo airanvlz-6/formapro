@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef, useEffect } from "react";
 import { aplicarTodasLasReglas } from "@/lib/validators/scientificRules";
-import { validarIntegridadSemana } from "@/lib/validators/weekIntegrityValidator";
+import { validarIntegridadSemana, validarBlueprintDisponibilidad } from "@/lib/validators/weekIntegrityValidator";
 
 const C = {
   bg: "#0D0D0D", card: "#1A1A1A", ink: "#F0EDE8", muted: "#9A9590",
@@ -809,6 +809,25 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     console.log("ORCHESTRATOR Paso 2 — Week Planner: resultado:", JSON.stringify(plannerRes));
     if(!plannerRes?.ok) { console.log("ORCHESTRATOR: FALLO en Week Planner, abortando"); return null; }
     const estructura=plannerRes.estructura;
+
+    // FORGE WEEK BLUEPRINT — validacion TEMPRANA de disponibilidad a nivel de estructura,
+    // ANTES de gastar ninguna llamada al Session Builder. Corrige el "tipo" del Blueprint
+    // directamente si hay violaciones — mucho mas barato que detectar y regenerar despues.
+    const distribucionParaValidar=(()=>{
+      try{ return typeof distribucionSemanal==="string"?JSON.parse(distribucionSemanal):distribucionSemanal; }
+      catch{ return null; }
+    })();
+    const validacionBlueprint=validarBlueprintDisponibilidad(estructura.sessions||[], distribucionParaValidar);
+    console.log("BLUEPRINT: validacion temprana de disponibilidad:", JSON.stringify(validacionBlueprint));
+    if(!validacionBlueprint.valido){
+      validacionBlueprint.correcciones.forEach(({dia, tipoCorrecto})=>{
+        const diaEnEstructura=(estructura.sessions||[]).find((d:any)=>d.dia===dia);
+        if(diaEnEstructura){
+          console.log(`BLUEPRINT: corrigiendo ${dia} de "${diaEnEstructura.tipo}" a "${tipoCorrecto}"`);
+          diaEnEstructura.tipo=tipoCorrecto;
+        }
+      });
+    }
 
     // FIX: preservar dias que YA tienen sesion completada en el plan actual de esta semana,
     // en vez de regenerarlos y perder/duplicar lo que el atleta ya reporto.

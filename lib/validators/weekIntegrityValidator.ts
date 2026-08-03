@@ -83,6 +83,39 @@ function verificarVariedad(sesiones: SesionSemana[]): { violaciones: string[]; d
   return { violaciones, diasCorregir };
 }
 
+// Regla de Blueprint — validacion TEMPRANA a nivel de estructura, ANTES de construir sesiones completas.
+// Corrige el Blueprint (solo tipo/dia) antes de gastar 7 llamadas al Session Builder.
+export function validarBlueprintDisponibilidad(blueprint: { dia: string; tipo: string; [k: string]: any }[], distribucion: DistribucionSemanal | null): { valido: boolean; correcciones: { dia: string; tipoCorrecto: string }[] } {
+  const correcciones: { dia: string; tipoCorrecto: string }[] = [];
+  if (!distribucion) return { valido: true, correcciones };
+
+  const MAPEO_TIPO: Record<string, string[]> = {
+    box: ["box"],
+    pista: ["carrera", "carrera_series", "carrera_larga", "intervalos"],
+    carrera: ["carrera", "carrera_series", "carrera_larga", "intervalos"],
+    gimnasticos: ["gimnasticos", "fuerza"],
+    descanso: ["descanso"]
+  };
+
+  Object.entries(distribucion).forEach(([clave, dias]) => {
+    if (clave === "observaciones" || !Array.isArray(dias)) return;
+    const tipoCorrecto = clave === "box" ? "box" : clave === "pista" ? "carrera" : clave;
+    dias.forEach((diaEsperado: string) => {
+      const diaNorm = normalizarDia(diaEsperado);
+      const diaBlueprint = blueprint.find(d => normalizarDia(d.dia) === diaNorm);
+      if (!diaBlueprint) return;
+      const tiposEsperados = MAPEO_TIPO[clave.toLowerCase()] || [clave.toLowerCase()];
+      const tipoReal = (diaBlueprint.tipo || "").toLowerCase();
+      const cumple = tiposEsperados.some(t => tipoReal.includes(t) || t.includes(tipoReal));
+      if (!cumple) {
+        correcciones.push({ dia: diaBlueprint.dia, tipoCorrecto });
+      }
+    });
+  });
+
+  return { valido: correcciones.length === 0, correcciones };
+}
+
 // Punto de entrada unico: aplica todas las reglas de integridad semanal
 export function validarIntegridadSemana(sesiones: SesionSemana[], distribucionSemanal: string | DistribucionSemanal | null): ResultadoIntegridad {
   let distribucionParsed: DistribucionSemanal | null = null;

@@ -1178,17 +1178,19 @@ ${usuarioPlanner?.distribucion_semanal || "sin restricciones especificadas, asum
 
 ESPECIALIDAD: ${usuarioPlanner?.especialidad || usuarioPlanner?.categoria}
 
-Responde SOLO con este JSON, sin texto adicional ni markdown, con los 7 días (lunes a domingo). Para cada
-dia, ademas de tipo y titulo, define una INTENCION breve (focus, volumen, intensidad relativa, y si lleva
-condicionamiento metabolico) — esto es SOLO la intencion, NO el contenido detallado de la sesion:
-{"sessions":[{"dia":"lunes","tipo":"carrera|box|fuerza|descanso|otro","titulo_breve":"3-5 palabras describiendo la sesion","focus":"movimiento o cualidad principal (ej: Snatch, resistencia aerobica, tren superior)","volume":"bajo|medio|alto","intensity":"rango % o descripcion breve (ej: 75-80%25 RM, conversacional)","conditioning":"ninguno|corto|largo (si lleva metcon/wod al final)"},{"dia":"martes",...},...]}
-Respeta la disponibilidad indicada. Si un día no tiene sesión, usa tipo "descanso" (sin necesidad de focus/volume/intensity/conditioning).`;
+Responde SOLO con este JSON valido, sin texto adicional ni markdown, con los 7 dias (lunes a domingo). Para
+cada dia, ademas de tipo y titulo, define una INTENCION breve (focus, volumen, intensidad relativa, y si
+lleva condicionamiento metabolico) — esto es SOLO la intencion, NO el contenido detallado de la sesion.
+IMPORTANTE: en el campo intensity, si usas un rango de porcentaje escribelo como texto simple sin simbolo
+de porcentaje literal (ej: "75 a 80 por ciento RM" o "conversacional Z2"), para evitar romper el formato JSON.
+{"sessions":[{"dia":"lunes","tipo":"carrera|box|fuerza|descanso|otro","titulo_breve":"3-5 palabras","focus":"movimiento o cualidad principal","volume":"bajo|medio|alto","intensity":"descripcion breve sin simbolo %","conditioning":"ninguno|corto|largo"},{"dia":"martes","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"..."},{"dia":"miercoles","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"..."},{"dia":"jueves","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"..."},{"dia":"viernes","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"..."},{"dia":"sabado","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"..."},{"dia":"domingo","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"..."}]}
+Respeta la disponibilidad indicada. Si un dia no tiene sesion, usa tipo "descanso" (sin necesidad de focus/volume/intensity/conditioning).`;
 
     try {
       const plannerRes = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 500, messages: [{ role: "user", content: plannerPrompt }] }),
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 900, messages: [{ role: "user", content: plannerPrompt }] }),
       });
       const plannerData = await plannerRes.json();
       const plannerTexto = plannerData.content?.map((b: any) => b.text || "").join("") || "{}";

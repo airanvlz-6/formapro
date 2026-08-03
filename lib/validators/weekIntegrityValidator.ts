@@ -116,6 +116,70 @@ export function validarBlueprintDisponibilidad(blueprint: { dia: string; tipo: s
   return { valido: correcciones.length === 0, correcciones };
 }
 
+// FORGE BLUEPRINT ACCEPTANCE VALIDATOR — se ejecuta ANTES de construir ninguna sesion completa.
+// Verifica el Blueprint (dias + estrategia), no sesiones. Si falla, BLOQUEA — no corrige, no continua.
+// Esto evita gastar 7 llamadas al Session Builder sobre una semana que ya nacio mal disenada.
+interface BlueprintDia {
+  dia: string;
+  tipo: string;
+  intensity?: string;
+  trabaja_debilidad?: boolean;
+  [k: string]: any;
+}
+interface WeeklyStrategy {
+  adaptacion_principal?: string;
+  criterio_general?: string;
+  dias_debilidad_prioritaria?: number;
+  [k: string]: any;
+}
+interface ResultadoAceptacion {
+  aceptado: boolean;
+  motivos: string[];
+}
+
+export function validateBlueprint(sessions: BlueprintDia[], strategy: WeeklyStrategy | null, distribucion: DistribucionSemanal | null): ResultadoAceptacion {
+  const motivos: string[] = [];
+
+  // 1. Disponibilidad debe ser perfecta
+  const validacionDisp = validarBlueprintDisponibilidad(sessions, distribucion);
+  if (!validacionDisp.valido) {
+    motivos.push(`Disponibilidad no respetada en: ${validacionDisp.correcciones.map(c => c.dia).join(", ")}`);
+  }
+
+  // 2. La debilidad prioritaria no debe monopolizar (usa el criterio que el propio modelo declaro,
+  // no un numero fijo — solo verifica que el resultado coincida con lo que el modelo dijo que haria)
+  const diasQueTrabajanDebilidad = sessions.filter(s => s.trabaja_debilidad === true).length;
+  if (strategy?.dias_debilidad_prioritaria !== undefined && diasQueTrabajanDebilidad !== strategy.dias_debilidad_prioritaria) {
+    motivos.push(`El Blueprint declaro trabajar la debilidad ${strategy.dias_debilidad_prioritaria} dias pero realmente la asigna a ${diasQueTrabajanDebilidad} dias — incoherencia interna`);
+  }
+  if (diasQueTrabajanDebilidad >= 6) {
+    motivos.push(`La debilidad prioritaria monopoliza ${diasQueTrabajanDebilidad} de 7 dias, sin importar lo declarado en la estrategia`);
+  }
+
+  // 3. No debe haber mas de 2 dias consecutivos de intensidad maxima sin descanso/baja intermedio
+  const esAltaIntensidad = (intensity?: string) => /8[5-9]|9[0-9]|alta|maxima|max/i.test(intensity || "");
+  let consecutivosAltos = 0;
+  for (const s of sessions) {
+    if (s.tipo === "descanso") { consecutivosAltos = 0; continue; }
+    if (esAltaIntensidad(s.intensity)) {
+      consecutivosAltos++;
+      if (consecutivosAltos > 2) {
+        motivos.push(`Mas de 2 dias consecutivos de intensidad alta sin descanso intermedio (detectado en ${s.dia})`);
+        break;
+      }
+    } else {
+      consecutivosAltos = 0;
+    }
+  }
+
+  // 4. Debe existir un objetivo semanal explicito y coherente
+  if (!strategy?.adaptacion_principal) {
+    motivos.push("No existe una adaptacion principal declarada para la semana");
+  }
+
+  return { aceptado: motivos.length === 0, motivos };
+}
+
 // Punto de entrada unico: aplica todas las reglas de integridad semanal
 export function validarIntegridadSemana(sesiones: SesionSemana[], distribucionSemanal: string | DistribucionSemanal | null): ResultadoIntegridad {
   let distribucionParsed: DistribucionSemanal | null = null;

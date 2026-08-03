@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef, useEffect } from "react";
 import { aplicarTodasLasReglas } from "@/lib/validators/scientificRules";
-import { validarIntegridadSemana, validarBlueprintDisponibilidad } from "@/lib/validators/weekIntegrityValidator";
+import { validarIntegridadSemana, validarBlueprintDisponibilidad, validateBlueprint } from "@/lib/validators/weekIntegrityValidator";
 
 const C = {
   bg: "#0D0D0D", card: "#1A1A1A", ink: "#F0EDE8", muted: "#9A9590",
@@ -803,35 +803,44 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     if(!analyzerRes?.ok) { console.log("ORCHESTRATOR: FALLO en Block Analyzer, abortando"); return null; }
     const analisis=analyzerRes.analisis;
 
-    // Paso 2: Week Planner
-    console.log("ORCHESTRATOR Paso 2 — Week Planner: iniciando con analisis:", JSON.stringify(analisis));
-    const plannerRes=await apiCall({action:"planificar_semana",codigo:codigoUsuario,datos:{analisis}});
-    console.log("ORCHESTRATOR Paso 2 — Week Planner: resultado:", JSON.stringify(plannerRes));
-    if(!plannerRes?.ok) { console.log("ORCHESTRATOR: FALLO en Week Planner, abortando"); return null; }
-    const estructura=plannerRes.estructura;
-
-    // FORGE WEEK BLUEPRINT — validacion TEMPRANA de disponibilidad a nivel de estructura,
-    // ANTES de gastar ninguna llamada al Session Builder. Corrige el "tipo" del Blueprint
-    // directamente si hay violaciones — mucho mas barato que detectar y regenerar despues.
+    // Paso 2: Week Planner — genera Strategy + Blueprint. Si el Blueprint Acceptance Validator lo
+    // rechaza, se REGENERA COMPLETO (no se parchean dias sueltos) — maximo 2 reintentos.
     const distribucionParaValidar=(()=>{
       try{ return typeof distribucionSemanal==="string"?JSON.parse(distribucionSemanal):distribucionSemanal; }
       catch{ return null; }
     })();
-    const validacionBlueprint=validarBlueprintDisponibilidad(estructura.sessions||[], distribucionParaValidar);
-    console.log("BLUEPRINT: validacion temprana de disponibilidad:", JSON.stringify(validacionBlueprint));
-    if(!validacionBlueprint.valido){
-      validacionBlueprint.correcciones.forEach(({dia, tipoCorrecto})=>{
-        const diaEnEstructura=(estructura.sessions||[]).find((d:any)=>d.dia===dia);
-        if(diaEnEstructura){
-          console.log(`BLUEPRINT: corrigiendo ${dia} de "${diaEnEstructura.tipo}" a "${tipoCorrecto}"`);
-          diaEnEstructura.tipo=tipoCorrecto;
-        }
-      });
-    }
 
-    // NOTA: la distribucion de la debilidad prioritaria ya NO se fuerza con una regla fija (ej: "3 dias").
-    // El Week Planner decide con criterio, guiado por principios explicitos en su prompt (ver route.ts).
-    // El Week Integrity Validator evalua el resultado DESPUES, sin dictar el numero exacto de antemano.
+    let estructura:any=null;
+    let intentosBlueprint=0;
+    const MAX_INTENTOS_BLUEPRINT=2;
+    while(intentosBlueprint<MAX_INTENTOS_BLUEPRINT){
+      intentosBlueprint++;
+      console.log(`ORCHESTRATOR Paso 2 — Week Planner: intento ${intentosBlueprint} de generar Blueprint...`);
+      const plannerRes=await apiCall({action:"planificar_semana",codigo:codigoUsuario,datos:{analisis}});
+      console.log("ORCHESTRATOR Paso 2 — Week Planner: resultado:", JSON.stringify(plannerRes));
+      if(!plannerRes?.ok) { console.log("ORCHESTRATOR: FALLO en Week Planner, abortando"); return null; }
+
+      const candidato=plannerRes.estructura;
+      // FORGE BLUEPRINT ACCEPTANCE VALIDATOR — evalua el Blueprint COMPLETO antes de construir nada
+      const aceptacion=validateBlueprint(candidato.sessions||[], candidato.strategy||null, distribucionParaValidar);
+      console.log("BLUEPRINT ACCEPTANCE:", JSON.stringify(aceptacion));
+
+      if(aceptacion.aceptado){
+        estructura=candidato;
+        break;
+      }
+      console.log(`BLUEPRINT RECHAZADO (intento ${intentosBlueprint}):`, aceptacion.motivos.join(" | "));
+      if(intentosBlueprint>=MAX_INTENTOS_BLUEPRINT){
+        // Ultimo recurso: usar el candidato de todos modos pero corrigiendo disponibilidad puntualmente
+        console.log("BLUEPRINT: maximo de reintentos alcanzado, usando ultimo candidato con correccion de disponibilidad");
+        const validacionDisp=validarBlueprintDisponibilidad(candidato.sessions||[], distribucionParaValidar);
+        validacionDisp.correcciones.forEach(({dia, tipoCorrecto}:{dia:string,tipoCorrecto:string})=>{
+          const diaEnEstructura=(candidato.sessions||[]).find((d:any)=>d.dia===dia);
+          if(diaEnEstructura) diaEnEstructura.tipo=tipoCorrecto;
+        });
+        estructura=candidato;
+      }
+    }
 
     // FIX: preservar dias que YA tienen sesion completada en el plan actual de esta semana,
     // en vez de regenerarlos y perder/duplicar lo que el atleta ya reporto.

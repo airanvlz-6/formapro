@@ -821,6 +821,10 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
           dia:diaEstructura.dia,
           tipo:diaEstructura.tipo,
           titulo_breve:diaEstructura.titulo_breve,
+          focus:diaEstructura.focus,
+          volume:diaEstructura.volume,
+          intensity:diaEstructura.intensity,
+          conditioning:diaEstructura.conditioning,
           analisis,
           debilidad_relacionada:analisis.debilidad_prioritaria
         }}).then((res:any)=>{

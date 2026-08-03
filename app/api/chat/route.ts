@@ -1178,9 +1178,11 @@ ${usuarioPlanner?.distribucion_semanal || "sin restricciones especificadas, asum
 
 ESPECIALIDAD: ${usuarioPlanner?.especialidad || usuarioPlanner?.categoria}
 
-Responde SOLO con este JSON, sin texto adicional ni markdown, con los 7 días (lunes a domingo):
-{"sessions":[{"dia":"lunes","tipo":"carrera|box|fuerza|descanso|otro","titulo_breve":"3-5 palabras describiendo la sesion"},{"dia":"martes",...},...]}
-Respeta la disponibilidad indicada. Si un día no tiene sesión, usa tipo "descanso".`;
+Responde SOLO con este JSON, sin texto adicional ni markdown, con los 7 días (lunes a domingo). Para cada
+dia, ademas de tipo y titulo, define una INTENCION breve (focus, volumen, intensidad relativa, y si lleva
+condicionamiento metabolico) — esto es SOLO la intencion, NO el contenido detallado de la sesion:
+{"sessions":[{"dia":"lunes","tipo":"carrera|box|fuerza|descanso|otro","titulo_breve":"3-5 palabras describiendo la sesion","focus":"movimiento o cualidad principal (ej: Snatch, resistencia aerobica, tren superior)","volume":"bajo|medio|alto","intensity":"rango % o descripcion breve (ej: 75-80%25 RM, conversacional)","conditioning":"ninguno|corto|largo (si lleva metcon/wod al final)"},{"dia":"martes",...},...]}
+Respeta la disponibilidad indicada. Si un día no tiene sesión, usa tipo "descanso" (sin necesidad de focus/volume/intensity/conditioning).`;
 
     try {
       const plannerRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -1203,16 +1205,25 @@ Respeta la disponibilidad indicada. Si un día no tiene sesión, usa tipo "desca
 
   if (action === "construir_sesion_dia") {
     // FORGE ORCHESTRATOR — Paso 3: Session Builder. Genera el contenido COMPLETO de UN solo dia.
-    const { dia, tipo, titulo_breve, analisis: analisisSesion, debilidad_relacionada } = datos;
+    const { dia, tipo, titulo_breve, analisis: analisisSesion, debilidad_relacionada, focus, volume, intensity, conditioning } = datos;
     const { data: usuarioBuilder } = await supabase.from("usuarios").select("especialidad,categoria,perfil,marcas_especificas,athlete_development").eq("codigo", codigo).single();
 
     const debilidadInfo = (usuarioBuilder?.athlete_development || []).find((d: any) => d.nombre_visible === debilidad_relacionada);
 
-    const builderPrompt = `Eres un constructor de sesiones de entrenamiento. Tu ÚNICA tarea es escribir el contenido COMPLETO Y DETALLADO de UNA sola sesión de entrenamiento.
+    // FORGE SESSION ENGINE (v1): el Session Builder ya no inventa la estructura desde cero.
+    // Recibe la INTENCION exacta que ya decidio el Week Planner y solo la desarrolla en detalle.
+    const builderPrompt = `Eres un constructor de sesiones de entrenamiento. Tu ÚNICA tarea es DESARROLLAR EN DETALLE
+la sesion segun la intencion ya decidida — NO inventes una estructura distinta, solo redacta el contenido
+especifico (ejercicios, series, reps, cargas) que cumpla exactamente esta intencion.
 
 DÍA: ${dia}
 TIPO DE SESIÓN: ${tipo}
 IDEA GENERAL: ${titulo_breve}
+INTENCION YA DECIDIDA (respeta esto, no la cambies):
+- Foco/movimiento principal: ${focus || "no especificado"}
+- Volumen: ${volume || "medio"}
+- Intensidad: ${intensity || "no especificada"}
+- Condicionamiento metabolico: ${conditioning || "ninguno"}
 CONTEXTO DEL BLOQUE: ${JSON.stringify(analisisSesion)}
 ESPECIALIDAD: ${usuarioBuilder?.especialidad || usuarioBuilder?.categoria}
 MARCAS DEL ATLETA: ${JSON.stringify(usuarioBuilder?.marcas_especificas || {})}

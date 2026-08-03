@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { render } from "@react-email/render";
 import { validateExtraction } from "@/lib/validators/extractionRules";
+import { buildCatalogoPrompt, validarCatalogoDisciplina } from "@/lib/sports/disciplineCatalog";
 import { buildAthleteKnowledge, knowledgeRouter, getObjectiveProgress } from "@/lib/knowledge/athleteKnowledge";
 import { getResponseMode, buildStaticResponse, getCapabilities, buildCapabilityInstruction } from "@/lib/response/responseEngine";
 import { sendEmail } from "@/lib/email/sendEmail";
@@ -1202,6 +1203,67 @@ Respeta la disponibilidad indicada. Si un dia no tiene sesion, usa tipo "descans
       return NextResponse.json({ ok: true, estructura: estructuraSemana });
     } catch (err: any) {
       return NextResponse.json({ error: "Error en Week Planner: " + err.message }, { status: 500 });
+    }
+  }
+
+  if (action === "regenerar_sesion_disciplina_forzada") {
+    // FORGE RECOVERY PIPELINE — accion EXCEPCIONAL, no parte del flujo normal. Su mision unica es
+    // recuperar una sesion que viola una restriccion canonica (disponibilidad). Ignora las debilidades
+    // detectadas en el analisis semanal (que pueden estar contaminando la generacion), pero SI mantiene
+    // fase/bloque/intensidad del ciclo, porque la sesion sigue perteneciendo al mismo bloque de entrenamiento.
+    const { dia, disciplinaForzada, tituloBreve, cicloActual: cicloRecibido } = datos;
+    const { data: usuarioBuilder2 } = await supabase.from("usuarios").select("especialidad,categoria,marcas_especificas,ciclo_actual").eq("codigo", codigo).single();
+    const cicloParaContexto = cicloRecibido || usuarioBuilder2?.ciclo_actual || {};
+
+    const catalogoPrompt = buildCatalogoPrompt(disciplinaForzada);
+
+    const forcedPrompt = `Eres un constructor de sesiones especializado EXCLUSIVAMENTE en la disciplina: ${disciplinaForzada.toUpperCase()}.
+
+DÍA: ${dia}
+IDEA GENERAL: ${tituloBreve || disciplinaForzada}
+ESPECIALIDAD DEL ATLETA: ${usuarioBuilder2?.especialidad || usuarioBuilder2?.categoria}
+MARCAS: ${JSON.stringify(usuarioBuilder2?.marcas_especificas || {})}
+FASE/BLOQUE ACTUAL (mantener coherencia con esto): ${JSON.stringify(cicloParaContexto)}
+
+${catalogoPrompt}
+
+IGNORA COMPLETAMENTE las debilidades detectadas en el analisis semanal previo. Mantén únicamente la
+disciplina obligatoria, la fase del bloque, y la intensidad correspondiente. No conviertas esta sesión
+en trabajo específico de ninguna debilidad — es una sesión pura de ${disciplinaForzada} dentro del bloque actual.
+
+Responde SOLO con este JSON, sin texto adicional ni markdown:
+{"titulo":"título breve y claro de ${disciplinaForzada}","por_que":"UNA frase corta","descripcion":"Calentamiento: [breve]. Bloque principal: [contenido de ${disciplinaForzada}, conciso]. Vuelta a la calma: [breve].","debilidad_relacionada":null}`;
+
+    try {
+      const forcedRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 800, messages: [{ role: "user", content: forcedPrompt }] }),
+      });
+      const forcedData = await forcedRes.json();
+      const forcedTexto = forcedData.content?.map((b: any) => b.text || "").join("") || "{}";
+      const forcedClean = forcedTexto.replace(/```json|```/g, "").trim();
+      const forcedMatch = forcedClean.match(/\{[\s\S]*\}/);
+      if (!forcedMatch) throw new Error("Regeneracion forzada no devolvio JSON valido");
+      let sesionForzada = JSON.parse(forcedMatch[0]);
+
+      const validacionCatalogo = validarCatalogoDisciplina(disciplinaForzada, sesionForzada.descripcion || "");
+      if (!validacionCatalogo.valido) {
+        console.error("REGENERACION FORZADA: violacion de catalogo detectada:", validacionCatalogo.terminosProhibidosEncontrados);
+      }
+
+      return NextResponse.json({
+        ok: true,
+        sesion: {
+          dia,
+          tipo: disciplinaForzada,
+          ...sesionForzada,
+          origen: "disciplina_forzada",
+          disciplina_verificada: validacionCatalogo.valido
+        }
+      });
+    } catch (err: any) {
+      return NextResponse.json({ error: "Error en regeneracion forzada: " + err.message }, { status: 500 });
     }
   }
 

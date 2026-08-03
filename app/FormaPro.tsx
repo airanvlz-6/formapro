@@ -898,16 +898,12 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
               }
             });
           }catch{}
-          const res=await apiCall({action:"construir_sesion_dia",codigo:codigoUsuario,datos:{
+          // FORGE RECOVERY PIPELINE — accion especializada con contexto aislado del analisis contaminado
+          const res=await apiCall({action:"regenerar_sesion_disciplina_forzada",codigo:codigoUsuario,datos:{
             dia:diaCorregir,
-            tipo:tipoForzado,
-            titulo_breve:estructuraDia.titulo_breve,
-            focus:estructuraDia.focus,
-            volume:estructuraDia.volume,
-            intensity:estructuraDia.intensity,
-            conditioning:estructuraDia.conditioning,
-            analisis,
-            debilidad_relacionada:null // se fuerza null para romper la monopolizacion de la debilidad
+            disciplinaForzada:tipoForzado,
+            tituloBreve:estructuraDia.titulo_breve,
+            cicloActual
           }});
           return res?.ok ? res.sesion : null;
         })

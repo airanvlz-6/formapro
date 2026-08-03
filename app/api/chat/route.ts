@@ -1126,14 +1126,18 @@ ${ultimos}`;
   if (action === "analizar_bloque_semana") {
     // FORGE ORCHESTRATOR — Paso 1: Block Analyzer. Solo decide estructura, no genera entrenamientos.
     const estado = await generarEstadoCanonico(supabase, codigo);
-    const { data: usuarioAnalyzer } = await supabase.from("usuarios").select("ciclo_actual,athlete_development,distribucion_semanal").eq("codigo", codigo).single();
+    const { data: usuarioAnalyzer } = await supabase.from("usuarios").select("ciclo_actual,athlete_development,distribucion_semanal,categoria,especialidad,objetivo_principal,perfil").eq("codigo", codigo).single();
 
     const debilidadesActivas = (usuarioAnalyzer?.athlete_development || []).filter((d: any) => d.estado !== "resuelta");
     const debilidadPrioritaria = debilidadesActivas.sort((a: any, b: any) => (b.prioridad === "alta" ? 1 : 0) - (a.prioridad === "alta" ? 1 : 0))[0];
 
+    // FIX CRITICO DE RAIZ: el Block Analyzer nunca recibia especialidad ni objetivo del atleta,
+    // generando estructuras genericas sin anclaje a la disciplina real (ej: CrossFit/halterofilia).
     const analyzerPrompt = `Eres un analizador de bloques de entrenamiento. Tu ÚNICA tarea es devolver un JSON pequeño describiendo la estructura de la PRÓXIMA semana. NO generes entrenamientos ni sesiones detalladas.
 
-CONTEXTO:
+CONTEXTO OBLIGATORIO — RESPETAR SIEMPRE:
+Categoría/especialidad del atleta: ${usuarioAnalyzer?.especialidad || usuarioAnalyzer?.categoria || "no especificada"} (la estructura semanal DEBE incluir las disciplinas propias de esta especialidad — si es hibrido/crossfit, incluye halterofilia y gimnasticos; si incluye running, incluye sesiones de carrera; etc.)
+Objetivo principal: ${JSON.stringify(usuarioAnalyzer?.objetivo_principal) || "no especificado"}
 Ciclo actual: ${JSON.stringify(estado.ciclo)}
 Debilidad prioritaria activa: ${debilidadPrioritaria ? debilidadPrioritaria.nombre_visible : "ninguna"}
 Disponibilidad: ${usuarioAnalyzer?.distribucion_semanal || "no especificada"}

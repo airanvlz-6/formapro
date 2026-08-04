@@ -347,6 +347,13 @@ async function forgeContextBuilder(supabase: any, codigo: string, eventoActivoAc
   const narrativaBloque = await buildBlockNarrative(supabase, codigo);
   partes.push(narrativaBloque);
 
+  // FORGE ATHLETE RESPONSE ENGINE — patrones de respuesta especificos y confirmados del atleta
+  // (que estimulos generan que efectos), para que el Coach pueda justificar decisiones con evidencia real.
+  const { data: patronesConfirmados } = await supabase.from("athlete_response_patterns").select("patron,categoria,confianza").eq("user_codigo", codigo).eq("activo", true).order("confianza", { ascending: false }).limit(5);
+  if (patronesConfirmados && patronesConfirmados.length > 0) {
+    partes.push(`PATRONES DE RESPUESTA CONFIRMADOS DE ESTE ATLETA (usa esto para justificar decisiones con evidencia real, nunca los inventes ni los ignores si son relevantes a la pregunta):\n${patronesConfirmados.map((p: any) => `- ${p.patron}`).join("\n")}`);
+  }
+
   // FORGE CONVERSATION MEMORY — hechos ya conocidos de HOY, evita preguntas/recomendaciones repetidas
   const facts = await buildConversationFacts(supabase, codigo);
   const instruccionFacts = buildConversationFactsInstruction(facts);
@@ -434,6 +441,83 @@ async function detectarCelebraciones(supabase: any, codigo: string): Promise<Cel
   }
 
   return celebraciones;
+}
+
+// FORGE ATHLETE RESPONSE ENGINE — a diferencia del Discovery Engine (patrones generales), este
+// componente busca correlaciones ESPECIFICAS entre estimulos concretos y respuesta del atleta:
+// que ejercicios/intensidades generan mejor adaptacion, cuales generan mas fatiga, como responde
+// el sueño al tipo de sesion previa, etc. Requiere evidencia real, nunca especula. Se ejecuta con
+// menor frecuencia que Discovery (necesita mas datos acumulados para ser fiable).
+async function ejecutarAthleteResponseEngine(supabase: any, apiKey: string, codigo: string): Promise<{ generado: boolean }> {
+  const { data: usuario } = await supabase.from("usuarios").select("workout_history,historial_fisiologico").eq("codigo", codigo).single();
+  const workoutHistory = (usuario?.workout_history || []).slice(-40);
+  const fisioHistory = (usuario?.historial_fisiologico || []).slice(-40);
+
+  if (workoutHistory.length < 10) {
+    return { generado: false }; // necesita suficiente historial para correlaciones fiables
+  }
+
+  const { data: patronesExistentes } = await supabase.from("athlete_response_patterns").select("patron").eq("user_codigo", codigo).eq("activo", true).limit(10);
+
+  const responsePrompt = `Eres el Forge Athlete Response Engine. Tu unica tarea es analizar datos reales de entrenamiento
+y fisiologia de un atleta buscando UNA correlacion especifica y verificable entre un ESTIMULO CONCRETO
+(un ejercicio, tipo de sesion, o patron de sueño) y la RESPUESTA del atleta (fatiga, calidad, recuperacion).
+
+NUNCA generes observaciones genericas tipo "entrenar es bueno para ti". Busca correlaciones ESPECIFICAS,
+por ejemplo: "las sesiones con [ejercicio X] a partir de [condicion Y] generan [efecto Z]".
+
+HISTORIAL DE ENTRENOS (hasta 40 ultimos):
+${JSON.stringify(workoutHistory.map((w: any) => ({ tipo: w.tipo, fecha: w.fecha, sensacion: w.sensacion, notas: (w.notas || "").substring(0, 150) })))}
+
+HISTORIAL FISIOLOGICO (hasta 40 ultimos dias):
+${JSON.stringify(fisioHistory)}
+
+PATRONES YA CONFIRMADOS ANTERIORMENTE (no repitas, busca uno DIFERENTE):
+${(patronesExistentes || []).map((p: any) => p.patron).join(" | ") || "ninguno todavia"}
+
+Si encuentras una correlacion especifica con al menos 3 puntos de evidencia real que la respalden, responde SOLO con este JSON:
+{"hay_patron": true, "patron": "frase corta y especifica del patron detectado, en tercera persona sobre el atleta", "categoria": "fatiga|recuperacion|rendimiento|sueno|tecnica", "puntos_evidencia": numero_real_de_puntos_que_lo_respaldan}
+
+Si NO hay evidencia suficientemente especifica y solida, responde SOLO con:
+{"hay_patron": false}`;
+
+  try {
+    const responseRes = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 350, messages: [{ role: "user", content: responsePrompt }] }),
+    });
+    const responseData = await responseRes.json();
+    const responseTexto = responseData.content?.map((b: any) => b.text || "").join("") || "{}";
+    const responseClean = responseTexto.replace(/```json|```/gi, "").trim();
+    const responseMatch = responseClean.match(/\{[\s\S]*\}/);
+    if (!responseMatch) return { generado: false };
+
+    const resultado = JSON.parse(responseMatch[0]);
+    if (!resultado.hay_patron || !resultado.patron) return { generado: false };
+
+    await supabase.from("athlete_response_patterns").insert({
+      user_codigo: codigo,
+      patron: resultado.patron,
+      categoria: resultado.categoria || "general",
+      confianza: resultado.puntos_evidencia >= 8 ? 85 : 60,
+      puntos_evidencia: resultado.puntos_evidencia || 3,
+      activo: true
+    });
+
+    // CONECTAR CON NIVEL DE CONOCIMIENTO REAL: cada patron confirmado con evidencia real
+    // (no solo texto extraido de conversacion) alimenta genuinamente la barra "Forge te conoce mejor".
+    const { data: usuarioAprendizajes } = await supabase.from("usuarios").select("aprendizajes_atleta").eq("codigo", codigo).single();
+    const aprendizajesActuales = usuarioAprendizajes?.aprendizajes_atleta || [];
+    const puntosPorEvidencia = resultado.puntos_evidencia >= 8 ? 5 : 3; // mas evidencia, mas puntos de conocimiento real
+    await supabase.from("usuarios").update({
+      aprendizajes_atleta: [...aprendizajesActuales, { texto: resultado.patron, categoria: resultado.categoria || "general", puntos: puntosPorEvidencia, origen: "athlete_response_engine" }]
+    }).eq("codigo", codigo);
+
+    return { generado: true };
+  } catch {
+    return { generado: false };
+  }
 }
 
 async function ejecutarDiscoveryEngine(supabase: any, apiKey: string, codigo: string): Promise<{ generado: boolean; nivel?: string }> {
@@ -1587,6 +1671,10 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
     // dispararse de forma independiente via la accion "ejecutar_discovery_engine"
     await ejecutarDiscoveryEngine(supabase, apiKey!, codigo);
 
+    // FORGE ATHLETE RESPONSE ENGINE — se ejecuta tambien al cerrar semana, buscando correlaciones
+    // especificas de respuesta del atleta (no patrones generales como Discovery)
+    await ejecutarAthleteResponseEngine(supabase, apiKey!, codigo);
+
     return NextResponse.json({ semanaCompleta: true, yaCerrada: false, weekStart: weekStartCierre, insightGenerado: true });
   }
 
@@ -1594,6 +1682,11 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
     // Permite disparar el Discovery Engine de forma independiente (no solo al cierre de semana),
     // por ejemplo tras varios entrenos reportados, para que Forge sorprenda con mas frecuencia.
     const resultado = await ejecutarDiscoveryEngine(supabase, apiKey!, codigo);
+    return NextResponse.json(resultado);
+  }
+
+  if (action === "ejecutar_athlete_response_engine") {
+    const resultado = await ejecutarAthleteResponseEngine(supabase, apiKey!, codigo);
     return NextResponse.json(resultado);
   }
 

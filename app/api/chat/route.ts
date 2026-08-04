@@ -884,6 +884,7 @@ ${ultimos}`;
         if (extracted.distribucion_semanal && extracted.distribucion_semanal !== "null" && extracted.distribucion_semanal !== "") {
           updates.distribucion_semanal = extracted.distribucion_semanal;
         }
+        let nuevoPrDetectado: { ejercicio: string; valor: string; mejora: string | null } | null = null;
         if (extracted.nueva_marca && extracted.nueva_marca !== "" && extracted.nueva_marca !== "vacío") {
           const histMarcas = usuarioData?.historial_marcas || [];
           const partes = extracted.nueva_marca.split(":");
@@ -897,10 +898,22 @@ ${ultimos}`;
               .replace(/\s+/g, "_");
             const valorNuevo = partes.slice(1).join(":").trim();
             const fechaHoy = new Date().toISOString().split('T')[0];
-            // Evitar duplicado exacto mismo ejercicio+fecha+valor
             const yaExiste = histMarcas.some((m:any) => m.ejercicio === ejercicioNormalizado && m.fecha === fechaHoy && m.valor === valorNuevo);
             if (!yaExiste) {
               updates.historial_marcas = [...histMarcas, { fecha: fechaHoy, ejercicio: ejercicioNormalizado, valor: valorNuevo }];
+              // FORGE CARDS — calcular mejora respecto a la marca anterior del mismo ejercicio para
+              // que el frontend pueda ofrecer generar la tarjeta compartible inmediatamente.
+              const marcasAnteriores = histMarcas.filter((m:any) => m.ejercicio === ejercicioNormalizado);
+              const marcaAnterior = marcasAnteriores[marcasAnteriores.length - 1];
+              let mejoraCalculada: string | null = null;
+              if (marcaAnterior) {
+                const numAnterior = parseFloat(marcaAnterior.valor);
+                const numNuevo = parseFloat(valorNuevo);
+                if (!isNaN(numAnterior) && !isNaN(numNuevo) && numNuevo > numAnterior) {
+                  mejoraCalculada = `${(numNuevo - numAnterior).toFixed(1)}`;
+                }
+              }
+              nuevoPrDetectado = { ejercicio: ejercicioNormalizado, valor: valorNuevo, mejora: mejoraCalculada };
             }
           }
         }
@@ -944,6 +957,11 @@ ${ultimos}`;
         }
         // Marcar el evento como ya extraido, iniciando ventana de correccion de 3 minutos
         await marcarEventoComoExtraido(supabase, apiKey!, codigo, true);
+        // FORGE CARDS — si se detecto un nuevo PR, lo devolvemos para que el frontend ofrezca
+        // generar la tarjeta compartible inmediatamente despues de reportar el entreno.
+        if (nuevoPrDetectado) {
+          return NextResponse.json({ ok: true, nuevoPrDetectado });
+        }
       } catch (e) {
         console.error("Error extraccion servidor:", e);
       }
@@ -1693,6 +1711,47 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
   if (action === "ejecutar_athlete_response_engine") {
     const resultado = await ejecutarAthleteResponseEngine(supabase, apiKey!, codigo);
     return NextResponse.json(resultado);
+  }
+
+  if (action === "generar_contexto_forge_card") {
+    // FORGE CARDS — genera la linea de contexto real (nunca inventada) para una tarjeta compartible.
+    // El tipo determina que datos reales se usan para fundamentar la frase.
+    const { tipoCard, datosCard } = datos;
+    const { data: usuarioCard } = await supabase.from("usuarios").select("workout_history,historial_marcas,block_week_summary,ciclo_actual").eq("codigo", codigo).single();
+    const { data: blockMemoryCard } = await supabase.from("block_week_summary").select("*").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(3);
+
+    let contextPrompt = "";
+    if (tipoCard === "nuevo_pr") {
+      contextPrompt = `El atleta acaba de lograr un nuevo PR: ${datosCard.ejercicio} ${datosCard.valor} (mejora de ${datosCard.mejora || "N/A"} respecto al anterior).
+Bloque actual: ${JSON.stringify(usuarioCard?.ciclo_actual)}
+Resumenes de semanas recientes del bloque: ${JSON.stringify(blockMemoryCard)}
+Escribe UNA frase corta (max 15 palabras) que conecte este PR con el progreso real del bloque. Ejemplo: "Este PR confirma la progresion prevista tras 6 semanas de trabajo". NO inventes datos que no esten arriba.`;
+    } else if (tipoCard === "semana_completada") {
+      contextPrompt = `El atleta completo ${datosCard.sesionesCompletadas}/${datosCard.sesionesTotales} sesiones esta semana.
+Bloque actual: ${JSON.stringify(usuarioCard?.ciclo_actual)}
+Escribe UNA frase corta (max 15 palabras) sobre lo que significa esta semana en el contexto del bloque. NO inventes datos.`;
+    } else if (tipoCard === "objetivo_conseguido") {
+      contextPrompt = `El atleta consiguio su objetivo: ${datosCard.objetivo}.
+Escribe UNA frase corta (max 15 palabras) celebrando este logro de forma especifica, sin generica motivacional vacia.`;
+    } else if (tipoCard === "racha") {
+      contextPrompt = `El atleta lleva ${datosCard.dias} dias consecutivos entrenando sin interrupcion.
+Escribe UNA frase corta (max 15 palabras) sobre esta constancia.`;
+    } else {
+      return NextResponse.json({ error: "tipoCard no reconocido" }, { status: 400 });
+    }
+
+    try {
+      const cardRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 100, messages: [{ role: "user", content: contextPrompt }] }),
+      });
+      const cardData = await cardRes.json();
+      const contexto = cardData.content?.map((b: any) => b.text || "").join("").trim() || "";
+      return NextResponse.json({ ok: true, contexto });
+    } catch (err: any) {
+      return NextResponse.json({ ok: true, contexto: "" }); // fallback silencioso, la card funciona sin contexto tambien
+    }
   }
 
   if (action === "verificar_persistencia_plan") {

@@ -1455,7 +1455,7 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
   if (action === "construir_sesion_dia") {
     // FORGE ORCHESTRATOR — Paso 3: Session Builder. Genera el contenido COMPLETO de UN solo dia.
     const { dia, tipo, titulo_breve, analisis: analisisSesion, debilidad_relacionada, focus, volume, intensity, conditioning, diaAnterior, diaSiguiente, trabaja_debilidad } = datos;
-    const { data: usuarioBuilder } = await supabase.from("usuarios").select("especialidad,categoria,perfil,marcas_especificas,athlete_development").eq("codigo", codigo).single();
+    const { data: usuarioBuilder } = await supabase.from("usuarios").select("especialidad,categoria,perfil,marcas_especificas,athlete_development,datos_entrenamiento").eq("codigo", codigo).single();
 
     const debilidadInfo = (usuarioBuilder?.athlete_development || []).find((d: any) => d.nombre_visible === debilidad_relacionada);
 
@@ -1481,6 +1481,11 @@ CONTEXTO DEL BLOQUE: ${JSON.stringify(analisisSesion)}
 ESPECIALIDAD: ${usuarioBuilder?.especialidad || usuarioBuilder?.categoria}
 MARCAS DEL ATLETA: ${JSON.stringify(usuarioBuilder?.marcas_especificas || {})}
 ${debilidadInfo ? `DEBILIDAD A TRABAJAR HOY: ${debilidadInfo.nombre_visible} — ${debilidadInfo.diagnostico}` : ""}
+
+ZONAS DE FRECUENCIA CARDIACA REALES DEL ATLETA (usar SIEMPRE estos rangos de pulsaciones exactas, NUNCA
+uses porcentajes de FCmax genericos como "70-80% FCmax" — el atleta necesita el rango de ppm directo):
+${JSON.stringify({z1: usuarioBuilder?.datos_entrenamiento?.z1_fc, z2: usuarioBuilder?.datos_entrenamiento?.z2_fc, z3: usuarioBuilder?.datos_entrenamiento?.z3_fc, z4: usuarioBuilder?.datos_entrenamiento?.z4_fc, z5: usuarioBuilder?.datos_entrenamiento?.z5_fc, fc_reposo: usuarioBuilder?.datos_entrenamiento?.fc_reposo, fc_maxima: usuarioBuilder?.datos_entrenamiento?.fc_maxima})}
+Si no hay dato para una zona especifica, no la menciones con numero — usa descripcion cualitativa (ej: "ritmo conversacional") en su lugar.
 
 ESTADO REAL RECIENTE DEL ATLETA (usar para evitar repetir estimulos o sobrecargar):
 Ultimas 5 sesiones: ${JSON.stringify(snapshot.ultimas_5_sesiones)}

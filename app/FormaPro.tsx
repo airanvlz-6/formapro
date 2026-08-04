@@ -861,9 +861,25 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
 
     // Paso 3: Session Builder, TODAS las llamadas en PARALELO (Promise.all) en vez de secuencial.
     // Reduce el tiempo total de ~7x30s (210s) a ~30-40s, sin cambiar la arquitectura.
+    // FIX: solo se construyen dias DESDE HOY en adelante (nunca dias pasados de la semana actual que
+    // no se llegaron a reportar) — cubre usuario nuevo a mitad de semana y regeneracion a mitad de semana.
+    const hoyParaFiltro=new Date();
+    const ORDEN_DIAS=["lunes","martes","miercoles","jueves","viernes","sabado","domingo"];
+    const normalizarDiaOrch=(d:string)=>(d||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+    const hoyOrchIdx=(hoyParaFiltro.getDay()||7)-1; // 0=lunes ... 6=domingo
+    const diasPasadosSinReportar=(estructura.sessions||[]).filter((d:any)=>{
+      const idxDia=ORDEN_DIAS.indexOf(normalizarDiaOrch(d.dia));
+      return idxDia<hoyOrchIdx && !diasYaCompletados.some((dc:any)=>normalizarDiaOrch(dc.dia)===normalizarDiaOrch(d.dia));
+    });
     console.log("ORCHESTRATOR Paso 3 — Session Builder: construyendo", (estructura.sessions||[]).length, "dias EN PARALELO");
-    const diasAConstruir=(estructura.sessions||[]).filter((d:any)=>d.tipo!=="descanso" && !diasYaCompletados.some((dc:any)=>dc.dia===d.dia));
-    const diasDescanso=(estructura.sessions||[]).filter((d:any)=>d.tipo==="descanso" && !diasYaCompletados.some((dc:any)=>dc.dia===d.dia));
+    const diasAConstruir=(estructura.sessions||[]).filter((d:any)=>{
+      const idxDia=ORDEN_DIAS.indexOf(normalizarDiaOrch(d.dia));
+      return d.tipo!=="descanso" && idxDia>=hoyOrchIdx && !diasYaCompletados.some((dc:any)=>normalizarDiaOrch(dc.dia)===normalizarDiaOrch(d.dia));
+    });
+    const diasDescanso=(estructura.sessions||[]).filter((d:any)=>{
+      const idxDia=ORDEN_DIAS.indexOf(normalizarDiaOrch(d.dia));
+      return d.tipo==="descanso" && idxDia>=hoyOrchIdx && !diasYaCompletados.some((dc:any)=>normalizarDiaOrch(dc.dia)===normalizarDiaOrch(d.dia));
+    });
 
     const todasLasSesionesOrden=estructura.sessions||[];
     const resultadosParalelos=await Promise.all(
@@ -894,7 +910,10 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     const sesionesCompletas:any[]=[
       ...diasYaCompletados,
       ...resultadosParalelos.filter((r:any)=>r?.ok).map((r:any)=>r.sesion),
-      ...diasDescanso.map((d:any)=>({dia:d.dia,tipo:"descanso",titulo:"Descanso",por_que:"Recuperación programada",descripcion:"Día de descanso — prioriza sueño, hidratación y nutrición."}))
+      ...diasDescanso.map((d:any)=>({dia:d.dia,tipo:"descanso",titulo:"Descanso",por_que:"Recuperación programada",descripcion:"Día de descanso — prioriza sueño, hidratación y nutrición."})),
+      // Dias pasados de esta semana sin reportar (ej: usuario nuevo que se registra un miercoles):
+      // no se inventan, se marcan simplemente como no disponibles para ese periodo.
+      ...diasPasadosSinReportar.map((d:any)=>({dia:d.dia,tipo:d.tipo,titulo:"Sin registrar",por_que:"Día anterior al inicio de esta planificación",descripcion:"No aplica — esta planificación comienza a partir de hoy.",completada:false}))
     ];
     console.log("ORCHESTRATOR: sesiones completas construidas:", sesionesCompletas.length, "de 7 esperadas");
 
@@ -963,19 +982,15 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
       console.log("WEEK INTEGRITY: dias regenerados:", regeneraciones.filter(Boolean).length);
     }
 
-    // FIX INTELIGENTE: si la semana ACTUAL ya tiene dias completados (el atleta ya empezo a vivirla),
-    // el Orchestrator trabaja sobre ESA semana (completando/corrigiendo lo que falta).
-    // Si la semana actual esta vacia o no existe, genera la SIGUIENTE (cierre normal de semana).
+    // SIEMPRE la semana ACTUAL (donde estamos hoy). El filtro de "dias a construir" (mas abajo, en el
+    // Paso 3) ya se encarga de generar solo desde HOY en adelante, respetando dias ya completados.
+    // Esto cubre correctamente: usuario nuevo (genera desde hoy hasta domingo), atleta a mitad de
+    // semana (genera solo los dias restantes), y cierre normal de semana completa.
     const hoy=new Date();
     const diaSem=hoy.getDay()||7;
     const lunesActual=new Date(hoy);
     lunesActual.setDate(hoy.getDate()-diaSem+1);
-    const weekStartActualCalc=lunesActual.toISOString().split('T')[0];
-    const weekStart=diasYaCompletados.length>0 ? weekStartActualCalc : (()=>{
-      const lunesProximaSemana=new Date(lunesActual);
-      lunesProximaSemana.setDate(lunesActual.getDate()+7);
-      return lunesProximaSemana.toISOString().split('T')[0];
-    })();
+    const weekStart=lunesActual.toISOString().split('T')[0];
     console.log("ORCHESTRATOR: dias ya completados esta semana =", diasYaCompletados.length, "→ generando para week_start:", weekStart);
 
     const planCompleto={

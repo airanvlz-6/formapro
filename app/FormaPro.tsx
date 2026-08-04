@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { aplicarTodasLasReglas } from "@/lib/validators/scientificRules";
 import { validarIntegridadSemana, validarBlueprintDisponibilidad, validateBlueprint } from "@/lib/validators/weekIntegrityValidator";
+import ForgeCardsGenerator from "@/components/ForgeCardsGenerator";
 
 const C = {
   bg: "#0D0D0D", card: "#1A1A1A", ink: "#F0EDE8", muted: "#9A9590",
@@ -733,6 +734,8 @@ const [mostrarCodigoReal,setMostrarCodigoReal]=useState(false);
 const [betaFounderInfo,setBetaFounderInfo]=useState<{numero:number;maxSlots:number;meses:number}|null>(null);
 const [estadoFounder,setEstadoFounder]=useState<any>(null);
 const [mostrarMasChat,setMostrarMasChat]=useState(false);
+const [forgeCardData,setForgeCardData]=useState<any>(null);
+const [prPendienteCompartir,setPrPendienteCompartir]=useState<{ejercicio:string;valor:string;mejora:string|null}|null>(null);
 const [historialMarcas,setHistorialMarcas]=useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
 const [analisisBloques,setAnalisisBloques]=useState<any[]>([]);
 const [athleteState,setAthleteState]=useState<Record<string,any>>({});
@@ -1584,7 +1587,12 @@ const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:build
       setHistorial(histFinal);
       if(hist.length>=20) compactarHistorial(hist);
       if(codigoUsuario){
-        apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histFinal}});
+        apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histFinal}}).then((resActualizar:any)=>{
+          // FORGE CARDS — si se detecto un nuevo PR en esta actualizacion, ofrecer compartirlo
+          if(resActualizar?.nuevoPrDetectado){
+            setPrPendienteCompartir(resActualizar.nuevoPrDetectado);
+          }
+        });
         // FIX CRITICO: esta verificacion solo existia en enviarSilencioso, nunca en enviar() (la funcion
         // principal usada en el 99% de los mensajes). Por eso el cierre de semana nunca se disparaba.
         if(!mostrarBotonNuevaSemana){
@@ -2799,6 +2807,41 @@ ${testStr}`}]});
             </>
           )}
         </div>
+      )}
+
+      {/* FORGE CARDS — banner para compartir un PR recien detectado */}
+      {prPendienteCompartir&&(
+        <div style={{position:"fixed",bottom:90,left:16,right:16,maxWidth:600,margin:"0 auto",background:"linear-gradient(135deg,#FF6B00,#c94f00)",borderRadius:16,padding:"14px 18px",zIndex:150,display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:"0 8px 24px rgba(255,107,0,0.35)"}}>
+          <div>
+            <p style={{color:"#fff",fontSize:13,fontWeight:700}}>🏆 ¡Nuevo PR detectado!</p>
+            <p style={{color:"#fff",fontSize:12,opacity:0.9}}>{prPendienteCompartir.ejercicio.replace(/_/g," ")}: {prPendienteCompartir.valor}</p>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={async()=>{
+              const nombreEjercicio=prPendienteCompartir.ejercicio.replace(/_/g," ").toUpperCase();
+              const resContexto=await apiCall({action:"generar_contexto_forge_card",codigo:codigoUsuario,datos:{tipoCard:"nuevo_pr",datosCard:{ejercicio:nombreEjercicio,valor:prPendienteCompartir.valor,mejora:prPendienteCompartir.mejora}}});
+              setForgeCardData({
+                achievementType:"pr",
+                titulo:nombreEjercicio,
+                valorPrincipal:prPendienteCompartir.valor,
+                detalle:prPendienteCompartir.mejora?`+${prPendienteCompartir.mejora} vs anterior`:undefined,
+                subtitulo:"Nuevo récord personal",
+                fecha:new Date().toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric"}).toUpperCase(),
+                contexto:resContexto?.contexto||undefined
+              });
+              setPrPendienteCompartir(null);
+            }} style={{background:"#fff",color:C.accent,border:"none",borderRadius:10,padding:"8px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              Compartir
+            </button>
+            <button onClick={()=>setPrPendienteCompartir(null)} style={{background:"rgba(255,255,255,0.2)",color:"#fff",border:"none",borderRadius:10,padding:"8px 10px",fontSize:12,cursor:"pointer"}}>
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {forgeCardData&&(
+        <ForgeCardsGenerator initialData={forgeCardData} onClose={()=>setForgeCardData(null)} />
       )}
 
       {/* Navegacion inferior fija, consistente con el resto de la app */}

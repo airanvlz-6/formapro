@@ -284,14 +284,15 @@ export default function Plan() {
               {sesionDetalle.descripcion&&(
                 <div style={{marginBottom:12}}>
                   {(()=>{
-                    // Normalizar: dividir por saltos de línea Y por patrones de bloque conocidos
+                    // Normalizar: dividir por saltos de línea Y por patrones de bloque conocidos.
+                    // Soporta AMBOS formatos: "Calentamiento:" (formato antiguo) y "**Calentamiento**" (nuevo, con asteriscos markdown)
                     let texto = sesionDetalle.descripcion;
-                    const patronesBloque = /(Calentamiento|Bloque principal|Bloque fuerza|Bloque técnica|Metcon|Vuelta a la calma|Enfriamiento|Notas técnicas|Notas|Objetivo)(\s*\([^)]*\))?:/gi;
+                    const patronesBloque = /\*?\*?(Calentamiento|Bloque principal|Bloque fuerza|Bloque técnica|Metcon|Vuelta a la calma|Enfriamiento|Notas técnicas|Notas|Objetivo)\*?\*?(\s*\([^)]*\))?:?/gi;
                     texto = texto.replace(patronesBloque, (match:string) => `\n\n${match}`);
                     const lineas = texto.split(/\n+/).filter((l:string)=>l.trim());
                     return lineas.map((linea:string,i:number)=>{
                       const t=linea.trim();
-                      const esEncabezado = /^(Calentamiento|Bloque principal|Bloque fuerza|Bloque técnica|Metcon|Vuelta a la calma|Enfriamiento|Notas técnicas|Notas|Objetivo)\s*(\([^)]*\))?:/i.test(t);
+                      const esEncabezado = /^\*?\*?(Calentamiento|Bloque principal|Bloque fuerza|Bloque técnica|Metcon|Vuelta a la calma|Enfriamiento|Notas técnicas|Notas|Objetivo)\*?\*?\s*(\([^)]*\))?:?$/i.test(t);
                       const esItem = /^[-.•]/.test(t) || /^[A-Z]\)/.test(t);
                       const limpio = t.replace(/^[-.•]\s*/,'').replace(/\*\*/g,'').replace(/^#+\s*/,'');
                       if(esEncabezado){

@@ -13,6 +13,32 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// FORGE BLOCK NARRATIVE — construye la secuencia completa de resumenes semanales del bloque ACTUAL
+// (no solo la ultima semana), para que el Coach pueda explicar decisiones con la historia real del
+// atleta ("la semana pasada bajaste calidad tecnica, por eso...") en vez de teoria generica.
+async function buildBlockNarrative(supabase: any, codigo: string): Promise<string> {
+  const { data: usuario } = await supabase.from("usuarios").select("ciclo_actual").eq("codigo", codigo).single();
+  const bloqueActual = usuario?.ciclo_actual?.bloque;
+  if (!bloqueActual) return "Sin bloque activo registrado.";
+
+  const { data: resumenes } = await supabase
+    .from("block_week_summary")
+    .select("*")
+    .eq("user_codigo", codigo)
+    .eq("bloque", bloqueActual)
+    .order("week_start", { ascending: true });
+
+  if (!resumenes || resumenes.length === 0) {
+    return `Bloque actual: ${bloqueActual}. Sin semanas previas registradas todavia en este bloque (primera semana o sin datos).`;
+  }
+
+  const lineas = resumenes.map((r: any) =>
+    `Semana ${r.semana_del_bloque}/${r.total_semanas_bloque}: objetivo "${r.objetivo_semanal}" — resultado ${r.resultado}, fatiga ${r.fatiga}, recuperacion ${r.recuperacion}. Adaptaciones: ${(r.adaptaciones_conseguidas || []).join(", ") || "ninguna"}. Pendiente: ${(r.pendiente || []).join(", ") || "nada"}.`
+  );
+
+  return `NARRATIVA DEL BLOQUE ACTUAL (${bloqueActual}, ${resumenes.length} semana(s) registrada(s)):\n${lineas.join("\n")}`;
+}
+
 async function generarEstadoCanonico(supabase: any, codigo: string) {
   const DIAS_MAP = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
   const ahora = new Date();
@@ -315,6 +341,11 @@ async function forgeContextBuilder(supabase: any, codigo: string, eventoActivoAc
   const tituloHoyRef = estadoParaReferencia.sesion_hoy?.titulo || "sin sesión programada";
   const tituloMananaRef = estadoParaReferencia.sesion_manana?.titulo || "sin sesión programada";
   partes.push(`REFERENCIA DE SESIONES PLANIFICADAS (dato inmutable, usar SIEMPRE que menciones qué toca hoy/mañana, nunca inventar otro contenido):\nHoy (${estadoParaReferencia.dia_semana_hoy}): ${tituloHoyRef}\nMañana (${estadoParaReferencia.dia_semana_manana}): ${tituloMananaRef}`);
+
+  // FORGE BLOCK NARRATIVE — historia real del bloque actual, semana a semana. Permite al Coach
+  // explicar decisiones con la evolucion real del atleta ("la semana pasada...") en vez de teoria generica.
+  const narrativaBloque = await buildBlockNarrative(supabase, codigo);
+  partes.push(narrativaBloque);
 
   // FORGE CONVERSATION MEMORY — hechos ya conocidos de HOY, evita preguntas/recomendaciones repetidas
   const facts = await buildConversationFacts(supabase, codigo);

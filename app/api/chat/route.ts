@@ -1472,14 +1472,22 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
 
   if (action === "construir_sesion_dia") {
     // FORGE ORCHESTRATOR — Paso 3: Session Builder. Genera el contenido COMPLETO de UN solo dia.
+    console.log(`CHECKPOINT construir_sesion_dia: ENTRA para dia=${datos?.dia}`);
     const { dia, tipo, titulo_breve, analisis: analisisSesion, debilidad_relacionada, focus, volume, intensity, conditioning, diaAnterior, diaSiguiente, trabaja_debilidad } = datos;
     const { data: usuarioBuilder } = await supabase.from("usuarios").select("especialidad,categoria,perfil,marcas_especificas,athlete_development,datos_entrenamiento").eq("codigo", codigo).single();
+    console.log(`CHECKPOINT construir_sesion_dia [${dia}]: usuarioBuilder obtenido`);
 
     const debilidadInfo = (usuarioBuilder?.athlete_development || []).find((d: any) => d.nombre_visible === debilidad_relacionada);
 
     // FORGE ATHLETE SNAPSHOT — contexto real y auditable del atleta, elimina la duda de "¿usa mis datos?"
-    const snapshot = await buildAthleteSnapshot(supabase, codigo);
-    console.log(`SESSION BUILDER INPUT [${dia}] — Snapshot:`, JSON.stringify(snapshot), "Dia anterior:", JSON.stringify(diaAnterior), "Dia siguiente:", JSON.stringify(diaSiguiente));
+    // COLD-START SAFE: envuelto en try/catch propio, un usuario nuevo sin historial no debe bloquear el flujo.
+    let snapshot: any = { ultimas_5_sesiones: [], sesiones_ultimos_7_dias: 0, volumen_carrera_7dias: 0, volumen_box_7dias: 0, marcas: {}, fatiga_actual: null };
+    try {
+      snapshot = await buildAthleteSnapshot(supabase, codigo);
+    } catch (errSnapshot) {
+      console.error(`CHECKPOINT construir_sesion_dia [${dia}]: ERROR en snapshot, usando snapshot vacio:`, errSnapshot);
+    }
+    console.log(`CHECKPOINT construir_sesion_dia [${dia}]: snapshot listo`);
 
     // FORGE SESSION ENGINE (v1): el Session Builder ya no inventa la estructura desde cero.
     // Recibe la INTENCION exacta que ya decidio el Week Planner y solo la desarrolla en detalle.

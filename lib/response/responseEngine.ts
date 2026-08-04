@@ -66,6 +66,10 @@ export function buildStaticResponse(intent: string, data: any): string | null {
       const marca = data?.valor;
       if (!marca) return "No tengo ninguna marca registrada para ese ejercicio todavía.";
       if (Array.isArray(marca)) return null;
+      // FIX: getBenchmark() sin ejercicio especifico devuelve {marcas_especificas, historial_reciente},
+      // no {ejercicio, valor, fecha}. En ese caso no hay una marca UNICA que mostrar de forma estatica
+      // — devolvemos null para que pase al flujo LLM normal, que puede razonar sobre el conjunto.
+      if (!marca.ejercicio || marca.valor === undefined) return null;
       return `Tu última marca registrada: **${marca.ejercicio}: ${marca.valor}** (${marca.fecha})`;
     }
     default:

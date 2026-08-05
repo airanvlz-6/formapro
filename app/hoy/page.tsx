@@ -97,17 +97,23 @@ export default function Hoy() {
 
         {(briefing?.modoEntrada==="supervision"||briefing?.modoEntrada==="consulta") && (
           <>
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}>
-              <p style={{ color: C.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>💪 Último entreno</p>
-              {briefing?.ultimoEntreno ? (
-                <>
-                  <p style={{ color: C.ink, fontSize: 16, fontWeight: 700, marginBottom: 4, textTransform: "capitalize" }}>{briefing.ultimoEntreno.tipo}</p>
-                  <p style={{ color: C.muted, fontSize: 12 }}>{new Date(briefing.ultimoEntreno.fecha).toLocaleDateString("es-ES", { day: "numeric", month: "long" })} · Sensación: {briefing.ultimoEntreno.sensacion || "no reportada"}</p>
-                </>
-              ) : (
-                <p style={{ color: C.muted, fontSize: 13 }}>Aún no has registrado ningún entreno. Cuéntaselo a Forge en el chat.</p>
-              )}
-            </div>
+            {briefing?.ultimoEntreno ? (
+              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}>
+                <p style={{ color: C.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>💪 Último entreno</p>
+                <p style={{ color: C.ink, fontSize: 16, fontWeight: 700, marginBottom: 4, textTransform: "capitalize" }}>{briefing.ultimoEntreno.tipo}</p>
+                <p style={{ color: C.muted, fontSize: 12 }}>{new Date(briefing.ultimoEntreno.fecha).toLocaleDateString("es-ES", { day: "numeric", month: "long" })} · Sensación: {briefing.ultimoEntreno.sensacion || "no reportada"}</p>
+              </div>
+            ) : (
+              <div style={{ background: `linear-gradient(135deg, ${C.card}, #1F1611)`, border: `1px solid ${C.accent}35`, borderRadius: 16, padding: "20px 18px", marginBottom: 14 }}>
+                <p style={{ color: C.accent, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>👋 Empecemos</p>
+                <p style={{ color: C.ink, fontSize: 15, fontWeight: 600, marginBottom: 14, lineHeight: 1.4 }}>Cuéntame tu último entreno y empiezo a analizarlo.</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 6 }}>
+                  {["📸 Sube una foto de tu entreno o app de reloj","✍️ Escribe qué hiciste y cómo te sentiste","❓ Pregúntame cualquier duda técnica"].map((s,i)=>(
+                    <p key={i} style={{ color: C.muted, fontSize: 13 }}>{s}</p>
+                  ))}
+                </div>
+              </div>
+            )}
             {(briefing?.recuperacion?.hrv || briefing?.recuperacion?.sueno) && (
               <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}>
                 <p style={{ color: C.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>🧬 Estado de recuperación</p>

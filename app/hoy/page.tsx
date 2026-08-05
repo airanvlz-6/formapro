@@ -94,7 +94,7 @@ export default function Hoy() {
           <p style={{ color: C.muted, fontSize: 13 }}>Esto es lo más importante hoy.</p>
         </div>
 
-        <div style={{ background: `linear-gradient(135deg, ${C.successLight}, #14201a)`, border: `1px solid ${C.success}40`, borderRadius: 16, padding: "18px 18px", marginBottom: 14 }}>
+        <a href={`/atleta?codigo=${codigo}`} style={{ display: "block", textDecoration: "none", background: `linear-gradient(135deg, ${C.successLight}, #14201a)`, border: `1px solid ${C.success}40`, borderRadius: 16, padding: "18px 18px", marginBottom: 14 }}>
           <p style={{ color: C.success, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>🧠 Forge te conoce mejor</p>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
             <span style={{ color: C.muted, fontSize: 12 }}>Nivel de conocimiento</span>
@@ -109,7 +109,7 @@ export default function Hoy() {
               <p style={{ color: C.ink, fontSize: 13, lineHeight: 1.5 }}>{briefing.ultimoAprendizaje}</p>
             </>
           )}
-        </div>
+        </a>
 
         {briefing?.descubrimiento && (
           <div style={{ background: C.card, border: `1px solid ${C.accent}50`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}>
@@ -119,7 +119,7 @@ export default function Hoy() {
         )}
 
         {briefing?.objetivo && (
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}>
+          <a href={`/atleta?codigo=${codigo}`} style={{ display: "block", textDecoration: "none", background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}>
             <p style={{ color: C.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>🎯 Objetivo principal</p>
             <p style={{ color: C.ink, fontSize: 16, fontWeight: 700, marginBottom: 10 }}>{briefing.objetivo}</p>
             {briefing.progresoObjetivo && (
@@ -133,10 +133,10 @@ export default function Hoy() {
                 <p style={{ color: C.muted, fontSize: 12 }}>Estás <span style={{ color: C.accent, fontWeight: 700 }}>{briefing.progresoObjetivo.percentage}%</span> más cerca de tu objetivo.</p>
               </>
             )}
-          </div>
+          </a>
         )}
 
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}>
+        <a href={`/plan?codigo=${codigo}`} style={{ display: "block", textDecoration: "none", background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}>
           <p style={{ color: C.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>🔥 Hoy toca</p>
           {briefing?.sesionHoy ? (
             <>
@@ -146,23 +146,23 @@ export default function Hoy() {
           ) : (
             <p style={{ color: C.muted, fontSize: 13 }}>Sin sesión programada para hoy en Mi Plan.</p>
           )}
-        </div>
+        </a>
 
         {briefing?.evolucionDestacada && (
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}>
+          <a href={`/atleta?codigo=${codigo}`} style={{ display: "block", textDecoration: "none", background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}>
             <p style={{ color: C.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>📈 Tu evolución</p>
             <p style={{ color: C.ink, fontSize: 14, fontWeight: 600, marginBottom: 8 }}>{briefing.evolucionDestacada.nombre_visible}</p>
             <div style={{ height: 6, background: C.border, borderRadius: 100 }}>
               <div style={{ height: 6, borderRadius: 100, background: C.accent, width: `${briefing.evolucionDestacada.progreso}%`, transition: "width 0.8s ease" }} />
             </div>
-          </div>
+          </a>
         )}
 
         {briefing?.ultimoInsight && (
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}>
+          <a href={`/historia?codigo=${codigo}`} style={{ display: "block", textDecoration: "none", background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}>
             <p style={{ color: C.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>💡 Tu último Forge Insight</p>
             <p style={{ color: C.ink, fontSize: 13, lineHeight: 1.6 }}>{briefing.ultimoInsight.substring(0, 180)}{briefing.ultimoInsight.length > 180 ? "..." : ""}</p>
-          </div>
+          </a>
         )}
 
         <a href={`/app?codigo=${codigo}`} style={{ display: "block", background: C.accent, color: "#fff", borderRadius: 14, padding: "16px", fontSize: 15, fontWeight: 700, textDecoration: "none", textAlign: "center", marginTop: 8 }}>

@@ -2848,6 +2848,13 @@ ${testStr}`}]});
             <button onClick={async()=>{
               const nombreEjercicio=prPendienteCompartir.ejercicio.replace(/_/g," ").toUpperCase();
               const resContexto=await apiCall({action:"generar_contexto_forge_card",codigo:codigoUsuario,datos:{tipoCard:"nuevo_pr",datosCard:{ejercicio:nombreEjercicio,valor:prPendienteCompartir.valor,mejora:prPendienteCompartir.mejora}}});
+              // FORGE CARDS — detectar disciplina segun el ejercicio, para el glyph de fondo correcto
+              const ejercicioLower=prPendienteCompartir.ejercicio.toLowerCase();
+              const disciplinaDetectada=
+                /snatch|clean|jerk|arrancada|cargada/.test(ejercicioLower) ? "halterofilia" :
+                /squat|deadlift|bench|press|sentadilla|peso_muerto/.test(ejercicioLower) ? "fuerza" :
+                /run|carrera|km|correr/.test(ejercicioLower) ? "carrera" :
+                /bici|ciclismo|watt|ftp/.test(ejercicioLower) ? "ciclismo" : "crossfit";
               setForgeCardData({
                 achievementType:"pr",
                 titulo:nombreEjercicio,
@@ -2855,7 +2862,8 @@ ${testStr}`}]});
                 detalle:prPendienteCompartir.mejora?`+${prPendienteCompartir.mejora} vs anterior`:undefined,
                 subtitulo:"Nuevo récord personal",
                 fecha:new Date().toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric"}).toUpperCase(),
-                contexto:resContexto?.contexto||undefined
+                contexto:resContexto?.contexto||undefined,
+                disciplina:disciplinaDetectada
               });
               setPrPendienteCompartir(null);
             }} style={{background:"#fff",color:C.accent,border:"none",borderRadius:10,padding:"8px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>

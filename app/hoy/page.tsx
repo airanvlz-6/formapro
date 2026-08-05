@@ -74,6 +74,7 @@ export default function Hoy() {
   const primerNombre = datos?.perfil?.nombre || "";
   const horaActual = new Date().getHours();
   const saludo = horaActual < 12 ? "Buenos días" : horaActual < 20 ? "Buenas tardes" : "Buenas noches";
+  const esModoSupervision = briefing?.modoEntrada==="supervision"||briefing?.modoEntrada==="consulta";
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'DM Sans', sans-serif", paddingBottom: 90 }}>
@@ -222,7 +223,9 @@ export default function Hoy() {
         {[
           { href: `/hoy?codigo=${codigo}`, icon: "🏠", label: "Hoy", active: true },
           { href: `/progreso?codigo=${codigo}`, icon: "📈", label: "Progreso", active: false },
-          { href: `/plan?codigo=${codigo}`, icon: "📅", label: "Plan", active: false },
+          esModoSupervision
+          ? { href: `/historia?codigo=${codigo}`, icon: "📖", label: "Historia", active: false }
+          : { href: `/plan?codigo=${codigo}`, icon: "📅", label: "Plan", active: false },
           { href: `/atleta?codigo=${codigo}`, icon: "👤", label: "Atleta", active: false },
         ].map(item => (
           <a key={item.label} href={item.href} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, textDecoration: "none", opacity: item.active ? 1 : 0.5 }}>

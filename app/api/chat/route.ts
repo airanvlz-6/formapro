@@ -918,6 +918,30 @@ ${ultimos}`;
           }
         }
 
+        // FORGE CARDS — Racha: calcular dias consecutivos entrenando usando workout_history real.
+        // Solo se ofrece compartir en hitos significativos (7, 14, 21, 30, 60, 90, 100 dias).
+        let rachaDetectada: number | null = null;
+        const HITOS_RACHA = [7, 14, 21, 30, 60, 90, 100, 150, 200, 365];
+        if (extracted.datos_entrenamiento || extracted.plan) { // proxy: hubo algo relacionado con entreno en el mensaje
+          const { data: usuarioRacha } = await supabase.from("usuarios").select("workout_history").eq("codigo", codigo).single();
+          const historialParaRacha = (usuarioRacha?.workout_history || []).map((w: any) => new Date(w.fecha).toISOString().split('T')[0]);
+          const fechasUnicas: string[] = [...new Set(historialParaRacha)].sort().reverse() as string[];
+          let racha = 0;
+          let fechaCursor = new Date();
+          for (const fechaStr of fechasUnicas) {
+            const fechaCursorStr = fechaCursor.toISOString().split('T')[0];
+            if (fechaStr === fechaCursorStr) {
+              racha++;
+              fechaCursor.setDate(fechaCursor.getDate() - 1);
+            } else if (fechaStr < fechaCursorStr) {
+              break;
+            }
+          }
+          if (HITOS_RACHA.includes(racha)) {
+            rachaDetectada = racha;
+          }
+        }
+
         if (extracted.fin_bloque && extracted.fin_bloque !== "null") {
           const finBloque = typeof extracted.fin_bloque === "string" ? JSON.parse(extracted.fin_bloque) : extracted.fin_bloque;
           if (finBloque && typeof finBloque === "object") {

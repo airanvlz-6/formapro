@@ -1776,22 +1776,33 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
     const { data: usuarioCard } = await supabase.from("usuarios").select("workout_history,historial_marcas,block_week_summary,ciclo_actual").eq("codigo", codigo).single();
     const { data: blockMemoryCard } = await supabase.from("block_week_summary").select("*").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(3);
 
+    const reglasGenerales = `REGLAS ESTRICTAS:
+- Maximo 15 palabras, una sola frase.
+- USA los numeros y datos concretos que tengas disponibles arriba (mejora exacta en kg/segundos, numero de semanas, porcentajes) — nunca generica vacia tipo "excelente punto de partida" o "sigue asi".
+- Si tienes un dato numerico de mejora, MENCIONALO explicitamente en la frase.
+- NO inventes datos que no esten en el contexto de arriba.`;
+
     let contextPrompt = "";
     if (tipoCard === "nuevo_pr") {
-      contextPrompt = `El atleta acaba de lograr un nuevo PR: ${datosCard.ejercicio} ${datosCard.valor} (mejora de ${datosCard.mejora || "N/A"} respecto al anterior).
+      contextPrompt = `El atleta acaba de lograr un nuevo PR: ${datosCard.ejercicio} ${datosCard.valor}${datosCard.mejora ? ` (mejora de +${datosCard.mejora} respecto al anterior — USA ESTE NUMERO EXACTO EN LA FRASE)` : ""}.
 Bloque actual: ${JSON.stringify(usuarioCard?.ciclo_actual)}
 Resumenes de semanas recientes del bloque: ${JSON.stringify(blockMemoryCard)}
-Escribe UNA frase corta (max 15 palabras) que conecte este PR con el progreso real del bloque. Ejemplo: "Este PR confirma la progresion prevista tras 6 semanas de trabajo". NO inventes datos que no esten arriba.`;
+${reglasGenerales}
+Ejemplo BUENO: "Has ganado 5kg en 3 semanas del bloque de fuerza". Ejemplo MALO (evitar): "Excelente punto de partida".`;
     } else if (tipoCard === "semana_completada") {
-      contextPrompt = `El atleta completo ${datosCard.sesionesCompletadas}/${datosCard.sesionesTotales} sesiones esta semana.
+      contextPrompt = `El atleta completo ${datosCard.sesionesCompletadas}/${datosCard.sesionesTotales} sesiones esta semana (100%).
 Bloque actual: ${JSON.stringify(usuarioCard?.ciclo_actual)}
-Escribe UNA frase corta (max 15 palabras) sobre lo que significa esta semana en el contexto del bloque. NO inventes datos.`;
+Resumenes de semanas recientes: ${JSON.stringify(blockMemoryCard)}
+${reglasGenerales}
+Si hay resumenes de semanas anteriores, menciona si esto continua o rompe una racha de adherencia.`;
     } else if (tipoCard === "objetivo_conseguido") {
       contextPrompt = `El atleta consiguio su objetivo: ${datosCard.objetivo}.
-Escribe UNA frase corta (max 15 palabras) celebrando este logro de forma especifica, sin generica motivacional vacia.`;
+Bloque actual: ${JSON.stringify(usuarioCard?.ciclo_actual)}
+${reglasGenerales}`;
     } else if (tipoCard === "racha") {
       contextPrompt = `El atleta lleva ${datosCard.dias} dias consecutivos entrenando sin interrupcion.
-Escribe UNA frase corta (max 15 palabras) sobre esta constancia.`;
+${reglasGenerales}
+Menciona el numero exacto de dias en la frase.`;
     } else {
       return NextResponse.json({ error: "tipoCard no reconocido" }, { status: 400 });
     }

@@ -91,9 +91,35 @@ export default function Hoy() {
 
         <div style={{ marginBottom: 20 }}>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: C.ink, fontFamily: "Georgia, serif", marginBottom: 4 }}>{saludo}{primerNombre ? `, ${primerNombre}` : ""} 👋</h1>
-          <p style={{ color: C.muted, fontSize: 13 }}>Esto es lo más importante hoy.</p>
+          <p style={{ color: C.muted, fontSize: 13 }}>{(briefing?.modoEntrada==="supervision"||briefing?.modoEntrada==="consulta")?"Tu resumen de hoy.":"Esto es lo más importante hoy."}</p>
         </div>
 
+        {(briefing?.modoEntrada==="supervision"||briefing?.modoEntrada==="consulta") && (
+          <>
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}>
+              <p style={{ color: C.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>💪 Último entreno</p>
+              {briefing?.ultimoEntreno ? (
+                <>
+                  <p style={{ color: C.ink, fontSize: 16, fontWeight: 700, marginBottom: 4, textTransform: "capitalize" }}>{briefing.ultimoEntreno.tipo}</p>
+                  <p style={{ color: C.muted, fontSize: 12 }}>{new Date(briefing.ultimoEntreno.fecha).toLocaleDateString("es-ES", { day: "numeric", month: "long" })} · Sensación: {briefing.ultimoEntreno.sensacion || "no reportada"}</p>
+                </>
+              ) : (
+                <p style={{ color: C.muted, fontSize: 13 }}>Aún no has registrado ningún entreno. Cuéntaselo a Forge en el chat.</p>
+              )}
+            </div>
+            {(briefing?.recuperacion?.hrv || briefing?.recuperacion?.sueno) && (
+              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}>
+                <p style={{ color: C.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>🧬 Estado de recuperación</p>
+                <div style={{ display: "flex", gap: 20 }}>
+                  {briefing.recuperacion.hrv && <div><p style={{ color: C.ink, fontSize: 22, fontWeight: 800 }}>{briefing.recuperacion.hrv}<span style={{ fontSize: 12 }}>ms</span></p><p style={{ color: C.muted, fontSize: 11 }}>HRV</p></div>}
+                  {briefing.recuperacion.sueno && <div><p style={{ color: C.ink, fontSize: 22, fontWeight: 800 }}>{briefing.recuperacion.sueno}</p><p style={{ color: C.muted, fontSize: 11 }}>Sueño</p></div>}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {!(briefing?.modoEntrada==="supervision"||briefing?.modoEntrada==="consulta") && (
         <a href={`/atleta?codigo=${codigo}`} style={{ display: "block", textDecoration: "none", background: `linear-gradient(135deg, ${C.successLight}, #14201a)`, border: `1px solid ${C.success}40`, borderRadius: 16, padding: "18px 18px", marginBottom: 14 }}>
           <p style={{ color: C.success, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>🧠 Forge te conoce mejor</p>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
@@ -110,6 +136,7 @@ export default function Hoy() {
             </>
           )}
         </a>
+        )}
 
         {briefing?.descubrimiento && (
           <div style={{ background: C.card, border: `1px solid ${C.accent}50`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}>
@@ -118,7 +145,7 @@ export default function Hoy() {
           </div>
         )}
 
-        {briefing?.objetivo && (
+        {briefing?.objetivo && !(briefing?.modoEntrada==="supervision"||briefing?.modoEntrada==="consulta") && (
           <a href={`/atleta?codigo=${codigo}`} style={{ display: "block", textDecoration: "none", background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}>
             <p style={{ color: C.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>🎯 Objetivo principal</p>
             <p style={{ color: C.ink, fontSize: 16, fontWeight: 700, marginBottom: 10 }}>{briefing.objetivo}</p>
@@ -136,6 +163,7 @@ export default function Hoy() {
           </a>
         )}
 
+        {!(briefing?.modoEntrada==="supervision"||briefing?.modoEntrada==="consulta") && (
         <a href={`/plan?codigo=${codigo}`} style={{ display: "block", textDecoration: "none", background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}>
           <p style={{ color: C.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>🔥 Hoy toca</p>
           {briefing?.sesionHoy ? (
@@ -147,6 +175,7 @@ export default function Hoy() {
             <p style={{ color: C.muted, fontSize: 13 }}>Sin sesión programada para hoy en Mi Plan.</p>
           )}
         </a>
+        )}
 
         {briefing?.evolucionDestacada && (
           <a href={`/atleta?codigo=${codigo}`} style={{ display: "block", textDecoration: "none", background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}>

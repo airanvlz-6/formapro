@@ -2113,6 +2113,23 @@ Menciona el numero exacto de dias en la frase.`;
   if (action === "obtener_daily_briefing") {
     // FORGE DAILY BRIEFING — agrega todo lo necesario para la pantalla "Hoy" en una sola llamada.
     // Responde en <10s a: que ha pasado, que toca hoy, que ha aprendido Forge, como voy.
+    // Su contenido varia segun modo_entrada: Coach (sesion del plan) vs Supervision (recuperacion + ultimo entreno).
+    const { data: usuarioModoBriefing } = await supabase.from("usuarios").select("modo_entrada,workout_history,estado_fisiologico").eq("codigo", codigo).single();
+    const modoEntradaBriefing = usuarioModoBriefing?.modo_entrada || "planificacion";
+
+    if (modoEntradaBriefing === "supervision" || modoEntradaBriefing === "consulta") {
+      const workoutHistoryBriefing = usuarioModoBriefing?.workout_history || [];
+      const ultimoEntreno = workoutHistoryBriefing[workoutHistoryBriefing.length - 1] || null;
+      const estadoFisioBriefing = usuarioModoBriefing?.estado_fisiologico || {};
+      return NextResponse.json({
+        briefing: {
+          modoEntrada: modoEntradaBriefing,
+          ultimoEntreno: ultimoEntreno ? { tipo: ultimoEntreno.tipo, fecha: ultimoEntreno.fecha, sensacion: ultimoEntreno.sensacion } : null,
+          recuperacion: { hrv: estadoFisioBriefing.hrv || null, sueno: estadoFisioBriefing.sueno || null, tendencia: estadoFisioBriefing.tendencia || null }
+        }
+      });
+    }
+
     const estado = await generarEstadoCanonico(supabase, codigo);
     const knowledge = await buildAthleteKnowledge(codigo);
 
@@ -2134,6 +2151,7 @@ Menciona el numero exacto de dias en la frase.`;
 
     return NextResponse.json({
       briefing: {
+        modoEntrada: "planificacion",
         diaSemana: estado.dia_semana_hoy,
         sesionHoy: estado.sesion_hoy,
         nivelConocimiento,

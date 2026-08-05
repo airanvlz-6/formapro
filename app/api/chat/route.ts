@@ -335,6 +335,16 @@ function buildConversationFactsInstruction(facts: ConversationFacts): string {
 async function forgeContextBuilder(supabase: any, codigo: string, eventoActivoActual: { eventType: string; mensajesDelEvento: string[] }): Promise<string> {
   const partes: string[] = [];
 
+  // FORGE MODO DE ENTRADA — restriccion de maxima prioridad: si el atleta eligio "ya tengo
+  // entrenador" o "solo consulta", el Coach NUNCA debe generar ni modificar planificacion semanal,
+  // sin importar lo que pida el intent detectado. Solo puede analizar, responder y registrar.
+  const { data: usuarioModo } = await supabase.from("usuarios").select("modo_entrada").eq("codigo", codigo).single();
+  if (usuarioModo?.modo_entrada === "supervision") {
+    partes.push(`MODO DE ENTRADA: SUPERVISION EXTERNA (restriccion maxima prioridad, nunca la ignores).\nEste atleta tiene su PROPIA planificacion o entrenador externo. NUNCA generes, sugieras cambiar, ni propongas una planificacion semanal completa — ni aunque el atleta lo pida directamente ("genera mi semana", "hazme un plan"). Si lo pide, explica amablemente que en este modo no generas planificaciones, pero que puedes ayudarle a analizar/adaptar UNA sesion puntual si la comparte contigo. Tu rol es: registrar entrenos, responder dudas tecnicas, dar opinion sobre sesiones concretas que el atleta comparta, y avisar si detectas señales de fatiga/riesgo.`);
+  } else if (usuarioModo?.modo_entrada === "consulta") {
+    partes.push(`MODO DE ENTRADA: SOLO CONSULTA (prioridad alta). Este atleta no tiene planificacion formal todavia y no la ha pedido. NO generes una planificacion semanal completa por iniciativa propia — solo si el atleta la pide explicitamente. Tu rol principal es ir conociendolo a traves de la conversacion, registrar lo que comparta, y responder dudas puntuales.`);
+  }
+
   // FORGE PLANNED SESSION REFERENCE — SIEMPRE presente, sin importar el intent de la conversacion.
   // Regla de capacidad (no de intent): si el Coach va a mencionar que sesion toca hoy/mañana,
   // DEBE usar estos nombres exactos, nunca inventar contenido de sesion durante conversacion libre.

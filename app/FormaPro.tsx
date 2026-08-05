@@ -1225,7 +1225,18 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
   };
 
   const irACategoria=(catId:string)=>{setCategoria(catId);setEspKey(null);setEspLabel(null);setPregIdx(0);setRespuestas({});setSelMulti([]);setTextoTemp("");setPantalla("especialidad");};
-const elegirEspecialidad=(label:string)=>{const key=ESPECIALIDAD_KEY[categoria!]?.[label]||categoria!;setEspKey(key);setEspLabel(label);setRespuestas({especialidad:label});setPregIdx(0);setPantalla("formulario");};
+const elegirEspecialidad=(label:string)=>{
+    const key=ESPECIALIDAD_KEY[categoria!]?.[label]||categoria!;
+    setEspKey(key);setEspLabel(label);setRespuestas({especialidad:label});setPregIdx(0);
+    // ONBOARDING DIFERENCIADO: los modos "supervision" y "consulta" saltan el cuestionario largo
+    // de objetivos/disponibilidad (que asume que Forge va a generar el plan) — solo necesitan
+    // el minimo para identificar al atleta, el resto lo descubre Forge conversando.
+    if(modoEntrada==="supervision"||modoEntrada==="consulta"){
+      setPantalla("final");
+    } else {
+      setPantalla("formulario");
+    }
+  };
 
   const avanzar=()=>{
     const val=pregActual.tipo==="multi"?selMulti:pregActual.tipo==="texto"?textoTemp:respuestas[pregActual.id];
@@ -1247,7 +1258,11 @@ const elegirEspecialidad=(label:string)=>{const key=ESPECIALIDAD_KEY[categoria!]
     }
     setErrorCodigoPersonal("");setCodigoGuardado(codigo);
 const esRehab=(espKey||categoria)==="rehabilitacion_general";
-    const prompt = esRehab
+    const promptSupervision="¡Hola! Ya tengo mi propia planificación o entrenador — no necesito que Forge me genere un plan. Preséntate brevemente explicando cómo me vas a ayudar en este modo: puedo registrar mis entrenos y métricas para que los organices, preguntarte dudas técnicas, pedirte opinión sobre sesiones concretas, y avisarte si necesito adaptar algo por fatiga o molestias. Deja claro que nunca vas a sustituir ni modificar mi planificación existente sin que yo lo pida explícitamente.";
+    const promptConsulta="¡Hola! Todavía no quiero una planificación completa, solo quiero ir contándote mis entrenos y que me vayas conociendo poco a poco, y poder preguntarte dudas cuando las tenga. Preséntate brevemente explicando esto.";
+    const prompt = modoEntrada==="supervision" ? promptSupervision
+      : modoEntrada==="consulta" ? promptConsulta
+      : esRehab
       ? "¡Hola! Acabo de completar mi perfil de rehabilitación. Por favor: 1) Incluye PRIMERO el disclaimer obligatorio completo. 2) Da la bienvenida breve demostrando que entiendes mi zona afectada, tipo de molestia y fase actual. 3) Explica el enfoque y las fases de rehabilitación que vas a aplicar y por qué. 4) Termina preguntando si estoy de acuerdo, indicando explícitamente que al confirmar para empezar la Fase 1 confirmo que he comprendido la información, que esto no sustituye valoración profesional, y que asumo la responsabilidad de detener cualquier ejercicio que cause dolor y consultar con un profesional si es necesario."
       : "¡Hola! Acabo de completar mi perfil. Por favor sigue exactamente esta secuencia: 1) Empieza con una declaración breve de compromiso, en el estilo de: 'Bienvenido a Forge. Ya he terminado de estudiar tu perfil. A partir de hoy me ocuparé de: adaptar cada sesión, analizar tu recuperación, detectar cuándo progresas, y cambiar el plan cuando sea necesario. Tú solo tienes que entrenar y contarme qué ocurre.' — adapta el tono a mi perfil concreto, no lo copies literal. 2) Demuestra que has leído mi perfil completo — especialidad, nivel, objetivo y limitaciones — en una frase breve y personalizada. 3) Explica qué metodología de periodización vas a aplicar conmigo y POR QUÉ es la más adecuada para mi situación concreta — sé específico, no genérico. 4) Pregúntame si estoy de acuerdo con esta metodología o si quiero explorar alguna alternativa antes de empezar. NO generes ningún entrenamiento todavía — espera mi confirmación.";
     try{
@@ -1256,7 +1271,7 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
       const texto=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error al conectar.").replace(/\[STATE_UPDATE\][\s\S]*?\[\/STATE_UPDATE\]/g,"").trim();
       const hist=[{role:"user",content:prompt},{role:"assistant",content:texto}];
       setMensajes([{role:"assistant",content:texto}]);setHistorial(hist);setMsgCount(1);setEmailGuardado(!!email);setFechaRegistro(new Date().toISOString());
-      await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:espKey||categoria,perfil,rutina:texto,historial:hist,marcas:[],email:email||null,admin:false,premium:false}});
+      await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:espKey||categoria,perfil,rutina:texto,historial:hist,marcas:[],email:email||null,admin:false,premium:false,modo_entrada:modoEntrada}});
       setCodigoUsuario(codigo);
     }catch{setMensajes([{role:"assistant",content:"Error de conexion. Por favor recarga."}]);}
     finally{setGenerando(false);setTimeout(()=>inputRef.current?.focus(),300);}

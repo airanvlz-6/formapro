@@ -1773,22 +1773,38 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
     // FORGE CARDS — genera la linea de contexto real (nunca inventada) para una tarjeta compartible.
     // El tipo determina que datos reales se usan para fundamentar la frase.
     const { tipoCard, datosCard } = datos;
-    const { data: usuarioCard } = await supabase.from("usuarios").select("workout_history,historial_marcas,block_week_summary,ciclo_actual").eq("codigo", codigo).single();
+    const { data: usuarioCard } = await supabase.from("usuarios").select("workout_history,historial_marcas,block_week_summary,ciclo_actual,objetivo_principal").eq("codigo", codigo).single();
     const { data: blockMemoryCard } = await supabase.from("block_week_summary").select("*").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(3);
+
+    // Calcular dias desde la marca anterior del mismo ejercicio (para narrativa tipo "primer PR en 43 dias")
+    let diasDesdeUltimoPr: number | null = null;
+    if (tipoCard === "nuevo_pr" && datosCard.ejercicio) {
+      const marcasDelEjercicio = (usuarioCard?.historial_marcas || []).filter((m: any) => m.ejercicio === datosCard.ejercicio?.toLowerCase().replace(/\s+/g, "_"));
+      if (marcasDelEjercicio.length >= 2) {
+        const penultima = marcasDelEjercicio[marcasDelEjercicio.length - 2];
+        diasDesdeUltimoPr = Math.round((Date.now() - new Date(penultima.fecha).getTime()) / (24 * 60 * 60 * 1000));
+      }
+    }
 
     const reglasGenerales = `REGLAS ESTRICTAS:
 - Maximo 15 palabras, una sola frase.
-- USA los numeros y datos concretos que tengas disponibles arriba (mejora exacta en kg/segundos, numero de semanas, porcentajes) — nunca generica vacia tipo "excelente punto de partida" o "sigue asi".
-- Si tienes un dato numerico de mejora, MENCIONALO explicitamente en la frase.
-- NO inventes datos que no esten en el contexto de arriba.`;
+- USA los numeros y datos concretos que tengas disponibles arriba — nunca generica vacia tipo "excelente punto de partida" o "sigue asi".
+- Prioriza NARRATIVA TEMPORAL sobre solo el numero: en cuanto tiempo se logro, si rompe una racha, si coincide con una fase del bloque.
+- NO inventes datos que no esten en el contexto de arriba.
+Ejemplos de BUENA narrativa (varia el estilo, no copies literal):
+- "Primer PR tras 43 dias de trabajo constante"
+- "Has ganado 5kg en 3 semanas del bloque de fuerza"
+- "Superas el objetivo dos semanas antes de lo previsto"
+- "Cuarto PR consecutivo en este bloque de intensificacion"
+Ejemplos de MALA narrativa (evitar siempre): "Excelente punto de partida", "Sigue asi", "Gran trabajo".`;
 
     let contextPrompt = "";
     if (tipoCard === "nuevo_pr") {
-      contextPrompt = `El atleta acaba de lograr un nuevo PR: ${datosCard.ejercicio} ${datosCard.valor}${datosCard.mejora ? ` (mejora de +${datosCard.mejora} respecto al anterior — USA ESTE NUMERO EXACTO EN LA FRASE)` : ""}.
+      contextPrompt = `El atleta acaba de lograr un nuevo PR: ${datosCard.ejercicio} ${datosCard.valor}${datosCard.mejora ? ` (mejora de +${datosCard.mejora} respecto al anterior)` : ""}.
+${diasDesdeUltimoPr !== null ? `Han pasado ${diasDesdeUltimoPr} dias desde su ultimo PR en este mismo ejercicio — considera usar este dato si aporta narrativa real.` : "Es su primera marca registrada en este ejercicio."}
 Bloque actual: ${JSON.stringify(usuarioCard?.ciclo_actual)}
 Resumenes de semanas recientes del bloque: ${JSON.stringify(blockMemoryCard)}
-${reglasGenerales}
-Ejemplo BUENO: "Has ganado 5kg en 3 semanas del bloque de fuerza". Ejemplo MALO (evitar): "Excelente punto de partida".`;
+${reglasGenerales}`;
     } else if (tipoCard === "semana_completada") {
       contextPrompt = `El atleta completo ${datosCard.sesionesCompletadas}/${datosCard.sesionesTotales} sesiones esta semana (100%).
 Bloque actual: ${JSON.stringify(usuarioCard?.ciclo_actual)}

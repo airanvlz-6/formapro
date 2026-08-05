@@ -738,6 +738,7 @@ const [forgeCardData,setForgeCardData]=useState<any>(null);
 const [prPendienteCompartir,setPrPendienteCompartir]=useState<{ejercicio:string;valor:string;mejora:string|null}|null>(null);
 const [semanaPendienteCompartir,setSemanaPendienteCompartir]=useState<{sesionesCompletadas:number;sesionesTotales:number}|null>(null);
 const [rachaPendienteCompartir,setRachaPendienteCompartir]=useState<number|null>(null);
+const [objetivoPendienteCompartir,setObjetivoPendienteCompartir]=useState<{objetivo:string;resultado:string}|null>(null);
 const [historialMarcas,setHistorialMarcas]=useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
 const [analisisBloques,setAnalisisBloques]=useState<any[]>([]);
 const [athleteState,setAthleteState]=useState<Record<string,any>>({});
@@ -1611,6 +1612,9 @@ const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:build
           }
           if(resActualizar?.rachaDetectada){
             setRachaPendienteCompartir(resActualizar.rachaDetectada);
+          }
+          if(resActualizar?.objetivoConseguidoDetectado){
+            setObjetivoPendienteCompartir(resActualizar.objetivoConseguidoDetectado);
           }
         });
         // FIX CRITICO: esta verificacion solo existia en enviarSilencioso, nunca en enviar() (la funcion
@@ -2916,6 +2920,35 @@ ${testStr}`}]});
               Compartir
             </button>
             <button onClick={()=>setRachaPendienteCompartir(null)} style={{background:"rgba(255,255,255,0.2)",color:"#fff",border:"none",borderRadius:10,padding:"8px 10px",fontSize:12,cursor:"pointer"}}>
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* FORGE CARDS — banner para compartir un objetivo conseguido */}
+      {objetivoPendienteCompartir&&(
+        <div style={{position:"fixed",bottom:(prPendienteCompartir?80:0)+(semanaPendienteCompartir?80:0)+(rachaPendienteCompartir?80:0)+90,left:16,right:16,maxWidth:600,margin:"0 auto",background:"linear-gradient(135deg,#4CAF50,#2E7D32)",borderRadius:16,padding:"14px 18px",zIndex:150,display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:"0 8px 24px rgba(76,175,80,0.35)"}}>
+          <div>
+            <p style={{color:"#fff",fontSize:13,fontWeight:700}}>🎯 ¡Objetivo conseguido!</p>
+            <p style={{color:"#fff",fontSize:12,opacity:0.9}}>{objetivoPendienteCompartir.objetivo}</p>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={async()=>{
+              const resContexto=await apiCall({action:"generar_contexto_forge_card",codigo:codigoUsuario,datos:{tipoCard:"objetivo_conseguido",datosCard:{objetivo:objetivoPendienteCompartir.objetivo}}});
+              setForgeCardData({
+                achievementType:"goal",
+                titulo:"OBJETIVO CONSEGUIDO",
+                valorPrincipal:objetivoPendienteCompartir.resultado,
+                subtitulo:objetivoPendienteCompartir.objetivo,
+                fecha:new Date().toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric"}).toUpperCase(),
+                contexto:resContexto?.contexto||undefined
+              });
+              setObjetivoPendienteCompartir(null);
+            }} style={{background:"#fff",color:"#2E7D32",border:"none",borderRadius:10,padding:"8px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              Compartir
+            </button>
+            <button onClick={()=>setObjetivoPendienteCompartir(null)} style={{background:"rgba(255,255,255,0.2)",color:"#fff",border:"none",borderRadius:10,padding:"8px 10px",fontSize:12,cursor:"pointer"}}>
               ✕
             </button>
           </div>

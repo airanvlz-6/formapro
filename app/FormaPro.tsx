@@ -1552,7 +1552,19 @@ const forgeValidator=(texto:string):string=>{
         if(inputRef.current){inputRef.current.style.height="auto";}
         const histConEstatico=[...historial,{role:"user",content:texto.trim()},{role:"assistant",content:resContexto.respuestaEstatica}];
         setHistorial(histConEstatico);
-        if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histConEstatico}});
+        if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histConEstatico}}).then((resActualizarEstatico:any)=>{
+          // FORGE CARDS — la rama STATIC tambien puede disparar deteccion de PR/racha/objetivo
+          // (ej: el usuario reporta un PR y el mensaje se clasifica como BENCHMARK/READ).
+          if(resActualizarEstatico?.nuevoPrDetectado){
+            setPrPendienteCompartir(resActualizarEstatico.nuevoPrDetectado);
+          }
+          if(resActualizarEstatico?.rachaDetectada){
+            setRachaPendienteCompartir(resActualizarEstatico.rachaDetectada);
+          }
+          if(resActualizarEstatico?.objetivoConseguidoDetectado){
+            setObjetivoPendienteCompartir(resActualizarEstatico.objetivoConseguidoDetectado);
+          }
+        });
         setCargando(false);
         return;
       }

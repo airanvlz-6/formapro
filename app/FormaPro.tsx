@@ -738,6 +738,7 @@ const [forgeCardData,setForgeCardData]=useState<any>(null);
 const [prPendienteCompartir,setPrPendienteCompartir]=useState<{ejercicio:string;valor:string;mejora:string|null;progresion?:{valor:number;fecha:string}[]}|null>(null);
 const [semanaPendienteCompartir,setSemanaPendienteCompartir]=useState<{sesionesCompletadas:number;sesionesTotales:number}|null>(null);
 const [rachaPendienteCompartir,setRachaPendienteCompartir]=useState<number|null>(null);
+const [modoEntrada,setModoEntrada]=useState<string>("planificacion");
 const [objetivoPendienteCompartir,setObjetivoPendienteCompartir]=useState<{objetivo:string;resultado:string}|null>(null);
 const [historialMarcas,setHistorialMarcas]=useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
 const [analisisBloques,setAnalisisBloques]=useState<any[]>([]);
@@ -1927,8 +1928,8 @@ ${testStr}`}]});
           </div>
           <p style={{color:C.muted,fontSize:17,lineHeight:1.65,marginBottom:4,fontWeight:600}}>No generamos entrenamientos. Construimos atletas.</p>
           <p style={{color:C.muted,fontSize:15,lineHeight:1.65,marginBottom:8}}>Forge aprende quién eres, planifica cada semana según tu evolución y adapta tu entrenamiento utilizando tu historial, estado fisiológico y objetivos deportivos.</p>
-          <button className="btn-main" onClick={()=>setPantalla("categoria")} style={{background:"#FF6B00",color:"#fff",border:"none",borderRadius:14,padding:"16px 40px",fontSize:16,fontWeight:600,cursor:"pointer",width:"100%",maxWidth:360,marginTop:16,marginBottom:8}}>
-            Crear mi atleta
+          <button className="btn-main" onClick={()=>setPantalla("bifurcacion")} style={{background:"#FF6B00",color:"#fff",border:"none",borderRadius:14,padding:"16px 40px",fontSize:16,fontWeight:600,cursor:"pointer",width:"100%",maxWidth:360,marginTop:16,marginBottom:8}}>
+            Empezar
           </button>
           <p style={{color:C.muted,fontSize:12,marginBottom:24}}>Empieza en menos de 3 minutos.</p>
           <div style={{maxWidth:360,margin:"0 auto"}}>
@@ -1971,9 +1972,33 @@ ${testStr}`}]});
         </div>
       )}
 
+      {pantalla==="bifurcacion"&&(
+        <div className="fade-up" style={{maxWidth:560,width:"100%"}}>
+          <button onClick={()=>setPantalla("inicio")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14,marginBottom:28}}>Volver</button>
+          <h2 style={{fontSize:"clamp(24px,5vw,32px)",color:C.ink,marginBottom:10,fontFamily:"'Playfair Display',serif",fontWeight:700}}>¿Qué necesitas hoy?</h2>
+          <p style={{color:C.muted,fontSize:14,marginBottom:28}}>Forge se adapta a cómo quieras usarlo — puedes cambiarlo cuando quieras.</p>
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            {[
+              {modo:"planificacion",emoji:"📅",titulo:"Que Forge planifique mi entrenamiento",desc:"Cuestionario completo, objetivos, disponibilidad — Forge diseña tu plan desde cero."},
+              {modo:"supervision",emoji:"👥",titulo:"Ya tengo entrenador o planificación propia",desc:"Forge no sustituye tu plan — te acompaña entre sesiones: registra, analiza y resuelve dudas."},
+              {modo:"consulta",emoji:"💬",titulo:"Solo quiero asesoramiento puntual",desc:"Sin cuestionarios. Cuéntame tus entrenos y te iré conociendo poco a poco."},
+              {modo:"empezando",emoji:"🌱",titulo:"Estoy empezando a entrenar",desc:"Te guío desde cero, sin dar por hecho que sabes nada todavía."},
+            ].map(op=>(
+              <div key={op.modo} onClick={()=>{setModoEntrada(op.modo);setPantalla("categoria");}} className="cat-card" style={{background:C.card,border:`2px solid ${C.border}`,borderRadius:16,padding:"18px 20px",cursor:"pointer",display:"flex",alignItems:"center",gap:16}}>
+                <span style={{fontSize:28}}>{op.emoji}</span>
+                <div style={{textAlign:"left"}}>
+                  <p style={{color:C.ink,fontSize:15,fontWeight:700,marginBottom:3}}>{op.titulo}</p>
+                  <p style={{color:C.muted,fontSize:12.5,lineHeight:1.4}}>{op.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {pantalla==="categoria"&&(
         <div className="fade-up" style={{maxWidth:580,width:"100%"}}>
-          <button onClick={()=>setPantalla("inicio")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14,marginBottom:28}}>Volver</button>
+          <button onClick={()=>setPantalla("bifurcacion")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14,marginBottom:28}}>Volver</button>
           <h2 style={{fontSize:"clamp(22px,5vw,30px)",color:C.ink,marginBottom:8}}>¿Qué tipo de atleta eres?</h2>
           <p style={{color:C.muted,fontSize:14,marginBottom:6}}>Forge adaptará tu planificación, tus métricas y tu seguimiento según el deporte que practiques.</p>
           <p style={{color:C.muted,fontSize:12,marginBottom:28,fontStyle:"italic"}}>Podrás cambiar esta especialidad más adelante desde Mi Atleta.</p>

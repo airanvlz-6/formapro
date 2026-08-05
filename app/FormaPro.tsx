@@ -736,6 +736,7 @@ const [estadoFounder,setEstadoFounder]=useState<any>(null);
 const [mostrarMasChat,setMostrarMasChat]=useState(false);
 const [forgeCardData,setForgeCardData]=useState<any>(null);
 const [prPendienteCompartir,setPrPendienteCompartir]=useState<{ejercicio:string;valor:string;mejora:string|null}|null>(null);
+const [semanaPendienteCompartir,setSemanaPendienteCompartir]=useState<{sesionesCompletadas:number;sesionesTotales:number}|null>(null);
 const [historialMarcas,setHistorialMarcas]=useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
 const [analisisBloques,setAnalisisBloques]=useState<any[]>([]);
 const [athleteState,setAthleteState]=useState<Record<string,any>>({});
@@ -1614,6 +1615,10 @@ const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:build
           apiCall({action:"verificar_semana_completa_sin_cierre",codigo:codigoUsuario}).then((resCierre)=>{
             if(resCierre?.semanaCompleta && !resCierre?.yaCerrada){
               setMostrarBotonNuevaSemana(true);
+              // FORGE CARDS — si la semana se completo al 100%, ofrecer compartir
+              if(resCierre?.cardSemanaData){
+                setSemanaPendienteCompartir(resCierre.cardSemanaData);
+              }
             }
           });
         }
@@ -2849,6 +2854,35 @@ ${testStr}`}]});
               Compartir
             </button>
             <button onClick={()=>setPrPendienteCompartir(null)} style={{background:"rgba(255,255,255,0.2)",color:"#fff",border:"none",borderRadius:10,padding:"8px 10px",fontSize:12,cursor:"pointer"}}>
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* FORGE CARDS — banner para compartir una semana completada al 100% */}
+      {semanaPendienteCompartir&&(
+        <div style={{position:"fixed",bottom:prPendienteCompartir?170:90,left:16,right:16,maxWidth:600,margin:"0 auto",background:"linear-gradient(135deg,#4CAF50,#2E7D32)",borderRadius:16,padding:"14px 18px",zIndex:150,display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:"0 8px 24px rgba(76,175,80,0.35)"}}>
+          <div>
+            <p style={{color:"#fff",fontSize:13,fontWeight:700}}>✅ ¡Semana completada al 100%!</p>
+            <p style={{color:"#fff",fontSize:12,opacity:0.9}}>{semanaPendienteCompartir.sesionesCompletadas}/{semanaPendienteCompartir.sesionesTotales} sesiones</p>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={async()=>{
+              const resContexto=await apiCall({action:"generar_contexto_forge_card",codigo:codigoUsuario,datos:{tipoCard:"semana_completada",datosCard:{sesionesCompletadas:semanaPendienteCompartir.sesionesCompletadas,sesionesTotales:semanaPendienteCompartir.sesionesTotales}}});
+              setForgeCardData({
+                achievementType:"week",
+                titulo:"SEMANA COMPLETADA",
+                valorPrincipal:`${semanaPendienteCompartir.sesionesCompletadas}/${semanaPendienteCompartir.sesionesTotales}`,
+                subtitulo:"100% de adherencia esta semana",
+                fecha:new Date().toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric"}).toUpperCase(),
+                contexto:resContexto?.contexto||undefined
+              });
+              setSemanaPendienteCompartir(null);
+            }} style={{background:"#fff",color:"#2E7D32",border:"none",borderRadius:10,padding:"8px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              Compartir
+            </button>
+            <button onClick={()=>setSemanaPendienteCompartir(null)} style={{background:"rgba(255,255,255,0.2)",color:"#fff",border:"none",borderRadius:10,padding:"8px 10px",fontSize:12,cursor:"pointer"}}>
               ✕
             </button>
           </div>

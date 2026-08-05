@@ -1706,7 +1706,13 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
     // especificas de respuesta del atleta (no patrones generales como Discovery)
     await ejecutarAthleteResponseEngine(supabase, apiKey!, codigo);
 
-    return NextResponse.json({ semanaCompleta: true, yaCerrada: false, weekStart: weekStartCierre, insightGenerado: true });
+    // FORGE CARDS — datos para ofrecer compartir la semana completada (solo si fue 100% adherencia)
+    const sesionesCompletadasCierre = sesionesQueRequierenReporte.filter((s:any)=>s.completada).length;
+    const cardSemanaData = sesionesCompletadasCierre === sesionesQueRequierenReporte.length
+      ? { sesionesCompletadas: sesionesCompletadasCierre, sesionesTotales: sesionesQueRequierenReporte.length }
+      : null;
+
+    return NextResponse.json({ semanaCompleta: true, yaCerrada: false, weekStart: weekStartCierre, insightGenerado: true, cardSemanaData });
   }
 
   if (action === "ejecutar_discovery_engine") {

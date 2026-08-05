@@ -885,6 +885,7 @@ ${ultimos}`;
           updates.distribucion_semanal = extracted.distribucion_semanal;
         }
         let nuevoPrDetectado: { ejercicio: string; valor: string; mejora: string | null } | null = null;
+        let objetivoConseguidoDetectado: { objetivo: string; resultado: string } | null = null;
         if (extracted.nueva_marca && extracted.nueva_marca !== "" && extracted.nueva_marca !== "vacío") {
           const histMarcas = usuarioData?.historial_marcas || [];
           const partes = extracted.nueva_marca.split(":");
@@ -914,6 +915,23 @@ ${ultimos}`;
                 }
               }
               nuevoPrDetectado = { ejercicio: ejercicioNormalizado, valor: valorNuevo, mejora: mejoraCalculada };
+
+              // FORGE CARDS — Objetivo Conseguido: verificar si esta nueva marca alcanza o supera
+              // el objetivo principal declarado (solo si el objetivo es de tipo "marca" y menciona
+              // el mismo ejercicio). Nunca se infiere, solo se compara con el dato real declarado.
+              const { data: usuarioObjetivo } = await supabase.from("usuarios").select("objetivo_principal").eq("codigo", codigo).single();
+              const objetivoDeclarado = usuarioObjetivo?.objetivo_principal;
+              if (objetivoDeclarado?.tipo === "marca" && objetivoDeclarado?.descripcion) {
+                const descObjetivoLower = objetivoDeclarado.descripcion.toLowerCase();
+                const ejercicioLegible = ejercicioNormalizado.replace(/_/g, " ");
+                if (descObjetivoLower.includes(ejercicioLegible) || descObjetivoLower.includes(ejercicioNormalizado)) {
+                  const numObjetivo = parseFloat(objetivoDeclarado.descripcion.match(/\d+(\.\d+)?/)?.[0] || "0");
+                  const numLogrado = parseFloat(valorNuevo);
+                  if (numObjetivo > 0 && !isNaN(numLogrado) && numLogrado >= numObjetivo) {
+                    objetivoConseguidoDetectado = { objetivo: objetivoDeclarado.descripcion, resultado: valorNuevo };
+                  }
+                }
+              }
             }
           }
         }
@@ -981,10 +999,10 @@ ${ultimos}`;
         }
         // Marcar el evento como ya extraido, iniciando ventana de correccion de 3 minutos
         await marcarEventoComoExtraido(supabase, apiKey!, codigo, true);
-        // FORGE CARDS — si se detecto un nuevo PR, lo devolvemos para que el frontend ofrezca
-        // generar la tarjeta compartible inmediatamente despues de reportar el entreno.
-        if (nuevoPrDetectado) {
-          return NextResponse.json({ ok: true, nuevoPrDetectado });
+        // FORGE CARDS — si se detecto un nuevo PR o un hito de racha, lo devolvemos para que el
+        // frontend ofrezca generar la tarjeta compartible inmediatamente despues de reportar.
+        if (nuevoPrDetectado || rachaDetectada || objetivoConseguidoDetectado) {
+          return NextResponse.json({ ok: true, nuevoPrDetectado, rachaDetectada, objetivoConseguidoDetectado });
         }
       } catch (e) {
         console.error("Error extraccion servidor:", e);

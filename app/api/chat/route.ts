@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { render } from "@react-email/render";
 import { validateExtraction } from "@/lib/validators/extractionRules";
 import { buildCatalogoPrompt, validarCatalogoDisciplina } from "@/lib/sports/disciplineCatalog";
+import { parseStrengthRecord } from "@/lib/sports/strengthRecordParser";
 import { buildAthleteKnowledge, knowledgeRouter, getObjectiveProgress } from "@/lib/knowledge/athleteKnowledge";
 import { getResponseMode, buildStaticResponse, getCapabilities, buildCapabilityInstruction } from "@/lib/response/responseEngine";
 import { sendEmail } from "@/lib/email/sendEmail";
@@ -1767,6 +1768,48 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
   if (action === "ejecutar_athlete_response_engine") {
     const resultado = await ejecutarAthleteResponseEngine(supabase, apiKey!, codigo);
     return NextResponse.json(resultado);
+  }
+
+  if (action === "verificar_pr_deterministico") {
+    // FORGE STRENGTH RECORD PARSER — Nivel 1: deteccion 100% deterministica, sin LLM. Se ejecuta
+    // ANTES de enviar el mensaje al Coach. Si detecta un candidato y supera la marca anterior real
+    // en BD, se registra directamente — nunca depende de que el LLM genere un tag correctamente.
+    const { mensaje } = datos;
+    const parsed = parseStrengthRecord(mensaje);
+    if (!parsed.detected || !parsed.ejercicio || !parsed.valor) {
+      return NextResponse.json({ ok: true, esPr: false });
+    }
+
+    const { data: usuarioParser } = await supabase.from("usuarios").select("historial_marcas").eq("codigo", codigo).single();
+    const histMarcas = usuarioParser?.historial_marcas || [];
+    const marcasDelEjercicio = histMarcas.filter((m: any) => m.ejercicio === parsed.ejercicio);
+    const marcaAnterior = marcasDelEjercicio[marcasDelEjercicio.length - 1];
+
+    const numNuevo = parseFloat(parsed.valor);
+    let esPr = true;
+    let mejoraCalculada: string | null = null;
+    if (marcaAnterior) {
+      const numAnterior = parseFloat(marcaAnterior.valor);
+      if (!isNaN(numAnterior) && numNuevo <= numAnterior) {
+        esPr = false;
+      } else if (!isNaN(numAnterior)) {
+        mejoraCalculada = `${(numNuevo - numAnterior).toFixed(1)}`;
+      }
+    }
+
+    if (!esPr) {
+      return NextResponse.json({ ok: true, esPr: false });
+    }
+
+    const fechaHoy = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+    const yaExisteHoy = histMarcas.some((m: any) => m.ejercicio === parsed.ejercicio && m.fecha === fechaHoy && m.valor === parsed.valor);
+    if (!yaExisteHoy) {
+      await supabase.from("usuarios").update({
+        historial_marcas: [...histMarcas, { fecha: fechaHoy, ejercicio: parsed.ejercicio, valor: parsed.valor }]
+      }).eq("codigo", codigo);
+    }
+
+    return NextResponse.json({ ok: true, esPr: true, nuevoPrDetectado: { ejercicio: parsed.ejercicio, valor: parsed.valor, mejora: mejoraCalculada } });
   }
 
   if (action === "generar_contexto_forge_card") {

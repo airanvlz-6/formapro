@@ -1518,6 +1518,14 @@ const forgeValidator=(texto:string):string=>{
       const esPlanificacionSemanal=texto.toLowerCase().includes("semana completa")||texto.toLowerCase().includes("planificacion semanal")||texto.toLowerCase().includes("plan semanal")||texto.toLowerCase().includes("toda la semana")||texto.toLowerCase().includes("generar semana");
       const esProgramacion=esPlanificacionSemanal||texto.toLowerCase().includes("programacion")||texto.toLowerCase().includes("rutina")||texto.toLowerCase().includes("semana")||texto.toLowerCase().includes("plan")||texto.toLowerCase().includes("sesion")||texto.toLowerCase().includes("entreno")||texto.toLowerCase().includes("wod")||texto.toLowerCase().includes("ejercicio")||texto.toLowerCase().includes("bloque")||texto.toLowerCase().includes("rehabilitacion")||texto.toLowerCase().includes("protocolo")||texto.toLowerCase().includes("fase");
       const mensajesContexto=esProgramacion?-6:-4;
+      // FORGE STRENGTH RECORD PARSER — Nivel 1, deteccion deterministica ANTES de llamar al LLM.
+      // Nunca depende de que el Coach recuerde generar un tag [EVENTO:] correctamente.
+      apiCall({action:"verificar_pr_deterministico",codigo:codigoUsuario,datos:{mensaje:texto}}).then((resPrDeterministico:any)=>{
+        if(resPrDeterministico?.esPr && resPrDeterministico?.nuevoPrDetectado){
+          setPrPendienteCompartir(resPrDeterministico.nuevoPrDetectado);
+        }
+      });
+
       // FORGE CONTEXT BUILDER: en vez de "ultimos N mensajes" ciegos, el backend construye el contexto
       // real (evento activo + evento anterior relevante) y lo inyectamos como un mensaje de contexto,
       // seguido solo del mensaje actual del usuario — evita perder el hilo de eventos importantes.

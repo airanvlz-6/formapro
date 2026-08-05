@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { Download, X } from 'lucide-react';
 
 const C = {
-  bg: '#050505',
+  bg: '#060605',
   ink: '#F7F4EE',
   muted: '#5C5850',
-  faint: '#3A3733',
+  faint: '#38352F',
   accent: '#FF6B00',
   gold: '#D4AF37',
   green: '#4ADE80',
@@ -18,25 +18,15 @@ interface ForgeCardData {
   achievementType: AchievementType;
   titulo: string;
   valorPrincipal: string;
-  unidad?: string; // "kg", "km", "min" - se separa del numero, mas pequeño
+  unidad?: string;
   subtitulo?: string;
   detalle?: string;
-  badge?: string; // ej: "PR #14", "31 dias desde el anterior"
+  badge?: string;
   fecha: string;
   contexto?: string;
   disciplina?: string;
-  progresion?: number[]; // ultimas 3-4 marcas numericas, la ultima es la actual
+  progresion?: { valor: number; fecha: string }[];
 }
-
-// BLUEPRINTS — un solo trazo tecnico gigante, pensado para 2-3% opacidad, ocupando toda la tarjeta
-const BLUEPRINT: Record<string, string> = {
-  fuerza: 'M200 40 A120 120 0 1 1 199 40 M200 75 A85 85 0 1 1 199 75 M200 105 A55 55 0 1 1 199 105 M60 240 L340 240 M200 40 L200 240 M170 240 L170 300 L230 300 L230 240',
-  halterofilia: 'M200 40 A120 120 0 1 1 199 40 M200 75 A85 85 0 1 1 199 75 M200 105 A55 55 0 1 1 199 105 M60 240 L340 240 M200 40 L200 240 M170 240 L170 300 L230 300 L230 240',
-  carrera: 'M40 260 Q120 180 180 200 Q230 213 250 150 L320 60 M40 300 L360 300 M75 300 L100 260 M140 300 L165 255 M205 300 L230 265 M270 300 L295 245 M320 60 L295 30 M320 60 L350 75',
-  crossfit: 'M50 60 L50 300 M350 60 L350 300 M50 60 L350 60 M50 300 L350 300 M50 180 L350 180 M120 60 L120 20 M280 60 L280 20 M120 20 L280 20 M150 180 Q165 230 150 280 M250 180 Q235 230 250 280',
-  ciclismo: 'M90 260 A70 70 0 1 1 90 120 A70 70 0 1 1 90 260 M310 260 A70 70 0 1 1 310 120 A70 70 0 1 1 310 260 M90 190 L200 90 L310 190 M200 90 L175 30 L245 30',
-  generico: 'M200 30 L230 145 L350 145 L255 210 L290 325 L200 260 L110 325 L145 210 L50 145 L170 145 Z',
-};
 
 const ACHIEVEMENT_CONFIG: Record<AchievementType, { label: string; accentColor: string; icon: string }> = {
   pr: { label: 'NUEVO PR', accentColor: C.accent, icon: '🏆' },
@@ -47,56 +37,154 @@ const ACHIEVEMENT_CONFIG: Record<AchievementType, { label: string; accentColor: 
   milestone: { label: 'HITO', accentColor: C.gold, icon: '✨' },
 };
 
-function Blueprint({ disciplina, color }: { disciplina: string; color: string }) {
-  const path = BLUEPRINT[disciplina] || BLUEPRINT.generico;
+// ============================================================
+// CAPA 1 — BACKGROUND ASSETS: SVG detallado por disciplina.
+// Elementos artisticos (disco, silueta, barra) — NUNCA datos dinamicos aqui.
+// ============================================================
+function BackgroundFuerza({ color }: { color: string }) {
   return (
-    <svg viewBox="0 0 400 400" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.028, pointerEvents: 'none' }} preserveAspectRatio="xMidYMid slice">
-      <path d={path} fill="none" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    <svg viewBox="0 0 480 480" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} preserveAspectRatio="xMidYMid slice">
+      <g transform="translate(260,-50)" stroke={color} fill="none" strokeWidth="1.3">
+        <circle cx="200" cy="200" r="180" opacity="0.22" />
+        <circle cx="200" cy="200" r="150" opacity="0.18" />
+        <circle cx="200" cy="200" r="120" opacity="0.16" />
+        <circle cx="200" cy="200" r="90" opacity="0.14" />
+        <circle cx="200" cy="200" r="45" opacity="0.22" />
+        <circle cx="200" cy="200" r="14" opacity="0.28" fill={color} fillOpacity="0.05" />
+        <line x1="200" y1="20" x2="200" y2="380" opacity="0.08" />
+        <line x1="20" y1="200" x2="380" y2="200" opacity="0.08" />
+        <line x1="60" y1="60" x2="340" y2="340" opacity="0.06" />
+        <line x1="340" y1="60" x2="60" y2="340" opacity="0.06" />
+        <path id="fcCirclePath" d="M 200,20 A 180,180 0 0,1 380,200" fill="none" />
+        <text fontFamily="'DM Sans', sans-serif" fontSize="12" fill={color} fillOpacity="0.18" letterSpacing="6" fontWeight="700">
+          <textPath href="#fcCirclePath" startOffset="12%">FORGE STRENGTH</textPath>
+        </text>
+      </g>
+      <g transform="translate(-70,330) rotate(-8)" stroke={color} fill="none" strokeWidth="1.4" opacity="0.16">
+        <line x1="0" y1="0" x2="260" y2="0" />
+        <circle cx="30" cy="0" r="20" />
+        <circle cx="30" cy="0" r="26" />
+        <line x1="0" y1="-26" x2="0" y2="26" />
+        <line x1="10" y1="-20" x2="10" y2="20" />
+      </g>
+      <g transform="translate(10,300)" stroke={color} fill="none" strokeWidth="1.3" opacity="0.12">
+        <path d="M60 40 Q65 20 80 20 Q92 20 92 32 Q92 42 82 45 L82 70 Q95 78 100 95 L100 130 M82 70 L60 78 L60 130 M60 78 Q40 85 25 100 M92 42 L140 42 M92 55 L145 60" />
+        <circle cx="83" cy="24" r="9" />
+      </g>
     </svg>
   );
 }
 
-// Halo circular grande y difuso detras del numero — al estilo Apple, no glow-de-texto
+function BackgroundCarrera({ color }: { color: string }) {
+  return (
+    <svg viewBox="0 0 480 480" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} preserveAspectRatio="xMidYMid slice">
+      <g stroke={color} fill="none" strokeWidth="1.2" opacity="0.14">
+        <path d="M-20 340 Q100 300 160 320 Q220 340 260 280 Q300 220 380 200 Q440 185 500 210" />
+        <path d="M-20 380 Q120 350 190 375 Q250 395 300 340 Q350 285 430 265 Q480 250 520 270" opacity="0.6" />
+        <path d="M-20 420 Q140 400 220 415 Q280 428 330 390 Q380 350 460 335" opacity="0.4" />
+      </g>
+      <g transform="translate(300,40)" stroke={color} fill="none" strokeWidth="1.3" opacity="0.15">
+        <path d="M40 30 Q45 15 58 15 Q68 15 68 25 Q68 33 60 36 L58 55 Q70 62 75 78 L78 105 M58 55 L40 62 L38 105 M40 62 Q22 68 10 82" />
+        <circle cx="60" cy="19" r="7" />
+      </g>
+      <g stroke={color} fill="none" strokeWidth="1" opacity="0.1">
+        <circle cx="220" cy="180" r="4" fill={color} fillOpacity="0.2" />
+        <circle cx="220" cy="180" r="14" />
+        <circle cx="220" cy="180" r="26" />
+      </g>
+    </svg>
+  );
+}
+
+function BackgroundCrossfit({ color }: { color: string }) {
+  return (
+    <svg viewBox="0 0 480 480" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} preserveAspectRatio="xMidYMid slice">
+      <g stroke={color} fill="none" strokeWidth="1.3" opacity="0.14">
+        <rect x="70" y="60" width="340" height="280" />
+        <line x1="70" y1="200" x2="410" y2="200" />
+        <line x1="150" y1="60" x2="150" y2="30" />
+        <line x1="330" y1="60" x2="330" y2="30" />
+        <line x1="150" y1="30" x2="330" y2="30" />
+        <path d="M200 200 Q215 240 200 270" opacity="0.5" />
+        <path d="M280 200 Q265 240 280 270" opacity="0.5" />
+      </g>
+    </svg>
+  );
+}
+
+function BackgroundGenerico({ color }: { color: string }) {
+  return (
+    <svg viewBox="0 0 480 480" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} preserveAspectRatio="xMidYMid slice">
+      <g stroke={color} fill="none" strokeWidth="1.2" opacity="0.14">
+        <path d="M240 60 L272 175 L390 175 L296 245 L330 360 L240 292 L150 360 L184 245 L90 175 L208 175 Z" />
+      </g>
+    </svg>
+  );
+}
+
+const BACKGROUND_MAP: Record<string, any> = {
+  fuerza: BackgroundFuerza,
+  halterofilia: BackgroundFuerza,
+  carrera: BackgroundCarrera,
+  crossfit: BackgroundCrossfit,
+  ciclismo: BackgroundCarrera,
+  generico: BackgroundGenerico,
+};
+
+// ============================================================
+// CAPA 2 — OVERLAY: glow, particulas, esquineras (decorativo, reutilizable)
+// ============================================================
+function Corners({ color }: { color: string }) {
+  return (
+    <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+      <path d="M24 44 L24 24 L44 24" stroke={color} strokeWidth="1.5" fill="none" opacity="0.5" />
+      <path d="M436 456 L456 456 L456 436" stroke={color} strokeWidth="1.5" fill="none" opacity="0.5" />
+    </svg>
+  );
+}
+
 function NumberHalo({ color }: { color: string }) {
   return (
     <div style={{
-      position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%)',
-      width: 420, height: 420, borderRadius: '50%',
-      background: `radial-gradient(circle, ${color}22 0%, ${color}0A 45%, transparent 70%)`,
-      filter: 'blur(4px)', zIndex: 0,
+      position: 'absolute', left: '52%', top: '46%', transform: 'translate(-50%,-50%)',
+      width: 440, height: 300, borderRadius: '50%',
+      background: `radial-gradient(ellipse, ${color}2A 0%, ${color}10 45%, transparent 72%)`,
+      zIndex: 0,
     }} />
   );
 }
 
-function CardShell({ children, glow, disciplina }: { children: React.ReactNode; glow: string; disciplina: string }) {
+function Sparks({ color }: { color: string }) {
+  const pts = [[365, 400, 0], [400, 420, 0.5], [385, 440, 1], [355, 425, 1.4]];
   return (
-    <div style={{
-      width: 480, height: 480, background: C.bg,
-      borderRadius: 26, position: 'relative', overflow: 'hidden',
-      fontFamily: "'DM Sans', sans-serif",
-      boxShadow: `0 40px 100px -30px rgba(0,0,0,0.7)`,
-    }}>
-      <Blueprint disciplina={disciplina} color={glow} />
-      {children}
-    </div>
+    <>
+      <style>{`@keyframes fcSpark{0%,100%{opacity:0.2;transform:scale(0.6)}50%{opacity:1;transform:scale(1.1)}}`}</style>
+      {pts.map(([x, y, d], i) => (
+        <div key={i} style={{ position: 'absolute', left: x, top: y, width: 3, height: 3, borderRadius: '50%', background: color, boxShadow: `0 0 8px 2px ${color}`, animation: `fcSpark 2.2s ease-in-out ${d}s infinite`, zIndex: 2 }} />
+      ))}
+    </>
   );
 }
 
-function TopBadge({ label, color, icon }: { label: string; color: string; icon: string }) {
+// ============================================================
+// CAPA 3 — DYNAMIC DATA: todo lo que React controla con datos reales
+// ============================================================
+function TitleBlock({ titulo, color }: { titulo: string; color: string }) {
   return (
-    <div style={{ position: 'absolute', top: 30, left: 34, zIndex: 3, display: 'flex', alignItems: 'center', gap: 7 }}>
-      <span style={{ fontSize: 13 }}>{icon}</span>
-      <span style={{ color, fontSize: 10.5, fontWeight: 800, letterSpacing: 2 }}>{label}</span>
+    <div style={{ position: 'absolute', top: 30, left: 36, zIndex: 3 }}>
+      <p style={{ color, fontSize: 11, fontWeight: 800, letterSpacing: 2.5, marginBottom: 8 }}>NUEVO PR</p>
+      <div style={{ width: 34, height: 2, background: color, borderRadius: 2, marginBottom: 10 }} />
+      <p style={{ color: C.muted, fontSize: 15, fontWeight: 700, letterSpacing: 2 }}>{titulo}</p>
     </div>
   );
 }
 
 function Footer({ fecha }: { fecha: string }) {
   return (
-    <div style={{ position: 'absolute', bottom: 24, left: 34, right: 34, display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 3 }}>
+    <div style={{ position: 'absolute', bottom: 24, left: 36, right: 36, display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 3 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <img src="/logo-forge.png" alt="" style={{ width: 14, height: 14, objectFit: 'contain', opacity: 0.6 }} />
-        <span style={{ color: C.muted, fontSize: 9.5, fontWeight: 800, letterSpacing: 2 }}>FORGE</span>
+        <img src="/logo-forge.png" alt="" style={{ width: 15, height: 15, objectFit: 'contain' }} />
+        <span style={{ color: C.ink, fontSize: 10, fontWeight: 800, letterSpacing: 2, opacity: 0.7 }}>FORGE</span>
       </div>
       <span style={{ color: C.faint, fontSize: 9, letterSpacing: 0.4 }}>{fecha}</span>
     </div>
@@ -105,62 +193,84 @@ function Footer({ fecha }: { fecha: string }) {
 
 function InsightCapsule({ text, color }: { text: string; color: string }) {
   return (
-    <div style={{ position: 'relative', zIndex: 3, margin: '0 34px 62px', background: '#0D0D0D', border: `1px solid ${color}25`, borderRadius: 14, padding: '12px 16px' }}>
-      <p style={{ color, fontSize: 9, fontWeight: 800, letterSpacing: 1.2, marginBottom: 5 }}>💡 FORGE INSIGHT</p>
-      <p style={{ color: C.ink, fontSize: 12, lineHeight: 1.45, opacity: 0.9 }}>{text}</p>
+    <div style={{ position: 'relative', zIndex: 3, margin: '0 36px 60px', background: `${color}08`, border: `1px solid ${color}30`, borderRadius: 14, padding: '13px 16px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+      <span style={{ fontSize: 16 }}>🧠</span>
+      <div>
+        <p style={{ color, fontSize: 9, fontWeight: 800, letterSpacing: 1, marginBottom: 3 }}>FORGE INSIGHT</p>
+        <p style={{ color: C.ink, fontSize: 12, lineHeight: 1.45, opacity: 0.92 }}>{text}</p>
+      </div>
     </div>
   );
 }
 
-// Barra de progresion: ultimas marcas en gris tenue, la actual en blanco brillante — cuenta la historia
-function ProgressionBar({ valores, color }: { valores: number[]; color: string }) {
-  const max = Math.max(...valores);
-  const min = Math.min(...valores);
-  const rango = max - min || 1;
+function ProgressionTimeline({ items, color }: { items: { valor: number; fecha: string }[]; color: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 48, marginTop: 4 }}>
-      {valores.map((v, i) => {
-        const esUltimo = i === valores.length - 1;
-        const alturaPct = 20 + ((v - min) / rango) * 80;
-        return (
-          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, flex: 1 }}>
-            <div style={{
-              width: '100%', maxWidth: 26, height: `${alturaPct}%`, borderRadius: 3,
-              background: esUltimo ? color : C.faint,
-              boxShadow: esUltimo ? `0 0 16px ${color}70` : 'none',
-            }} />
-            <span style={{ fontSize: 8.5, color: esUltimo ? C.ink : C.muted, fontWeight: esUltimo ? 800 : 600 }}>{v}</span>
-          </div>
-        );
-      })}
+    <div style={{ position: 'relative', zIndex: 3, margin: '0 36px 16px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4 }}>
+        {items.map((it, i) => {
+          const esUltimo = i === items.length - 1;
+          return (
+            <div key={i} style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+              <div style={{ flex: 1, textAlign: 'center' }}>
+                <p style={{
+                  color: esUltimo ? C.ink : C.muted, fontFamily: 'Georgia, serif', fontWeight: 800,
+                  fontSize: esUltimo ? 24 : 18, lineHeight: 1, marginBottom: 2,
+                  textShadow: esUltimo ? `0 0 20px ${color}70` : 'none',
+                }}>{it.valor}<span style={{ fontSize: esUltimo ? 11 : 9, fontWeight: 700 }}> kg</span></p>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: esUltimo ? color : C.faint, margin: '6px auto', boxShadow: esUltimo ? `0 0 10px ${color}` : 'none' }} />
+                <p style={{ color: esUltimo ? color : C.faint, fontSize: 8, fontWeight: esUltimo ? 800 : 600, letterSpacing: 0.5 }}>{it.fecha}</p>
+              </div>
+              {i < items.length - 1 && <span style={{ color: C.faint, fontSize: 11, marginBottom: 20 }}>›</span>}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ height: 1, background: `linear-gradient(90deg, transparent, ${C.faint}, ${color}60)`, marginTop: 10 }} />
     </div>
   );
 }
 
-// ---- LAYOUT PR: numero domina 60% del alto, badge junto al numero, progresion opcional ----
+// ============================================================
+// COMPOSICION FINAL — todas las capas juntas
+// ============================================================
+function CardShell({ children, disciplina, color }: { children: React.ReactNode; disciplina: string; color: string }) {
+  const Background = BACKGROUND_MAP[disciplina] || BACKGROUND_MAP.generico;
+  return (
+    <div style={{
+      width: 480, height: 480, background: `linear-gradient(150deg, #0A0A09 0%, ${C.bg} 55%)`,
+      borderRadius: 26, position: 'relative', overflow: 'hidden',
+      fontFamily: "'DM Sans', sans-serif",
+      boxShadow: `0 40px 100px -30px rgba(0,0,0,0.7)`,
+    }}>
+      <Background color={color} />
+      <Corners color={color} />
+      {children}
+    </div>
+  );
+}
+
 function LayoutPR({ data, config }: { data: ForgeCardData; config: typeof ACHIEVEMENT_CONFIG['pr'] }) {
   return (
-    <CardShell glow={config.accentColor} disciplina={data.disciplina || 'generico'}>
-      <TopBadge label={data.titulo} color={C.muted} icon="" />
-      <div style={{ position: 'relative', zIndex: 2, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <NumberHalo color={config.accentColor} />
-        <div style={{ position: 'relative', zIndex: 1, textAlign: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 6 }}>
-            <span style={{ color: C.ink, fontSize: 128, fontWeight: 800, fontFamily: 'Georgia, serif', lineHeight: 0.85 }}>{data.valorPrincipal}</span>
-            {data.unidad && <span style={{ color: C.muted, fontSize: 32, fontWeight: 700, fontFamily: 'Georgia, serif' }}>{data.unidad}</span>}
+    <CardShell disciplina={data.disciplina || 'generico'} color={config.accentColor}>
+      <NumberHalo color={config.accentColor} />
+      <Sparks color={config.accentColor} />
+      <TitleBlock titulo={data.titulo} color={config.accentColor} />
+      <div style={{ position: 'relative', zIndex: 3, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingTop: 30 }}>
+        <div style={{ padding: '0 36px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <span style={{ color: C.ink, fontSize: 120, fontWeight: 800, fontFamily: 'Georgia, serif', lineHeight: 0.85, textShadow: `0 0 40px ${config.accentColor}40` }}>{data.valorPrincipal}</span>
+            {data.unidad && <span style={{ color: C.muted, fontSize: 30, fontWeight: 700, fontFamily: 'Georgia, serif' }}>{data.unidad}</span>}
           </div>
-          <div style={{ width: 46, height: 2, background: config.accentColor, margin: '18px auto 14px', borderRadius: 2 }} />
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14 }}>
             <span style={{ fontSize: 15 }}>{config.icon}</span>
-            <span style={{ color: config.accentColor, fontSize: 13, fontWeight: 800, letterSpacing: 1.5 }}>{config.label}</span>
+            <span style={{ color: config.accentColor, fontSize: 12, fontWeight: 800, letterSpacing: 1.5 }}>{config.label}</span>
+            <div style={{ flex: 1, height: 1, background: `${config.accentColor}30` }} />
           </div>
-          {data.badge && <p style={{ color: C.muted, fontSize: 11, fontWeight: 600, marginTop: 8 }}>{data.badge}</p>}
+          {data.badge && <p style={{ color: C.muted, fontSize: 13, fontWeight: 600, marginTop: 8 }}>{data.badge}</p>}
         </div>
       </div>
       {data.progresion && data.progresion.length >= 2 && (
-        <div style={{ position: 'relative', zIndex: 3, padding: '0 34px', marginBottom: data.contexto ? 18 : 62 }}>
-          <ProgressionBar valores={data.progresion} color={config.accentColor} />
-        </div>
+        <ProgressionTimeline items={data.progresion} color={config.accentColor} />
       )}
       {data.contexto && <InsightCapsule text={data.contexto} color={config.accentColor} />}
       <Footer fecha={data.fecha} />
@@ -170,14 +280,15 @@ function LayoutPR({ data, config }: { data: ForgeCardData; config: typeof ACHIEV
 
 function LayoutGoal({ data, config }: { data: ForgeCardData; config: typeof ACHIEVEMENT_CONFIG['goal'] }) {
   return (
-    <CardShell glow={config.accentColor} disciplina={data.disciplina || 'generico'}>
-      <div style={{ position: 'relative', zIndex: 2, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 44px' }}>
-        <NumberHalo color={config.accentColor} />
-        <div style={{ position: 'relative', zIndex: 1 }}>
-          <span style={{ fontSize: 40 }}>✓</span>
-          <p style={{ color: C.muted, fontSize: 15, fontWeight: 600, margin: '18px 0 6px', maxWidth: 330, lineHeight: 1.4 }}>{data.subtitulo}</p>
-          <p style={{ color: C.ink, fontSize: 76, fontWeight: 800, fontFamily: 'Georgia, serif', lineHeight: 1 }}>{data.valorPrincipal}</p>
-          <div style={{ width: 46, height: 2, background: config.accentColor, margin: '18px auto 12px', borderRadius: 2 }} />
+    <CardShell disciplina={data.disciplina || 'generico'} color={config.accentColor}>
+      <NumberHalo color={config.accentColor} />
+      <Sparks color={config.accentColor} />
+      <div style={{ position: 'relative', zIndex: 3, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 44px' }}>
+        <span style={{ fontSize: 38 }}>✓</span>
+        <p style={{ color: C.muted, fontSize: 15, fontWeight: 600, margin: '16px 0 6px', maxWidth: 330, lineHeight: 1.4 }}>{data.subtitulo}</p>
+        <p style={{ color: C.ink, fontSize: 74, fontWeight: 800, fontFamily: 'Georgia, serif', lineHeight: 1, textShadow: `0 0 40px ${config.accentColor}40` }}>{data.valorPrincipal}</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 16 }}>
+          <span style={{ fontSize: 14 }}>{config.icon}</span>
           <span style={{ color: config.accentColor, fontSize: 12, fontWeight: 800, letterSpacing: 2 }}>{config.label}</span>
         </div>
       </div>
@@ -189,14 +300,13 @@ function LayoutGoal({ data, config }: { data: ForgeCardData; config: typeof ACHI
 
 function LayoutStreak({ data, config }: { data: ForgeCardData; config: typeof ACHIEVEMENT_CONFIG['streak'] }) {
   return (
-    <CardShell glow={config.accentColor} disciplina="generico">
-      <div style={{ position: 'relative', zIndex: 2, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <NumberHalo color={config.accentColor} />
-        <div style={{ position: 'relative', zIndex: 1, textAlign: 'center' }}>
-          <span style={{ fontSize: 42, filter: `drop-shadow(0 0 24px ${config.accentColor}80)` }}>🔥</span>
-          <p style={{ color: C.ink, fontSize: 158, fontWeight: 800, fontFamily: 'Georgia, serif', lineHeight: 0.85, margin: '4px 0 0' }}>{data.valorPrincipal}</p>
-          <span style={{ color: config.accentColor, fontSize: 14, fontWeight: 800, letterSpacing: 4 }}>DÍAS SEGUIDOS</span>
-        </div>
+    <CardShell disciplina="generico" color={config.accentColor}>
+      <NumberHalo color={config.accentColor} />
+      <Sparks color={config.accentColor} />
+      <div style={{ position: 'relative', zIndex: 3, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontSize: 40, filter: `drop-shadow(0 0 24px ${config.accentColor}80)` }}>🔥</span>
+        <p style={{ color: C.ink, fontSize: 152, fontWeight: 800, fontFamily: 'Georgia, serif', lineHeight: 0.85, textShadow: `0 0 50px ${config.accentColor}45` }}>{data.valorPrincipal}</p>
+        <span style={{ color: config.accentColor, fontSize: 14, fontWeight: 800, letterSpacing: 4 }}>DÍAS SEGUIDOS</span>
       </div>
       {data.contexto && <InsightCapsule text={data.contexto} color={config.accentColor} />}
       <Footer fecha={data.fecha} />
@@ -206,15 +316,15 @@ function LayoutStreak({ data, config }: { data: ForgeCardData; config: typeof AC
 
 function LayoutWeek({ data, config }: { data: ForgeCardData; config: typeof ACHIEVEMENT_CONFIG['week'] }) {
   return (
-    <CardShell glow={config.accentColor} disciplina="crossfit">
-      <div style={{ position: 'relative', zIndex: 2, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <NumberHalo color={config.accentColor} />
-        <div style={{ position: 'relative', zIndex: 1, textAlign: 'center' }}>
-          <p style={{ color: C.ink, fontSize: 100, fontWeight: 800, fontFamily: 'Georgia, serif', lineHeight: 0.9 }}>{data.valorPrincipal}</p>
-          <div style={{ width: 46, height: 2, background: config.accentColor, margin: '16px auto 12px', borderRadius: 2 }} />
-          <span style={{ color: config.accentColor, fontSize: 13, fontWeight: 800, letterSpacing: 1.5 }}>{config.label}</span>
-          <p style={{ color: C.muted, fontSize: 12, marginTop: 6 }}>100% de adherencia</p>
+    <CardShell disciplina="crossfit" color={config.accentColor}>
+      <NumberHalo color={config.accentColor} />
+      <div style={{ position: 'relative', zIndex: 3, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: C.ink, fontSize: 96, fontWeight: 800, fontFamily: 'Georgia, serif', lineHeight: 0.9, textShadow: `0 0 40px ${config.accentColor}40` }}>{data.valorPrincipal}</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14 }}>
+          <span style={{ fontSize: 14 }}>{config.icon}</span>
+          <span style={{ color: config.accentColor, fontSize: 12, fontWeight: 800, letterSpacing: 1.5 }}>{config.label}</span>
         </div>
+        <p style={{ color: C.muted, fontSize: 12, marginTop: 6 }}>100% de adherencia</p>
       </div>
       {data.contexto && <InsightCapsule text={data.contexto} color={config.accentColor} />}
       <Footer fecha={data.fecha} />

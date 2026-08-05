@@ -1809,10 +1809,20 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
       }).eq("codigo", codigo);
     }
 
-    // FORGE CARDS — progresion visual: ultimas 3 marcas previas + la nueva, solo valores numericos
-    const progresionValores = [...marcasDelEjercicio.slice(-3).map((m: any) => parseFloat(m.valor)).filter((v: number) => !isNaN(v)), numNuevo];
+    // FORGE CARDS — progresion visual: ultimas 3 marcas previas + la nueva, con fecha formateada corta
+    const formatearFechaCorta = (f: string) => {
+      const d = new Date(f + 'T12:00:00');
+      const meses = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
+      return `${String(d.getDate()).padStart(2,'0')} ${meses[d.getMonth()]}`;
+    };
+    const progresionConFechas = [
+      ...marcasDelEjercicio.slice(-3)
+        .map((m: any) => ({ valor: parseFloat(m.valor), fecha: formatearFechaCorta(m.fecha) }))
+        .filter((p: any) => !isNaN(p.valor)),
+      { valor: numNuevo, fecha: formatearFechaCorta(fechaHoy) }
+    ];
 
-    return NextResponse.json({ ok: true, esPr: true, nuevoPrDetectado: { ejercicio: parsed.ejercicio, valor: parsed.valor, mejora: mejoraCalculada, progresion: progresionValores } });
+    return NextResponse.json({ ok: true, esPr: true, nuevoPrDetectado: { ejercicio: parsed.ejercicio, valor: parsed.valor, mejora: mejoraCalculada, progresion: progresionConFechas } });
   }
 
   if (action === "generar_contexto_forge_card") {

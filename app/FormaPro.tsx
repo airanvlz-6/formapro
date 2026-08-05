@@ -1269,7 +1269,9 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
       const esp=espKey||categoria!;
       const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:3000,system:buildPrompt(catObj,perfil,[],""),messages:[{role:"user",content:prompt}]});
       const texto=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error al conectar.").replace(/\[STATE_UPDATE\][\s\S]*?\[\/STATE_UPDATE\]/g,"").trim();
-      const hist=[{role:"user",content:prompt},{role:"assistant",content:texto}];
+      // FIX: el prompt interno (usado solo para generar la bienvenida) nunca debe guardarse como
+      // mensaje visible del usuario en el historial — se sustituye por un texto neutro discreto.
+      const hist=[{role:"user",content:"[Inicio de conversación]"},{role:"assistant",content:texto}];
       setMensajes([{role:"assistant",content:texto}]);setHistorial(hist);setMsgCount(1);setEmailGuardado(!!email);setFechaRegistro(new Date().toISOString());
       await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:espKey||categoria,perfil,rutina:texto,historial:hist,marcas:[],email:email||null,admin:false,premium:false,modo_entrada:modoEntrada}});
       setCodigoUsuario(codigo);

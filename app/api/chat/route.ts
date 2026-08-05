@@ -2471,11 +2471,26 @@ Menciona el numero exacto de dias en la frase.`;
           .replace(/press banca|press de banca/i, "bench_press")
           .replace(/\s+/g, "_");
         const fechaEvento = evento.date;
-        const yaExiste = histMarcas.some((m:any) => m.ejercicio === ejercicio && m.fecha === fechaEvento);
-        if (!yaExiste) {
+        const yaExisteMarca = histMarcas.some((m:any) => m.ejercicio === ejercicio && m.fecha === fechaEvento);
+        if (!yaExisteMarca) {
           await supabase.from("usuarios").update({
             historial_marcas: [...histMarcas, { fecha: fechaEvento, ejercicio, valor }]
           }).eq("codigo", codigo);
+
+          // FORGE CARDS — fuente FIABLE de deteccion de PR: el tag [EVENTO:] del propio Coach,
+          // en vez de depender del extractor Haiku posterior (que puede fallar de forma inconsistente
+          // segun el formato exacto del mensaje del usuario). Calculamos la mejora aqui mismo.
+          const marcasAnteriores = histMarcas.filter((m:any) => m.ejercicio === ejercicio);
+          const marcaAnterior = marcasAnteriores[marcasAnteriores.length - 1];
+          let mejoraCalculada: string | null = null;
+          if (marcaAnterior) {
+            const numAnterior = parseFloat(marcaAnterior.valor);
+            const numNuevo = parseFloat(valor);
+            if (!isNaN(numAnterior) && !isNaN(numNuevo) && numNuevo > numAnterior) {
+              mejoraCalculada = `${(numNuevo - numAnterior).toFixed(1)}`;
+            }
+          }
+          return NextResponse.json({ ok: true, nuevoPrDetectado: { ejercicio, valor, mejora: mejoraCalculada } });
         }
       }
     }

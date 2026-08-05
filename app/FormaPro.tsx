@@ -1375,7 +1375,11 @@ const forgeValidator=(texto:string):string=>{
       }
     });
     await procesarTag("[EVENTO:",8,async(data)=>{
-      await apiCall({action:"registrar_evento",codigo:codigoUsuario,datos:{evento:data}});
+      const resEvento=await apiCall({action:"registrar_evento",codigo:codigoUsuario,datos:{evento:data}});
+      // FORGE CARDS — fuente FIABLE de PR: el tag [EVENTO:] del Coach, no el extractor Haiku posterior
+      if(resEvento?.nuevoPrDetectado){
+        setPrPendienteCompartir(resEvento.nuevoPrDetectado);
+      }
     });
     await procesarTag("[METRICA:",9,async(data)=>{
       await apiCall({action:"registrar_metrica_pasada",codigo:codigoUsuario,datos:data});

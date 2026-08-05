@@ -735,7 +735,7 @@ const [betaFounderInfo,setBetaFounderInfo]=useState<{numero:number;maxSlots:numb
 const [estadoFounder,setEstadoFounder]=useState<any>(null);
 const [mostrarMasChat,setMostrarMasChat]=useState(false);
 const [forgeCardData,setForgeCardData]=useState<any>(null);
-const [prPendienteCompartir,setPrPendienteCompartir]=useState<{ejercicio:string;valor:string;mejora:string|null}|null>(null);
+const [prPendienteCompartir,setPrPendienteCompartir]=useState<{ejercicio:string;valor:string;mejora:string|null;progresion?:number[]}|null>(null);
 const [semanaPendienteCompartir,setSemanaPendienteCompartir]=useState<{sesionesCompletadas:number;sesionesTotales:number}|null>(null);
 const [rachaPendienteCompartir,setRachaPendienteCompartir]=useState<number|null>(null);
 const [objetivoPendienteCompartir,setObjetivoPendienteCompartir]=useState<{objetivo:string;resultado:string}|null>(null);
@@ -2879,15 +2879,20 @@ ${testStr}`}]});
                 /squat|deadlift|bench|press|sentadilla|peso_muerto/.test(ejercicioLower) ? "fuerza" :
                 /run|carrera|km|correr/.test(ejercicioLower) ? "carrera" :
                 /bici|ciclismo|watt|ftp/.test(ejercicioLower) ? "ciclismo" : "crossfit";
+              // Separar el numero de la unidad (ej: "158kg" -> "158" + "kg")
+              const matchValorUnidad=prPendienteCompartir.valor.match(/^([\d.,]+)\s*([a-zA-Z]*)$/);
+              const numeroSolo=matchValorUnidad?matchValorUnidad[1]:prPendienteCompartir.valor;
+              const unidadSola=matchValorUnidad?matchValorUnidad[2]:"";
               setForgeCardData({
                 achievementType:"pr",
                 titulo:nombreEjercicio,
-                valorPrincipal:prPendienteCompartir.valor,
-                detalle:prPendienteCompartir.mejora?`+${prPendienteCompartir.mejora} vs anterior`:undefined,
-                subtitulo:"Nuevo récord personal",
+                valorPrincipal:numeroSolo,
+                unidad:unidadSola||undefined,
+                badge:prPendienteCompartir.mejora?`+${prPendienteCompartir.mejora} vs anterior`:undefined,
                 fecha:new Date().toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric"}).toUpperCase(),
                 contexto:resContexto?.contexto||undefined,
-                disciplina:disciplinaDetectada
+                disciplina:disciplinaDetectada,
+                progresion:prPendienteCompartir.progresion&&prPendienteCompartir.progresion.length>=2?prPendienteCompartir.progresion:undefined
               });
               setPrPendienteCompartir(null);
             }} style={{background:"#fff",color:C.accent,border:"none",borderRadius:10,padding:"8px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>

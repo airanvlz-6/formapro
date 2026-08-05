@@ -1809,7 +1809,10 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
       }).eq("codigo", codigo);
     }
 
-    return NextResponse.json({ ok: true, esPr: true, nuevoPrDetectado: { ejercicio: parsed.ejercicio, valor: parsed.valor, mejora: mejoraCalculada } });
+    // FORGE CARDS — progresion visual: ultimas 3 marcas previas + la nueva, solo valores numericos
+    const progresionValores = [...marcasDelEjercicio.slice(-3).map((m: any) => parseFloat(m.valor)).filter((v: number) => !isNaN(v)), numNuevo];
+
+    return NextResponse.json({ ok: true, esPr: true, nuevoPrDetectado: { ejercicio: parsed.ejercicio, valor: parsed.valor, mejora: mejoraCalculada, progresion: progresionValores } });
   }
 
   if (action === "generar_contexto_forge_card") {

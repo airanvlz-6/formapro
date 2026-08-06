@@ -1550,7 +1550,12 @@ const forgeValidator=(texto:string):string=>{
 
       // FORGE PENDING ACTIONS — deteccion 100% deterministica de confirmacion (regex simple), nunca
       // depende de que el LLM recuerde generar un tag tras la confirmacion del usuario.
-      const esConfirmacionSimple = /^\s*(s[ií]|confirmo|vale|adelante|ok|okay|de\s*acuerdo|perfecto|correcto|hazlo|as[ií]\s*(lo\s*)?(hacemos|hago))\s*[.!]?\s*$/i.test(texto.trim());
+      // FIX: permitir combinaciones naturales de palabras de confirmacion (ej: "confirmo si", "si, confirmo",
+// "vale, adelante") ademas de una sola palabra — un mensaje corto (<6 palabras) formado ÚNICAMENTE
+// por palabras de esta lista, sin ningun contenido adicional, se considera confirmacion.
+const PALABRAS_CONFIRMACION = /^(s[ií]|confirmo|vale|adelante|ok|okay|de|acuerdo|perfecto|correcto|hazlo|as[ií]|lo|hacemos|hago|claro|dale)$/i;
+      const palabrasTexto = texto.trim().replace(/[.,!¡¿?]/g,"").split(/\s+/).filter(Boolean);
+      const esConfirmacionSimple = palabrasTexto.length>0 && palabrasTexto.length<=5 && palabrasTexto.every(p=>PALABRAS_CONFIRMACION.test(p));
       if(esConfirmacionSimple && codigoUsuario){
         apiCall({action:"confirmar_pending_action",codigo:codigoUsuario}).then((resPending:any)=>{
           if(resPending?.ejecutado){

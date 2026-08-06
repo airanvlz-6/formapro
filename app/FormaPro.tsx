@@ -1550,12 +1550,13 @@ const forgeValidator=(texto:string):string=>{
 
       // FORGE PENDING ACTIONS — deteccion 100% deterministica de confirmacion (regex simple), nunca
       // depende de que el LLM recuerde generar un tag tras la confirmacion del usuario.
-      // FIX: permitir combinaciones naturales de palabras de confirmacion (ej: "confirmo si", "si, confirmo",
-// "vale, adelante") ademas de una sola palabra — un mensaje corto (<6 palabras) formado ÚNICAMENTE
-// por palabras de esta lista, sin ningun contenido adicional, se considera confirmacion.
-const PALABRAS_CONFIRMACION = /^(s[ií]|confirmo|vale|adelante|ok|okay|de|acuerdo|perfecto|correcto|hazlo|as[ií]|lo|hacemos|hago|claro|dale)$/i;
-      const palabrasTexto = texto.trim().replace(/[.,!¡¿?]/g,"").split(/\s+/).filter(Boolean);
-      const esConfirmacionSimple = palabrasTexto.length>0 && palabrasTexto.length<=5 && palabrasTexto.every(p=>PALABRAS_CONFIRMACION.test(p));
+      // FIX FINAL: en vez de exigir que TODAS las palabras del mensaje coincidan con una lista exhaustiva
+// (fragil, siempre habra huecos como "ajuste"/"cambio"/"plan"), verificamos que el mensaje CONTENGA
+// una palabra clara de confirmacion Y sea corto (<8 palabras) — sugiere respuesta afirmativa breve,
+// no un mensaje nuevo con contenido propio que casualmente contenga la palabra "si" en otro contexto.
+const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|okay|de\s*acuerdo|perfecto|correcto|hazlo|claro|dale)\b/i;
+      const palabrasTexto = texto.trim().split(/\s+/).filter(Boolean);
+      const esConfirmacionSimple = palabrasTexto.length>0 && palabrasTexto.length<=8 && CONTIENE_CONFIRMACION.test(texto.trim());
       if(esConfirmacionSimple && codigoUsuario){
         apiCall({action:"confirmar_pending_action",codigo:codigoUsuario}).then((resPending:any)=>{
           if(resPending?.ejecutado){

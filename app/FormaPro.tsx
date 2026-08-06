@@ -1663,6 +1663,11 @@ const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:build
       const respText=await procesarTags(respTextRaw2, esSuenoParaResumen);
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);
+      // FORGE PROPOSAL PARSER — Nivel 1 deterministico: detecta si el Coach acaba de proponer un
+      // cambio de sesion, sin depender de ningun tag. Se ejecuta en cada respuesta, en segundo plano.
+      if(codigoUsuario && typeof texto==="string"){
+        apiCall({action:"detectar_propuesta_sesion",codigo:codigoUsuario,datos:{mensajeUsuario:texto,respuestaCoach:respText}});
+      }
       const histFinal=hist.length>=20?hist.slice(-10):hist;
       setHistorial(histFinal);
       if(hist.length>=20) compactarHistorial(hist);

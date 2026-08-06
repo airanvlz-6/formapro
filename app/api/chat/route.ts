@@ -4,6 +4,7 @@ import { render } from "@react-email/render";
 import { validateExtraction } from "@/lib/validators/extractionRules";
 import { buildCatalogoPrompt, validarCatalogoDisciplina } from "@/lib/sports/disciplineCatalog";
 import { parseStrengthRecord } from "@/lib/sports/strengthRecordParser";
+import { parseSessionProposal } from "@/lib/sports/proposalParser";
 import { buildAthleteKnowledge, knowledgeRouter, getObjectiveProgress } from "@/lib/knowledge/athleteKnowledge";
 import { getResponseMode, buildStaticResponse, getCapabilities, buildCapabilityInstruction } from "@/lib/response/responseEngine";
 import { sendEmail } from "@/lib/email/sendEmail";
@@ -1795,6 +1796,51 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
     }).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true, pendingId: nuevaPending.id });
+  }
+
+  if (action === "detectar_propuesta_sesion") {
+    // FORGE PROPOSAL PARSER — Nivel 1 (deterministico) detecta SI hay propuesta. Si la hay,
+    // Nivel 2 (extraccion ligera) saca los detalles estructurados de esa propuesta especifica.
+    // El LLM nunca decide si guardar — solo el parser decide, el LLM solo ayuda a extraer datos.
+    const { mensajeUsuario, respuestaCoach } = datos;
+    const parsed = parseSessionProposal(respuestaCoach, mensajeUsuario);
+    if (!parsed.detected || !parsed.dia) {
+      return NextResponse.json({ ok: true, propuestaDetectada: false });
+    }
+
+    // Calcular week_start de la semana actual
+    const hoyProp = new Date();
+    const diaSemProp = hoyProp.getDay() || 7;
+    const lunesProp = new Date(hoyProp);
+    lunesProp.setDate(hoyProp.getDate() - diaSemProp + 1);
+    const weekStartProp = lunesProp.toISOString().split('T')[0];
+
+    const extractPrompt = `Extrae los detalles de esta propuesta de cambio de sesion de entrenamiento.
+RESPUESTA DEL COACH: ${respuestaCoach}
+
+Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, carrera, box)","titulo":"titulo breve de la sesion propuesta","descripcion":"descripcion completa de la sesion propuesta tal como la explico el coach, conciso"}`;
+
+    try {
+      const extractRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 400, messages: [{ role: "user", content: extractPrompt }] }),
+      });
+      const extractData = await extractRes.json();
+      const extractTexto = extractData.content?.map((b: any) => b.text || "").join("") || "{}";
+      const extractClean = extractTexto.replace(/```json|```/g, "").trim();
+      const extractMatch = extractClean.match(/\{[\s\S]*\}/);
+      if (!extractMatch) return NextResponse.json({ ok: true, propuestaDetectada: false });
+      const detalles = JSON.parse(extractMatch[0]);
+
+      const accionCompleta = { week_start: weekStartProp, dia: parsed.dia, tipo: detalles.tipo, titulo: detalles.titulo, descripcion: detalles.descripcion, motivo: parsed.motivo };
+      await supabase.from("pending_actions").update({ estado: "expirado" }).eq("user_codigo", codigo).eq("tipo", "modificar_sesion").eq("estado", "pendiente");
+      await supabase.from("pending_actions").insert({ user_codigo: codigo, tipo: "modificar_sesion", accion: accionCompleta, estado: "pendiente" });
+
+      return NextResponse.json({ ok: true, propuestaDetectada: true });
+    } catch {
+      return NextResponse.json({ ok: true, propuestaDetectada: false });
+    }
   }
 
   if (action === "confirmar_pending_action") {

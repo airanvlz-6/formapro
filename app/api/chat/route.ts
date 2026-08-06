@@ -953,7 +953,7 @@ ${ultimos}`;
         let rachaDetectada: number | null = null;
         const HITOS_RACHA = [7, 14, 21, 30, 60, 90, 100, 150, 200, 365];
         if (extracted.datos_entrenamiento || extracted.plan) { // proxy: hubo algo relacionado con entreno en el mensaje
-          const { data: usuarioRacha } = await supabase.from("usuarios").select("workout_history").eq("codigo", codigo).single();
+          const { data: usuarioRacha } = await supabase.from("usuarios").select("workout_history,ultima_racha_mostrada").eq("codigo", codigo).single();
           const historialParaRacha = (usuarioRacha?.workout_history || []).map((w: any) => new Date(w.fecha).toISOString().split('T')[0]);
           const fechasUnicas: string[] = [...new Set(historialParaRacha)].sort().reverse() as string[];
           let racha = 0;
@@ -967,8 +967,10 @@ ${ultimos}`;
               break;
             }
           }
-          if (HITOS_RACHA.includes(racha)) {
+          // FIX: evitar mostrar el mismo hito de racha en cada mensaje del mismo dia — solo la primera vez.
+          if (HITOS_RACHA.includes(racha) && usuarioRacha && (usuarioRacha as any).ultima_racha_mostrada !== racha) {
             rachaDetectada = racha;
+            await supabase.from("usuarios").update({ ultima_racha_mostrada: racha }).eq("codigo", codigo);
           }
         }
 

@@ -284,7 +284,7 @@ HISTORIA DEPORTIVA — OBLIGATORIO: SIEMPRE que el atleta reporte un nuevo réco
 PLAN SEMANAL — FLUJO OBLIGATORIO:
 1. Cuando el usuario pida la planificación semanal, muestra PRIMERO un resumen breve de cada día (máx 2 líneas por sesión) y pregunta: "¿Confirmas esta distribución?"
 2. REGLA TÉCNICA OBLIGATORIA — SIN ESTO EL SISTEMA FALLA: Cuando el usuario confirme el plan semanal, tu respuesta de confirmación DEBE contener el bloque de código [PLAN:{...}] con el JSON completo. NUNCA digas "guardado" o "confirmado" sin incluir literalmente ese bloque [PLAN:...] en el mismo mensaje — decir que está guardado sin el tag es un ERROR GRAVE que rompe la aplicación. El formato exacto que debes escribir, carácter por carácter, al INICIO de tu mensaje de confirmación es: [PLAN:{"week_start":"YYYY-MM-DD del lunes","week_number":X,"total_weeks_block":número total de semanas de este bloque,"block_name":"nombre bloque","week_objective":"UNA frase clara del objetivo de esta semana concreta, ej: Mejorar capacidad aeróbica sin comprometer recuperación","sessions":[{"dia":"lunes","tipo":"carrera|box|descanso|otro","titulo":"título breve","por_que":"UNA frase clara explicando el propósito de esta sesión concreta en el contexto del bloque y objetivo","descripcion":"SESIÓN COMPLETA: Calentamiento: X. Bloque principal: Y (series, reps, intensidad, zonas FC). Vuelta a la calma: Z. Notas técnicas: W.","debilidad_relacionada":"nombre_visible EXACTO de la debilidad activa del atleta si esta sesión específicamente la trabaja (mira DEBILIDADES DEL ATLETA en tu contexto), o null si no aplica"},...]}]. Incluye los 7 días con sesión completa. Después del tag confirma al usuario que el plan está guardado e invítale a verlo en Mi Plan. 🚨 COHERENCIA DE FECHAS OBLIGATORIA: El "week_start" de este plan SIEMPRE corresponde a la semana que contiene el día de HOY (lunes a domingo de la semana actual, según el ESTADO CANÓNICO). NUNCA digas frases como "la semana empieza el lunes que viene" o "arrancamos la próxima semana" — el plan que acabas de generar ES la semana actual, incluyendo los días que ya pasaron esta semana (que se consideran descanso o ya completados) y los que faltan por delante. Si hoy es jueves, el plan de lunes-domingo ya está en curso — los días miércoles/jueves anteriores a hoy dentro de esa semana no se prescriben retroactivamente, pero el resto de días SÍ se siguen tal cual desde hoy en adelante, no desde la semana siguiente.
-REGLA CRÍTICA OBLIGATORIA: Cada vez que el atleta CONFIRME un cambio de sesión respecto a lo ya planificado en Mi Plan (eligiendo una opción A/B, diciendo "sí", "confirmo", "vale" tras tu propuesta de ajuste), DEBES incluir SIN EXCEPCIÓN al final de tu respuesta: [MODIFICAR_SESION:{"week_start":"YYYY-MM-DD del lunes de esa semana","dia":"nombre del día en minúsculas sin tildes (miercoles no miércoles)","tipo":"tipo de sesión","titulo":"título breve","motivo":"por qué se modificó","descripcion":"sesión completa con todos los detalles","confidence":número 0-100 según magnitud del cambio}]. NUNCA olvides este tag tras una confirmación de cambio. Sin este tag el cambio NO se guarda y el atleta verá información incorrecta en Mi Plan.
+FORGE PENDING ACTIONS — FLUJO DE MODIFICACION DE SESIONES: Cuando PROPONGAS un cambio de sesión (nunca cuando lo confirmes), incluye AL FINAL de esa misma respuesta el tag: [PROPONER_MODIFICACION:{"week_start":"YYYY-MM-DD del lunes de esa semana","dia":"nombre del día en minúsculas sin tildes","tipo":"tipo de sesión propuesta","titulo":"título breve","motivo":"por qué se propone el cambio","descripcion":"sesión completa propuesta con todos los detalles"}]. Este tag se genera SIEMPRE que propongas un cambio, independientemente de si el atleta lo confirma despues o no — el backend lo guarda como propuesta pendiente y gestiona la confirmacion automaticamente sin que tengas que hacer nada mas. Cuando el atleta confirme despues (di, confirmo, vale, adelante), simplemente responde de forma natural confirmando el cambio — NO necesitas generar ningun tag adicional en ese momento, el sistema ya se encarga de aplicarlo.
 MODIFICACIÓN DE SESIONES — REGLA OBLIGATORIA:
 - Cuando detectes que una sesión debe modificarse (por HRV bajo, mal sueño, fatiga acumulada, lesión, etc.) NUNCA la cambies sin avisar primero.
 - Informa al atleta: "Basándome en [motivo concreto], propongo modificar [día] de [sesión original] a [sesión modificada]. ¿Confirmas?"
@@ -1377,6 +1377,11 @@ const forgeValidator=(texto:string):string=>{
       await apiCall({action:"actualizar_sesion_plan",codigo:codigoUsuario,datos:data});
       cargarPlanSemanal(codigoUsuario);
     });
+    // FORGE PENDING ACTIONS — el Coach propone un cambio, se guarda como pending. La confirmacion
+    // se detecta deterministicamente (regex), NUNCA dependiendo de que el LLM genere otro tag despues.
+    await procesarTag("[PROPONER_MODIFICACION:",24,async(data)=>{
+      await apiCall({action:"guardar_pending_action",codigo:codigoUsuario,datos:{tipo:"modificar_sesion",accion:data}});
+    });
     await procesarTag("[DEBILIDAD_DEV:",15,async(data)=>{
       await apiCall({action:"registrar_debilidad_dev",codigo:codigoUsuario,datos:data});
     });
@@ -1543,6 +1548,17 @@ const forgeValidator=(texto:string):string=>{
           setPrPendienteCompartir(resPrDeterministico.nuevoPrDetectado);
         }
       });
+
+      // FORGE PENDING ACTIONS — deteccion 100% deterministica de confirmacion (regex simple), nunca
+      // depende de que el LLM recuerde generar un tag tras la confirmacion del usuario.
+      const esConfirmacionSimple = /^\s*(s[ií]|confirmo|vale|adelante|ok|okay|de\s*acuerdo|perfecto|correcto|hazlo|as[ií]\s*(lo\s*)?(hacemos|hago))\s*[.!]?\s*$/i.test(texto.trim());
+      if(esConfirmacionSimple && codigoUsuario){
+        apiCall({action:"confirmar_pending_action",codigo:codigoUsuario}).then((resPending:any)=>{
+          if(resPending?.ejecutado){
+            cargarPlanSemanal(codigoUsuario);
+          }
+        });
+      }
 
       // FORGE CONTEXT BUILDER: en vez de "ultimos N mensajes" ciegos, el backend construye el contexto
       // real (evento activo + evento anterior relevante) y lo inyectamos como un mensaje de contexto,

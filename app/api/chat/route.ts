@@ -1783,6 +1783,44 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
     return NextResponse.json(resultado);
   }
 
+  if (action === "guardar_pending_action") {
+    // FORGE PENDING ACTIONS — cuando el Coach propone un cambio (modificar sesion, etc.), se guarda
+    // AQUI como propuesta pendiente, ANTES de que el usuario confirme. El guardado real NUNCA depende
+    // de que el LLM recuerde generar un tag tras la confirmacion — el backend ya tiene todo lo necesario.
+    const { tipo, accion } = datos;
+    // Expirar automaticamente cualquier pending anterior del mismo tipo sin resolver (evita acumular)
+    await supabase.from("pending_actions").update({ estado: "expirado" }).eq("user_codigo", codigo).eq("tipo", tipo).eq("estado", "pendiente");
+    const { data: nuevaPending, error } = await supabase.from("pending_actions").insert({
+      user_codigo: codigo, tipo, accion, estado: "pendiente"
+    }).select().single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, pendingId: nuevaPending.id });
+  }
+
+  if (action === "confirmar_pending_action") {
+    // Se dispara cuando el Intent Router (no el LLM) detecta que el usuario confirmo una propuesta.
+    // Ejecuta la accion de forma deterministica, sin volver a pedirle nada al modelo.
+    const { data: pendiente } = await supabase.from("pending_actions").select("*").eq("user_codigo", codigo).eq("estado", "pendiente").order("created_at", { ascending: false }).limit(1).single();
+    if (!pendiente) return NextResponse.json({ ok: true, ejecutado: false, motivo: "no_hay_pending" });
+
+    if (pendiente.tipo === "modificar_sesion") {
+      const acc = pendiente.accion;
+      const { data: planActualPending } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", acc.week_start).single();
+      if (!planActualPending) return NextResponse.json({ ok: true, ejecutado: false, motivo: "plan_no_encontrado" });
+      const normalizar = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      const sessions = planActualPending.sessions.map((s: any) => {
+        if (normalizar(s.dia) === normalizar(acc.dia)) {
+          return { ...s, tipo: acc.tipo, titulo: acc.titulo, descripcion: acc.descripcion, modificado: true, motivo_modificacion: acc.motivo || "", modificado_at: new Date().toISOString() };
+        }
+        return s;
+      });
+      await supabase.from("weekly_plan").update({ sessions }).eq("user_codigo", codigo).eq("week_start", acc.week_start);
+    }
+
+    await supabase.from("pending_actions").update({ estado: "ejecutado", resuelto_at: new Date().toISOString() }).eq("id", pendiente.id);
+    return NextResponse.json({ ok: true, ejecutado: true, tipo: pendiente.tipo });
+  }
+
   if (action === "verificar_pr_deterministico") {
     // FORGE STRENGTH RECORD PARSER — Nivel 1: deteccion 100% deterministica, sin LLM. Se ejecuta
     // ANTES de enviar el mensaje al Coach. Si detecta un candidato y supera la marca anterior real

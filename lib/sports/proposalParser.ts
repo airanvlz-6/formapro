@@ -15,7 +15,9 @@ const DIAS_SEMANA: Record<string, string> = {
 };
 
 // Verbos/frases que indican que el Coach esta proponiendo un cambio (no solo describiendo el plan actual)
-const PATRON_PROPUESTA = /\b(propongo|te propongo|podr[ií]amos cambiar|mi recomendaci[oó]n es|sustituir[ií]a|sustituimos|movería|cambiar[ií]a|cambiamos|creo que ser[ií]a mejor|modificamos|modificar[ií]a|ajustamos|ajustar[ií]a)\b/i;
+// FIX: ampliado para detectar tambien cuando el USUARIO inicia la propuesta (ej: "¿modificamos la
+// sesion por descanso?") y el Coach solo la desarrolla/confirma, sin usar el verbo "propongo" el mismo.
+const PATRON_PROPUESTA = /\b(propongo|te propongo|podr[ií]amos cambiar|mi recomendaci[oó]n es|sustituir[ií]a|sustituimos|movería|cambiar[ií]a|cambiamos|creo que ser[ií]a mejor|modificamos|modificar[ií]a|ajustamos|ajustar[ií]a|perfecto\s*decisi[oó]n|buena\s*decisi[oó]n|decisi[oó]n\s*correcta|totalmente\s*de\s*acuerdo|tiene\s*sentido|ajuste\s*propuesto|ajuste\s*para\s*hoy)\b/i;
 
 // Palabras que confirman que se esta hablando de una sesion/entreno (no de otra cosa)
 const PATRON_SESION = /\b(sesi[oó]n|entreno|entrenamiento|plan de hoy|descanso activo)\b/i;

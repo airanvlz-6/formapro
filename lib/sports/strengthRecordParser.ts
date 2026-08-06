@@ -22,8 +22,10 @@ const CATALOGO_EJERCICIOS: Record<string, string[]> = {
   overhead_squat: ["overhead squat", "sentadilla overhead"],
 };
 
-// Palabras clave que indican que se esta reportando un record (no solo mencionando el ejercicio)
-const PALABRAS_CLAVE_RECORD = /\b(nuevo\s*rm|nuevo\s*pr|1\s*rm|1rm|record|récord|maxima|máxima|max|marca)\b/i;
+// FIX: eliminadas palabras sueltas ambiguas ("max", "marca") que generaban falsos positivos con
+// series de trabajo normales. Ahora exige frase clara e inequivoca de reportar un record.
+// Reconoce NRM generico (1RM, 3RM, 5RM...) ademas de las frases explicitas de record.
+const PALABRAS_CLAVE_RECORD = /\b(nuevo\s*rm|nuevo\s*pr|\d+\s*rm|nuevo\s*r[eé]cord|r[eé]cord\s*personal|marca\s*personal)\b/i;
 
 export function parseStrengthRecord(mensaje: string): ParsedRecord {
   const mensajeLower = mensaje.toLowerCase();

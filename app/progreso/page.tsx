@@ -182,6 +182,21 @@ useEffect(() => {
             else if(hrv >= 50 && sueno >= 60){ recuperacion = "Buena"; recomendacion = "Apto para entrenamiento normal"; colorRec = "#4CAF50"; }
             else if(hrv >= 40 && sueno >= 50){ recuperacion = "Moderada"; recomendacion = "Reduce intensidad, prioriza técnica"; colorRec = C.accent; }
             else { recuperacion = "Baja"; recomendacion = "Sesión de recuperación activa recomendada"; colorRec = "#ff4444"; }
+
+            // FIX SEMANTICO: si hay tendencia de descenso consecutivo real (misma logica que la alerta
+            // roja de abajo), la clasificacion no puede decir "Buena/apto normal" de forma aislada —
+            // debe reflejar que el valor absoluto es aceptable PERO la tendencia es desfavorable.
+            const ultimos4Fisio = histFisio.slice(-4);
+            const hrvUltimos4 = ultimos4Fisio.filter((e:any)=>e.hrv).map((e:any)=>e.hrv);
+            if(hrvUltimos4.length>=4){
+              const esDescensoConsecutivoActual = hrvUltimos4[1]<hrvUltimos4[0] && hrvUltimos4[2]<hrvUltimos4[1] && hrvUltimos4[3]<hrvUltimos4[2];
+              const caidaTotalActual = hrvUltimos4[0]-hrvUltimos4[hrvUltimos4.length-1];
+              if(esDescensoConsecutivoActual && caidaTotalActual>15 && (recuperacion==="Buena"||recuperacion==="Excelente")){
+                recuperacion = "Aceptable";
+                recomendacion = "Puedes entrenar, pero vigila la carga — tendencia de recuperación desfavorable";
+                colorRec = C.accent;
+              }
+            }
           }
 
           return (
@@ -277,7 +292,7 @@ useEffect(() => {
             if(ratioHrv < 0.70){
               alertas.push({mensaje: `Tu HRV actual (${datos.estado_fisiologico.hrv}ms) está un 30% o más por debajo de tu media reciente. Reduce intensidad hoy.`, tipo: 'danger'});
             } else if(ratioHrv < 0.85){
-              alertas.push({mensaje: `Tu HRV actual (${datos.estado_fisiologico.hrv}ms) está algo por debajo de tu media reciente. Vigila cómo te sientes.`, tipo: 'precaucion'});
+              alertas.push({mensaje: `Tu HRV actual (${datos.estado_fisiologico.hrv}ms) está por debajo de tu media reciente (${Math.round(mediaHrv)}ms). Vigila cómo te sientes.`, tipo: 'precaucion'});
             }
           }
 

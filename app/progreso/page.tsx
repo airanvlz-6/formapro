@@ -249,7 +249,11 @@ useEffect(() => {
               : ultimosN[2]-ultimosN[0]<-umbral ? (esDescensoConsistente ? "↓ Descendiendo" : "↓ Fluctuando")
               : "→ Estable")
             : "Sin datos suficientes";
-          const colorTendencia = tendencia.includes("Mejorando")?"#4CAF50":tendencia.includes("Fluctuando")?"#FF6B00":C.muted;
+          // Paleta de 3 niveles: verde (mejorando/estable), naranja (fluctuando), rojo (descendiendo/peligro)
+          const colorTendencia = tendencia.includes("Mejorando")||tendencia.includes("Estable") ? "#4CAF50"
+            : tendencia.includes("Descendiendo") ? "#ff4444"
+            : tendencia.includes("Fluctuando") ? "#FF6B00"
+            : C.muted;
 
           return (
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>

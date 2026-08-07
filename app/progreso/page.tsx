@@ -508,7 +508,9 @@ useEffect(() => {
         {[
           {href:`/hoy?codigo=${codigo}`,icon:"🏠",label:"Hoy",active:false},
           {href:`/progreso?codigo=${codigo}`,icon:"📈",label:"Progreso",active:true},
-          {href:`/plan?codigo=${codigo}`,icon:"📅",label:"Plan",active:false},
+          (datos?.modo_entrada==="supervision"||datos?.modo_entrada==="consulta")
+            ? {href:`/historia?codigo=${codigo}`,icon:"📖",label:"Historia",active:false}
+            : {href:`/plan?codigo=${codigo}`,icon:"📅",label:"Plan",active:false},
           {href:`/atleta?codigo=${codigo}`,icon:"👤",label:"Atleta",active:false},
         ].map(item=>(
           <a key={item.label} href={item.href} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,textDecoration:"none",opacity:item.active?1:0.5}}>

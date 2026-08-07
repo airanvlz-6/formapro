@@ -241,7 +241,14 @@ useEffect(() => {
           const media = valoresSolo.length>0 ? Math.round(valoresSolo.reduce((a:number,b:number)=>a+b,0)/valoresSolo.length) : 0;
           const ultimosN = valoresSolo.slice(-3);
           const umbral = metricaGrafico==="hrv" ? Math.max(10, media*0.15) : 12;
-          const tendencia = ultimosN.length>=3?(ultimosN[2]-ultimosN[0]>umbral?"↑ Mejorando":ultimosN[2]-ultimosN[0]<-umbral?"↓ Fluctuando":"→ Estable"):"Sin datos suficientes";
+          // FIX SEMANTICO: distinguir "descenso consistente" (siempre bajando) de "fluctuando" (sube y baja).
+          const esDescensoConsistente = ultimosN.length>=3 && ultimosN[1]<=ultimosN[0] && ultimosN[2]<ultimosN[1];
+          const esSubidaConsistente = ultimosN.length>=3 && ultimosN[1]>=ultimosN[0] && ultimosN[2]>ultimosN[1];
+          const tendencia = ultimosN.length>=3
+            ? (ultimosN[2]-ultimosN[0]>umbral ? "↑ Mejorando"
+              : ultimosN[2]-ultimosN[0]<-umbral ? (esDescensoConsistente ? "↓ Descendiendo" : "↓ Fluctuando")
+              : "→ Estable")
+            : "Sin datos suficientes";
           const colorTendencia = tendencia.includes("Mejorando")?"#4CAF50":tendencia.includes("Fluctuando")?"#FF6B00":C.muted;
 
           return (

@@ -58,6 +58,7 @@ export default function Historia() {
   const [logros, setLogros] = useState<any[]>([]);
   const [menuEventoAbierto, setMenuEventoAbierto] = useState<string|null>(null);
   const [historialFisiologico, setHistorialFisiologico] = useState<any[]>([]);
+  const [modoEntradaUsuario, setModoEntradaUsuario] = useState<string>("planificacion");
 
   const cargarDatos = async(cod:string)=>{
     setCargando(true);
@@ -72,6 +73,7 @@ export default function Historia() {
       setHistorialMarcas(dataUser?.data?.historial_marcas||[]);
       setWorkoutHistory(dataUser?.data?.workout_history||[]);
       setHistorialFisiologico(dataUser?.data?.historial_fisiologico||[]);
+      setModoEntradaUsuario(dataUser?.data?.modo_entrada||"planificacion");
       fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"calcular_logros",codigo:cod})})
         .then(r=>r.json()).then(d=>setLogros(d.logros||[])).catch(()=>{});
       setAutenticado(true);
@@ -644,7 +646,9 @@ export default function Historia() {
         {[
           {href:`/hoy?codigo=${codigo}`,icon:"🏠",label:"Hoy",active:false},
           {href:`/progreso?codigo=${codigo}`,icon:"📈",label:"Progreso",active:false},
-          {href:`/plan?codigo=${codigo}`,icon:"📅",label:"Plan",active:false},
+          (modoEntradaUsuario==="supervision"||modoEntradaUsuario==="consulta")
+            ? {href:`/historia?codigo=${codigo}`,icon:"📖",label:"Historia",active:true}
+            : {href:`/plan?codigo=${codigo}`,icon:"📅",label:"Plan",active:false},
           {href:`/atleta?codigo=${codigo}`,icon:"👤",label:"Atleta",active:false},
         ].map(item=>(
           <a key={item.label} href={item.href} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,textDecoration:"none",opacity:item.active?1:0.5}}>

@@ -2220,11 +2220,33 @@ Menciona el numero exacto de dias en la frase.`;
     const estado = await generarEstadoCanonico(supabase, codigo);
     const knowledge = await buildAthleteKnowledge(codigo);
 
-    const { data: usuarioBriefing } = await supabase.from("usuarios").select("aprendizajes_atleta,ciclo_actual").eq("codigo", codigo).single();
+    const { data: usuarioBriefing } = await supabase.from("usuarios").select("aprendizajes_atleta,ciclo_actual,workout_history,historial_marcas,perfil,fecha_registro").eq("codigo", codigo).single();
     const aprendizajes = usuarioBriefing?.aprendizajes_atleta || [];
-    const puntosAprendizajes = aprendizajes.reduce((sum: number, a: any) => sum + (a.puntos || 0), 0);
-    const nivelConocimiento = Math.min(40 + puntosAprendizajes, 100);
     const ultimoAprendizaje = aprendizajes.length > 0 ? aprendizajes[aprendizajes.length - 1].texto : null;
+
+    // FORGE NIVEL DE CONOCIMIENTO REAL — ya no es un numero base arbitrario (40%) igual para todos.
+    // Se calcula genuinamente segun cuanta informacion real tiene Forge sobre ESTE atleta concreto.
+    const workoutHistoryBriefingCalc = usuarioBriefing?.workout_history || [];
+    const historialMarcasCalc = usuarioBriefing?.historial_marcas || [];
+    const { data: patronesConfirmadosCalc } = await supabase.from("athlete_response_patterns").select("id").eq("user_codigo", codigo).eq("activo", true);
+    const { data: blockSummariesCalc } = await supabase.from("block_week_summary").select("id").eq("user_codigo", codigo);
+
+    let nivelConocimiento = 0;
+    // Perfil basico completado (hasta 15 puntos): especialidad, objetivo, disponibilidad declarados
+    if (usuarioBriefing?.perfil && Object.keys(usuarioBriefing.perfil).length > 0) nivelConocimiento += 15;
+    // Historial de entrenos reales (hasta 30 puntos, escalando con volumen real de datos)
+    nivelConocimiento += Math.min(workoutHistoryBriefingCalc.length * 1.5, 30);
+    // Marcas/PRs registrados (hasta 15 puntos)
+    nivelConocimiento += Math.min(historialMarcasCalc.length * 2, 15);
+    // Aprendizajes/patrones confirmados por conversacion (hasta 15 puntos)
+    const puntosAprendizajes = aprendizajes.reduce((sum: number, a: any) => sum + (a.puntos || 0), 0);
+    nivelConocimiento += Math.min(puntosAprendizajes, 15);
+    // Patrones de respuesta confirmados con evidencia real (Athlete Response Engine) — hasta 15 puntos, muy valioso
+    nivelConocimiento += Math.min((patronesConfirmadosCalc?.length || 0) * 5, 15);
+    // Semanas de bloque completadas y analizadas (hasta 10 puntos)
+    nivelConocimiento += Math.min((blockSummariesCalc?.length || 0) * 2, 10);
+
+    nivelConocimiento = Math.min(Math.round(nivelConocimiento), 100);
 
     // Descubrimiento/celebracion mas reciente sin ver
     const { data: descubrimiento } = await supabase.from("forge_discoveries").select("*").eq("user_codigo", codigo).eq("visto", false).order("created_at", { ascending: false }).limit(1).single();

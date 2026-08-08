@@ -509,24 +509,24 @@ Si NO hay evidencia suficientemente especifica y solida, responde SOLO con:
     const resultado = JSON.parse(responseMatch[0]);
     if (!resultado.hay_patron || !resultado.patron) return { generado: false };
 
-    await supabase.from("athlete_response_patterns").insert({
+    // FORGE ATHLETE KNOWLEDGE — pipeline correcto: nace como "candidato" con confianza baja.
+    // Solo asciende a "activo" cuando la evidencia acumulada supera el umbral — nunca directamente
+    // desde una sola deteccion del LLM, evitando el mismo error que tuvo aprendizajes_atleta.
+    const puntosEvidenciaNuevo = resultado.puntos_evidencia || 3;
+    const esActivo = puntosEvidenciaNuevo >= 8;
+    await supabase.from("athlete_knowledge_points").insert({
       user_codigo: codigo,
-      patron: resultado.patron,
-      categoria: resultado.categoria || "general",
-      confianza: resultado.puntos_evidencia >= 8 ? 85 : 60,
-      puntos_evidencia: resultado.puntos_evidencia || 3,
-      activo: true
+      categoria: resultado.categoria || "respuesta_entrenamiento",
+      conocimiento: resultado.patron,
+      confianza: esActivo ? 0.8 : 0.5,
+      puntos_evidencia: puntosEvidenciaNuevo,
+      estado: esActivo ? "activo" : "candidato",
+      fuente: "athlete_response_engine",
+      ultima_evidencia: new Date().toISOString()
     });
 
-    // CONECTAR CON NIVEL DE CONOCIMIENTO REAL: cada patron confirmado con evidencia real
-    // (no solo texto extraido de conversacion) alimenta genuinamente la barra "Forge te conoce mejor".
-    const { data: usuarioAprendizajes } = await supabase.from("usuarios").select("aprendizajes_atleta").eq("codigo", codigo).single();
-    const aprendizajesActuales = usuarioAprendizajes?.aprendizajes_atleta || [];
-    const puntosPorEvidencia = resultado.puntos_evidencia >= 8 ? 5 : 3; // mas evidencia, mas puntos de conocimiento real
-    await supabase.from("usuarios").update({
-      aprendizajes_atleta: [...aprendizajesActuales, { texto: resultado.patron, categoria: resultado.categoria || "general", puntos: puntosPorEvidencia, origen: "athlete_response_engine" }]
-    }).eq("codigo", codigo);
-
+    // NOTA: ya no se escribe en aprendizajes_atleta (deprecado). athlete_knowledge_points es ahora
+    // la unica fuente real del Nivel de Conocimiento, calculado dinamicamente en obtener_daily_briefing.
     return { generado: true };
   } catch {
     return { generado: false };
@@ -2231,27 +2231,30 @@ Menciona el numero exacto de dias en la frase.`;
     const aprendizajes = usuarioBriefing?.aprendizajes_atleta || [];
     const ultimoAprendizaje = aprendizajes.length > 0 ? aprendizajes[aprendizajes.length - 1].texto : null;
 
-    // FORGE NIVEL DE CONOCIMIENTO REAL — ya no es un numero base arbitrario (40%) igual para todos.
-    // Se calcula genuinamente segun cuanta informacion real tiene Forge sobre ESTE atleta concreto.
+    // FORGE ATHLETE KNOWLEDGE v2 — el Nivel de Conocimiento se calcula desde athlete_knowledge_points,
+    // la fuente real de conocimiento con evidencia. Pondera AMPLITUD (cuantas categorias de las 6
+    // tienen al menos un Knowledge Point activo) tanto como PROFUNDIDAD (confianza acumulada),
+    // reflejando genuinamente cuanto sabe Forge de ESTE atleta, no solo cuantos datos existen.
+    const CATEGORIAS_CONOCIMIENTO = ["perfil_deportivo", "capacidades", "debilidades", "respuesta_entrenamiento", "recuperacion", "preferencias"];
+    const { data: knowledgePointsCalc } = await supabase.from("athlete_knowledge_points").select("categoria,confianza,estado").eq("user_codigo", codigo).in("estado", ["activo", "en_evolucion"]);
     const workoutHistoryBriefingCalc = usuarioBriefing?.workout_history || [];
     const historialMarcasCalc = usuarioBriefing?.historial_marcas || [];
-    const { data: patronesConfirmadosCalc } = await supabase.from("athlete_response_patterns").select("id").eq("user_codigo", codigo).eq("activo", true);
-    const { data: blockSummariesCalc } = await supabase.from("block_week_summary").select("id").eq("user_codigo", codigo);
 
     let nivelConocimiento = 0;
-    // Perfil basico completado (hasta 15 puntos): especialidad, objetivo, disponibilidad declarados
-    if (usuarioBriefing?.perfil && Object.keys(usuarioBriefing.perfil).length > 0) nivelConocimiento += 15;
-    // Historial de entrenos reales (hasta 30 puntos, escalando con volumen real de datos)
-    nivelConocimiento += Math.min(workoutHistoryBriefingCalc.length * 1.5, 30);
-    // Marcas/PRs registrados (hasta 15 puntos)
+    // Perfil basico completado (10 puntos) — base minima, siempre presente si completo el onboarding
+    if (usuarioBriefing?.perfil && Object.keys(usuarioBriefing.perfil).length > 0) nivelConocimiento += 10;
+    // Capacidades objetivas: marcas/PRs registrados (hasta 15 puntos) — esto SI es Canonical Truth, cuenta aparte
     nivelConocimiento += Math.min(historialMarcasCalc.length * 2, 15);
-    // Aprendizajes/patrones confirmados por conversacion (hasta 15 puntos)
-    const puntosAprendizajes = aprendizajes.reduce((sum: number, a: any) => sum + (a.puntos || 0), 0);
-    nivelConocimiento += Math.min(puntosAprendizajes, 15);
-    // Patrones de respuesta confirmados con evidencia real (Athlete Response Engine) — hasta 15 puntos, muy valioso
-    nivelConocimiento += Math.min((patronesConfirmadosCalc?.length || 0) * 5, 15);
-    // Semanas de bloque completadas y analizadas (hasta 10 puntos)
-    nivelConocimiento += Math.min((blockSummariesCalc?.length || 0) * 2, 10);
+    // Amplitud: cuantas de las 6 categorias tienen al menos un Knowledge Point activo (hasta 45 puntos, 7.5 c/u)
+    const categoriasConConocimiento = new Set((knowledgePointsCalc || []).map((kp: any) => kp.categoria));
+    nivelConocimiento += categoriasConConocimiento.size * 7.5;
+    // Profundidad: confianza media de los Knowledge Points activos (hasta 20 puntos)
+    if (knowledgePointsCalc && knowledgePointsCalc.length > 0) {
+      const confianzaMedia = knowledgePointsCalc.reduce((sum: number, kp: any) => sum + (kp.confianza || 0), 0) / knowledgePointsCalc.length;
+      nivelConocimiento += confianzaMedia * 20;
+    }
+    // Volumen de historial real como señal complementaria (hasta 10 puntos)
+    nivelConocimiento += Math.min(workoutHistoryBriefingCalc.length * 0.3, 10);
 
     nivelConocimiento = Math.min(Math.round(nivelConocimiento), 100);
 

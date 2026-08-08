@@ -6,6 +6,7 @@ export default function MiAtleta() {
   const [autenticado, setAutenticado] = useState(false);
   const [datos, setDatos] = useState<any>(null);
   const [progresoObjetivo, setProgresoObjetivo] = useState<{percentage:number;daysRemaining:number|null}|null>(null);
+  const [nivelConocimientoReal, setNivelConocimientoReal] = useState<number>(0);
   const [mostrarMas, setMostrarMas] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [iniciado, setIniciado] = useState(false);
@@ -40,6 +41,10 @@ export default function MiAtleta() {
       const resProgreso = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"obtener_progreso_objetivo",codigo:cod})});
       const dataProgreso = await resProgreso.json();
       if(dataProgreso?.progreso) setProgresoObjetivo(dataProgreso.progreso);
+      // FORGE ATHLETE KNOWLEDGE — consulta INDEPENDIENTE a la fuente real, no depende de la pagina Hoy
+      const resNivel = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"calcular_nivel_conocimiento",codigo:cod})});
+      const dataNivel = await resNivel.json();
+      setNivelConocimientoReal(dataNivel?.nivelConocimiento ?? 0);
     }catch{ setError("Error de conexión"); }
     finally{ setCargando(false); setIniciado(true); }
   };
@@ -91,49 +96,20 @@ export default function MiAtleta() {
           </a>
         </div>
 
-        {/* Conocimiento del atleta */}
-        {(()=>{
-          const aprendizajes=datos?.aprendizajes_atleta||[];
-          const puntosAprendizajes=aprendizajes.reduce((sum:number,a:any)=>sum+(a.puntos||0),0);
-          const porcentaje=Math.min(40+puntosAprendizajes,100);
-          const categorias=["recuperacion","ritmos","fuerza","tecnica","sueno"];
-          const categoriasLabel:Record<string,string>={recuperacion:"Recuperación",ritmos:"Ritmos",fuerza:"Fuerza",tecnica:"Técnica",sueno:"Sueño",general:"General"};
-          const categoriasConocidas=new Set(aprendizajes.map((a:any)=>a.categoria));
-          const categoriasPendientes=categorias.filter(c=>!categoriasConocidas.has(c));
-          return (
-            <div style={{ background: C.card, border: `1px solid ${C.accent}60`, borderRadius: 16, padding: "18px 18px", marginBottom: 16 }}>
-              <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 8 }}>🧠 Conocimiento del atleta</p>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.muted, marginBottom: 6 }}>
-                <span>Nivel de conocimiento</span>
-                <span>{porcentaje}%</span>
-              </div>
-              <div style={{ height: 8, background: C.border, borderRadius: 100, marginBottom: 14 }}>
-                <div style={{ height: 8, borderRadius: 100, background: C.accent, width: `${porcentaje}%`, transition: "width 0.8s ease" }}/>
-              </div>
-              {aprendizajes.length>0 && (
-                <div style={{ marginBottom: 12 }}>
-                  <p style={{ color: "#4CAF50", fontSize: 11, fontWeight: 700, marginBottom: 6 }}>Últimos aprendizajes</p>
-                  {[...aprendizajes].reverse().slice(0,4).map((a:any,i:number)=>(
-                    <p key={i} style={{ color: C.ink, fontSize: 12, lineHeight: 1.7 }}>✓ {a.texto}</p>
-                  ))}
-                </div>
-              )}
-              {categoriasPendientes.length>0 && (
-                <div>
-                  <p style={{ color: C.muted, fontSize: 11, fontWeight: 700, marginBottom: 6 }}>Pendiente de conocer</p>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {categoriasPendientes.map(c=>(
-                      <span key={c} style={{ color: C.muted, fontSize: 11, background: C.bg, padding: "3px 10px", borderRadius: 100 }}>○ {categoriasLabel[c]}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {aprendizajes.length===0 && (
-                <p style={{ color: C.muted, fontSize: 12, lineHeight: 1.6 }}>Cuando completes tu primera semana empezaremos a detectar patrones personales de rendimiento y recuperación.</p>
-              )}
-            </div>
-          );
-        })()}
+        {/* Conocimiento del atleta — usa la fuente REAL independiente (athlete_knowledge_points) */}
+        <div style={{ background: C.card, border: `1px solid ${C.accent}60`, borderRadius: 16, padding: "18px 18px", marginBottom: 16 }}>
+          <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 8 }}>🧠 Conocimiento del atleta</p>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.muted, marginBottom: 6 }}>
+            <span>Nivel de conocimiento</span>
+            <span>{nivelConocimientoReal}%</span>
+          </div>
+          <div style={{ height: 8, background: C.border, borderRadius: 100, marginBottom: 14 }}>
+            <div style={{ height: 8, borderRadius: 100, background: C.accent, width: `${nivelConocimientoReal}%`, transition: "width 0.8s ease" }}/>
+          </div>
+          {nivelConocimientoReal===0 && (
+            <p style={{ color: C.muted, fontSize: 12, lineHeight: 1.6 }}>Cuando completes tu primera semana y Forge acumule suficiente evidencia real, empezaremos a detectar patrones personales de rendimiento y recuperación.</p>
+          )}
+        </div>
 
         {/* Datos personales */}
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>

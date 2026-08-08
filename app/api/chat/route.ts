@@ -2204,7 +2204,35 @@ Menciona el numero exacto de dias en la frase.`;
     return NextResponse.json({ eventoActivo: eventoActivo || null, historial: eventosLog || [] });
   }
 
-  if (action === "obtener_daily_briefing") {
+  // FORGE ATHLETE KNOWLEDGE — funcion reutilizable, unica fuente de verdad del Nivel de Conocimiento.
+// Cualquier pagina (Hoy, Atleta, futuras) llama a la ACCION "calcular_nivel_conocimiento", nunca
+// calcula su propia version ni depende de otra pagina — ambas consultan la misma fuente independiente.
+async function calcularNivelConocimientoReal(supabase: any, codigo: string): Promise<number> {
+  const { data: usuarioCalc } = await supabase.from("usuarios").select("perfil,workout_history,historial_marcas").eq("codigo", codigo).single();
+  const { data: knowledgePointsCalc } = await supabase.from("athlete_knowledge_points").select("categoria,confianza,estado").eq("user_codigo", codigo).in("estado", ["activo", "en_evolucion"]);
+  const workoutHistoryCalc = usuarioCalc?.workout_history || [];
+  const historialMarcasCalc = usuarioCalc?.historial_marcas || [];
+
+  let nivel = 0;
+  if (usuarioCalc?.perfil && Object.keys(usuarioCalc.perfil).length > 0) nivel += 10;
+  nivel += Math.min(historialMarcasCalc.length * 2, 15);
+  const categoriasConConocimiento = new Set((knowledgePointsCalc || []).map((kp: any) => kp.categoria));
+  nivel += categoriasConConocimiento.size * 7.5;
+  if (knowledgePointsCalc && knowledgePointsCalc.length > 0) {
+    const confianzaMedia = knowledgePointsCalc.reduce((sum: number, kp: any) => sum + (kp.confianza || 0), 0) / knowledgePointsCalc.length;
+    nivel += confianzaMedia * 20;
+  }
+  nivel += Math.min(workoutHistoryCalc.length * 0.3, 10);
+
+  return Math.min(Math.round(nivel), 100);
+}
+
+if (action === "calcular_nivel_conocimiento") {
+  const nivel = await calcularNivelConocimientoReal(supabase, codigo);
+  return NextResponse.json({ nivelConocimiento: nivel });
+}
+
+if (action === "obtener_daily_briefing") {
     // FORGE DAILY BRIEFING — agrega todo lo necesario para la pantalla "Hoy" en una sola llamada.
     // Responde en <10s a: que ha pasado, que toca hoy, que ha aprendido Forge, como voy.
     // Su contenido varia segun modo_entrada: Coach (sesion del plan) vs Supervision (recuperacion + ultimo entreno).
@@ -2231,32 +2259,9 @@ Menciona el numero exacto de dias en la frase.`;
     const aprendizajes = usuarioBriefing?.aprendizajes_atleta || [];
     const ultimoAprendizaje = aprendizajes.length > 0 ? aprendizajes[aprendizajes.length - 1].texto : null;
 
-    // FORGE ATHLETE KNOWLEDGE v2 — el Nivel de Conocimiento se calcula desde athlete_knowledge_points,
-    // la fuente real de conocimiento con evidencia. Pondera AMPLITUD (cuantas categorias de las 6
-    // tienen al menos un Knowledge Point activo) tanto como PROFUNDIDAD (confianza acumulada),
-    // reflejando genuinamente cuanto sabe Forge de ESTE atleta, no solo cuantos datos existen.
-    const CATEGORIAS_CONOCIMIENTO = ["perfil_deportivo", "capacidades", "debilidades", "respuesta_entrenamiento", "recuperacion", "preferencias"];
-    const { data: knowledgePointsCalc } = await supabase.from("athlete_knowledge_points").select("categoria,confianza,estado").eq("user_codigo", codigo).in("estado", ["activo", "en_evolucion"]);
-    const workoutHistoryBriefingCalc = usuarioBriefing?.workout_history || [];
-    const historialMarcasCalc = usuarioBriefing?.historial_marcas || [];
-
-    let nivelConocimiento = 0;
-    // Perfil basico completado (10 puntos) — base minima, siempre presente si completo el onboarding
-    if (usuarioBriefing?.perfil && Object.keys(usuarioBriefing.perfil).length > 0) nivelConocimiento += 10;
-    // Capacidades objetivas: marcas/PRs registrados (hasta 15 puntos) — esto SI es Canonical Truth, cuenta aparte
-    nivelConocimiento += Math.min(historialMarcasCalc.length * 2, 15);
-    // Amplitud: cuantas de las 6 categorias tienen al menos un Knowledge Point activo (hasta 45 puntos, 7.5 c/u)
-    const categoriasConConocimiento = new Set((knowledgePointsCalc || []).map((kp: any) => kp.categoria));
-    nivelConocimiento += categoriasConConocimiento.size * 7.5;
-    // Profundidad: confianza media de los Knowledge Points activos (hasta 20 puntos)
-    if (knowledgePointsCalc && knowledgePointsCalc.length > 0) {
-      const confianzaMedia = knowledgePointsCalc.reduce((sum: number, kp: any) => sum + (kp.confianza || 0), 0) / knowledgePointsCalc.length;
-      nivelConocimiento += confianzaMedia * 20;
-    }
-    // Volumen de historial real como señal complementaria (hasta 10 puntos)
-    nivelConocimiento += Math.min(workoutHistoryBriefingCalc.length * 0.3, 10);
-
-    nivelConocimiento = Math.min(Math.round(nivelConocimiento), 100);
+    // FORGE ATHLETE KNOWLEDGE — consultamos la funcion reutilizable, no calculamos aqui.
+    // Esta pagina es CONSUMIDORA del dato, no su fuente — igual que Mi Atleta.
+    const nivelConocimiento = await calcularNivelConocimientoReal(supabase, codigo);
 
     // Descubrimiento/celebracion mas reciente sin ver
     const { data: descubrimiento } = await supabase.from("forge_discoveries").select("*").eq("user_codigo", codigo).eq("visto", false).order("created_at", { ascending: false }).limit(1).single();

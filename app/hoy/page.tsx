@@ -131,10 +131,10 @@ export default function Hoy() {
           <p style={{ color: C.success, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>🧠 Forge te conoce mejor</p>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
             <span style={{ color: C.muted, fontSize: 12 }}>Nivel de conocimiento</span>
-            <span style={{ color: C.success, fontSize: 20, fontWeight: 900 }}>{briefing?.nivelConocimiento || 40}%</span>
+            <span style={{ color: C.success, fontSize: 20, fontWeight: 900 }}>{briefing?.nivelConocimiento ?? 0}%</span>
           </div>
           <div style={{ height: 7, background: C.border, borderRadius: 100, marginBottom: briefing?.ultimoAprendizaje ? 12 : 0 }}>
-            <div style={{ height: 7, borderRadius: 100, background: C.success, width: `${briefing?.nivelConocimiento || 40}%`, transition: "width 0.8s ease" }} />
+            <div style={{ height: 7, borderRadius: 100, background: C.success, width: `${briefing?.nivelConocimiento ?? 0}%`, transition: "width 0.8s ease" }} />
           </div>
           {briefing?.ultimoAprendizaje && (
             <>

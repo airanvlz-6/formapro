@@ -839,9 +839,9 @@ ${ultimos}`;
         if (extracted.plan) updates.plan_proxima_semana = extracted.plan;
         if (extracted.notas) updates.notas_coach = extracted.notas;
 
-        if (extracted.ciclo?.bloque) {
-          updates.ciclo_actual = { ...cicloActual, ...Object.fromEntries(Object.entries(extracted.ciclo).filter(([,v]) => v !== null)) };
-        }
+        // FORGE ESTADO CANONICO — ciclo_actual es un dato CRITICO INMUTABLE. Ningun extractor conversacional
+        // (Haiku ni ningun otro LLM) tiene autoridad para escribirlo. Solo un flujo determinista de
+        // "Cerrar Bloque" explicito puede modificarlo. Ver FORGE_TRUTH_PRINCIPLE.md.
 
 // FORGE EXTRACTION VALIDATOR — el LLM propone, el backend verifica antes de persistir.
         extracted = validateExtraction(extracted, soloUsuario);
@@ -1009,6 +1009,13 @@ ${ultimos}`;
           }
         }
 
+        // FORGE CANONICAL STATE GUARD — proteccion de auditoria: si algun cambio futuro reintroduce
+        // escritura de ciclo_actual en este flujo no autorizado, lo detectamos y bloqueamos explicitamente
+        // en vez de dejarlo pasar silenciosamente.
+        if ('ciclo_actual' in updates) {
+          console.error("🚨 BLOCKED CANONICAL STATE MUTATION — field: ciclo_actual, source: actualizar_usuario (extractor no autorizado), valor_bloqueado:", JSON.stringify(updates.ciclo_actual));
+          delete updates.ciclo_actual;
+        }
         if (Object.keys(updates).length > 0) {
           await supabase.from("usuarios").update(updates).eq("codigo", codigo);
         }

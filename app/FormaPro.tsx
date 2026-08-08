@@ -1743,18 +1743,11 @@ Extrae SOLO lo que puedas determinar con certeza. Responde SOLO con este JSON:
             if(datos.lesiones) nuevaMemoria.lesiones_actuales=datos.lesiones;
             if(datos.plan) nuevaMemoria.plan_proxima_semana=datos.plan;
             if(datos.notas) nuevaMemoria.notas_coach=datos.notas;
-            if(datos.ciclo){
-              const nuevoCiclo={
-                bloque: datos.ciclo.bloque||cicloActual.bloque||"",
-                semana: datos.ciclo.semana||cicloActual.semana||null,
-                totalSemanas: datos.ciclo.totalSemanas||cicloActual.totalSemanas||null,
-                objetivo: datos.ciclo.objetivo||cicloActual.objetivo||""
-              };
-              if(nuevoCiclo.bloque||nuevoCiclo.semana){
-                setCicloActual(nuevoCiclo);
-                nuevaMemoria.ciclo_actual=nuevoCiclo;
-              }
-            }
+            // FORGE ESTADO CANONICO — ciclo_actual (bloque/semana/objetivo) es un dato CRITICO INMUTABLE.
+            // El extractor Haiku conversacional NUNCA tiene autoridad para escribirlo — solo un flujo
+            // determinista de "Cerrar Bloque" (accion explicita y validada) puede modificarlo.
+            // Esto elimina el mismo tipo de fallo ya resuelto con PRs y modificacion de sesiones:
+            // un LLM secundario "creyendo" haber detectado un cambio de ciclo y sobrescribiendo el estado real.
             if(datos.psicologia&&Object.values(datos.psicologia).some(v=>v)){
               const nuevoPsico={...perfilPsicologico,...datos.psicologia};
               setPerfilPsicologico(nuevoPsico);

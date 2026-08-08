@@ -97,8 +97,15 @@ export async function getObjectiveProgress(codigo: string): Promise<{ percentage
   // real de cuando se establecio, en vez de asumir un valor por defecto arbitrario.
   let fechaInicioReal = objetivo.fecha_inicio;
   if (!fechaInicioReal) {
-    const { data: eventoObjetivo } = await supabase.from("athlete_events").select("date").eq("user_codigo", codigo).eq("type", "objetivo").order("date", { ascending: true }).limit(1).single();
-    fechaInicioReal = eventoObjetivo?.date || null;
+    // COLD-START SAFE: proteger con try/catch propio, .single() lanza excepcion si no encuentra
+    // exactamente 1 fila — nunca debe romper toda la funcion de progreso del objetivo.
+    try {
+      const { data: eventoObjetivo } = await supabase.from("athlete_events").select("date").eq("user_codigo", codigo).eq("type", "objetivo").order("date", { ascending: true }).limit(1).single();
+      fechaInicioReal = eventoObjetivo?.date || null;
+    } catch (errEventoObjetivo) {
+      console.error("getObjectiveProgress: error consultando evento objetivo en Timeline:", errEventoObjetivo);
+      fechaInicioReal = null;
+    }
   }
   let tiempoScore = 15; // valor conservador solo si no hay NINGUNA fecha real disponible (ni guardada ni en Timeline)
   if (fechaInicioReal) {

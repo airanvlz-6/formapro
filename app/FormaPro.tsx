@@ -996,11 +996,15 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     const weekStart=lunesActual.toISOString().split('T')[0];
     console.log("ORCHESTRATOR: dias ya completados esta semana =", diasYaCompletados.length, "→ generando para week_start:", weekStart);
 
+    // FIX: week_number debe ser SIEMPRE cicloActual.semana (la fuente real del Estado Canonico),
+    // nunca "+1" ciego — sumar +1 solo tenia sentido en el modelo antiguo donde se generaba siempre
+    // la semana SIGUIENTE. Ahora que el Orchestrator puede regenerar la semana ACTUAL, sumar +1
+    // duplicaba el incremento cada vez que se corregia/regeneraba la misma semana.
     const planCompleto={
       week_start:weekStart,
-      week_number:(cicloActual.semana||0)+1,
+      week_number:cicloActual.semana||1,
       total_weeks_block:cicloActual.totalSemanas||null,
-      block_name:analisis.tipo_semana,
+      block_name:cicloActual.bloque||analisis.tipo_semana,
       week_objective:analisis.objetivo,
       sessions:sesionesCompletas
     };

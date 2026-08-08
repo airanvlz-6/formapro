@@ -92,11 +92,17 @@ export async function getObjectiveProgress(codigo: string): Promise<{ percentage
   // FIX: tiempoScore era un valor fijo (30) sin ningun calculo real, causando que atletas con
 // fechas de objetivo completamente distintas mostraran el mismo porcentaje. Ahora se calcula
 // genuinamente segun el avance temporal real: tiempo transcurrido vs tiempo total hasta el objetivo.
-// Usa fecha_inicio REAL del objetivo (registrada al establecerlo/cambiarlo) — nunca un proxy
-  // generico, para que un cambio de objetivo a mitad de camino no arrastre una fecha incorrecta.
-  let tiempoScore = 15; // valor conservador si el objetivo no tiene fecha_inicio registrada aun
-  if (objetivo.fecha_inicio) {
-    const fechaInicio = new Date(objetivo.fecha_inicio);
+// Usa fecha_inicio REAL del objetivo. Si no esta guardada en el objeto, busca el evento real
+  // "objetivo" mas antiguo en athlete_events (Timeline) que coincida — es la fuente de verdad
+  // real de cuando se establecio, en vez de asumir un valor por defecto arbitrario.
+  let fechaInicioReal = objetivo.fecha_inicio;
+  if (!fechaInicioReal) {
+    const { data: eventoObjetivo } = await supabase.from("athlete_events").select("date").eq("user_codigo", codigo).eq("type", "objetivo").order("date", { ascending: true }).limit(1).single();
+    fechaInicioReal = eventoObjetivo?.date || null;
+  }
+  let tiempoScore = 15; // valor conservador solo si no hay NINGUNA fecha real disponible (ni guardada ni en Timeline)
+  if (fechaInicioReal) {
+    const fechaInicio = new Date(fechaInicioReal);
     const tiempoTotalMs = fechaObjetivo.getTime() - fechaInicio.getTime();
     const tiempoTranscurridoMs = hoy.getTime() - fechaInicio.getTime();
     if (tiempoTotalMs > 0) {

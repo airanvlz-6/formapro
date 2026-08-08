@@ -995,7 +995,17 @@ ${ultimos}`;
              ultMensajeUsuario.toLowerCase().includes("carrera") ||
              ultMensajeUsuario.toLowerCase().includes("quiero") ||
              ultMensajeUsuario.toLowerCase().includes("meta"));
-          if (obj && typeof obj === "object" && mencionaObjetivo) updates.objetivo_principal = obj;
+          if (obj && typeof obj === "object" && mencionaObjetivo) {
+            // FIX: registrar fecha_inicio REAL del objetivo (momento en que se establece/cambia),
+            // no un proxy generico — esto permite calcular progreso temporal correcto si el atleta
+            // cambia de objetivo a mitad de camino, en vez de arrastrar la fecha de registro original.
+            const objetivoAnteriorFecha = usuarioData?.objetivo_principal?.descripcion;
+            const esObjetivoNuevo = objetivoAnteriorFecha !== obj.descripcion;
+            updates.objetivo_principal = {
+              ...obj,
+              fecha_inicio: esObjetivoNuevo ? new Date().toISOString().split('T')[0] : (usuarioData?.objetivo_principal?.fecha_inicio || new Date().toISOString().split('T')[0])
+            };
+          }
         }
 
         if (extracted.datos_entrenamiento && extracted.datos_entrenamiento !== "null") {

@@ -70,7 +70,7 @@ export async function getWeekPlan(codigo: string): Promise<any> {
 // combinando adherencia reciente y evolucion de debilidades activas. No es exacto pero es honesto:
 // se basa en datos reales, nunca en una estimacion inventada por el LLM.
 export async function getObjectiveProgress(codigo: string): Promise<{ percentage: number; daysRemaining: number | null } | null> {
-  const { data } = await supabase.from("usuarios").select("objetivo_principal,workout_history,athlete_development").eq("codigo", codigo).single();
+  const { data } = await supabase.from("usuarios").select("objetivo_principal,workout_history,athlete_development,fecha_registro").eq("codigo", codigo).single();
   const objetivo = data?.objetivo_principal;
   if (!objetivo?.fecha) return null;
 
@@ -89,7 +89,21 @@ export async function getObjectiveProgress(codigo: string): Promise<{ percentage
   const totalDebilidades = desarrollo.length || 1;
   const debilidadesScore = (resueltas / totalDebilidades) * 30;
 
-  const tiempoScore = 30;
+  // FIX: tiempoScore era un valor fijo (30) sin ningun calculo real, causando que atletas con
+// fechas de objetivo completamente distintas mostraran el mismo porcentaje. Ahora se calcula
+// genuinamente segun el avance temporal real: tiempo transcurrido vs tiempo total hasta el objetivo.
+// Usa fecha_inicio REAL del objetivo (registrada al establecerlo/cambiarlo) — nunca un proxy
+  // generico, para que un cambio de objetivo a mitad de camino no arrastre una fecha incorrecta.
+  let tiempoScore = 15; // valor conservador si el objetivo no tiene fecha_inicio registrada aun
+  if (objetivo.fecha_inicio) {
+    const fechaInicio = new Date(objetivo.fecha_inicio);
+    const tiempoTotalMs = fechaObjetivo.getTime() - fechaInicio.getTime();
+    const tiempoTranscurridoMs = hoy.getTime() - fechaInicio.getTime();
+    if (tiempoTotalMs > 0) {
+      const avanceTemporal = Math.max(0, Math.min(tiempoTranscurridoMs / tiempoTotalMs, 1));
+      tiempoScore = avanceTemporal * 30;
+    }
+  }
 
   const percentage = Math.round(Math.min(adherenciaScore + debilidadesScore + tiempoScore, 100));
   return { percentage, daysRemaining: diasRestantes };

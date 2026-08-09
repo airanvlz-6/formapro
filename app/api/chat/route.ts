@@ -1400,7 +1400,18 @@ if (action === "analizar_bloque_semana") {
     });
 
     const debilidadPrioritaria = debilidadesConScore.sort((a: any, b: any) => b.score - a.score)[0];
-    console.log("BLOCK ANALYZER: scores de debilidades (prioridad - penalizacion exposicion):", JSON.stringify(debilidadesConScore.map((d: any) => ({ nombre: d.nombre_visible, score: d.score, exposicion: d.exposicionReciente }))));
+    console.log("BLOCK ANALYZER: scores de debilidades (prioridad - penalizacion exposicion):", JSON.stringify(debilidadesConScore.map((d: any) => ({ nombre: d.nombre_visible, score: d.score, exposicion: d.exposicionReciente, response: d.ultimaResponse }))));
+
+    // FIX: si la debilidad prioritaria esta en estancamiento, recuperar los metodos ya usados
+    // recientemente para poder indicar explicitamente que se debe CAMBIAR el estimulo, no repetirlo.
+    let metodosYaProbadosTexto = "";
+    if (debilidadPrioritaria?.ultimaResponse === "estancamiento") {
+      const { data: exposicionesConMetodos } = await supabase.from("weakness_exposure").select("metodos_usados").eq("user_codigo", codigo).eq("weakness_id", debilidadPrioritaria.nombre_visible).order("week_start", { ascending: false }).limit(3);
+      const todosLosMetodos = (exposicionesConMetodos || []).flatMap((e: any) => e.metodos_usados || []);
+      if (todosLosMetodos.length > 0) {
+        metodosYaProbadosTexto = `\nESTANCAMIENTO DETECTADO en "${debilidadPrioritaria.nombre_visible}": se ha trabajado con estos metodos recientemente sin mejora real: ${[...new Set(todosLosMetodos)].join(", ")}. Esta semana debe usarse un ESTIMULO DISTINTO a estos, no repetir el mismo enfoque.`;
+      }
+    }
 
     // FIX CRITICO DE RAIZ: el Block Analyzer nunca recibia especialidad ni objetivo del atleta,
     // generando estructuras genericas sin anclaje a la disciplina real (ej: CrossFit/halterofilia).
@@ -1412,6 +1423,7 @@ Objetivo principal: ${JSON.stringify(usuarioAnalyzer?.objetivo_principal) || "no
 Ciclo actual: ${JSON.stringify(estado.ciclo)}
 Debilidad prioritaria activa: ${debilidadPrioritaria ? debilidadPrioritaria.nombre_visible : "ninguna"}
 Disponibilidad: ${usuarioAnalyzer?.distribucion_semanal || "no especificada"}
+${metodosYaProbadosTexto}
 
 Responde SOLO con este JSON, sin texto adicional ni markdown:
 {"tipo_semana":"acumulacion|intensificacion|realizacion|deload","objetivo":"frase corta del objetivo de esta semana","volumen_relativo":0.0-1.0,"intensidad_relativa":0.0-1.0,"debilidad_prioritaria":"nombre o null","dias_entreno_sugeridos":número}`;
@@ -1846,15 +1858,19 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
 
     // FORGE WEAKNESS EXPOSURE — entidad dedicada: cuanto se trabajo REALMENTE cada debilidad esta
     // semana (no solo si aparece en BLOCK_WEEK_SUMMARY). Deterministico, agrupado por debilidad real.
-    const exposicionPorDebilidad: Record<string, { sesiones: number; ultimaFecha: string | null }> = {};
+    // FIX: capturar tambien el METODO especifico usado cada vez (titulo de la sesion), para que Forge
+    // pueda distinguir "trabajamos resistencia pectoral con EMOM push-ups" de "con bench volume" —
+    // base real para poder decir en el futuro "ya probamos 3 metodos distintos sin mejora, cambiar enfoque".
+    const exposicionPorDebilidad: Record<string, { sesiones: number; ultimaFecha: string | null; metodos: string[] }> = {};
     sesionesQueRequierenReporte.forEach((s: any) => {
       if (!s.debilidad_relacionada) return;
       if (!exposicionPorDebilidad[s.debilidad_relacionada]) {
-        exposicionPorDebilidad[s.debilidad_relacionada] = { sesiones: 0, ultimaFecha: null };
+        exposicionPorDebilidad[s.debilidad_relacionada] = { sesiones: 0, ultimaFecha: null, metodos: [] };
       }
       if (s.completada === true) {
         exposicionPorDebilidad[s.debilidad_relacionada].sesiones++;
         exposicionPorDebilidad[s.debilidad_relacionada].ultimaFecha = hoyCierreStr;
+        if (s.titulo) exposicionPorDebilidad[s.debilidad_relacionada].metodos.push(s.titulo);
       }
     });
     // FIX: calcular response REAL comparando progreso actual vs progreso registrado la semana anterior
@@ -1890,7 +1906,8 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
         sessions_count: exposicion.sesiones,
         last_exposure_date: exposicion.ultimaFecha,
         response: responseCalculada,
-        progreso_al_cierre: progresoActual
+        progreso_al_cierre: progresoActual,
+        metodos_usados: exposicion.metodos
       }, { onConflict: "user_codigo,weakness_id,week_start" });
     }
     console.log("WEAKNESS EXPOSURE registrado:", JSON.stringify(exposicionPorDebilidad));

@@ -5,6 +5,7 @@ import { validateExtraction } from "@/lib/validators/extractionRules";
 import { buildCatalogoPrompt, validarCatalogoDisciplina } from "@/lib/sports/disciplineCatalog";
 import { parseStrengthRecord } from "@/lib/sports/strengthRecordParser";
 import { parseSessionProposal } from "@/lib/sports/proposalParser";
+import { detectarSesionDuplicada } from "@/lib/validators/sessionDuplicationValidator";
 import { buildAthleteKnowledge, knowledgeRouter, getObjectiveProgress } from "@/lib/knowledge/athleteKnowledge";
 import { getResponseMode, buildStaticResponse, getCapabilities, buildCapabilityInstruction } from "@/lib/response/responseEngine";
 import { sendEmail } from "@/lib/email/sendEmail";
@@ -1687,6 +1688,33 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
       // exclusivamente de "trabaja_debilidad" que ya decidio el Blueprint — nunca del criterio libre
       // del Session Builder, evitando incoherencias semanticas para Discovery/Analytics futuros.
       const debilidadFinal = trabaja_debilidad === true ? (debilidad_relacionada || null) : null;
+
+      // FORGE SESSION DUPLICATION VALIDATOR — capa determinista POST-generacion. El LLM propone,
+      // el backend decide: si la sesion generada es sospechosamente identica a una pasada real,
+      // se rechaza y se regenera UNA vez con instruccion explicita, en vez de aceptarla silenciosamente.
+      const resultadoDuplicacion = detectarSesionDuplicada(
+        { titulo: sesionCompleta.titulo, descripcion: descripcionEnsamblada },
+        snapshot.ultimas_5_sesiones || []
+      );
+      if (resultadoDuplicacion.esDuplicado) {
+        console.error(`🚨 SESSION DUPLICATION DETECTADA [${dia}]: similitud=${resultadoDuplicacion.similitudMaxima} con "${resultadoDuplicacion.sesionParecida}" — regenerando una vez con instruccion explicita`);
+        const builderPromptRetry = builderPrompt + `\n\n🚨 INTENTO ANTERIOR RECHAZADO: generaste una sesion casi identica a "${resultadoDuplicacion.sesionParecida}" (similitud ${Math.round(resultadoDuplicacion.similitudMaxima*100)}%). DEBES generar contenido genuinamente DISTINTO — diferentes ejercicios, diferente estructura, aunque el tipo/foco sea el mismo.`;
+        const builderRetryRes = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+          body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 900, messages: [{ role: "user", content: builderPromptRetry }] }),
+        });
+        const builderRetryData = await builderRetryRes.json();
+        const builderRetryTexto = builderRetryData.content?.map((b: any) => b.text || "").join("") || "{}";
+        const builderRetryClean = builderRetryTexto.replace(/```json|```/g, "").trim();
+        const builderRetryMatch = builderRetryClean.match(/\{[\s\S]*\}/);
+        if (builderRetryMatch) {
+          const sesionRetry = JSON.parse(builderRetryMatch[0]);
+          const descripcionRetryEnsamblada = `**Calentamiento**\n${sesionRetry.calentamiento || ""}\n\n**Bloque principal**\n${sesionRetry.bloque_principal || ""}\n\n**Vuelta a la calma**\n${sesionRetry.vuelta_calma || ""}`;
+          return NextResponse.json({ ok: true, sesion: { dia, tipo, titulo: sesionRetry.titulo, por_que: sesionRetry.por_que, descripcion: descripcionRetryEnsamblada, debilidad_relacionada: debilidadFinal, regenerada_por_duplicado: true } });
+        }
+      }
+
       return NextResponse.json({ ok: true, sesion: { dia, tipo, titulo: sesionCompleta.titulo, por_que: sesionCompleta.por_que, descripcion: descripcionEnsamblada, debilidad_relacionada: debilidadFinal } });
     } catch (err: any) {
       return NextResponse.json({ error: "Error en Session Builder: " + err.message }, { status: 500 });

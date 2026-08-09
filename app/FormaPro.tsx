@@ -1610,20 +1610,23 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
       // Orchestrator, nunca del Coach conversacional. Si el intent lo detecta, disparamos el mismo
       // flujo que usa el boton oficial, de forma transparente — el usuario nunca nota la diferencia.
       if(resContexto?.debeDispararOrchestrator){
-        // NOTA: el mensaje del usuario ya se mostro al inicio de enviar(), no lo duplicamos aqui.
+        // FIX: mismo comportamiento que el boton oficial — preguntar disponibilidad ANTES de generar,
+        // en vez de disparar el Orchestrator directamente sin confirmar.
         const mensajeDisplayUsuario=texto.trim();
-        setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu próxima semana paso a paso — analizando bloque, distribuyendo días y diseñando cada sesión..."}]);
+        let distTextoOrch="No tengo tu disponibilidad guardada todavia.";
+        try{
+          const distParsedOrch=typeof distribucionSemanal==="string"?JSON.parse(distribucionSemanal):distribucionSemanal;
+          if(distParsedOrch && typeof distParsedOrch==="object"){
+            distTextoOrch=Object.entries(distParsedOrch).filter(([k])=>k!=="observaciones").map(([k,v]:[string,any])=>`${k}: ${Array.isArray(v)?v.join(", "):v}`).join(" — ");
+          }
+        }catch{}
+        const respuestaConfirmacion=`Antes de generar tu próxima semana, confirmemos tu disponibilidad actual:\n\n📅 ${distTextoOrch}\n\n¿Sigue siendo así, o ha cambiado algo?`;
+        setMensajes(prev=>[...prev,{role:"assistant",content:respuestaConfirmacion}]);
+        setEsperandoConfirmacionDisponibilidad(true);
         setCargando(false);
-        setGenerandoSemana(true);
-        const planGenerado=await orquestarGeneracionSemana();
-        setGenerandoSemana(false);
-        const respuestaFinal=planGenerado
-          ? `✅ Tu nueva semana está lista y guardada en Mi Plan.\n\n📌 ${planGenerado.week_objective || "Revisa cada sesión con su detalle completo."}\n\n¿Alguna duda sobre la semana o necesitas ajustar algo?`
-          : "⚠️ Hubo un problema generando la semana. Inténtalo de nuevo o dímelo directamente en el chat.";
-        setMensajes(prev=>[...prev.slice(0,-1),{role:"assistant",content:respuestaFinal}]);
-        const histConOrchestrator=[...historial,{role:"user",content:mensajeDisplayUsuario},{role:"assistant",content:respuestaFinal}];
-        setHistorial(histConOrchestrator);
-        if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histConOrchestrator}});
+        const histConPregunta=[...historial,{role:"user",content:mensajeDisplayUsuario},{role:"assistant",content:respuestaConfirmacion}];
+        setHistorial(histConPregunta);
+        if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histConPregunta}});
         return;
       }
 

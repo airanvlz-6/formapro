@@ -1402,10 +1402,13 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
     // FORGE BLOCK MEMORY — el resumen estructurado de la semana ANTERIOR del mismo bloque, para que
     // la Strategy pueda razonar progresion real en vez de partir de cero cada semana. Solo la mas reciente.
     const { data: blockMemoryReciente } = await supabase.from("block_week_summary").select("*").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(1).single();
+    const sesionesNoCompletadasAnterior = blockMemoryReciente?.sesiones_no_completadas || [];
     const blockMemoryTexto = blockMemoryReciente
       ? `MEMORIA DEL BLOQUE (resultado de la semana anterior, semana ${blockMemoryReciente.semana_del_bloque}/${blockMemoryReciente.total_semanas_bloque} de ${blockMemoryReciente.bloque}):
 Objetivo que perseguia: ${blockMemoryReciente.objetivo_semanal}
 Resultado: ${blockMemoryReciente.resultado}
+Adherencia real: ${blockMemoryReciente.adherencia_real ?? 100}%
+${sesionesNoCompletadasAnterior.length > 0 ? `Sesiones que NO se completaron: ${sesionesNoCompletadasAnterior.map((s: any) => `${s.dia} (${s.titulo})`).join(", ")} — considera si alguna de estas debe recuperarse o compensarse esta semana, sin forzar sobrecarga.` : "Semana completada al 100%."}
 Fatiga acumulada: ${blockMemoryReciente.fatiga}
 Recuperacion: ${blockMemoryReciente.recuperacion}
 Adaptaciones ya conseguidas: ${(blockMemoryReciente.adaptaciones_conseguidas || []).join(", ") || "ninguna registrada"}
@@ -1773,6 +1776,15 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
       if (summaryMatch) summaryEstructurado = JSON.parse(summaryMatch[0]);
     } catch (e) { console.error("Error generando BLOCK_WEEK_SUMMARY:", e); }
 
+    // FIX: sesiones NO completadas calculadas de forma DETERMINISTICA (no por el LLM), para que
+    // el Coach/Strategy de la proxima semana sepa exactamente que se salto, no solo un resumen narrativo.
+    const sesionesNoCompletadas = sesionesQueRequierenReporte
+      .filter((s: any) => s.completada !== true)
+      .map((s: any) => ({ dia: s.dia, tipo: s.tipo, titulo: s.titulo }));
+    const adherenciaRealCalc = sesionesQueRequierenReporte.length > 0
+      ? Math.round((sesionesQueRequierenReporte.filter((s: any) => s.completada === true).length / sesionesQueRequierenReporte.length) * 100)
+      : 100;
+
     if (summaryEstructurado) {
       await supabase.from("block_week_summary").upsert({
         user_codigo: codigo,
@@ -1785,9 +1797,11 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
         fatiga: summaryEstructurado.fatiga || null,
         recuperacion: summaryEstructurado.recuperacion || null,
         adaptaciones_conseguidas: summaryEstructurado.adaptaciones_conseguidas || [],
-        pendiente: summaryEstructurado.pendiente || []
+        pendiente: summaryEstructurado.pendiente || [],
+        sesiones_no_completadas: sesionesNoCompletadas,
+        adherencia_real: adherenciaRealCalc
       }, { onConflict: "user_codigo,week_start" });
-      console.log("BLOCK WEEK SUMMARY generado:", JSON.stringify(summaryEstructurado));
+      console.log("BLOCK WEEK SUMMARY generado:", JSON.stringify(summaryEstructurado), "sesiones_no_completadas:", JSON.stringify(sesionesNoCompletadas));
     }
 
     // FORGE CELEBRATIONS ENGINE — hitos objetivos deterministas (constancia, recuperacion, volumen)

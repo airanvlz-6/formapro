@@ -1378,17 +1378,13 @@ if (action === "analizar_bloque_semana") {
     // FIX ARQUITECTONICO: score deterministico que penaliza exposicion reciente, no solo prioridad
     // declarada. Cuenta cuantas sesiones de los ultimos 7 dias mencionan cada debilidad (por nombre
     // en debilidad_relacionada de weekly_plan reciente), y penaliza el score de esa debilidad.
-    const { data: planesRecientesParaExposicion } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(2);
-    const sesionesRecientesTodas = (planesRecientesParaExposicion || []).flatMap((p: any) => p.sessions || []);
-    const hace7diasExposicion = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    // FORGE WEAKNESS EXPOSURE — fuente real y estructurada (no aproximacion), registrada en cada
+    // cierre de semana. Consulta las ultimas 2 semanas de exposicion real por debilidad.
+    const { data: exposicionesRecientes } = await supabase.from("weakness_exposure").select("weakness_id,sessions_count,last_exposure_date").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(20);
 
     const debilidadesConScore = debilidadesActivas.map((d: any) => {
-      const exposicionReciente = sesionesRecientesTodas.filter((s: any) =>
-        s.debilidad_relacionada === d.nombre_visible && s.fecha && new Date(s.fecha) >= hace7diasExposicion
-      ).length;
-      // Fallback: contar tambien por titulo/tipo si no hay fecha fiable en la sesion (aproximacion conservadora)
-      const exposicionAproximada = sesionesRecientesTodas.filter((s: any) => s.debilidad_relacionada === d.nombre_visible).length;
-      const exposicionFinal = exposicionReciente || exposicionAproximada;
+      const exposicionesDeEstaDebilidad = (exposicionesRecientes || []).filter((e: any) => e.weakness_id === d.nombre_visible);
+      const exposicionFinal = exposicionesDeEstaDebilidad.reduce((sum: number, e: any) => sum + (e.sessions_count || 0), 0);
 
       const scorePrioridad = d.prioridad === "alta" ? 50 : d.prioridad === "media" ? 30 : 15;
       const penalizacionExposicion = Math.min(exposicionFinal * 12, 40); // maximo 40 puntos de penalizacion
@@ -1840,6 +1836,31 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
       }, { onConflict: "user_codigo,week_start" });
       console.log("BLOCK WEEK SUMMARY generado:", JSON.stringify(summaryEstructurado), "sesiones_no_completadas:", JSON.stringify(sesionesNoCompletadas));
     }
+
+    // FORGE WEAKNESS EXPOSURE — entidad dedicada: cuanto se trabajo REALMENTE cada debilidad esta
+    // semana (no solo si aparece en BLOCK_WEEK_SUMMARY). Deterministico, agrupado por debilidad real.
+    const exposicionPorDebilidad: Record<string, { sesiones: number; ultimaFecha: string | null }> = {};
+    sesionesQueRequierenReporte.forEach((s: any) => {
+      if (!s.debilidad_relacionada) return;
+      if (!exposicionPorDebilidad[s.debilidad_relacionada]) {
+        exposicionPorDebilidad[s.debilidad_relacionada] = { sesiones: 0, ultimaFecha: null };
+      }
+      if (s.completada === true) {
+        exposicionPorDebilidad[s.debilidad_relacionada].sesiones++;
+        exposicionPorDebilidad[s.debilidad_relacionada].ultimaFecha = hoyCierreStr;
+      }
+    });
+    for (const [weaknessNombre, exposicion] of Object.entries(exposicionPorDebilidad)) {
+      await supabase.from("weakness_exposure").upsert({
+        user_codigo: codigo,
+        weakness_id: weaknessNombre,
+        week_start: weekStartCierre,
+        sessions_count: exposicion.sesiones,
+        last_exposure_date: exposicion.ultimaFecha,
+        response: "sin_evaluar" // se enriquecera en el futuro con analisis de progreso real
+      }, { onConflict: "user_codigo,weakness_id,week_start" });
+    }
+    console.log("WEAKNESS EXPOSURE registrado:", JSON.stringify(exposicionPorDebilidad));
 
     // FORGE CELEBRATIONS ENGINE — hitos objetivos deterministas (constancia, recuperacion, volumen)
     const celebraciones = await detectarCelebraciones(supabase, codigo);

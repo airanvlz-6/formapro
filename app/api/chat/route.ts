@@ -1380,16 +1380,23 @@ if (action === "analizar_bloque_semana") {
     // en debilidad_relacionada de weekly_plan reciente), y penaliza el score de esa debilidad.
     // FORGE WEAKNESS EXPOSURE — fuente real y estructurada (no aproximacion), registrada en cada
     // cierre de semana. Consulta las ultimas 2 semanas de exposicion real por debilidad.
-    const { data: exposicionesRecientes } = await supabase.from("weakness_exposure").select("weakness_id,sessions_count,last_exposure_date").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(20);
+    const { data: exposicionesRecientes } = await supabase.from("weakness_exposure").select("weakness_id,sessions_count,last_exposure_date,response").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(20);
 
     const debilidadesConScore = debilidadesActivas.map((d: any) => {
       const exposicionesDeEstaDebilidad = (exposicionesRecientes || []).filter((e: any) => e.weakness_id === d.nombre_visible);
       const exposicionFinal = exposicionesDeEstaDebilidad.reduce((sum: number, e: any) => sum + (e.sessions_count || 0), 0);
+      const ultimaResponse = exposicionesDeEstaDebilidad[0]?.response || "sin_evaluar";
 
       const scorePrioridad = d.prioridad === "alta" ? 50 : d.prioridad === "media" ? 30 : 15;
-      const penalizacionExposicion = Math.min(exposicionFinal * 12, 40); // maximo 40 puntos de penalizacion
-      const score = scorePrioridad - penalizacionExposicion;
-      return { ...d, score, exposicionReciente: exposicionFinal };
+      let penalizacionExposicion = Math.min(exposicionFinal * 12, 40);
+      // FIX: estancamiento NO se penaliza igual que saturacion normal — si hay exposicion pero sin
+      // progreso, la debilidad debe SEGUIR siendo prioritaria (posiblemente con metodo distinto),
+      // no perder relevancia solo por haber recibido trabajo.
+      if (ultimaResponse === "estancamiento") penalizacionExposicion = Math.max(0, penalizacionExposicion - 25);
+      const bonusEstancamiento = ultimaResponse === "estancamiento" ? 15 : 0;
+
+      const score = scorePrioridad - penalizacionExposicion + bonusEstancamiento;
+      return { ...d, score, exposicionReciente: exposicionFinal, ultimaResponse };
     });
 
     const debilidadPrioritaria = debilidadesConScore.sort((a: any, b: any) => b.score - a.score)[0];
@@ -1850,14 +1857,40 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
         exposicionPorDebilidad[s.debilidad_relacionada].ultimaFecha = hoyCierreStr;
       }
     });
+    // FIX: calcular response REAL comparando progreso actual vs progreso registrado la semana anterior
+    // para esta misma debilidad. Distingue SATURACION (exposicion alta + progreso avanzando → bajar
+    // prioridad temporal, va bien) de ESTANCAMIENTO (exposicion alta + progreso estancado → subir
+    // prioridad y señalar cambio de metodo, no esta funcionando).
+    const { data: desarrolloActualParaResponse } = await supabase.from("usuarios").select("athlete_development").eq("codigo", codigo).single();
+    const desarrolloActual = desarrolloActualParaResponse?.athlete_development || [];
+
     for (const [weaknessNombre, exposicion] of Object.entries(exposicionPorDebilidad)) {
+      const debilidadActualObj = desarrolloActual.find((d: any) => d.nombre_visible === weaknessNombre);
+      const progresoActual = debilidadActualObj?.progreso ?? null;
+
+      const { data: exposicionSemanaAnterior } = await supabase.from("weakness_exposure").select("progreso_al_cierre").eq("user_codigo", codigo).eq("weakness_id", weaknessNombre).order("week_start", { ascending: false }).limit(1).single();
+      const progresoAnterior = exposicionSemanaAnterior?.progreso_al_cierre ?? null;
+
+      let responseCalculada = "sin_evaluar";
+      if (progresoActual !== null && progresoAnterior !== null) {
+        const delta = progresoActual - progresoAnterior;
+        if (exposicion.sesiones >= 2 && delta <= 1) {
+          responseCalculada = "estancamiento"; // exposicion alta, sin mejora real
+        } else if (delta > 1) {
+          responseCalculada = "respuesta_positiva"; // progreso avanzando con la exposicion actual
+        } else {
+          responseCalculada = "estable";
+        }
+      }
+
       await supabase.from("weakness_exposure").upsert({
         user_codigo: codigo,
         weakness_id: weaknessNombre,
         week_start: weekStartCierre,
         sessions_count: exposicion.sesiones,
         last_exposure_date: exposicion.ultimaFecha,
-        response: "sin_evaluar" // se enriquecera en el futuro con analisis de progreso real
+        response: responseCalculada,
+        progreso_al_cierre: progresoActual
       }, { onConflict: "user_codigo,weakness_id,week_start" });
     }
     console.log("WEAKNESS EXPOSURE registrado:", JSON.stringify(exposicionPorDebilidad));

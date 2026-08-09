@@ -878,15 +878,18 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     // Reduce el tiempo total de ~7x30s (210s) a ~30-40s, sin cambiar la arquitectura.
     // FIX: solo se construyen dias DESDE HOY en adelante (nunca dias pasados de la semana actual que
     // no se llegaron a reportar) — cubre usuario nuevo a mitad de semana y regeneracion a mitad de semana.
-    const hoyParaFiltro=new Date();
     const ORDEN_DIAS=["lunes","martes","miercoles","jueves","viernes","sabado","domingo"];
     const normalizarDiaOrch=(d:string)=>(d||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
-    const hoyOrchIdx=(hoyParaFiltro.getDay()||7)-1; // 0=lunes ... 6=domingo
-    const diasPasadosSinReportar=(estructura.sessions||[]).filter((d:any)=>{
+    // FIX CRITICO: el filtro de "dias pasados sin reportar" SOLO tiene sentido si estamos generando
+    // la semana ACTUAL (weekStartOrchestrator === weekStartSemanaActual). Si es una semana FUTURA
+    // (porque la actual ya se cerro), NINGUN dia es "pasado" — todos son dias nuevos por construir.
+    const esSemanaActualReal=weekStartOrchestrator===weekStartSemanaActual;
+    const hoyOrchIdx=esSemanaActualReal?((new Date()).getDay()||7)-1:-1; // -1 = ningun dia se considera pasado
+    const diasPasadosSinReportar=esSemanaActualReal?(estructura.sessions||[]).filter((d:any)=>{
       const idxDia=ORDEN_DIAS.indexOf(normalizarDiaOrch(d.dia));
       return idxDia<hoyOrchIdx && !diasYaCompletados.some((dc:any)=>normalizarDiaOrch(dc.dia)===normalizarDiaOrch(d.dia));
-    });
-    console.log("ORCHESTRATOR Paso 3 — Session Builder: construyendo", (estructura.sessions||[]).length, "dias EN PARALELO");
+    }):[];
+    console.log("ORCHESTRATOR Paso 3 — Session Builder: construyendo", (estructura.sessions||[]).length, "dias EN PARALELO. esSemanaActualReal=", esSemanaActualReal);
     const diasAConstruir=(estructura.sessions||[]).filter((d:any)=>{
       const idxDia=ORDEN_DIAS.indexOf(normalizarDiaOrch(d.dia));
       return d.tipo!=="descanso" && idxDia>=hoyOrchIdx && !diasYaCompletados.some((dc:any)=>normalizarDiaOrch(dc.dia)===normalizarDiaOrch(d.dia));

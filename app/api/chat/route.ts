@@ -1374,7 +1374,30 @@ if (action === "analizar_bloque_semana") {
     const { data: usuarioAnalyzer } = await supabase.from("usuarios").select("ciclo_actual,athlete_development,distribucion_semanal,categoria,especialidad,objetivo_principal,perfil").eq("codigo", codigo).single();
 
     const debilidadesActivas = (usuarioAnalyzer?.athlete_development || []).filter((d: any) => d.estado !== "resuelta");
-    const debilidadPrioritaria = debilidadesActivas.sort((a: any, b: any) => (b.prioridad === "alta" ? 1 : 0) - (a.prioridad === "alta" ? 1 : 0))[0];
+
+    // FIX ARQUITECTONICO: score deterministico que penaliza exposicion reciente, no solo prioridad
+    // declarada. Cuenta cuantas sesiones de los ultimos 7 dias mencionan cada debilidad (por nombre
+    // en debilidad_relacionada de weekly_plan reciente), y penaliza el score de esa debilidad.
+    const { data: planesRecientesParaExposicion } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(2);
+    const sesionesRecientesTodas = (planesRecientesParaExposicion || []).flatMap((p: any) => p.sessions || []);
+    const hace7diasExposicion = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const debilidadesConScore = debilidadesActivas.map((d: any) => {
+      const exposicionReciente = sesionesRecientesTodas.filter((s: any) =>
+        s.debilidad_relacionada === d.nombre_visible && s.fecha && new Date(s.fecha) >= hace7diasExposicion
+      ).length;
+      // Fallback: contar tambien por titulo/tipo si no hay fecha fiable en la sesion (aproximacion conservadora)
+      const exposicionAproximada = sesionesRecientesTodas.filter((s: any) => s.debilidad_relacionada === d.nombre_visible).length;
+      const exposicionFinal = exposicionReciente || exposicionAproximada;
+
+      const scorePrioridad = d.prioridad === "alta" ? 50 : d.prioridad === "media" ? 30 : 15;
+      const penalizacionExposicion = Math.min(exposicionFinal * 12, 40); // maximo 40 puntos de penalizacion
+      const score = scorePrioridad - penalizacionExposicion;
+      return { ...d, score, exposicionReciente: exposicionFinal };
+    });
+
+    const debilidadPrioritaria = debilidadesConScore.sort((a: any, b: any) => b.score - a.score)[0];
+    console.log("BLOCK ANALYZER: scores de debilidades (prioridad - penalizacion exposicion):", JSON.stringify(debilidadesConScore.map((d: any) => ({ nombre: d.nombre_visible, score: d.score, exposicion: d.exposicionReciente }))));
 
     // FIX CRITICO DE RAIZ: el Block Analyzer nunca recibia especialidad ni objetivo del atleta,
     // generando estructuras genericas sin anclaje a la disciplina real (ej: CrossFit/halterofilia).

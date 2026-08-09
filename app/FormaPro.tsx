@@ -738,6 +738,7 @@ const [prPendienteCompartir,setPrPendienteCompartir]=useState<{ejercicio:string;
 const [semanaPendienteCompartir,setSemanaPendienteCompartir]=useState<{sesionesCompletadas:number;sesionesTotales:number}|null>(null);
 const [rachaPendienteCompartir,setRachaPendienteCompartir]=useState<number|null>(null);
 const [modoEntrada,setModoEntrada]=useState<string>("planificacion");
+const [esperandoConfirmacionDisponibilidad,setEsperandoConfirmacionDisponibilidad]=useState(false);
 const [objetivoPendienteCompartir,setObjetivoPendienteCompartir]=useState<{objetivo:string;resultado:string}|null>(null);
 const [historialMarcas,setHistorialMarcas]=useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
 const [analisisBloques,setAnalisisBloques]=useState<any[]>([]);
@@ -1567,7 +1568,32 @@ const forgeValidator=(texto:string):string=>{
 const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|okay|de\s*acuerdo|perfecto|correcto|hazlo|claro|dale)\b/i;
       const palabrasTexto = texto.trim().split(/\s+/).filter(Boolean);
       const esConfirmacionSimple = palabrasTexto.length>0 && palabrasTexto.length<=8 && CONTIENE_CONFIRMACION.test(texto.trim());
-      if(esConfirmacionSimple && codigoUsuario){
+
+      // FIX: si estamos esperando confirmacion de disponibilidad tras cerrar semana, priorizamos ese
+      // flujo. Confirmacion simple → genera directamente. Cualquier otra cosa → el mensaje probablemente
+      // describe un cambio de disponibilidad, se procesa normalmente (el extractor lo guardara) y
+      // DESPUES generamos con los datos ya actualizados.
+      if(esperandoConfirmacionDisponibilidad && codigoUsuario){
+        setEsperandoConfirmacionDisponibilidad(false);
+        const dispararGeneracion=async()=>{
+          setGenerandoSemana(true);
+          setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu próxima semana paso a paso — analizando bloque, distribuyendo días y diseñando cada sesión..."}]);
+          const plan=await orquestarGeneracionSemana();
+          if(plan){
+            setMensajes(prev=>[...prev,{role:"assistant",content:`✅ **Semana generada y guardada.**\n\nBloque: ${plan.block_name} — ${plan.week_objective}\n\nRevisa el detalle completo en **Mi Plan**. ¿Alguna duda?`}]);
+          } else {
+            setMensajes(prev=>[...prev,{role:"assistant",content:"⚠️ Hubo un problema generando la semana. Inténtalo de nuevo o dímelo directamente en el chat."}]);
+          }
+          setGenerandoSemana(false);
+        };
+        if(esConfirmacionSimple){
+          dispararGeneracion();
+        } else {
+          // El mensaje describe un cambio — esperamos un momento a que el extractor normal lo guarde
+          // (ya en curso en el resto de enviar()), y generamos despues con la disponibilidad actualizada.
+          setTimeout(dispararGeneracion, 2500);
+        }
+      } else if(esConfirmacionSimple && codigoUsuario){
         apiCall({action:"confirmar_pending_action",codigo:codigoUsuario}).then((resPending:any)=>{
           if(resPending?.ejecutado){
             cargarPlanSemanal(codigoUsuario);
@@ -2758,16 +2784,19 @@ ${testStr}`}]});
             {mostrarBotonNuevaSemana&&!generandoSemana&&(
               <div style={{display:"flex",justifyContent:"center",marginTop:4}}>
                 <button onClick={async()=>{
-                  setGenerandoSemana(true);
                   setMostrarBotonNuevaSemana(false);
-                  setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu próxima semana paso a paso — analizando bloque, distribuyendo días y diseñando cada sesión..."}]);
-                  const plan=await orquestarGeneracionSemana();
-                  if(plan){
-                    setMensajes(prev=>[...prev,{role:"assistant",content:`✅ **Semana generada y guardada.**\n\nBloque: ${plan.block_name} — ${plan.week_objective}\n\nRevisa el detalle completo en **Mi Plan**. ¿Alguna duda?`}]);
-                  } else {
-                    setMensajes(prev=>[...prev,{role:"assistant",content:"⚠️ Hubo un problema generando la semana. Inténtalo de nuevo o dímelo directamente en el chat."}]);
-                  }
-                  setGenerandoSemana(false);
+                  // FIX: preguntar disponibilidad ANTES de generar, en vez de asumir silenciosamente
+                  // la misma distribucion de semanas anteriores. El usuario puede confirmar o corregir.
+                  const distActual=distribucionSemanal;
+                  let distTexto="No tengo tu disponibilidad guardada todavia.";
+                  try{
+                    const distParsed=typeof distActual==="string"?JSON.parse(distActual):distActual;
+                    if(distParsed && typeof distParsed==="object"){
+                      distTexto=Object.entries(distParsed).filter(([k])=>k!=="observaciones").map(([k,v]:[string,any])=>`${k}: ${Array.isArray(v)?v.join(", "):v}`).join(" — ");
+                    }
+                  }catch{}
+                  setMensajes(prev=>[...prev,{role:"assistant",content:`Antes de generar tu próxima semana, confirmemos tu disponibilidad actual:\n\n📅 ${distTexto}\n\n¿Sigue siendo así, o ha cambiado algo?`}]);
+                  setEsperandoConfirmacionDisponibilidad(true);
                 }} style={{background:accentColor,color:"#fff",border:"none",borderRadius:100,padding:"12px 28px",fontSize:14,fontWeight:600,cursor:"pointer"}}>
                   🚀 Generar mi próxima semana
                 </button>

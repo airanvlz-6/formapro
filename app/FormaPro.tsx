@@ -849,19 +849,30 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
       }
     }
 
-    // FIX: preservar dias que YA tienen sesion completada en el plan actual de esta semana,
-    // en vez de regenerarlos y perder/duplicar lo que el atleta ya reporto.
-    const weekStartOrchestrator=(()=>{
-      const hoyOrch=new Date();
-      const diaSemOrch=hoyOrch.getDay()||7;
-      const lunesOrch=new Date(hoyOrch);
-      lunesOrch.setDate(hoyOrch.getDate()-diaSemOrch+1);
-      return lunesOrch.toISOString().split('T')[0];
-    })();
+    // FIX CRITICO DE RAIZ: calcular el weekStart REAL (con la logica de "si la semana actual ya
+    // se cerro, avanzar a la siguiente") AQUI AL PRINCIPIO — antes se calculaba solo al final,
+    // y "dias ya completados" siempre miraba la semana de HOY, arrastrando por error el contenido
+    // completo de una semana ya cerrada hacia la nueva semana que se estaba generando.
+    const hoyOrch=new Date();
+    const diaSemOrch=hoyOrch.getDay()||7;
+    const lunesOrch=new Date(hoyOrch);
+    lunesOrch.setDate(hoyOrch.getDate()-diaSemOrch+1);
+    const weekStartSemanaActual=lunesOrch.toISOString().split('T')[0];
+
+    const resVerificarCierreActual=await apiCall({action:"verificar_semana_completa_sin_cierre",codigo:codigoUsuario});
+    const semanaActualYaCerrada=resVerificarCierreActual?.yaCerrada===true;
+
+    const weekStartOrchestrator=semanaActualYaCerrada
+      ? (()=>{ const lunesSig=new Date(lunesOrch); lunesSig.setDate(lunesOrch.getDate()+7); return lunesSig.toISOString().split('T')[0]; })()
+      : weekStartSemanaActual;
+    console.log("ORCHESTRATOR: semana actual ya cerrada =", semanaActualYaCerrada, "→ weekStart real:", weekStartOrchestrator);
+
+    // Preservar dias que YA tienen sesion completada, pero SOLO dentro del weekStart REAL que se
+    // esta generando — si es una semana nueva (recien empezada), esto correctamente sera vacio.
     const resPlanExistente=await apiCall({action:"obtener_plan_semana",codigo:codigoUsuario});
     const sessionsExistentes=(resPlanExistente?.plan?.week_start===weekStartOrchestrator ? resPlanExistente.plan.sessions : []) || [];
     const diasYaCompletados=sessionsExistentes.filter((s:any)=>s.completada===true);
-    console.log("ORCHESTRATOR: dias ya completados esta semana, se preservan:", JSON.stringify(diasYaCompletados.map((s:any)=>s.dia)));
+    console.log("ORCHESTRATOR: dias ya completados en la semana que se esta generando, se preservan:", JSON.stringify(diasYaCompletados.map((s:any)=>s.dia)));
 
     // Paso 3: Session Builder, TODAS las llamadas en PARALELO (Promise.all) en vez de secuencial.
     // Reduce el tiempo total de ~7x30s (210s) a ~30-40s, sin cambiar la arquitectura.
@@ -986,22 +997,8 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
       console.log("WEEK INTEGRITY: dias regenerados:", regeneraciones.filter(Boolean).length);
     }
 
-    // FIX: si la semana actual YA se cerro (existe forge_insight para ella, sin importar el % de
-    // adherencia real), generamos la SIGUIENTE semana. Si no se ha cerrado todavia, seguimos en la
-    // actual (cubre usuario nuevo, atleta a mitad de semana, y correccion de la semana en curso).
-    const hoy=new Date();
-    const diaSem=hoy.getDay()||7;
-    const lunesActual=new Date(hoy);
-    lunesActual.setDate(hoy.getDate()-diaSem+1);
-    const weekStartActualComp=lunesActual.toISOString().split('T')[0];
-
-    const resVerificarCierreActual=await apiCall({action:"verificar_semana_completa_sin_cierre",codigo:codigoUsuario});
-    const semanaActualYaCerrada=resVerificarCierreActual?.yaCerrada===true;
-
-    const weekStart=semanaActualYaCerrada
-      ? (()=>{ const lunesSiguiente=new Date(lunesActual); lunesSiguiente.setDate(lunesActual.getDate()+7); return lunesSiguiente.toISOString().split('T')[0]; })()
-      : weekStartActualComp;
-    console.log("ORCHESTRATOR: semana actual ya cerrada =", semanaActualYaCerrada, "→ generando para week_start:", weekStart);
+    // weekStart ya se calculo al principio de la funcion (weekStartOrchestrator) — se reutiliza aqui.
+    const weekStart=weekStartOrchestrator;
 
     // FIX: week_number debe ser SIEMPRE cicloActual.semana (la fuente real del Estado Canonico),
     // nunca "+1" ciego — sumar +1 solo tenia sentido en el modelo antiguo donde se generaba siempre

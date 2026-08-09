@@ -985,16 +985,22 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
       console.log("WEEK INTEGRITY: dias regenerados:", regeneraciones.filter(Boolean).length);
     }
 
-    // SIEMPRE la semana ACTUAL (donde estamos hoy). El filtro de "dias a construir" (mas abajo, en el
-    // Paso 3) ya se encarga de generar solo desde HOY en adelante, respetando dias ya completados.
-    // Esto cubre correctamente: usuario nuevo (genera desde hoy hasta domingo), atleta a mitad de
-    // semana (genera solo los dias restantes), y cierre normal de semana completa.
+    // FIX: si la semana actual YA se cerro (existe forge_insight para ella, sin importar el % de
+    // adherencia real), generamos la SIGUIENTE semana. Si no se ha cerrado todavia, seguimos en la
+    // actual (cubre usuario nuevo, atleta a mitad de semana, y correccion de la semana en curso).
     const hoy=new Date();
     const diaSem=hoy.getDay()||7;
     const lunesActual=new Date(hoy);
     lunesActual.setDate(hoy.getDate()-diaSem+1);
-    const weekStart=lunesActual.toISOString().split('T')[0];
-    console.log("ORCHESTRATOR: dias ya completados esta semana =", diasYaCompletados.length, "→ generando para week_start:", weekStart);
+    const weekStartActualComp=lunesActual.toISOString().split('T')[0];
+
+    const resVerificarCierreActual=await apiCall({action:"verificar_semana_completa_sin_cierre",codigo:codigoUsuario});
+    const semanaActualYaCerrada=resVerificarCierreActual?.yaCerrada===true;
+
+    const weekStart=semanaActualYaCerrada
+      ? (()=>{ const lunesSiguiente=new Date(lunesActual); lunesSiguiente.setDate(lunesActual.getDate()+7); return lunesSiguiente.toISOString().split('T')[0]; })()
+      : weekStartActualComp;
+    console.log("ORCHESTRATOR: semana actual ya cerrada =", semanaActualYaCerrada, "→ generando para week_start:", weekStart);
 
     // FIX: week_number debe ser SIEMPRE cicloActual.semana (la fuente real del Estado Canonico),
     // nunca "+1" ciego — sumar +1 solo tenia sentido en el modelo antiguo donde se generaba siempre

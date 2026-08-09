@@ -1654,7 +1654,29 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
     console.log("VERIFICAR CIERRE: planSemana encontrado?", !!planSemana);
     if (!planSemana) return NextResponse.json({ semanaCompleta: false });
 
-    const sessions = planSemana.sessions || [];
+    // FIX: dias de descanso/recuperacion que ya PASARON (fecha anterior a hoy) sin reporte explicito
+    // se marcan automaticamente como completados al momento de verificar el cierre — un descanso no
+    // reportado simplemente significa que el atleta descanso, no que la sesion sigue "pendiente".
+    const ORDEN_DIAS_CIERRE = ["lunes","martes","miercoles","jueves","viernes","sabado","domingo"];
+    const normalizarDiaCierre = (d: string) => (d || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const hoyIdxCierre = diaSemCierre - 1;
+    let huboAutoCompletado = false;
+    const sessionsConAutoCompletado = (planSemana.sessions || []).map((s: any) => {
+      const esDescanso = /descanso/i.test(s.tipo || "");
+      const idxDiaSesion = ORDEN_DIAS_CIERRE.indexOf(normalizarDiaCierre(s.dia));
+      const diaYaPaso = idxDiaSesion < hoyIdxCierre;
+      if (esDescanso && diaYaPaso && s.completada !== true) {
+        huboAutoCompletado = true;
+        return { ...s, completada: true };
+      }
+      return s;
+    });
+    if (huboAutoCompletado) {
+      await supabase.from("weekly_plan").update({ sessions: sessionsConAutoCompletado }).eq("user_codigo", codigo).eq("week_start", weekStartCierre);
+      console.log("CIERRE: auto-completados dias de descanso pasados sin reporte");
+    }
+
+    const sessions = sessionsConAutoCompletado;
     const sesionesQueRequierenReporte = sessions.filter((s: any) => s.tipo !== "descanso");
     const todasCompletadas = sesionesQueRequierenReporte.length > 0 && sesionesQueRequierenReporte.every((s: any) => s.completada === true);
     console.log("VERIFICAR CIERRE: sesionesQueRequierenReporte=", sesionesQueRequierenReporte.length, "todasCompletadas=", todasCompletadas, "detalle=", JSON.stringify(sesionesQueRequierenReporte.map((s:any)=>({dia:s.dia,tipo:s.tipo,completada:s.completada}))));
@@ -1885,7 +1907,10 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
       const normalizar = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
       const sessions = planActualPending.sessions.map((s: any) => {
         if (normalizar(s.dia) === normalizar(acc.dia)) {
-          return { ...s, tipo: acc.tipo, titulo: acc.titulo, descripcion: acc.descripcion, modificado: true, motivo_modificacion: acc.motivo || "", modificado_at: new Date().toISOString() };
+          // FIX: siempre establecer "completada" explicitamente (nunca dejarlo undefined) para que el
+          // calculo de cierre de semana funcione correctamente. No se marca automaticamente al confirmar
+          // el cambio — se completa por reporte del usuario, igual que cualquier otra sesion.
+          return { ...s, tipo: acc.tipo, titulo: acc.titulo, descripcion: acc.descripcion, modificado: true, motivo_modificacion: acc.motivo || "", modificado_at: new Date().toISOString(), completada: s.completada ?? false };
         }
         return s;
       });

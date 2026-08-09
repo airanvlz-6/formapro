@@ -895,7 +895,21 @@ ${ultimos}`;
         // Registro de sesiones por acción explícita del usuario
 
         if (extracted.distribucion_semanal && extracted.distribucion_semanal !== "null" && extracted.distribucion_semanal !== "") {
-          updates.distribucion_semanal = extracted.distribucion_semanal;
+          // FIX CRITICO: validar el FORMATO antes de guardar. El extractor a veces genera un objeto
+          // de "metadatos del cambio" ({cambio, anterior, actual}) en vez de la distribucion real
+          // ({box:[...], pista:[...]}). Guardar el formato incorrecto rompe silenciosamente todo el
+          // Blueprint Acceptance Validator, que no puede extraer ningun dia de una estructura invalida.
+          let distParaValidar = extracted.distribucion_semanal;
+          try {
+            if (typeof distParaValidar === "string") distParaValidar = JSON.parse(distParaValidar);
+          } catch { distParaValidar = null; }
+          const tieneFormatoValido = distParaValidar && typeof distParaValidar === "object" &&
+            Object.entries(distParaValidar).some(([k, v]) => k !== "observaciones" && k !== "cambio" && k !== "anterior" && k !== "actual" && Array.isArray(v));
+          if (tieneFormatoValido) {
+            updates.distribucion_semanal = extracted.distribucion_semanal;
+          } else {
+            console.error("🚨 RECHAZADO distribucion_semanal con formato invalido (no es {clave:[dias]}):", JSON.stringify(extracted.distribucion_semanal));
+          }
         }
         let nuevoPrDetectado: { ejercicio: string; valor: string; mejora: string | null } | null = null;
         let objetivoConseguidoDetectado: { objetivo: string; resultado: string } | null = null;

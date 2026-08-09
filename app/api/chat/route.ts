@@ -1659,7 +1659,18 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
     const todasCompletadas = sesionesQueRequierenReporte.length > 0 && sesionesQueRequierenReporte.every((s: any) => s.completada === true);
     console.log("VERIFICAR CIERRE: sesionesQueRequierenReporte=", sesionesQueRequierenReporte.length, "todasCompletadas=", todasCompletadas, "detalle=", JSON.stringify(sesionesQueRequierenReporte.map((s:any)=>({dia:s.dia,tipo:s.tipo,completada:s.completada}))));
 
-    if (!todasCompletadas) return NextResponse.json({ semanaCompleta: false });
+    // FIX: separar "semana terminada" (cronologico, zona horaria real de Forge) de "semana completada"
+    // (100% adherencia). Antes se exigia 100% para siquiera considerar el cierre, dejando semanas
+    // incompletas "abiertas" indefinidamente. Ahora: si la semana termino cronologicamente (domingo real
+    // ya paso segun Europe/Madrid), se cierra igualmente, calculando el resultado real (sea 100% o no).
+    const domingoDeEstaSemana = new Date(lunesCierre);
+    domingoDeEstaSemana.setDate(lunesCierre.getDate() + 6);
+    const semanaTerminadaCronologicamente = hoyCierreFecha.getTime() > domingoDeEstaSemana.getTime();
+
+    if (!todasCompletadas && !semanaTerminadaCronologicamente) {
+      // La semana sigue en curso Y no esta completa — legitimamente no hay nada que cerrar todavia
+      return NextResponse.json({ semanaCompleta: false });
+    }
 
     const { data: insightExistente } = await supabase.from("athlete_events").select("id").eq("user_codigo", codigo).eq("type", "forge_insight").ilike("title", `%${weekStartCierre}%`).limit(1);
 
@@ -1786,7 +1797,8 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
       ? { sesionesCompletadas: sesionesCompletadasCierre, sesionesTotales: sesionesQueRequierenReporte.length }
       : null;
 
-    return NextResponse.json({ semanaCompleta: true, yaCerrada: false, weekStart: weekStartCierre, insightGenerado: true, cardSemanaData });
+    const adherenciaReal = sesionesQueRequierenReporte.length > 0 ? Math.round((sesionesCompletadasCierre / sesionesQueRequierenReporte.length) * 100) : 0;
+    return NextResponse.json({ semanaCompleta: true, yaCerrada: false, weekStart: weekStartCierre, insightGenerado: true, cardSemanaData, adherenciaPorcentaje: adherenciaReal, sesionesCompletadas: sesionesCompletadasCierre, sesionesTotales: sesionesQueRequierenReporte.length });
   }
 
   if (action === "ejecutar_discovery_engine") {

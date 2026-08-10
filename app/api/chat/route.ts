@@ -2691,6 +2691,23 @@ if (action === "obtener_daily_briefing") {
         });
       }
     }
+    // FORGE CANONICAL STATE — unico punto autorizado para incrementar ciclo_actual.semana: cuando se
+    // guarda una semana genuinamente NUEVA (week_start posterior a la actual real), no una regeneracion
+    // de la semana en curso. Deterministico, nunca depende de que el LLM lo detecte o recuerde.
+    if (!esSemanaActual) {
+      try {
+        const { data: usuarioCicloIncr } = await supabase.from("usuarios").select("ciclo_actual").eq("codigo", codigo).single();
+        const cicloIncr = usuarioCicloIncr?.ciclo_actual;
+        if (cicloIncr && typeof cicloIncr.semana === "number") {
+          const nuevaSemana = cicloIncr.semana + 1;
+          await supabase.from("usuarios").update({ ciclo_actual: { ...cicloIncr, semana: nuevaSemana } }).eq("codigo", codigo);
+          console.log(`CICLO ACTUAL: semana incrementada automaticamente de ${cicloIncr.semana} a ${nuevaSemana} al generar nueva semana ${plan.week_start}`);
+        }
+      } catch (errIncrCiclo) {
+        console.error("Error incrementando ciclo_actual.semana:", errIncrCiclo);
+      }
+    }
+
     // Si NO es la semana actual (es una semana futura nueva), se guarda tal cual, sin fusionar con nada existente
     const { error } = await supabase.from("weekly_plan").upsert({
       user_codigo: codigo,

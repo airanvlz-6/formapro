@@ -70,14 +70,28 @@ export async function getWeekPlan(codigo: string): Promise<any> {
 // combinando adherencia reciente y evolucion de debilidades activas. No es exacto pero es honesto:
 // se basa en datos reales, nunca en una estimacion inventada por el LLM.
 export async function getObjectiveProgress(codigo: string): Promise<{ percentage: number; daysRemaining: number | null } | null> {
-  const { data } = await supabase.from("usuarios").select("objetivo_principal,workout_history,athlete_development,fecha_registro").eq("codigo", codigo).single();
+  console.log(`[P0-DIAGNOSTICO] getObjectiveProgress INICIO para codigo=${codigo}`);
+  const { data, error: errorQueryObjetivo } = await supabase.from("usuarios").select("objetivo_principal,workout_history,athlete_development,fecha_registro").eq("codigo", codigo).single();
+  if (errorQueryObjetivo) {
+    console.error(`[P0-DIAGNOSTICO] ERROR en query principal de usuarios:`, JSON.stringify(errorQueryObjetivo));
+  }
+  console.log(`[P0-DIAGNOSTICO] data recibida de usuarios:`, JSON.stringify(data?.objetivo_principal));
   const objetivo = data?.objetivo_principal;
-  if (!objetivo?.fecha) return null;
+  if (!objetivo?.fecha) {
+    console.log(`[P0-DIAGNOSTICO] RETURN NULL — objetivo?.fecha es falsy. objetivo=`, JSON.stringify(objetivo));
+    return null;
+  }
+  console.log(`[P0-DIAGNOSTICO] objetivo.fecha valida:`, objetivo.fecha);
 
   const hoy = new Date();
   const fechaObjetivo = new Date(objetivo.fecha);
+  console.log(`[P0-DIAGNOSTICO] fechaObjetivo parseada:`, fechaObjetivo.toISOString(), `esValida=`, !isNaN(fechaObjetivo.getTime()));
   const diasRestantes = Math.round((fechaObjetivo.getTime() - hoy.getTime()) / (24 * 60 * 60 * 1000));
-  if (diasRestantes < 0) return { percentage: 100, daysRemaining: 0 };
+  console.log(`[P0-DIAGNOSTICO] diasRestantes calculados:`, diasRestantes);
+  if (diasRestantes < 0) {
+    console.log(`[P0-DIAGNOSTICO] RETURN percentage:100 — diasRestantes negativo (objetivo ya paso)`);
+    return { percentage: 100, daysRemaining: 0 };
+  }
 
   const workoutHistory = data?.workout_history || [];
   const hace28dias = new Date(hoy.getTime() - 28 * 24 * 60 * 60 * 1000);
@@ -96,29 +110,35 @@ export async function getObjectiveProgress(codigo: string): Promise<{ percentage
   // "objetivo" mas antiguo en athlete_events (Timeline) que coincida — es la fuente de verdad
   // real de cuando se establecio, en vez de asumir un valor por defecto arbitrario.
   let fechaInicioReal = objetivo.fecha_inicio;
+  console.log(`[P0-DIAGNOSTICO] fechaInicioReal desde objetivo:`, fechaInicioReal);
   if (!fechaInicioReal) {
     // COLD-START SAFE: proteger con try/catch propio, .single() lanza excepcion si no encuentra
     // exactamente 1 fila — nunca debe romper toda la funcion de progreso del objetivo.
     try {
-      const { data: eventoObjetivo } = await supabase.from("athlete_events").select("date").eq("user_codigo", codigo).eq("type", "objetivo").order("date", { ascending: true }).limit(1).single();
+      const { data: eventoObjetivo, error: errorEventoObjetivo } = await supabase.from("athlete_events").select("date").eq("user_codigo", codigo).eq("type", "objetivo").order("date", { ascending: true }).limit(1).single();
+      if (errorEventoObjetivo) console.error(`[P0-DIAGNOSTICO] ERROR consultando athlete_events:`, JSON.stringify(errorEventoObjetivo));
       fechaInicioReal = eventoObjetivo?.date || null;
+      console.log(`[P0-DIAGNOSTICO] fechaInicioReal desde athlete_events:`, fechaInicioReal);
     } catch (errEventoObjetivo) {
-      console.error("getObjectiveProgress: error consultando evento objetivo en Timeline:", errEventoObjetivo);
+      console.error(`[P0-DIAGNOSTICO] EXCEPCION en consulta athlete_events:`, errEventoObjetivo);
       fechaInicioReal = null;
     }
   }
-  let tiempoScore = 15; // valor conservador solo si no hay NINGUNA fecha real disponible (ni guardada ni en Timeline)
+  let tiempoScore = 15;
   if (fechaInicioReal) {
     const fechaInicio = new Date(fechaInicioReal);
     const tiempoTotalMs = fechaObjetivo.getTime() - fechaInicio.getTime();
     const tiempoTranscurridoMs = hoy.getTime() - fechaInicio.getTime();
+    console.log(`[P0-DIAGNOSTICO] fechaInicio=${fechaInicio.toISOString()} tiempoTotalMs=${tiempoTotalMs} tiempoTranscurridoMs=${tiempoTranscurridoMs}`);
     if (tiempoTotalMs > 0) {
       const avanceTemporal = Math.max(0, Math.min(tiempoTranscurridoMs / tiempoTotalMs, 1));
       tiempoScore = avanceTemporal * 30;
     }
   }
+  console.log(`[P0-DIAGNOSTICO] tiempoScore final:`, tiempoScore, `adherenciaScore:`, adherenciaScore, `debilidadesScore:`, debilidadesScore);
 
   const percentage = Math.round(Math.min(adherenciaScore + debilidadesScore + tiempoScore, 100));
+  console.log(`[P0-DIAGNOSTICO] RETURN FINAL percentage=${percentage} diasRestantes=${diasRestantes}`);
   return { percentage, daysRemaining: diasRestantes };
 }
 

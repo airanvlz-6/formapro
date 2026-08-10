@@ -97,9 +97,12 @@ export function validarBlueprintDisponibilidad(blueprint: { dia: string; tipo: s
     descanso: ["descanso"]
   };
 
-  Object.entries(distribucion).forEach(([clave, dias]) => {
-    if (clave === "observaciones" || !Array.isArray(dias)) return;
-    const tipoCorrecto = clave === "box" ? "box" : clave === "pista" ? "carrera" : clave;
+  // Claves genericas (no especifican disciplina concreta) — no se debe forzar su nombre literal
+    // como "tipo" de sesion, ya que "dias"/"disponibilidad" no son tipos validos de entrenamiento.
+    const CLAVES_GENERICAS = ["dias", "disponibilidad", "duracion_sesion", "cambio_permanente", "razon"];
+    Object.entries(distribucion).forEach(([clave, dias]) => {
+      if (clave === "observaciones" || CLAVES_GENERICAS.includes(clave.toLowerCase()) || !Array.isArray(dias)) return;
+      const tipoCorrecto = clave === "box" ? "box" : clave === "pista" ? "carrera" : clave;
     dias.forEach((diaEsperado: string) => {
       const diaNorm = normalizarDia(diaEsperado);
       const diaBlueprint = blueprint.find(d => normalizarDia(d.dia) === diaNorm);

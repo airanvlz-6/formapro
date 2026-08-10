@@ -71,7 +71,10 @@ export async function getWeekPlan(codigo: string): Promise<any> {
 // se basa en datos reales, nunca en una estimacion inventada por el LLM.
 export async function getObjectiveProgress(codigo: string): Promise<{ percentage: number; daysRemaining: number | null } | null> {
   console.log(`[P0-DIAGNOSTICO] getObjectiveProgress INICIO para codigo=${codigo}`);
-  const { data, error: errorQueryObjetivo } = await supabase.from("usuarios").select("objetivo_principal,workout_history,athlete_development,fecha_registro").eq("codigo", codigo).single();
+  // FIX P0 DEFINITIVO: "fecha_registro" no existe como columna en la tabla usuarios (era un residuo
+    // de un fallback que ya eliminamos), causando que la query ENTERA fallara con error 42703 y
+    // devolviera undefined — rompiendo toda la funcion. Este fue el bug real detras del "null" persistente.
+    const { data, error: errorQueryObjetivo } = await supabase.from("usuarios").select("objetivo_principal,workout_history,athlete_development").eq("codigo", codigo).single();
   if (errorQueryObjetivo) {
     console.error(`[P0-DIAGNOSTICO] ERROR en query principal de usuarios:`, JSON.stringify(errorQueryObjetivo));
   }

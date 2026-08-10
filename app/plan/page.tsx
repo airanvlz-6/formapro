@@ -20,6 +20,7 @@ export default function Plan() {
   const [autenticado, setAutenticado] = useState(false);
   const [plan, setPlan] = useState<any>(null);
   const [objetivoPrincipal, setObjetivoPrincipal] = useState<any>(null);
+  const [progresoObjetivoPlan, setProgresoObjetivoPlan] = useState<{percentage:number}|null>(null);
   const [weekStart, setWeekStart] = useState("");
   const [cargando, setCargando] = useState(true);
   const [iniciado, setIniciado] = useState(false);
@@ -56,6 +57,9 @@ export default function Plan() {
       setAutenticado(true);
       fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"recuperar_usuario",codigo:cod})})
         .then(r=>r.json()).then(d=>setObjetivoPrincipal(d?.data?.objetivo_principal||null)).catch(()=>{});
+      // FORGE OBJETIVOS VIVOS — mismo dato real que Hoy, consulta independiente y simetrica
+      fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"obtener_progreso_objetivo",codigo:cod})})
+        .then(r=>r.json()).then(d=>{ if(d?.progreso) setProgresoObjetivoPlan(d.progreso); }).catch(()=>{});
     }catch{ setError("Error de conexión"); }
     finally{ setCargando(false); setIniciado(true); }
   };
@@ -141,10 +145,18 @@ export default function Plan() {
               return (
                 <div style={{background:C.card,border:`2px solid ${C.accent}`,borderRadius:16,padding:"14px 18px",marginBottom:16}}>
                   <p style={{color:C.accent,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>🏆 Objetivo principal</p>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:progresoObjetivoPlan?10:0}}>
                     <p style={{color:C.ink,fontSize:15,fontWeight:700}}>{objetivoPrincipal.descripcion}</p>
                     {diasRestantes !== null && <span style={{color:C.muted,fontSize:12}}>{diasRestantes} días</span>}
                   </div>
+                  {progresoObjetivoPlan && (
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <div style={{flex:1,height:7,background:C.border,borderRadius:100}}>
+                        <div style={{height:7,borderRadius:100,background:`linear-gradient(90deg, ${C.accent}, #FFB07A)`,width:`${progresoObjetivoPlan.percentage}%`,transition:"width 0.8s ease"}}/>
+                      </div>
+                      <span style={{color:C.accent,fontSize:14,fontWeight:800}}>{progresoObjetivoPlan.percentage}%</span>
+                    </div>
+                  )}
                 </div>
               );
             })()}

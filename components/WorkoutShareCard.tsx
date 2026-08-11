@@ -198,7 +198,20 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
       const html2canvas = (await import('html2canvas')).default;
       const el = document.getElementById('workout-share-card-export');
       if (!el) return;
+      // FIX CRITICO: el elemento tiene aplicado `transform: scale(escalaViewport)` para caber
+      // en pantalla (responsive). html2canvas puede leer el bounding box YA escalado a pesar de
+      // recibir width/height explicitos, exportando una imagen comprimida/con letterbox negro.
+      // Solucion: anular el transform SOLO durante la captura (tamaño real 100%), y restaurarlo
+      // inmediatamente despues — el usuario no ve el cambio, es instantaneo.
+      const transformOriginal = el.style.transform;
+      el.style.transform = 'none';
+      // Forzar reflow para que el navegador aplique el cambio antes de capturar
+      void el.offsetHeight;
+
       const canvas = await html2canvas(el, { backgroundColor: null, scale: 2, useCORS: true, width: dims.w, height: dims.h });
+
+      el.style.transform = transformOriginal;
+
       const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
       if (!blob) return;
       const file = new File([blob], `forge-${disciplina}-${Date.now()}.png`, { type: 'image/png' });

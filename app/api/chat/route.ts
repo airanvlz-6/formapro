@@ -366,6 +366,20 @@ Solo considera real un cambio cuando haya sido procesado y reflejado por el sist
   const tituloMananaRef = estadoParaReferencia.sesion_manana?.titulo || "sin sesión programada";
   partes.push(`REFERENCIA DE SESIONES PLANIFICADAS (dato inmutable, usar SIEMPRE que menciones qué toca hoy/mañana, nunca inventar otro contenido):\nHoy (${estadoParaReferencia.dia_semana_hoy}): ${tituloHoyRef}\nMañana (${estadoParaReferencia.dia_semana_manana}): ${tituloMananaRef}`);
 
+  // FORGE CURRENT_CYCLE / CURRENT_OBJECTIVE / CURRENT_AVAILABILITY — snapshots explicitos y aislados
+  // de lectura obligatoria. El Coach debe usar SIEMPRE estos valores exactos si menciona ciclo,
+  // objetivo o disponibilidad — nunca reconstruirlos desde la conversacion o inventarlos.
+  const { data: usuarioSnapshots } = await supabase.from("usuarios").select("ciclo_actual,objetivo_principal,distribucion_semanal").eq("codigo", codigo).single();
+  if (usuarioSnapshots?.ciclo_actual) {
+    partes.push(`CURRENT_CYCLE (fuente unica de verdad del ciclo — NUNCA lo cambies ni lo reinterpretes por algo dicho en la conversacion): ${JSON.stringify(usuarioSnapshots.ciclo_actual)}`);
+  }
+  if (usuarioSnapshots?.objetivo_principal) {
+    partes.push(`CURRENT_OBJECTIVE (fuente unica de verdad del objetivo — NUNCA lo cambies por una mencion casual en la conversacion): ${JSON.stringify(usuarioSnapshots.objetivo_principal)}`);
+  }
+  if (usuarioSnapshots?.distribucion_semanal) {
+    partes.push(`CURRENT_AVAILABILITY (fuente unica de verdad de la disponibilidad — NUNCA la cambies por una mencion casual en la conversacion): ${JSON.stringify(usuarioSnapshots.distribucion_semanal)}`);
+  }
+
   // FORGE BLOCK NARRATIVE — historia real del bloque actual, semana a semana. Permite al Coach
   // explicar decisiones con la evolucion real del atleta ("la semana pasada...") en vez de teoria generica.
   const narrativaBloque = await buildBlockNarrative(supabase, codigo);
@@ -906,20 +920,31 @@ ${ultimos}`;
         // Registro de sesiones por acción explícita del usuario
 
         if (extracted.distribucion_semanal && extracted.distribucion_semanal !== "null" && extracted.distribucion_semanal !== "") {
-          // FIX CRITICO: validar el FORMATO antes de guardar. El extractor a veces genera un objeto
-          // de "metadatos del cambio" ({cambio, anterior, actual}) en vez de la distribucion real
-          // ({box:[...], pista:[...]}). Guardar el formato incorrecto rompe silenciosamente todo el
-          // Blueprint Acceptance Validator, que no puede extraer ningun dia de una estructura invalida.
-          let distParaValidar = extracted.distribucion_semanal;
-          try {
-            if (typeof distParaValidar === "string") distParaValidar = JSON.parse(distParaValidar);
-          } catch { distParaValidar = null; }
-          const tieneFormatoValido = distParaValidar && typeof distParaValidar === "object" &&
-            Object.entries(distParaValidar).some(([k, v]) => k !== "observaciones" && k !== "cambio" && k !== "anterior" && k !== "actual" && Array.isArray(v));
-          if (tieneFormatoValido) {
-            updates.distribucion_semanal = extracted.distribucion_semanal;
+          // FORGE CANONICAL STATE GUARD — disponibilidad protegida al mismo nivel que ciclo_actual.
+          // El extractor conversacional NUNCA puede escribirla por una mencion casual o duda del
+          // usuario ("creo que mañana hago box") — exige una CONFIRMACION EXPLICITA real en el mensaje.
+          const ultMensajeUsuarioDisp = datos.historial?.filter((m:any)=>m.role==="user").slice(-1)[0]?.content||"";
+          const esConfirmacionExplicitaDisp = typeof ultMensajeUsuarioDisp === "string" &&
+            /\b(confirmo|sigue siendo|ha cambiado|cambio de disponibilidad|ahora entreno|mi nueva disponibilidad|actualizo mi disponibilidad)\b/i.test(ultMensajeUsuarioDisp);
+
+          if (!esConfirmacionExplicitaDisp) {
+            console.error("🚨 BLOCKED disponibilidad — sin confirmacion explicita en el mensaje del usuario. Mensaje:", ultMensajeUsuarioDisp.substring(0,100), "valor_bloqueado:", JSON.stringify(extracted.distribucion_semanal));
           } else {
-            console.error("🚨 RECHAZADO distribucion_semanal con formato invalido (no es {clave:[dias]}):", JSON.stringify(extracted.distribucion_semanal));
+            // FIX CRITICO: validar el FORMATO antes de guardar. El extractor a veces genera un objeto
+            // de "metadatos del cambio" ({cambio, anterior, actual}) en vez de la distribucion real
+            // ({box:[...], pista:[...]}). Guardar el formato incorrecto rompe silenciosamente todo el
+            // Blueprint Acceptance Validator, que no puede extraer ningun dia de una estructura invalida.
+            let distParaValidar = extracted.distribucion_semanal;
+            try {
+              if (typeof distParaValidar === "string") distParaValidar = JSON.parse(distParaValidar);
+            } catch { distParaValidar = null; }
+            const tieneFormatoValido = distParaValidar && typeof distParaValidar === "object" &&
+              Object.entries(distParaValidar).some(([k, v]) => k !== "observaciones" && k !== "cambio" && k !== "anterior" && k !== "actual" && Array.isArray(v));
+            if (tieneFormatoValido) {
+              updates.distribucion_semanal = extracted.distribucion_semanal;
+            } else {
+              console.error("🚨 RECHAZADO distribucion_semanal con formato invalido (no es {clave:[dias]}):", JSON.stringify(extracted.distribucion_semanal));
+            }
           }
         }
         let nuevoPrDetectado: { ejercicio: string; valor: string; mejora: string | null } | null = null;
@@ -1011,16 +1036,17 @@ ${ultimos}`;
 
         if (extracted.objetivo_principal && extracted.objetivo_principal !== "null") {
           const obj = typeof extracted.objetivo_principal === "string" ? JSON.parse(extracted.objetivo_principal) : extracted.objetivo_principal;
-          // Solo actualizar objetivo si el usuario lo menciona explícitamente en primera persona
-          // No actualizar si viene de una sesión conjunta (el historial contiene datos de otro atleta)
+          // FORGE CANONICAL STATE GUARD — objetivo protegido al mismo nivel que ciclo_actual y
+          // disponibilidad. Es el dato MAS peligroso de contaminar (Strategy → Blueprint → planificacion
+          // completa dependen de el), asi que exige CONFIRMACION EXPLICITA real, nunca una mencion
+          // casual, duda o hipotesis ("quizas mi objetivo sea...", "quiero probar...").
           const ultMensajeUsuario = datos.historial?.filter((m:any)=>m.role==="user").slice(-1)[0]?.content||"";
-          const mencionaObjetivo = typeof ultMensajeUsuario === "string" && 
-            (ultMensajeUsuario.toLowerCase().includes("objetivo") || 
-             ultMensajeUsuario.toLowerCase().includes("competición") ||
-             ultMensajeUsuario.toLowerCase().includes("carrera") ||
-             ultMensajeUsuario.toLowerCase().includes("quiero") ||
-             ultMensajeUsuario.toLowerCase().includes("meta"));
-          if (obj && typeof obj === "object" && mencionaObjetivo) {
+          const esConfirmacionExplicitaObjetivo = typeof ultMensajeUsuario === "string" &&
+            /\b(confirmo|mi nuevo objetivo es|cambio (mi )?objetivo|actualizo (mi )?objetivo|quiero cambiar (mi )?objetivo a|a partir de ahora mi objetivo)\b/i.test(ultMensajeUsuario);
+          if (!esConfirmacionExplicitaObjetivo) {
+            console.error("🚨 BLOCKED objetivo_principal — sin confirmacion explicita en el mensaje del usuario. Mensaje:", ultMensajeUsuario.substring(0,100), "valor_bloqueado:", JSON.stringify(obj));
+          }
+          if (obj && typeof obj === "object" && esConfirmacionExplicitaObjetivo) {
             // FIX: registrar fecha_inicio REAL del objetivo (momento en que se establece/cambia),
             // no un proxy generico — esto permite calcular progreso temporal correcto si el atleta
             // cambia de objetivo a mitad de camino, en vez de arrastrar la fecha de registro original.

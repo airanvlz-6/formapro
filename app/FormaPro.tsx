@@ -3180,9 +3180,11 @@ ${testStr}`}]});
         const fechaFormateada=new Date(sesionParaCompartir.fecha).toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric"}).toUpperCase();
 
         const matchDistancia=textoFuente.match(/(\d+(?:[.,]\d+)?)\s*(?:km|kilometros)/i);
+        const matchIntervalos=textoFuente.match(/(\d+\s*x\s*\d+)\s*m(?:etros)?/i);
         const matchTiempo=textoFuente.match(/(\d{1,2}:\d{2}(?::\d{2})?)\s*(?:min|minutos|h)?/);
         const matchRitmo=textoFuente.match(/(\d{1,2}:\d{2})\s*\/\s*km/i);
-        const matchFc=textoFuente.match(/fc\s*(?:media)?\s*(\d{2,3})\s*(?:ppm|bpm)?/i);
+        const matchFcMedia=textoFuente.match(/fc\s*media\s*(\d{2,3})/i)||textoFuente.match(/(\d{2,3})\s*(?:ppm|bpm)\s*media/i);
+        const matchFcMax=textoFuente.match(/fc\s*m[aá]x(?:ima)?\s*(\d{2,3})/i)||textoFuente.match(/(\d{2,3})\s*(?:ppm|bpm)\s*m[aá]x/i);
         const matchDesnivel=textoFuente.match(/(\d+)\s*m?\s*(?:de\s*)?(?:desnivel|d\+)/i);
 
         const matchResultadoTiempo=textoFuente.match(/(?:en|resultado)\s*(\d{1,2}:\d{2})/i);
@@ -3194,9 +3196,11 @@ ${testStr}`}]});
             fecha={fechaFormateada}
             running={esCarrera?{
               distancia:matchDistancia?.[1]?.replace(",",".")||undefined,
+              intervalos:matchIntervalos?.[1]?.replace(/\s+/g,"")||undefined,
               tiempo:matchTiempo?.[1]||undefined,
               ritmo:matchRitmo?.[1]||undefined,
-              fcMedia:matchFc?.[1]||undefined,
+              fcMedia:matchFcMedia?.[1]||undefined,
+              fcMax:matchFcMax?.[1]||undefined,
               desnivel:matchDesnivel?.[1]||undefined,
             }:undefined}
             crossfit={!esCarrera?{

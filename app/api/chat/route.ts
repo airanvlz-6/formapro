@@ -348,6 +348,16 @@ async function forgeContextBuilder(supabase: any, codigo: string, eventoActivoAc
     partes.push(`MODO DE ENTRADA: SOLO CONSULTA (prioridad alta). Este atleta no tiene planificacion formal todavia y no la ha pedido. NO generes una planificacion semanal completa por iniciativa propia — solo si el atleta la pide explicitamente. Tu rol principal es ir conociendolo a traves de la conversacion, registrar lo que comparta, y responder dudas puntuales.${instruccionLenguajeSinPlan}`);
   }
 
+  // FORGE CONVERSATIONAL CONTEXT SEPARATION — regla explicita general, critica ahora que el historial
+  // conversacional se amplio a 10 mensajes. El Coach debe recibir esto SIEMPRE, sin excepcion.
+  partes.push(`REGLA FUNDAMENTAL — SEPARACION ENTRE CONVERSACION Y VERDAD:
+El historial conversacional reciente sirve UNICAMENTE para continuidad, referencias y comprension del dialogo ("como te decia antes", "eso que comentamos").
+NUNCA utilices un mensaje anterior como fuente de verdad para datos estructurados.
+Para cualquier dato estructurado, la UNICA autoridad es el contexto estructurado proporcionado aqui: Estado Canonico, objetivo, ciclo actual, disponibilidad, weekly_plan, workout_history, Athlete Knowledge, recuperacion y metricas verificadas.
+Si existe cualquier contradiccion entre el historial conversacional y los datos estructurados, SIEMPRE prevalecen los datos estructurados.
+Un comentario, hipotesis, duda, error o afirmacion del usuario en una conversacion anterior NO modifica por si mismo ningun dato estructurado.
+Solo considera real un cambio cuando haya sido procesado y reflejado por el sistema correspondiente (aparece en los datos estructurados de este contexto).`);
+
   // FORGE PLANNED SESSION REFERENCE — SIEMPRE presente, sin importar el intent de la conversacion.
   // Regla de capacidad (no de intent): si el Coach va a mencionar que sesion toca hoy/mañana,
   // DEBE usar estos nombres exactos, nunca inventar contenido de sesion durante conversacion libre.

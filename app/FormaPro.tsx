@@ -3172,15 +3172,38 @@ ${testStr}`}]});
       )}
 
       {sesionParaCompartir&&(()=>{
-        // FORGE SHARE CARDS — mapea la sesion recien registrada a las props de la Card, segun tipo.
+        // FORGE SHARE CARDS PARSER — determinista, sin LLM. Extrae distancia/tiempo/ritmo/FC del
+        // texto libre de "notas" o "analisis" cuando el formato es reconocible. Si no encuentra
+        // nada, la Card simplemente muestra los campos vacios y el usuario puede completarlos.
+        const textoFuente=`${sesionParaCompartir.notas||""} ${sesionParaCompartir.analisis||""}`;
         const esCarrera=/carrera|running|correr/i.test(sesionParaCompartir.tipo||"");
         const fechaFormateada=new Date(sesionParaCompartir.fecha).toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric"}).toUpperCase();
+
+        const matchDistancia=textoFuente.match(/(\d+(?:[.,]\d+)?)\s*(?:km|kilometros)/i);
+        const matchTiempo=textoFuente.match(/(\d{1,2}:\d{2}(?::\d{2})?)\s*(?:min|minutos|h)?/);
+        const matchRitmo=textoFuente.match(/(\d{1,2}:\d{2})\s*\/\s*km/i);
+        const matchFc=textoFuente.match(/fc\s*(?:media)?\s*(\d{2,3})\s*(?:ppm|bpm)?/i);
+        const matchDesnivel=textoFuente.match(/(\d+)\s*m?\s*(?:de\s*)?(?:desnivel|d\+)/i);
+
+        const matchResultadoTiempo=textoFuente.match(/(?:en|resultado)\s*(\d{1,2}:\d{2})/i);
+        const matchResultadoReps=textoFuente.match(/(\d+)\s*(?:rondas|rounds|reps)/i);
+
         return (
           <WorkoutShareCard
             disciplina={esCarrera?"carrera":"crossfit"}
             fecha={fechaFormateada}
-            running={esCarrera?{}:undefined}
-            crossfit={!esCarrera?{nombreWod:sesionParaCompartir.tipo,resultado:sesionParaCompartir.notas?.substring(0,40)}:undefined}
+            running={esCarrera?{
+              distancia:matchDistancia?.[1]?.replace(",",".")||undefined,
+              tiempo:matchTiempo?.[1]||undefined,
+              ritmo:matchRitmo?.[1]||undefined,
+              fcMedia:matchFc?.[1]||undefined,
+              desnivel:matchDesnivel?.[1]||undefined,
+            }:undefined}
+            crossfit={!esCarrera?{
+              nombreWod:sesionParaCompartir.tipo,
+              resultado:matchResultadoTiempo?.[1]||(matchResultadoReps?`${matchResultadoReps[1]} rondas`:undefined),
+              movimientos:sesionParaCompartir.notas?.substring(0,90),
+            }:undefined}
             onClose={()=>setSesionParaCompartir(null)}
           />
         );

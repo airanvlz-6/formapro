@@ -1616,6 +1616,19 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
       // Orchestrator, nunca del Coach conversacional. Si el intent lo detecta, disparamos el mismo
       // flujo que usa el boton oficial, de forma transparente — el usuario nunca nota la diferencia.
       if(resContexto?.debeDispararOrchestrator){
+        // FORGE CAPABILITY GUARD (temprano) — comprobar ANTES de preguntar disponibilidad ni gastar
+        // ninguna llamada. Un usuario en supervision/consulta no puede iniciar el flujo de planificacion
+        // en absoluto — ni siquiera la pregunta de confirmacion, que ya implicaria estar planificando.
+        if(modoEntrada==="supervision"||modoEntrada==="consulta"){
+          const mensajeDisplaySinPermiso=texto.trim();
+          const respuestaSinPermiso=`Ahora mismo estás en modo Supervisión. En este modo no genero ni gestiono tu planificación — tu entrenador o tu plan actual siguen teniendo el control.\n\nSí puedo ayudarte a analizar tus sesiones, registrar tus entrenamientos, interpretar tus métricas y proponerte ajustes puntuales cuando tú me los pidas.\n\nSi quieres que Forge pase a encargarse de tu planificación, dímelo y cambiamos al modo Coach.`;
+          setMensajes(prev=>[...prev,{role:"assistant",content:respuestaSinPermiso}]);
+          setCargando(false);
+          const histSinPermiso=[...historial,{role:"user",content:mensajeDisplaySinPermiso},{role:"assistant",content:respuestaSinPermiso}];
+          setHistorial(histSinPermiso);
+          if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histSinPermiso}});
+          return;
+        }
         // FIX: mismo comportamiento que el boton oficial — preguntar disponibilidad ANTES de generar,
         // en vez de disparar el Orchestrator directamente sin confirmar.
         const mensajeDisplayUsuario=texto.trim();
@@ -2794,6 +2807,12 @@ ${testStr}`}]});
               <div style={{display:"flex",justifyContent:"center",marginTop:4}}>
                 <button onClick={async()=>{
                   setMostrarBotonNuevaSemana(false);
+                  // FORGE CAPABILITY GUARD (temprano) — defensa en profundidad, aunque este boton
+                  // teoricamente solo deberia mostrarse en modo planificacion.
+                  if(modoEntrada==="supervision"||modoEntrada==="consulta"){
+                    setMensajes(prev=>[...prev,{role:"assistant",content:"Ahora mismo estás en modo Supervisión — no genero planificaciones en este modo. Si quieres que Forge se encargue de tu entrenamiento, dímelo y cambiamos al modo Coach."}]);
+                    return;
+                  }
                   // FIX: preguntar disponibilidad ANTES de generar, en vez de asumir silenciosamente
                   // la misma distribucion de semanas anteriores. El usuario puede confirmar o corregir.
                   const distActual=distribucionSemanal;

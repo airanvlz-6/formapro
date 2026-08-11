@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { aplicarTodasLasReglas } from "@/lib/validators/scientificRules";
 import { validarIntegridadSemana, validarBlueprintDisponibilidad, validateBlueprint } from "@/lib/validators/weekIntegrityValidator";
 import ForgeCardsGenerator from "@/components/ForgeCardsGenerator";
+import WorkoutShareCard from "@/components/WorkoutShareCard";
 
 const C = {
   bg: "#0D0D0D", card: "#1A1A1A", ink: "#F0EDE8", muted: "#9A9590",
@@ -744,6 +745,7 @@ const [rachaPendienteCompartir,setRachaPendienteCompartir]=useState<number|null>
 const [modoEntrada,setModoEntrada]=useState<string>("planificacion");
 const [esperandoConfirmacionDisponibilidad,setEsperandoConfirmacionDisponibilidad]=useState(false);
 const [mostrarBannerCambioModo,setMostrarBannerCambioModo]=useState(false);
+const [sesionParaCompartir,setSesionParaCompartir]=useState<any>(null);
 const [objetivoPendienteCompartir,setObjetivoPendienteCompartir]=useState<{objetivo:string;resultado:string}|null>(null);
 const [historialMarcas,setHistorialMarcas]=useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
 const [analisisBloques,setAnalisisBloques]=useState<any[]>([]);
@@ -2983,6 +2985,10 @@ ${testStr}`}]});
                       const res=await apiCall({action:"registrar_sesion",codigo:codigoUsuario,datos:{sesion:sesionPendiente}});
                       await apiCall({action:"marcar_sesion_completada",codigo:codigoUsuario,datos:{fecha:sesionPendiente.fecha,sesion:sesionPendiente}});
                       cargarPlanSemanal(codigoUsuario);
+                      // FORGE SHARE CARDS — tras registrar con exito, ofrecer compartir. Los datos
+                      // numericos (distancia/tiempo/ritmo/resultado) no siempre vienen estructurados
+                      // del extractor todavia — el usuario puede completarlos en la propia Card si faltan.
+                      setSesionParaCompartir(sesionPendiente);
                       setSesionPendiente(null);
                       if(res?.esPrimeraSesion){
                         setMensajes(prev=>[...prev,{role:"assistant",content:"🎉 **¡Primer entrenamiento registrado!**\n\nYa has empezado a construir tu historial. A partir de ahora Forge aprenderá de cada sesión para adaptar las siguientes.\n\nRevisa tu evolución en **Mi Historia** cuando quieras."}]);
@@ -3164,6 +3170,21 @@ ${testStr}`}]});
       {forgeCardData&&(
         <ForgeCardsGenerator initialData={forgeCardData} onClose={()=>setForgeCardData(null)} />
       )}
+
+      {sesionParaCompartir&&(()=>{
+        // FORGE SHARE CARDS — mapea la sesion recien registrada a las props de la Card, segun tipo.
+        const esCarrera=/carrera|running|correr/i.test(sesionParaCompartir.tipo||"");
+        const fechaFormateada=new Date(sesionParaCompartir.fecha).toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric"}).toUpperCase();
+        return (
+          <WorkoutShareCard
+            disciplina={esCarrera?"carrera":"crossfit"}
+            fecha={fechaFormateada}
+            running={esCarrera?{}:undefined}
+            crossfit={!esCarrera?{nombreWod:sesionParaCompartir.tipo,resultado:sesionParaCompartir.notas?.substring(0,40)}:undefined}
+            onClose={()=>setSesionParaCompartir(null)}
+          />
+        );
+      })()}
 
       {/* Navegacion inferior fija, consistente con el resto de la app */}
       {pantalla==="chat"&&codigoUsuario&&(

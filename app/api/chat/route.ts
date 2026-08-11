@@ -1618,6 +1618,18 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
         console.error("REGENERACION FORZADA: violacion de catalogo detectada:", validacionCatalogo.terminosProhibidosEncontrados);
       }
 
+      // NIVEL C — adaptacion automatica del sistema (correccion de disponibilidad durante el Week
+      // Integrity Validator), no cuenta contra el limite de generaciones, es Forge haciendo su trabajo.
+      await supabase.from("weekly_plan_events").insert({
+        user_codigo: codigo,
+        week_start: null,
+        nivel: "C_adaptacion_automatica",
+        accion: "regenerar_sesion_disciplina_forzada",
+        motivo: `Correccion de disponibilidad — disciplina forzada a ${disciplinaForzada}`,
+        dia_afectado: dia,
+        confirmado_por_usuario: false
+      });
+
       return NextResponse.json({
         ok: true,
         sesion: {
@@ -2101,6 +2113,17 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
         return s;
       });
       await supabase.from("weekly_plan").update({ sessions }).eq("user_codigo", codigo).eq("week_start", acc.week_start);
+      // NIVEL B — modificacion de sesion concreta, NO cuenta contra el limite de generaciones de semana,
+      // pero queda auditada igual (confirmada explicitamente por el flujo de Pending Actions).
+      await supabase.from("weekly_plan_events").insert({
+        user_codigo: codigo,
+        week_start: acc.week_start,
+        nivel: "B_modificacion_sesion",
+        accion: "modificar_sesion",
+        motivo: acc.motivo || null,
+        dia_afectado: acc.dia,
+        confirmado_por_usuario: true
+      });
     }
 
     await supabase.from("pending_actions").update({ estado: "ejecutado", resuelto_at: new Date().toISOString() }).eq("id", pendiente.id);
@@ -2802,6 +2825,15 @@ if (action === "obtener_daily_briefing") {
         week_start: plan.week_start,
         version: (countActual || 0) + 1,
         generation_reason: esSemanaActual ? "regeneracion_semana_actual" : "nueva_semana"
+      });
+      // NIVEL A — regeneracion/generacion de semana completa, cuenta contra el limite de 2
+      await supabase.from("weekly_plan_events").insert({
+        user_codigo: codigo,
+        week_start: plan.week_start,
+        nivel: "A_regeneracion_completa",
+        accion: esSemanaActual ? "regenerar_semana" : "generar_semana_nueva",
+        motivo: plan.week_objective || null,
+        confirmado_por_usuario: true
       });
     }
 

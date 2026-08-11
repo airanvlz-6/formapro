@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { X, Upload, Image as ImageIcon, AlertTriangle, Share2 } from 'lucide-react';
 
 const C = {
@@ -12,9 +12,9 @@ type Disciplina = 'carrera' | 'crossfit';
 type Formato = '9:16' | '4:5' | '1:1';
 
 const FORMATOS: Record<Formato, { w: number; h: number; label: string }> = {
-  '9:16': { w: 405, h: 720, label: 'Story' },
-  '4:5': { w: 480, h: 600, label: 'Feed' },
-  '1:1': { w: 480, h: 480, label: 'Cuadrado' },
+  '9:16': { w: 1080, h: 1920, label: 'Story' },
+  '4:5': { w: 1080, h: 1350, label: 'Feed' },
+  '1:1': { w: 1080, h: 1080, label: 'Cuadrado' },
 };
 
 interface RunningData {
@@ -58,73 +58,34 @@ function calcularEtiquetaRunning(data: RunningData): string {
   return 'RUN';
 }
 
-function RunningOverlay({ data, escala }: { data: RunningData; escala: number }) {
-  const { principal, secundario } = calcularResultadoPrincipalRunning(data);
-  const etiqueta = calcularEtiquetaRunning(data);
-  const metricasSecundarias = [
-    data.intervalos && data.distancia && { valor: `${data.distancia} KM` },
-    data.fcMedia && { valor: `${data.fcMedia} FC` },
-    data.fcMax && { valor: `${data.fcMax} MAX` },
-    data.desnivel && { valor: `${data.desnivel} D+` },
-  ].filter(Boolean).slice(0, 3) as { valor: string }[];
-
-  return (
-    <div style={{ position: 'relative', zIndex: 3, padding: `0 ${30*escala}px ${30*escala}px`, display: 'flex', flexDirection: 'column', gap: 6*escala }}>
-      <p style={{ color: C.accent, fontSize: 12*escala, fontWeight: 800, letterSpacing: 2 }}>{etiqueta}</p>
-      {principal ? (
-        <p style={{ color: C.ink, fontSize: 48*escala, fontWeight: 800, fontFamily: 'Georgia, serif', lineHeight: 1, textShadow: '0 2px 20px rgba(0,0,0,0.6)' }}>{principal}</p>
-      ) : (
-        <p style={{ color: C.muted, fontSize: 16*escala, fontStyle: 'italic' }}>Añade los datos de tu entreno</p>
-      )}
-      {secundario && <p style={{ color: C.ink, fontSize: 20*escala, fontWeight: 700, fontFamily: 'Georgia, serif', opacity: 0.9, textShadow: '0 2px 12px rgba(0,0,0,0.6)' }}>{secundario}</p>}
-      {metricasSecundarias.length > 0 && (
-        <p style={{ color: C.muted, fontSize: 12.5*escala, fontWeight: 600, letterSpacing: 0.5, marginTop: 4*escala }}>{metricasSecundarias.map(m => m.valor).join(' · ')}</p>
-      )}
-    </div>
-  );
-}
-
-function CrossfitOverlay({ data, escala }: { data: CrossfitData; escala: number }) {
-  const movimientosTruncados = data.movimientos && data.movimientos.length > 70 ? data.movimientos.slice(0, 67).trim() + '...' : data.movimientos;
-  return (
-    <div style={{ position: 'relative', zIndex: 3, padding: `0 ${30*escala}px ${30*escala}px`, display: 'flex', flexDirection: 'column', gap: 4*escala }}>
-      <p style={{ color: C.accent, fontSize: 12*escala, fontWeight: 800, letterSpacing: 2 }}>WOD{data.tipo ? ` · ${data.tipo.toUpperCase()}` : ''}</p>
-      <p style={{ color: C.ink, fontSize: 24*escala, fontWeight: 800, marginTop: 2, textShadow: '0 2px 16px rgba(0,0,0,0.6)', lineHeight: 1.15 }}>{data.nombreWod || 'Entreno de hoy'}</p>
-      {data.resultado ? (
-        <p style={{ color: C.ink, fontSize: 48*escala, fontWeight: 800, fontFamily: 'Georgia, serif', lineHeight: 1, marginTop: 4, textShadow: '0 2px 20px rgba(0,0,0,0.6)' }}>{data.resultado}</p>
-      ) : (
-        <p style={{ color: C.muted, fontSize: 16*escala, fontStyle: 'italic', marginTop: 6 }}>Añade tu resultado</p>
-      )}
-      {movimientosTruncados && <p style={{ color: C.muted, fontSize: 12*escala, marginTop: 8, lineHeight: 1.5 }}>{movimientosTruncados}</p>}
-    </div>
-  );
-}
-
-// Distancia entre 2 puntos tactiles, para calcular el gesto de pellizco (pinch)
 function distanciaEntreToques(t0: React.Touch, t1: React.Touch) {
   return Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
 }
 
+// FORGE SHARE CARD — v3: renderizado sobre <canvas> real en vez de CSS transforms anidados.
+// CAUSA RAIZ del bug de "efecto lupa": los transforms CSS anidados (escala del contenedor
+// responsivo x escala/posicion de la foto) se comportaban de forma inconsistente entre lo que
+// el navegador pintaba en pantalla y lo que html2canvas capturaba al medir el DOM. Un <canvas>
+// dibuja pixeles reales de forma identica siempre — WYSIWYG genuino, sin ambiguedad de layout.
 export default function WorkoutShareCard({ disciplina, fecha, running, crossfit, onClose }: WorkoutShareCardProps) {
-  const [foto, setFoto] = useState<string | null>(null);
+  const [imagenObj, setImagenObj] = useState<HTMLImageElement | null>(null);
   const [fotoBajaResolucion, setFotoBajaResolucion] = useState(false);
   const [formato, setFormato] = useState<Formato>('9:16');
   const [zoom, setZoom] = useState(1);
-  const [posX, setPosX] = useState(50);
-  const [posY, setPosY] = useState(50);
+  const [offsetX, setOffsetX] = useState(0); // desplazamiento en px, a escala del canvas real (1080 ancho)
+  const [offsetY, setOffsetY] = useState(0);
   const [procesando, setProcesando] = useState(false);
-  const [escalaViewport, setEscalaViewport] = useState(1);
+  const [escalaViewport, setEscalaViewport] = useState(0.3);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const dims = FORMATOS[formato];
-  const escalaOverlay = dims.w / 480;
+  const escalaTexto = dims.w / 1080; // escala de tipografia relativa al canvas base 1080 de ancho
 
-  // FIX: la Card SIEMPRE cabe en pantalla — se calcula un factor de escala visual segun el
-  // viewport disponible, independiente del formato elegido (Story/Feed/Cuadrado).
   useEffect(() => {
     const calcular = () => {
-      const maxAlto = window.innerHeight - 260; // deja espacio para controles y botones
+      const maxAlto = window.innerHeight - 260;
       const maxAncho = Math.min(window.innerWidth - 48, 460);
-      const factor = Math.min(maxAncho / dims.w, maxAlto / dims.h, 1);
+      const factor = Math.min(maxAncho / dims.w, maxAlto / dims.h);
       setEscalaViewport(factor);
     };
     calcular();
@@ -135,83 +96,200 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
   const handleFotoSeleccionada = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const img = new window.Image();
-    img.onload = () => setFotoBajaResolucion(img.width < 700 || img.height < 850);
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const resultado = ev.target?.result as string;
-      img.src = resultado;
-      setFoto(resultado);
-      setZoom(1); setPosX(50); setPosY(50);
+      const img = new window.Image();
+      img.onload = () => {
+        setFotoBajaResolucion(img.width < 1080 || img.height < 1080);
+        setImagenObj(img);
+        setZoom(1); setOffsetX(0); setOffsetY(0);
+      };
+      img.src = ev.target?.result as string;
     };
     reader.readAsDataURL(file);
   };
 
-  // FIX GESTOS TACTILES REALES: un dedo = mover (pan), dos dedos = pellizco (pinch zoom).
-  // Antes solo existia un slider de zoom y el arrastre con mouse no funcionaba en touch real.
-  const gestoRef = useRef<{ modo: 'ninguno' | 'pan' | 'pinch'; startX: number; startY: number; startPosX: number; startPosY: number; startDist: number; startZoom: number }>({
-    modo: 'ninguno', startX: 0, startY: 0, startPosX: 50, startPosY: 50, startDist: 0, startZoom: 1,
-  });
+  // Dibuja la foto (cover + zoom + offset) en las dimensiones REALES del canvas (1080x...).
+  // Esta misma funcion se usa tanto para la vista previa como para la exportacion final —
+  // garantiza que lo que se ve es exactamente lo que se exporta.
+  const dibujarFoto = useCallback((ctx: CanvasRenderingContext2D) => {
+    if (!imagenObj) return;
+    const coverBase = Math.max(dims.w / imagenObj.width, dims.h / imagenObj.height);
+    const escalaFinal = coverBase * zoom;
+    const anchoDibujo = imagenObj.width * escalaFinal;
+    const altoDibujo = imagenObj.height * escalaFinal;
+    const cx = (dims.w - anchoDibujo) / 2 + offsetX;
+    const cy = (dims.h - altoDibujo) / 2 + offsetY;
+    ctx.drawImage(imagenObj, cx, cy, anchoDibujo, altoDibujo);
+  }, [imagenObj, zoom, offsetX, offsetY, dims.w, dims.h]);
+
+  // Redibuja el canvas de vista previa cada vez que cambia algo relevante
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.width = dims.w;
+    canvas.height = dims.h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, dims.w, dims.h);
+    ctx.fillStyle = '#161616';
+    ctx.fillRect(0, 0, dims.w, dims.h);
+    dibujarFoto(ctx);
+  }, [dibujarFoto, dims.w, dims.h]);
+
+  // Limitar el offset para que la foto no se pueda arrastrar fuera del marco
+  const limitarOffset = useCallback((ox: number, oy: number, z: number) => {
+    if (!imagenObj) return { ox, oy };
+    const coverBase = Math.max(dims.w / imagenObj.width, dims.h / imagenObj.height);
+    const escalaFinal = coverBase * z;
+    const anchoDibujo = imagenObj.width * escalaFinal;
+    const altoDibujo = imagenObj.height * escalaFinal;
+    const maxOffsetX = Math.max(0, (anchoDibujo - dims.w) / 2);
+    const maxOffsetY = Math.max(0, (altoDibujo - dims.h) / 2);
+    return { ox: Math.max(-maxOffsetX, Math.min(maxOffsetX, ox)), oy: Math.max(-maxOffsetY, Math.min(maxOffsetY, oy)) };
+  }, [imagenObj, dims.w, dims.h]);
+
+  // Gestos tactiles: coordenadas de pantalla -> pixeles reales del canvas (dividiendo por escalaViewport)
+  const gestoRef = useRef({ modo: 'ninguno' as 'ninguno' | 'pan' | 'pinch', startX: 0, startY: 0, startOffX: 0, startOffY: 0, startDist: 0, startZoom: 1 });
 
   const onTouchStart = (e: React.TouchEvent) => {
-    if (!foto) return;
+    if (!imagenObj) return;
     if (e.touches.length === 1) {
-      gestoRef.current = { ...gestoRef.current, modo: 'pan', startX: e.touches[0].clientX, startY: e.touches[0].clientY, startPosX: posX, startPosY: posY };
+      gestoRef.current = { ...gestoRef.current, modo: 'pan', startX: e.touches[0].clientX, startY: e.touches[0].clientY, startOffX: offsetX, startOffY: offsetY };
     } else if (e.touches.length === 2) {
       gestoRef.current = { ...gestoRef.current, modo: 'pinch', startDist: distanciaEntreToques(e.touches[0], e.touches[1]), startZoom: zoom };
     }
   };
   const onTouchMove = (e: React.TouchEvent) => {
-    if (!foto) return;
+    if (!imagenObj) return;
     e.preventDefault();
     if (gestoRef.current.modo === 'pan' && e.touches.length === 1) {
-      const dx = (e.touches[0].clientX - gestoRef.current.startX) / (dims.w * escalaViewport) * 100;
-      const dy = (e.touches[0].clientY - gestoRef.current.startY) / (dims.h * escalaViewport) * 100;
-      setPosX(Math.max(0, Math.min(100, gestoRef.current.startPosX - dx)));
-      setPosY(Math.max(0, Math.min(100, gestoRef.current.startPosY - dy)));
+      const dx = (e.touches[0].clientX - gestoRef.current.startX) / escalaViewport;
+      const dy = (e.touches[0].clientY - gestoRef.current.startY) / escalaViewport;
+      const { ox, oy } = limitarOffset(gestoRef.current.startOffX + dx, gestoRef.current.startOffY + dy, zoom);
+      setOffsetX(ox); setOffsetY(oy);
     } else if (gestoRef.current.modo === 'pinch' && e.touches.length === 2) {
       const nuevaDist = distanciaEntreToques(e.touches[0], e.touches[1]);
-      const factor = nuevaDist / gestoRef.current.startDist;
-      setZoom(Math.max(1, Math.min(3, gestoRef.current.startZoom * factor)));
+      const nuevoZoom = Math.max(1, Math.min(3, gestoRef.current.startZoom * (nuevaDist / gestoRef.current.startDist)));
+      const { ox, oy } = limitarOffset(offsetX, offsetY, nuevoZoom);
+      setZoom(nuevoZoom); setOffsetX(ox); setOffsetY(oy);
     }
   };
   const onTouchEnd = () => { gestoRef.current.modo = 'ninguno'; };
 
-  // Arrastre con mouse (desktop) — se mantiene como alternativa
-  const arrastreMouseRef = useRef({ activo: false, startX: 0, startY: 0, startPosX: 50, startPosY: 50 });
+  const arrastreMouseRef = useRef({ activo: false, startX: 0, startY: 0, startOffX: 0, startOffY: 0 });
   const onMouseDown = (e: React.MouseEvent) => {
-    if (!foto) return;
-    arrastreMouseRef.current = { activo: true, startX: e.clientX, startY: e.clientY, startPosX: posX, startPosY: posY };
+    if (!imagenObj) return;
+    arrastreMouseRef.current = { activo: true, startX: e.clientX, startY: e.clientY, startOffX: offsetX, startOffY: offsetY };
   };
   const onMouseMove = (e: React.MouseEvent) => {
     if (!arrastreMouseRef.current.activo) return;
-    const dx = (e.clientX - arrastreMouseRef.current.startX) / (dims.w * escalaViewport) * 100;
-    const dy = (e.clientY - arrastreMouseRef.current.startY) / (dims.h * escalaViewport) * 100;
-    setPosX(Math.max(0, Math.min(100, arrastreMouseRef.current.startPosX - dx)));
-    setPosY(Math.max(0, Math.min(100, arrastreMouseRef.current.startPosY - dy)));
+    const dx = (e.clientX - arrastreMouseRef.current.startX) / escalaViewport;
+    const dy = (e.clientY - arrastreMouseRef.current.startY) / escalaViewport;
+    const { ox, oy } = limitarOffset(arrastreMouseRef.current.startOffX + dx, arrastreMouseRef.current.startOffY + dy, zoom);
+    setOffsetX(ox); setOffsetY(oy);
   };
   const onMouseUpOrLeave = () => { arrastreMouseRef.current.activo = false; };
+
+  const onZoomSlider = (nuevoZoom: number) => {
+    const { ox, oy } = limitarOffset(offsetX, offsetY, nuevoZoom);
+    setZoom(nuevoZoom); setOffsetX(ox); setOffsetY(oy);
+  };
+
+  // Exporta el canvas final: foto (dibujada en pixeles reales) + overlay de texto, todo en un
+  // unico canvas — sin html2canvas, sin ambiguedad de DOM/CSS. Verdadero WYSIWYG.
+  const generarCanvasFinal = (): HTMLCanvasElement => {
+    const canvas = document.createElement('canvas');
+    canvas.width = dims.w;
+    canvas.height = dims.h;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#161616';
+    ctx.fillRect(0, 0, dims.w, dims.h);
+    dibujarFoto(ctx);
+
+    // Gradiente inferior para legibilidad
+    const grad = ctx.createLinearGradient(0, 0, 0, dims.h);
+    grad.addColorStop(0, 'rgba(5,5,5,0)');
+    grad.addColorStop(0.3, 'rgba(5,5,5,0)');
+    grad.addColorStop(0.62, 'rgba(5,5,5,0.55)');
+    grad.addColorStop(1, 'rgba(5,5,5,0.94)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, dims.w, dims.h);
+
+    const px = 66 * escalaTexto;
+    let y = dims.h - 210 * escalaTexto;
+    ctx.textBaseline = 'alphabetic';
+
+    if (disciplina === 'carrera') {
+      const { principal, secundario } = calcularResultadoPrincipalRunning(running || {});
+      const etiqueta = calcularEtiquetaRunning(running || {});
+      const metricas = [
+        running?.intervalos && running?.distancia && `${running.distancia} KM`,
+        running?.fcMedia && `${running.fcMedia} FC`,
+        running?.fcMax && `${running.fcMax} MAX`,
+        running?.desnivel && `${running.desnivel} D+`,
+      ].filter(Boolean).slice(0, 3) as string[];
+
+      y = dims.h - (metricas.length > 0 ? 240 : 210) * escalaTexto;
+      ctx.fillStyle = C.accent;
+      ctx.font = `800 ${27 * escalaTexto}px 'DM Sans', sans-serif`;
+      ctx.fillText(etiqueta, px, y);
+      y += 68 * escalaTexto;
+      ctx.fillStyle = C.ink;
+      ctx.font = `800 ${100 * escalaTexto}px Georgia, serif`;
+      ctx.fillText(principal || '—', px, y);
+      if (secundario) {
+        y += 44 * escalaTexto;
+        ctx.font = `700 ${42 * escalaTexto}px Georgia, serif`;
+        ctx.globalAlpha = 0.9;
+        ctx.fillText(secundario, px, y);
+        ctx.globalAlpha = 1;
+      }
+      if (metricas.length > 0) {
+        y += 40 * escalaTexto;
+        ctx.fillStyle = C.muted;
+        ctx.font = `600 ${26 * escalaTexto}px 'DM Sans', sans-serif`;
+        ctx.fillText(metricas.join(' · '), px, y);
+      }
+    } else {
+      const movimientos = crossfit?.movimientos && crossfit.movimientos.length > 70 ? crossfit.movimientos.slice(0, 67).trim() + '...' : crossfit?.movimientos;
+      y = dims.h - 260 * escalaTexto;
+      ctx.fillStyle = C.accent;
+      ctx.font = `800 ${27 * escalaTexto}px 'DM Sans', sans-serif`;
+      ctx.fillText(`WOD${crossfit?.tipo ? ` · ${crossfit.tipo.toUpperCase()}` : ''}`, px, y);
+      y += 56 * escalaTexto;
+      ctx.fillStyle = C.ink;
+      ctx.font = `800 ${50 * escalaTexto}px 'DM Sans', sans-serif`;
+      ctx.fillText(crossfit?.nombreWod || 'Entreno de hoy', px, y);
+      y += 90 * escalaTexto;
+      ctx.font = `800 ${100 * escalaTexto}px Georgia, serif`;
+      ctx.fillText(crossfit?.resultado || '—', px, y);
+      if (movimientos) {
+        y += 48 * escalaTexto;
+        ctx.fillStyle = C.muted;
+        ctx.font = `500 ${26 * escalaTexto}px 'DM Sans', sans-serif`;
+        ctx.fillText(movimientos, px, y);
+      }
+    }
+
+    // Footer: logo + FORGE + fecha
+    const footerY = dims.h - 60 * escalaTexto;
+    ctx.fillStyle = C.accent;
+    ctx.font = `800 ${28 * escalaTexto}px 'DM Sans', sans-serif`;
+    ctx.fillText('FORGE', px, footerY);
+    ctx.fillStyle = C.muted;
+    ctx.font = `500 ${22 * escalaTexto}px 'DM Sans', sans-serif`;
+    ctx.textAlign = 'right';
+    ctx.fillText(fecha, dims.w - px, footerY);
+    ctx.textAlign = 'left';
+
+    return canvas;
+  };
 
   const compartirCard = async () => {
     setProcesando(true);
     try {
-      const html2canvas = (await import('html2canvas')).default;
-      const el = document.getElementById('workout-share-card-export');
-      if (!el) return;
-      // FIX CRITICO: el elemento tiene aplicado `transform: scale(escalaViewport)` para caber
-      // en pantalla (responsive). html2canvas puede leer el bounding box YA escalado a pesar de
-      // recibir width/height explicitos, exportando una imagen comprimida/con letterbox negro.
-      // Solucion: anular el transform SOLO durante la captura (tamaño real 100%), y restaurarlo
-      // inmediatamente despues — el usuario no ve el cambio, es instantaneo.
-      const transformOriginal = el.style.transform;
-      el.style.transform = 'none';
-      // Forzar reflow para que el navegador aplique el cambio antes de capturar
-      void el.offsetHeight;
-
-      const canvas = await html2canvas(el, { backgroundColor: null, scale: 2, useCORS: true, width: dims.w, height: dims.h });
-
-      el.style.transform = transformOriginal;
-
+      const canvas = generarCanvasFinal();
       const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
       if (!blob) return;
       const file = new File([blob], `forge-${disciplina}-${Date.now()}.png`, { type: 'image/png' });
@@ -248,57 +326,23 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
         ))}
       </div>
 
-      {/* FIX: contenedor con tamano REAL de layout = tamano visual escalado (evita desbordar
-          la pantalla), mientras que el nodo exportado interno mantiene sus dimensiones reales
-          mediante CSS transform: scale — html2canvas exporta con width/height explicitos, no
-          se ve afectado por este scale puramente visual. */}
-      <div style={{ width: dims.w * escalaViewport, height: dims.h * escalaViewport, position: 'relative' }}>
-        <div id="workout-share-card-export"
-          onMouseDown={onMouseDown}
-          onMouseMove={onMouseMove}
-          onMouseUp={onMouseUpOrLeave}
-          onMouseLeave={onMouseUpOrLeave}
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-          style={{
-            width: dims.w, height: dims.h, borderRadius: 20, position: 'absolute', top: 0, left: 0,
-            transform: `scale(${escalaViewport})`, transformOrigin: 'top left',
-            overflow: 'hidden', background: `linear-gradient(155deg, #161616 0%, ${C.bg} 60%)`,
-            boxShadow: '0 40px 100px -30px rgba(0,0,0,0.7)',
-            display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-            cursor: foto ? 'grab' : 'default', touchAction: foto ? 'none' : 'auto',
+      <div style={{ width: dims.w * escalaViewport, height: dims.h * escalaViewport, borderRadius: 20, overflow: 'hidden', boxShadow: '0 40px 100px -30px rgba(0,0,0,0.7)', position: 'relative' }}>
+        <canvas
+          ref={canvasRef}
+          onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUpOrLeave} onMouseLeave={onMouseUpOrLeave}
+          onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
+          style={{ width: '100%', height: '100%', display: 'block', cursor: imagenObj ? 'grab' : 'default', touchAction: imagenObj ? 'none' : 'auto' }}
+        />
+        {!imagenObj && (
+          <button onClick={() => fileInputRef.current?.click()} style={{
+            position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+            background: 'none', border: `1.5px dashed ${C.muted}`, borderRadius: 16, padding: '24px 32px', cursor: 'pointer',
           }}>
-          {foto && (
-            <img src={foto} draggable={false} style={{
-              position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
-              objectPosition: `${posX}% ${posY}%`, transform: `scale(${zoom})`, transformOrigin: 'center',
-              zIndex: 0, userSelect: 'none', pointerEvents: 'none',
-            }} />
-          )}
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, transparent 30%, rgba(5,5,5,0.55) 62%, rgba(5,5,5,0.94) 100%)', zIndex: 1 }} />
-
-          {!foto && (
-            <button onClick={() => fileInputRef.current?.click()} style={{
-              position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 2,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
-              background: 'none', border: `1.5px dashed ${C.muted}`, borderRadius: 16, padding: '24px 32px', cursor: 'pointer',
-            }}>
-              <ImageIcon size={26} color={C.muted} />
-              <span style={{ color: C.muted, fontSize: 12.5, fontWeight: 600 }}>Añadir foto</span>
-            </button>
-          )}
-
-          {disciplina === 'carrera' ? <RunningOverlay data={running || {}} escala={escalaOverlay} /> : <CrossfitOverlay data={crossfit || {}} escala={escalaOverlay} />}
-
-          <div style={{ position: 'relative', zIndex: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: `${14*escalaOverlay}px ${30*escalaOverlay}px ${22*escalaOverlay}px` }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8*escalaOverlay }}>
-              <img src="/logo-forge.png" alt="" style={{ width: 22*escalaOverlay, height: 22*escalaOverlay, objectFit: 'contain', filter: 'drop-shadow(0 1px 4px rgba(0,0,0,0.5))' }} />
-              <span style={{ color: C.accent, fontSize: 13*escalaOverlay, fontWeight: 800, letterSpacing: 3 }}>FORGE</span>
-            </div>
-            <span style={{ color: C.muted, fontSize: 10.5*escalaOverlay, letterSpacing: 0.4 }}>{fecha}</span>
-          </div>
-        </div>
+            <ImageIcon size={26} color={C.muted} />
+            <span style={{ color: C.muted, fontSize: 12.5, fontWeight: 600 }}>Añadir foto</span>
+          </button>
+        )}
       </div>
 
       <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFotoSeleccionada} style={{ display: 'none' }} />
@@ -310,12 +354,19 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
         </div>
       )}
 
-      {foto && (
-        <p style={{ color: C.muted, fontSize: 11.5, textAlign: 'center' }}>Arrastra con un dedo para mover · pellizca con dos dedos para zoom</p>
+      {imagenObj && (
+        <>
+          <p style={{ color: C.muted, fontSize: 11.5, textAlign: 'center' }}>Arrastra para mover · pellizca para zoom</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: dims.w * escalaViewport }}>
+            <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>1x</span>
+            <input type="range" min={1} max={3} step={0.05} value={zoom} onChange={(e) => onZoomSlider(Number(e.target.value))} style={{ flex: 1, accentColor: C.accent }} />
+            <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>3x</span>
+          </div>
+        </>
       )}
 
       <div style={{ display: 'flex', gap: 10 }}>
-        {foto && (
+        {imagenObj && (
           <button onClick={() => fileInputRef.current?.click()} style={{
             display: 'flex', alignItems: 'center', gap: 8, background: '#141414', color: C.ink, border: `1px solid #232323`,
             borderRadius: 100, padding: '13px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer',
@@ -324,10 +375,10 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
             Cambiar
           </button>
         )}
-        <button onClick={compartirCard} disabled={procesando || !foto} style={{
-          display: 'flex', alignItems: 'center', gap: 8, background: foto ? C.accent : '#333', color: '#fff', border: 'none',
-          borderRadius: 100, padding: '13px 30px', fontSize: 14, fontWeight: 700, cursor: foto ? 'pointer' : 'not-allowed',
-          boxShadow: foto ? `0 10px 30px -8px ${C.accent}70` : 'none', opacity: foto ? 1 : 0.5,
+        <button onClick={compartirCard} disabled={procesando || !imagenObj} style={{
+          display: 'flex', alignItems: 'center', gap: 8, background: imagenObj ? C.accent : '#333', color: '#fff', border: 'none',
+          borderRadius: 100, padding: '13px 30px', fontSize: 14, fontWeight: 700, cursor: imagenObj ? 'pointer' : 'not-allowed',
+          boxShadow: imagenObj ? `0 10px 30px -8px ${C.accent}70` : 'none', opacity: imagenObj ? 1 : 0.5,
         }}>
           <Share2 size={16} />
           {procesando ? 'Preparando...' : 'Compartir'}

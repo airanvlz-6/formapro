@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import WorkoutShareCard from "@/components/WorkoutShareCard";
 
 const TIPO_CONFIG: Record<string, {emoji:string;label:string;color:string}> = {
   forge_insight: { emoji:"🧠", label:"Forge Insight", color:"#4CAF50" },
@@ -55,6 +56,7 @@ export default function Historia() {
   const [mesActual, setMesActual] = useState(new Date());
   const [diaSeleccionado, setDiaSeleccionado] = useState<any>(null);
   const [decisionDia, setDecisionDia] = useState<any>(null);
+  const [sesionParaCompartirHistoria, setSesionParaCompartirHistoria] = useState<any>(null);
   const [logros, setLogros] = useState<any[]>([]);
   const [menuEventoAbierto, setMenuEventoAbierto] = useState<string|null>(null);
   const [historialFisiologico, setHistorialFisiologico] = useState<any[]>([]);
@@ -334,10 +336,35 @@ export default function Historia() {
                     </>
                   ) : (
                     <>
-                      <p style={{color:C.muted,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>🏋️ Entrenamiento</p>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                        <p style={{color:C.muted,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1}}>🏋️ Entrenamiento</p>
+                        <button onClick={(e)=>{e.stopPropagation();setSesionParaCompartirHistoria({tipo:item.tipo,fecha:diaSeleccionado.fecha,notas:item.notas});}} style={{background:`${C.accent}18`,color:C.accent,border:`1px solid ${C.accent}40`,borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                          Compartir
+                        </button>
+                      </div>
                       <p style={{color:C.ink,fontSize:14,fontWeight:600,marginBottom:6,textTransform:"capitalize"}}>{item.tipo?.replace(/_/g,' ')}</p>
                       <p style={{color:C.muted,fontSize:12,lineHeight:1.6}}>{item.notas}</p>
                       {item.sensacion && <span style={{color:C.accent,fontSize:11,marginTop:6,display:"inline-block"}}>● Sensación: {item.sensacion}</span>}
+                      {sesionParaCompartirHistoria && sesionParaCompartirHistoria.fecha===diaSeleccionado.fecha && sesionParaCompartirHistoria.notas===item.notas && (()=>{
+                        const textoFuente=`${sesionParaCompartirHistoria.notas||""}`;
+                        const esCarrera=/carrera|running|correr/i.test(sesionParaCompartirHistoria.tipo||"");
+                        const fechaFormateada=new Date(sesionParaCompartirHistoria.fecha).toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric"}).toUpperCase();
+                        const matchDistancia=textoFuente.match(/(\d+(?:[.,]\d+)?)\s*(?:km|kilometros)/i);
+                        const matchIntervalos=textoFuente.match(/(\d+\s*x\s*\d+)\s*m(?:etros)?/i);
+                        const matchTiempo=textoFuente.match(/(\d{1,2}:\d{2}(?::\d{2})?)/);
+                        const matchRitmo=textoFuente.match(/(\d{1,2}:\d{2})\s*\/\s*km/i);
+                        const matchFcMedia=textoFuente.match(/fc\s*media\s*(\d{2,3})/i);
+                        const matchFcMax=textoFuente.match(/fc\s*m[aá]x(?:ima)?\s*(\d{2,3})/i);
+                        return (
+                          <WorkoutShareCard
+                            disciplina={esCarrera?"carrera":"crossfit"}
+                            fecha={fechaFormateada}
+                            running={esCarrera?{distancia:matchDistancia?.[1]?.replace(",","."),intervalos:matchIntervalos?.[1]?.replace(/\s+/g,""),tiempo:matchTiempo?.[1],ritmo:matchRitmo?.[1],fcMedia:matchFcMedia?.[1],fcMax:matchFcMax?.[1]}:undefined}
+                            crossfit={!esCarrera?{nombreWod:sesionParaCompartirHistoria.tipo,movimientos:sesionParaCompartirHistoria.notas?.substring(0,90)}:undefined}
+                            onClose={()=>setSesionParaCompartirHistoria(null)}
+                          />
+                        );
+                      })()}
                     </>
                   )}
                 </div>

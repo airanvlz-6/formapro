@@ -123,7 +123,98 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
     ctx.drawImage(imagenObj, cx, cy, anchoDibujo, altoDibujo);
   }, [imagenObj, zoom, offsetX, offsetY, dims.w, dims.h]);
 
-  // Redibuja el canvas de vista previa cada vez que cambia algo relevante
+  // Dibuja la Card COMPLETA (foto + gradiente + overlay de texto) en un contexto dado.
+  // Reutilizada IDENTICA tanto para la vista previa en pantalla como para la exportacion final —
+  // elimina el bug de "el texto no se ve hasta compartir" causado por tener dos funciones distintas.
+  const dibujarCardCompleta = useCallback((ctx: CanvasRenderingContext2D) => {
+    ctx.clearRect(0, 0, dims.w, dims.h);
+    ctx.fillStyle = '#161616';
+    ctx.fillRect(0, 0, dims.w, dims.h);
+    dibujarFoto(ctx);
+
+    const grad = ctx.createLinearGradient(0, 0, 0, dims.h);
+    grad.addColorStop(0, 'rgba(5,5,5,0)');
+    grad.addColorStop(0.3, 'rgba(5,5,5,0)');
+    grad.addColorStop(0.62, 'rgba(5,5,5,0.55)');
+    grad.addColorStop(1, 'rgba(5,5,5,0.94)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, dims.w, dims.h);
+
+    const px = 66 * escalaTexto;
+    // FIX: en Story (1080x1920), escalaTexto=1 pero la altura es mucho mayor que en Feed/Cuadrado,
+    // haciendo que el bloque de texto (posicionado a una distancia fija del borde inferior) se vea
+    // proporcionalmente pequeño y pegado a la esquina. Anclamos la posicion vertical de forma
+    // proporcional a la ALTURA real del formato, no a un valor fijo en pixeles.
+    const anclaInferior = dims.h * 0.14; // ~14% de la altura total, consistente en todos los formatos
+    let y = dims.h - anclaInferior;
+    ctx.textBaseline = 'alphabetic';
+    ctx.textAlign = 'left';
+
+    if (disciplina === 'carrera') {
+      const { principal, secundario } = calcularResultadoPrincipalRunning(running || {});
+      const etiqueta = calcularEtiquetaRunning(running || {});
+      const metricas = [
+        running?.intervalos && running?.distancia && `${running.distancia} KM`,
+        running?.fcMedia && `${running.fcMedia} FC`,
+        running?.fcMax && `${running.fcMax} MAX`,
+        running?.desnivel && `${running.desnivel} D+`,
+      ].filter(Boolean).slice(0, 3) as string[];
+
+      y = dims.h - anclaInferior - (metricas.length > 0 ? 30 * escalaTexto : 0);
+      ctx.fillStyle = C.accent;
+      ctx.font = `800 ${27 * escalaTexto}px 'DM Sans', sans-serif`;
+      ctx.fillText(etiqueta, px, y);
+      y += 68 * escalaTexto;
+      ctx.fillStyle = C.ink;
+      ctx.font = `800 ${100 * escalaTexto}px Georgia, serif`;
+      ctx.fillText(principal || '—', px, y);
+      if (secundario) {
+        y += 44 * escalaTexto;
+        ctx.font = `700 ${42 * escalaTexto}px Georgia, serif`;
+        ctx.globalAlpha = 0.9;
+        ctx.fillText(secundario, px, y);
+        ctx.globalAlpha = 1;
+      }
+      if (metricas.length > 0) {
+        y += 40 * escalaTexto;
+        ctx.fillStyle = C.muted;
+        ctx.font = `600 ${26 * escalaTexto}px 'DM Sans', sans-serif`;
+        ctx.fillText(metricas.join(' · '), px, y);
+      }
+    } else {
+      const movimientos = crossfit?.movimientos && crossfit.movimientos.length > 70 ? crossfit.movimientos.slice(0, 67).trim() + '...' : crossfit?.movimientos;
+      y = dims.h - anclaInferior - 50 * escalaTexto;
+      ctx.fillStyle = C.accent;
+      ctx.font = `800 ${27 * escalaTexto}px 'DM Sans', sans-serif`;
+      ctx.fillText(`WOD${crossfit?.tipo ? ` · ${crossfit.tipo.toUpperCase()}` : ''}`, px, y);
+      y += 56 * escalaTexto;
+      ctx.fillStyle = C.ink;
+      ctx.font = `800 ${50 * escalaTexto}px 'DM Sans', sans-serif`;
+      ctx.fillText(crossfit?.nombreWod || 'Entreno de hoy', px, y);
+      y += 90 * escalaTexto;
+      ctx.font = `800 ${100 * escalaTexto}px Georgia, serif`;
+      ctx.fillText(crossfit?.resultado || '—', px, y);
+      if (movimientos) {
+        y += 48 * escalaTexto;
+        ctx.fillStyle = C.muted;
+        ctx.font = `500 ${26 * escalaTexto}px 'DM Sans', sans-serif`;
+        ctx.fillText(movimientos, px, y);
+      }
+    }
+
+    const footerY = dims.h - (dims.h * 0.035);
+    ctx.fillStyle = C.accent;
+    ctx.font = `800 ${28 * escalaTexto}px 'DM Sans', sans-serif`;
+    ctx.fillText('FORGE', px, footerY);
+    ctx.fillStyle = C.muted;
+    ctx.font = `500 ${22 * escalaTexto}px 'DM Sans', sans-serif`;
+    ctx.textAlign = 'right';
+    ctx.fillText(fecha, dims.w - px, footerY);
+    ctx.textAlign = 'left';
+  }, [dibujarFoto, dims.w, dims.h, escalaTexto, disciplina, running, crossfit, fecha]);
+
+  // Redibuja el canvas de vista previa cada vez que cambia algo relevante — usa la MISMA funcion
+  // que la exportacion final, garantizando coherencia total entre preview y resultado compartido.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -131,11 +222,8 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
     canvas.height = dims.h;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    ctx.clearRect(0, 0, dims.w, dims.h);
-    ctx.fillStyle = '#161616';
-    ctx.fillRect(0, 0, dims.w, dims.h);
-    dibujarFoto(ctx);
-  }, [dibujarFoto, dims.w, dims.h]);
+    dibujarCardCompleta(ctx);
+  }, [dibujarCardCompleta, dims.w, dims.h]);
 
   // Limitar el offset para que la foto no se pueda arrastrar fuera del marco
   const limitarOffset = useCallback((ox: number, oy: number, z: number) => {
@@ -196,93 +284,13 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
     setZoom(nuevoZoom); setOffsetX(ox); setOffsetY(oy);
   };
 
-  // Exporta el canvas final: foto (dibujada en pixeles reales) + overlay de texto, todo en un
-  // unico canvas — sin html2canvas, sin ambiguedad de DOM/CSS. Verdadero WYSIWYG.
+  // Exporta el canvas final llamando a la MISMA funcion de dibujo que la vista previa.
   const generarCanvasFinal = (): HTMLCanvasElement => {
     const canvas = document.createElement('canvas');
     canvas.width = dims.w;
     canvas.height = dims.h;
     const ctx = canvas.getContext('2d')!;
-    ctx.fillStyle = '#161616';
-    ctx.fillRect(0, 0, dims.w, dims.h);
-    dibujarFoto(ctx);
-
-    // Gradiente inferior para legibilidad
-    const grad = ctx.createLinearGradient(0, 0, 0, dims.h);
-    grad.addColorStop(0, 'rgba(5,5,5,0)');
-    grad.addColorStop(0.3, 'rgba(5,5,5,0)');
-    grad.addColorStop(0.62, 'rgba(5,5,5,0.55)');
-    grad.addColorStop(1, 'rgba(5,5,5,0.94)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, dims.w, dims.h);
-
-    const px = 66 * escalaTexto;
-    let y = dims.h - 210 * escalaTexto;
-    ctx.textBaseline = 'alphabetic';
-
-    if (disciplina === 'carrera') {
-      const { principal, secundario } = calcularResultadoPrincipalRunning(running || {});
-      const etiqueta = calcularEtiquetaRunning(running || {});
-      const metricas = [
-        running?.intervalos && running?.distancia && `${running.distancia} KM`,
-        running?.fcMedia && `${running.fcMedia} FC`,
-        running?.fcMax && `${running.fcMax} MAX`,
-        running?.desnivel && `${running.desnivel} D+`,
-      ].filter(Boolean).slice(0, 3) as string[];
-
-      y = dims.h - (metricas.length > 0 ? 240 : 210) * escalaTexto;
-      ctx.fillStyle = C.accent;
-      ctx.font = `800 ${27 * escalaTexto}px 'DM Sans', sans-serif`;
-      ctx.fillText(etiqueta, px, y);
-      y += 68 * escalaTexto;
-      ctx.fillStyle = C.ink;
-      ctx.font = `800 ${100 * escalaTexto}px Georgia, serif`;
-      ctx.fillText(principal || '—', px, y);
-      if (secundario) {
-        y += 44 * escalaTexto;
-        ctx.font = `700 ${42 * escalaTexto}px Georgia, serif`;
-        ctx.globalAlpha = 0.9;
-        ctx.fillText(secundario, px, y);
-        ctx.globalAlpha = 1;
-      }
-      if (metricas.length > 0) {
-        y += 40 * escalaTexto;
-        ctx.fillStyle = C.muted;
-        ctx.font = `600 ${26 * escalaTexto}px 'DM Sans', sans-serif`;
-        ctx.fillText(metricas.join(' · '), px, y);
-      }
-    } else {
-      const movimientos = crossfit?.movimientos && crossfit.movimientos.length > 70 ? crossfit.movimientos.slice(0, 67).trim() + '...' : crossfit?.movimientos;
-      y = dims.h - 260 * escalaTexto;
-      ctx.fillStyle = C.accent;
-      ctx.font = `800 ${27 * escalaTexto}px 'DM Sans', sans-serif`;
-      ctx.fillText(`WOD${crossfit?.tipo ? ` · ${crossfit.tipo.toUpperCase()}` : ''}`, px, y);
-      y += 56 * escalaTexto;
-      ctx.fillStyle = C.ink;
-      ctx.font = `800 ${50 * escalaTexto}px 'DM Sans', sans-serif`;
-      ctx.fillText(crossfit?.nombreWod || 'Entreno de hoy', px, y);
-      y += 90 * escalaTexto;
-      ctx.font = `800 ${100 * escalaTexto}px Georgia, serif`;
-      ctx.fillText(crossfit?.resultado || '—', px, y);
-      if (movimientos) {
-        y += 48 * escalaTexto;
-        ctx.fillStyle = C.muted;
-        ctx.font = `500 ${26 * escalaTexto}px 'DM Sans', sans-serif`;
-        ctx.fillText(movimientos, px, y);
-      }
-    }
-
-    // Footer: logo + FORGE + fecha
-    const footerY = dims.h - 60 * escalaTexto;
-    ctx.fillStyle = C.accent;
-    ctx.font = `800 ${28 * escalaTexto}px 'DM Sans', sans-serif`;
-    ctx.fillText('FORGE', px, footerY);
-    ctx.fillStyle = C.muted;
-    ctx.font = `500 ${22 * escalaTexto}px 'DM Sans', sans-serif`;
-    ctx.textAlign = 'right';
-    ctx.fillText(fecha, dims.w - px, footerY);
-    ctx.textAlign = 'left';
-
+    dibujarCardCompleta(ctx);
     return canvas;
   };
 

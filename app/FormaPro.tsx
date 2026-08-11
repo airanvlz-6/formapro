@@ -743,6 +743,7 @@ const [semanaPendienteCompartir,setSemanaPendienteCompartir]=useState<{sesionesC
 const [rachaPendienteCompartir,setRachaPendienteCompartir]=useState<number|null>(null);
 const [modoEntrada,setModoEntrada]=useState<string>("planificacion");
 const [esperandoConfirmacionDisponibilidad,setEsperandoConfirmacionDisponibilidad]=useState(false);
+const [esperandoConfirmacionCambioModo,setEsperandoConfirmacionCambioModo]=useState(false);
 const [objetivoPendienteCompartir,setObjetivoPendienteCompartir]=useState<{objetivo:string;resultado:string}|null>(null);
 const [historialMarcas,setHistorialMarcas]=useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
 const [analisisBloques,setAnalisisBloques]=useState<any[]>([]);
@@ -1584,7 +1585,17 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
       // flujo. Confirmacion simple → genera directamente. Cualquier otra cosa → el mensaje probablemente
       // describe un cambio de disponibilidad, se procesa normalmente (el extractor lo guardara) y
       // DESPUES generamos con los datos ya actualizados.
-      if(esperandoConfirmacionDisponibilidad && codigoUsuario){
+      if(esperandoConfirmacionCambioModo && codigoUsuario){
+        setEsperandoConfirmacionCambioModo(false);
+        if(esConfirmacionSimple){
+          apiCall({action:"cambiar_modo_entrada",codigo:codigoUsuario,datos:{nuevoModo:"planificacion"}}).then((resCambioModo:any)=>{
+            if(resCambioModo?.ok){
+              setModoEntrada("planificacion");
+              setMensajes(prev=>[...prev,{role:"assistant",content:"¡Perfecto! A partir de ahora Forge se encarga de tu planificación. Cuéntame tu disponibilidad y objetivo para diseñar tu primera semana, o simplemente dime \"genera mi próxima semana\" si ya los tengo guardados."}]);
+            }
+          });
+        }
+      } else if(esperandoConfirmacionDisponibilidad && codigoUsuario){
         setEsperandoConfirmacionDisponibilidad(false);
         const dispararGeneracion=async()=>{
           setGenerandoSemana(true);
@@ -1629,6 +1640,7 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
           const respuestaSinPermiso=`Ahora mismo estás en modo Supervisión. En este modo no genero ni gestiono tu planificación — tu entrenador o tu plan actual siguen teniendo el control.\n\nSí puedo ayudarte a analizar tus sesiones, registrar tus entrenamientos, interpretar tus métricas y proponerte ajustes puntuales cuando tú me los pidas.\n\nSi quieres que Forge pase a encargarse de tu planificación, dímelo y cambiamos al modo Coach.`;
           setMensajes(prev=>[...prev,{role:"assistant",content:respuestaSinPermiso}]);
           setCargando(false);
+          setEsperandoConfirmacionCambioModo(true);
           const histSinPermiso=[...historial,{role:"user",content:mensajeDisplaySinPermiso},{role:"assistant",content:respuestaSinPermiso}];
           setHistorial(histSinPermiso);
           if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histSinPermiso}});

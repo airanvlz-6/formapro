@@ -2107,6 +2107,20 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
     return NextResponse.json({ ok: true, ejecutado: true, tipo: pendiente.tipo });
   }
 
+  if (action === "cambiar_modo_entrada") {
+    // FORGE MODE TRANSITION — accion determinista, unica autorizada para cambiar modo_entrada tras
+    // el registro inicial. El LLM detecta intencion y puede sugerir el cambio, pero NUNCA lo ejecuta
+    // directamente — requiere esta llamada explicita, disparada solo tras confirmacion real del usuario.
+    const { nuevoModo } = datos;
+    const MODOS_VALIDOS = ["planificacion", "supervision", "consulta"];
+    if (!MODOS_VALIDOS.includes(nuevoModo)) {
+      return NextResponse.json({ error: "Modo invalido" }, { status: 400 });
+    }
+    await supabase.from("usuarios").update({ modo_entrada: nuevoModo }).eq("codigo", codigo);
+    console.log(`MODO ENTRADA cambiado a "${nuevoModo}" para usuario ${codigo}`);
+    return NextResponse.json({ ok: true, nuevoModo });
+  }
+
   if (action === "verificar_pr_deterministico") {
     // FORGE STRENGTH RECORD PARSER — Nivel 1: deteccion 100% deterministica, sin LLM. Se ejecuta
     // ANTES de enviar el mensaje al Coach. Si detecta un candidato y supera la marca anterior real

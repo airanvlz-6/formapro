@@ -2684,6 +2684,15 @@ if (action === "obtener_daily_briefing") {
   }
 
   if (action === "guardar_plan_semana") {
+    // FORGE CAPABILITY GUARD — ultima linea de defensa determinista, sin importar quien invoque esta
+    // accion (boton, Coach, Orchestrator, futuro flujo). Un usuario en modo_entrada "supervision" o
+    // "consulta" NUNCA puede persistir un weekly_plan — el modo determina la capacidad, no la peticion.
+    const { data: usuarioGuardPlan } = await supabase.from("usuarios").select("modo_entrada").eq("codigo", codigo).single();
+    if (usuarioGuardPlan?.modo_entrada === "supervision" || usuarioGuardPlan?.modo_entrada === "consulta") {
+      console.error(`🚨 BLOCKED guardar_plan_semana — usuario ${codigo} en modo_entrada=${usuarioGuardPlan.modo_entrada}, no tiene capacidad can_generate_plan`);
+      return NextResponse.json({ error: "Este modo no permite generar planificacion", blocked: true, reason: "SUPERVISION_NO_PLANNING" }, { status: 403 });
+    }
+
     const { plan } = datos;
     // CORRECCIÓN DE RAÍZ: recalcular week_start correcto en el servidor, ignorando el que envió el modelo si es incorrecto
     const ahoraServ = new Date();

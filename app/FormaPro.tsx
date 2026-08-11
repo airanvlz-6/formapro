@@ -1547,10 +1547,16 @@ const forgeValidator=(texto:string):string=>{
       const esSuenoParaResumen=/métricas de sueño|dormí|puntuación de sueño|durante la noche|sueño profundo|sueño rem/i.test(texto.toLowerCase()) && !/entren|wod|sesion realizada|serie|repeticion/i.test(texto.toLowerCase());
       const resumen=esSuenoParaResumen
         ? `[Mensaje de tipo SUEÑO_NOCTURNO — se omite deliberadamente el historial conversacional reciente para evitar asociaciones incorrectas entre este sueño y cualquier entreno mencionado en mensajes anteriores. Usa SOLO el Estado Canónico y los datos estructurados del atleta para responder.]`
-        : historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[imagen/archivo]"}...`).join("\n");
+        : historial.slice(-10).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[imagen/archivo]"}...`).join("\n");
+      // FORGE CONVERSATIONAL CONTEXT — aumentado de 4/6 a 10 mensajes (prueba A/B, empezando por el
+      // limite superior). REGLA ARQUITECTONICA: este historial ayuda a Forge a ENTENDER la conversacion
+      // (referencias, continuidad, tono), pero NUNCA es fuente de verdad para planificacion — eso sigue
+      // viniendo exclusivamente de Canonical Truth (ciclo_actual, weekly_plan, workout_history, etc.)
+      // y Athlete Knowledge (patrones con evidencia). El aumento de contexto no otorga al historial
+      // conversacional ninguna autoridad nueva sobre decisiones estructuradas.
       const esPlanificacionSemanal=texto.toLowerCase().includes("semana completa")||texto.toLowerCase().includes("planificacion semanal")||texto.toLowerCase().includes("plan semanal")||texto.toLowerCase().includes("toda la semana")||texto.toLowerCase().includes("generar semana");
       const esProgramacion=esPlanificacionSemanal||texto.toLowerCase().includes("programacion")||texto.toLowerCase().includes("rutina")||texto.toLowerCase().includes("semana")||texto.toLowerCase().includes("plan")||texto.toLowerCase().includes("sesion")||texto.toLowerCase().includes("entreno")||texto.toLowerCase().includes("wod")||texto.toLowerCase().includes("ejercicio")||texto.toLowerCase().includes("bloque")||texto.toLowerCase().includes("rehabilitacion")||texto.toLowerCase().includes("protocolo")||texto.toLowerCase().includes("fase");
-      const mensajesContexto=esProgramacion?-6:-4;
+      const mensajesContexto=-10;
       // FORGE STRENGTH RECORD PARSER — Nivel 1, deteccion deterministica ANTES de llamar al LLM.
       // Nunca depende de que el Coach recuerde generar un tag [EVENTO:] correctamente.
       apiCall({action:"verificar_pr_deterministico",codigo:codigoUsuario,datos:{mensaje:texto}}).then((resPrDeterministico:any)=>{

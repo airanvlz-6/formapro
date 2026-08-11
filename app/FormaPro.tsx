@@ -1587,24 +1587,33 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
       // DESPUES generamos con los datos ya actualizados.
       if(esperandoConfirmacionDisponibilidad && codigoUsuario){
         setEsperandoConfirmacionDisponibilidad(false);
+        // FIX CRITICO: el mensaje del usuario ya se mostro al inicio de enviar(), pero faltaba
+        // detener el flujo normal del Coach conversacional (procesar_mensaje_contexto seguia
+        // ejecutandose EN PARALELO, generando una respuesta generica confusa mientras el Orchestrator
+        // trabajaba en segundo plano). Ahora se registra el mensaje en historial y se corta el flujo.
+        const mensajeDisplayConfirmacion=texto.trim();
         const dispararGeneracion=async()=>{
           setGenerandoSemana(true);
           setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu próxima semana paso a paso — analizando bloque, distribuyendo días y diseñando cada sesión..."}]);
           const plan=await orquestarGeneracionSemana();
-          if(plan){
-            setMensajes(prev=>[...prev,{role:"assistant",content:`✅ **Semana generada y guardada.**\n\nBloque: ${plan.block_name} — ${plan.week_objective}\n\nRevisa el detalle completo en **Mi Plan**. ¿Alguna duda?`}]);
-          } else {
-            setMensajes(prev=>[...prev,{role:"assistant",content:"⚠️ Hubo un problema generando la semana. Inténtalo de nuevo o dímelo directamente en el chat."}]);
-          }
+          const respuestaFinalGen=plan
+            ? `✅ **Semana generada y guardada.**\n\nBloque: ${plan.block_name} — ${plan.week_objective}\n\nRevisa el detalle completo en **Mi Plan**. ¿Alguna duda?`
+            : "⚠️ Hubo un problema generando la semana. Inténtalo de nuevo o dímelo directamente en el chat.";
+          setMensajes(prev=>[...prev,{role:"assistant",content:respuestaFinalGen}]);
           setGenerandoSemana(false);
+          // FIX: persistir el mensaje final en el historial real, no solo en el estado visual —
+          // sin esto, el mensaje desaparecia al navegar y volver al chat.
+          const histConGeneracion=[...historial,{role:"user",content:mensajeDisplayConfirmacion},{role:"assistant",content:respuestaFinalGen}];
+          setHistorial(histConGeneracion);
+          if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histConGeneracion}});
         };
+        setCargando(false);
         if(esConfirmacionSimple){
           dispararGeneracion();
         } else {
-          // El mensaje describe un cambio — esperamos un momento a que el extractor normal lo guarde
-          // (ya en curso en el resto de enviar()), y generamos despues con la disponibilidad actualizada.
           setTimeout(dispararGeneracion, 2500);
         }
+        return;
       } else if(esConfirmacionSimple && codigoUsuario){
         apiCall({action:"confirmar_pending_action",codigo:codigoUsuario}).then((resPending:any)=>{
           if(resPending?.ejecutado){

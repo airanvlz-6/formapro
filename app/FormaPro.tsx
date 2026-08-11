@@ -743,7 +743,7 @@ const [semanaPendienteCompartir,setSemanaPendienteCompartir]=useState<{sesionesC
 const [rachaPendienteCompartir,setRachaPendienteCompartir]=useState<number|null>(null);
 const [modoEntrada,setModoEntrada]=useState<string>("planificacion");
 const [esperandoConfirmacionDisponibilidad,setEsperandoConfirmacionDisponibilidad]=useState(false);
-const [esperandoConfirmacionCambioModo,setEsperandoConfirmacionCambioModo]=useState(false);
+const [mostrarBannerCambioModo,setMostrarBannerCambioModo]=useState(false);
 const [objetivoPendienteCompartir,setObjetivoPendienteCompartir]=useState<{objetivo:string;resultado:string}|null>(null);
 const [historialMarcas,setHistorialMarcas]=useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
 const [analisisBloques,setAnalisisBloques]=useState<any[]>([]);
@@ -1585,17 +1585,7 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
       // flujo. Confirmacion simple → genera directamente. Cualquier otra cosa → el mensaje probablemente
       // describe un cambio de disponibilidad, se procesa normalmente (el extractor lo guardara) y
       // DESPUES generamos con los datos ya actualizados.
-      if(esperandoConfirmacionCambioModo && codigoUsuario){
-        setEsperandoConfirmacionCambioModo(false);
-        if(esConfirmacionSimple){
-          apiCall({action:"cambiar_modo_entrada",codigo:codigoUsuario,datos:{nuevoModo:"planificacion"}}).then((resCambioModo:any)=>{
-            if(resCambioModo?.ok){
-              setModoEntrada("planificacion");
-              setMensajes(prev=>[...prev,{role:"assistant",content:"¡Perfecto! A partir de ahora Forge se encarga de tu planificación. Cuéntame tu disponibilidad y objetivo para diseñar tu primera semana, o simplemente dime \"genera mi próxima semana\" si ya los tengo guardados."}]);
-            }
-          });
-        }
-      } else if(esperandoConfirmacionDisponibilidad && codigoUsuario){
+      if(esperandoConfirmacionDisponibilidad && codigoUsuario){
         setEsperandoConfirmacionDisponibilidad(false);
         const dispararGeneracion=async()=>{
           setGenerandoSemana(true);
@@ -1637,10 +1627,12 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
         // en absoluto — ni siquiera la pregunta de confirmacion, que ya implicaria estar planificando.
         if(modoEntrada==="supervision"||modoEntrada==="consulta"){
           const mensajeDisplaySinPermiso=texto.trim();
-          const respuestaSinPermiso=`Ahora mismo estás en modo Supervisión. En este modo no genero ni gestiono tu planificación — tu entrenador o tu plan actual siguen teniendo el control.\n\nSí puedo ayudarte a analizar tus sesiones, registrar tus entrenamientos, interpretar tus métricas y proponerte ajustes puntuales cuando tú me los pidas.\n\nSi quieres que Forge pase a encargarse de tu planificación, dímelo y cambiamos al modo Coach.`;
+          const respuestaSinPermiso=`Ahora mismo estás en modo Supervisión. En este modo no genero ni gestiono tu planificación — tu entrenador o tu plan actual siguen teniendo el control.\n\nSí puedo ayudarte a analizar tus sesiones, registrar tus entrenamientos, interpretar tus métricas y proponerte ajustes puntuales cuando tú me los pidas.`;
           setMensajes(prev=>[...prev,{role:"assistant",content:respuestaSinPermiso}]);
           setCargando(false);
-          setEsperandoConfirmacionCambioModo(true);
+          // FIX: banner interactivo con botones reales, en vez de esperar texto libre ambiguo
+          // ("Cambiamos a modo COACH" no coincidia con ningun detector de confirmacion simple).
+          setMostrarBannerCambioModo(true);
           const histSinPermiso=[...historial,{role:"user",content:mensajeDisplaySinPermiso},{role:"assistant",content:respuestaSinPermiso}];
           setHistorial(histSinPermiso);
           if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histSinPermiso}});
@@ -2818,6 +2810,29 @@ ${testStr}`}]});
                     Ver en Mi Atleta →
                   </a>
                 </div>
+              </div>
+            )}
+            {mostrarBannerCambioModo&&(
+              <div style={{display:"flex",justifyContent:"center",marginTop:4,gap:10}}>
+                <button onClick={async()=>{
+                  setMostrarBannerCambioModo(false);
+                  const resCambioModo=await apiCall({action:"cambiar_modo_entrada",codigo:codigoUsuario,datos:{nuevoModo:"planificacion"}});
+                  // FIX: solo confirmar el cambio al usuario si el backend REALMENTE lo persistio —
+                  // nunca decir "hemos cambiado" basandose en la intencion, siempre en el resultado real.
+                  const verificacion=await apiCall({action:"recuperar_usuario",codigo:codigoUsuario});
+                  const modoRealPersistido=verificacion?.data?.modo_entrada;
+                  if(resCambioModo?.ok && modoRealPersistido==="planificacion"){
+                    setModoEntrada("planificacion");
+                    setMensajes(prev=>[...prev,{role:"assistant",content:"¡Perfecto! A partir de ahora Forge se encarga de tu planificación. Cuéntame tu disponibilidad y objetivo para diseñar tu primera semana, o dime \"genera mi próxima semana\" si ya los tengo guardados."}]);
+                  } else {
+                    setMensajes(prev=>[...prev,{role:"assistant",content:"⚠️ Hubo un problema cambiando tu modo. Inténtalo de nuevo en unos segundos."}]);
+                  }
+                }} style={{background:accentColor,color:"#fff",border:"none",borderRadius:100,padding:"10px 20px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                  Pasar a modo Coach
+                </button>
+                <button onClick={()=>setMostrarBannerCambioModo(false)} style={{background:"transparent",color:C.muted,border:`1px solid ${C.muted}`,borderRadius:100,padding:"10px 20px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                  Seguir en Supervisión
+                </button>
               </div>
             )}
             {mostrarBotonNuevaSemana&&!generandoSemana&&(

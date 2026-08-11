@@ -689,6 +689,10 @@ export default function Forge() {
         setAnalisisBloques((u as any).analisis_bloques||[]);
         setDebilidades((u as any).debilidades||[]);
         setFechaRegistro((u as any).created_at||null);
+        // FIX CRITICO: modo_entrada nunca se cargaba al recuperar un usuario existente, quedandose
+        // siempre en el valor por defecto "planificacion" — rompiendo el Capability Guard para
+        // usuarios en supervision/consulta que inician sesion (no solo los recien registrados).
+        setModoEntrada((u as any).modo_entrada||"planificacion");
         cargarEquipos(u.codigo);
         cargarPlanSemanal(u.codigo);
         cargarBlockOutcomes(u.codigo);
@@ -1190,6 +1194,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
       plan:(u as any).plan_proxima_semana||"",
       notas:(u as any).notas_coach||""
     });
+    setModoEntrada((u as any).modo_entrada||"planificacion");
     setMarcasEspecificas((u as any).marcas_especificas||{});
     setCicloActual((u as any).ciclo_actual||{});
     setPerfilPsicologico((u as any).perfil_psicologico||{});

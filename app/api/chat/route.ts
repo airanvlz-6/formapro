@@ -2707,6 +2707,18 @@ if (action === "obtener_daily_briefing") {
       return NextResponse.json({ error: "Este modo no permite generar planificacion", blocked: true, reason: "SUPERVISION_NO_PLANNING" }, { status: 403 });
     }
 
+    // FORGE WEEK GENERATION GUARD — limite deterministico de 2 generaciones por semana/usuario.
+    // Impide que "genera mi semana" repetido cree/regenere indefinidamente la misma semana o avance
+    // el tiempo artificialmente. Se cuenta ANTES de ejecutar nada mas costoso.
+    const weekStartParaConteo = datos.plan?.week_start;
+    if (weekStartParaConteo) {
+      const { count: generacionesExistentes } = await supabase.from("weekly_plan_generation_log").select("id", { count: "exact", head: true }).eq("user_codigo", codigo).eq("week_start", weekStartParaConteo);
+      if ((generacionesExistentes || 0) >= 2) {
+        console.error(`🚨 BLOCKED guardar_plan_semana — usuario ${codigo} ya alcanzo el limite de 2 generaciones para week_start=${weekStartParaConteo}`);
+        return NextResponse.json({ error: "Esta semana ya ha sido planificada dos veces. Para evitar alterar continuamente la estructura, no se generan mas versiones automaticas — puedes pedirme modificar sesiones concretas.", blocked: true, reason: "MAX_GENERATIONS_REACHED" }, { status: 403 });
+      }
+    }
+
     const { plan } = datos;
     // CORRECCIÓN DE RAÍZ: recalcular week_start correcto en el servidor, ignorando el que envió el modelo si es incorrecto
     const ahoraServ = new Date();
@@ -2781,6 +2793,18 @@ if (action === "obtener_daily_briefing") {
       updated_at: new Date().toISOString()
     }, { onConflict: "user_codigo,week_start" });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    // FORGE WEEK GENERATION GUARD — registrar esta generacion exitosa en el log de auditoria.
+    if (plan.week_start) {
+      const { count: countActual } = await supabase.from("weekly_plan_generation_log").select("id", { count: "exact", head: true }).eq("user_codigo", codigo).eq("week_start", plan.week_start);
+      await supabase.from("weekly_plan_generation_log").insert({
+        user_codigo: codigo,
+        week_start: plan.week_start,
+        version: (countActual || 0) + 1,
+        generation_reason: esSemanaActual ? "regeneracion_semana_actual" : "nueva_semana"
+      });
+    }
+
     return NextResponse.json({ ok: true });
   }
 

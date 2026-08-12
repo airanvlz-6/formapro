@@ -11,13 +11,16 @@ export interface ParsedSleepMetrics {
   duracionHoras: number | null;
 }
 
-// Palabras clave que indican que el mensaje es un reporte de sueño (no solo mencion casual)
+// FIX: ampliado para reconocer TAMBIEN menciones directas de una sola metrica (ej: "VFC 80ms",
+// "HRV 65") sin exigir la frase completa de reporte — el usuario a veces reporta datos sueltos
+// en mensajes posteriores, y el parser debe seguir detectandolos y guardandolos.
 const PATRON_REPORTE_SUENO = /\b(m[eé]tricas? de sue[nñ]o|puntuaci[oó]n del? sue[nñ]o|dorm[ií]|durante la noche|sue[nñ]o profundo|sue[nñ]o rem)\b/i;
+const PATRON_METRICA_SUELTA = /\b(hrv|vfc)\s*(?:de)?\s*\d{1,3}\s*(?:ms)?\b/i;
 
 export function parseSleepMetrics(mensaje: string): ParsedSleepMetrics {
   const mensajeLower = mensaje.toLowerCase();
 
-  if (!PATRON_REPORTE_SUENO.test(mensajeLower)) {
+  if (!PATRON_REPORTE_SUENO.test(mensajeLower) && !PATRON_METRICA_SUELTA.test(mensajeLower)) {
     return { detected: false, hrv: null, sueno: null, rhr: null, duracionHoras: null };
   }
 

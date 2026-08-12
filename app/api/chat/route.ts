@@ -2168,6 +2168,7 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
         user_codigo: codigo,
         fecha: hoySueno,
         ...valoresGuardar,
+        source: "manual_parser",
         updated_at: new Date().toISOString()
       }, { onConflict: "user_codigo,fecha" });
       if (errorUpsertSuenoDet) {

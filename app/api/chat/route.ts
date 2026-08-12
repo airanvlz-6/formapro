@@ -4,6 +4,7 @@ import { render } from "@react-email/render";
 import { validateExtraction } from "@/lib/validators/extractionRules";
 import { buildCatalogoPrompt, validarCatalogoDisciplina } from "@/lib/sports/disciplineCatalog";
 import { parseStrengthRecord } from "@/lib/sports/strengthRecordParser";
+import { parseSleepMetrics } from "@/lib/sports/sleepMetricsParser";
 import { parseSessionProposal } from "@/lib/sports/proposalParser";
 import { detectarSesionDuplicada } from "@/lib/validators/sessionDuplicationValidator";
 import { buildAthleteKnowledge, knowledgeRouter, getObjectiveProgress } from "@/lib/knowledge/athleteKnowledge";
@@ -2142,6 +2143,45 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
     await supabase.from("usuarios").update({ modo_entrada: nuevoModo }).eq("codigo", codigo);
     console.log(`MODO ENTRADA cambiado a "${nuevoModo}" para usuario ${codigo}`);
     return NextResponse.json({ ok: true, nuevoModo });
+  }
+
+  if (action === "verificar_metricas_sueno_deterministico") {
+    // FORGE SLEEP METRICS PARSER — Nivel 1: deteccion 100% deterministica, sin LLM. Se ejecuta
+    // ANTES de enviar el mensaje al Coach. El extractor Haiku posterior fallaba de forma intermitente
+    // (varios dias sin guardar pese a que el usuario SI reporto), exactamente el mismo patron de
+    // fallo ya resuelto con PR Detection y Pending Actions. El LLM nunca decide si se guarda un
+    // dato fisiologico critico — este parser lo hace de forma directa y auditable.
+    const { mensaje } = datos;
+    const parsedSueno = parseSleepMetrics(mensaje);
+    if (!parsedSueno.detected) {
+      return NextResponse.json({ ok: true, detectado: false });
+    }
+
+    const hoySueno = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+    const valoresGuardar: any = {};
+    if (parsedSueno.hrv !== null) valoresGuardar.hrv = parsedSueno.hrv;
+    if (parsedSueno.sueno !== null) valoresGuardar.sueno = parsedSueno.sueno;
+    if (parsedSueno.rhr !== null) valoresGuardar.rhr = parsedSueno.rhr;
+
+    if (Object.keys(valoresGuardar).length > 0) {
+      const { error: errorUpsertSuenoDet } = await supabase.from("physiology_records").upsert({
+        user_codigo: codigo,
+        fecha: hoySueno,
+        ...valoresGuardar,
+        updated_at: new Date().toISOString()
+      }, { onConflict: "user_codigo,fecha" });
+      if (errorUpsertSuenoDet) {
+        console.error("Error guardando metricas de sueño deterministicas:", errorUpsertSuenoDet);
+        return NextResponse.json({ ok: true, detectado: true, guardado: false });
+      }
+      // Actualizar tambien el snapshot rapido en usuarios.estado_fisiologico (consistencia con el resto del sistema)
+      const { data: usuarioSuenoDet } = await supabase.from("usuarios").select("estado_fisiologico").eq("codigo", codigo).single();
+      await supabase.from("usuarios").update({
+        estado_fisiologico: { ...(usuarioSuenoDet?.estado_fisiologico || {}), ...valoresGuardar }
+      }).eq("codigo", codigo);
+    }
+
+    return NextResponse.json({ ok: true, detectado: true, guardado: true, valores: valoresGuardar, fecha: hoySueno });
   }
 
   if (action === "verificar_pr_deterministico") {

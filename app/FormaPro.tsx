@@ -746,6 +746,7 @@ const [modoEntrada,setModoEntrada]=useState<string>("planificacion");
 const [esperandoConfirmacionDisponibilidad,setEsperandoConfirmacionDisponibilidad]=useState(false);
 const [mostrarBannerCambioModo,setMostrarBannerCambioModo]=useState(false);
 const [sesionParaCompartir,setSesionParaCompartir]=useState<any>(null);
+const [suenoConfirmado,setSuenoConfirmado]=useState<{fecha:string;valores:any}|null>(null);
 const [objetivoPendienteCompartir,setObjetivoPendienteCompartir]=useState<{objetivo:string;resultado:string}|null>(null);
 const [historialMarcas,setHistorialMarcas]=useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
 const [analisisBloques,setAnalisisBloques]=useState<any[]>([]);
@@ -1572,6 +1573,15 @@ const forgeValidator=(texto:string):string=>{
           setPrPendienteCompartir(resPrDeterministico.nuevoPrDetectado);
         }
       });
+      // FORGE SLEEP METRICS PARSER — Nivel 1, deteccion deterministica ANTES de llamar al LLM.
+      // Corrige el fallo intermitente del extractor Haiku (varios dias sin guardar pese a reporte real).
+      if(codigoUsuario){
+        apiCall({action:"verificar_metricas_sueno_deterministico",codigo:codigoUsuario,datos:{mensaje:texto}}).then((resSuenoDet:any)=>{
+          if(resSuenoDet?.detectado && resSuenoDet?.guardado){
+            setSuenoConfirmado({fecha:resSuenoDet.fecha,valores:resSuenoDet.valores});
+          }
+        });
+      }
 
       // FORGE PENDING ACTIONS — deteccion 100% deterministica de confirmacion (regex simple), nunca
       // depende de que el LLM recuerde generar un tag tras la confirmacion del usuario.
@@ -3169,6 +3179,18 @@ ${testStr}`}]});
 
       {forgeCardData&&(
         <ForgeCardsGenerator initialData={forgeCardData} onClose={()=>setForgeCardData(null)} />
+      )}
+
+      {suenoConfirmado&&(
+        <div style={{position:"fixed",bottom:90,left:16,right:16,maxWidth:600,margin:"0 auto",background:"linear-gradient(135deg,#4CAF50,#2E7D32)",borderRadius:16,padding:"12px 16px",zIndex:150,display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:"0 8px 24px rgba(76,175,80,0.35)"}}>
+          <div>
+            <p style={{color:"#fff",fontSize:12,fontWeight:700}}>✅ Métricas de sueño guardadas</p>
+            <p style={{color:"#fff",fontSize:11,opacity:0.9}}>{Object.entries(suenoConfirmado.valores).map(([k,v])=>`${k.toUpperCase()}: ${v}`).join(" · ")}</p>
+          </div>
+          <button onClick={()=>setSuenoConfirmado(null)} style={{background:"rgba(255,255,255,0.2)",color:"#fff",border:"none",borderRadius:10,padding:"6px 10px",fontSize:12,cursor:"pointer"}}>
+            ✕
+          </button>
+        </div>
       )}
 
       {sesionParaCompartir&&(()=>{

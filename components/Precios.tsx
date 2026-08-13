@@ -2,39 +2,24 @@
 
 import { motion } from "framer-motion";
 
-const gratisIncluye = [
-  "Evaluación inicial del atleta",
+const advisorIncluye = [
   "Mi Atleta",
-  "Mi Plan",
-  "Mi Historia",
-  "Progreso",
+  "Mi Historia y Progreso",
   "Registro de entrenamientos",
-  "Estado fisiológico",
+  "Estado fisiológico y HRV",
+  "Consulta diaria sobre tu plan actual",
+  "Recomendaciones explicadas",
   "Equipos (Forge Duo)",
 ];
 
-const premiumIncluye = [
-  "Memoria persistente completa",
+const coachIncluye = [
+  "Todo lo de Advisor",
+  "Diseño de planificación completa",
+  "Gestión y adaptación automática del plan",
+  "Memoria persistente completa entre bloques",
+  "Coaching correctivo de debilidades",
   "Aprendizaje continuo entre bloques",
-  "Coaching correctivo",
-  "Dashboard avanzado",
-  "Análisis fisiológico inteligente",
-  "Planificación dinámica completa",
-  "Historial y evolución de marcas",
   "Prioridad en nuevas funciones",
-];
-
-const comparativa = [
-  { funcion: "Mi Atleta", free: true, premium: true },
-  { funcion: "Mi Plan", free: true, premium: true },
-  { funcion: "Mi Historia", free: true, premium: true },
-  { funcion: "Registro de entrenamientos", free: true, premium: true },
-  { funcion: "Equipos", free: true, premium: true },
-  { funcion: "Estado fisiológico", free: "Básico", premium: "Avanzado" },
-  { funcion: "Coaching correctivo", free: false, premium: true },
-  { funcion: "Aprendizaje continuo", free: false, premium: true },
-  { funcion: "Predicción de riesgo", free: false, premium: true },
-  { funcion: "Dashboard avanzado", free: false, premium: true },
 ];
 
 export default function Precios() {
@@ -47,16 +32,16 @@ export default function Precios() {
             Precios
           </span>
           <h2 className="mt-8 text-4xl font-bold text-white md:text-5xl">
-            Un entrenador personal no debería estar al alcance de unos pocos.
+            Empieza con supervisión. Crece hacia planificación completa cuando quieras.
           </h2>
           <p className="mt-8 text-xl leading-9 text-zinc-400">
-            Forge reúne planificación científica, seguimiento continuo y un entrenador que aprende contigo en una única plataforma.
+            ¿No sabes cuál necesitas? Empieza con Advisor. Si más adelante quieres que Forge también diseñe tu planificación, puedes pasar a Coach desde tu propia conversación.
           </p>
         </div>
 
         <div className="mt-20 grid gap-8 md:grid-cols-2">
 
-          {/* Free */}
+          {/* Advisor */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -64,12 +49,12 @@ export default function Precios() {
             transition={{ duration: 0.5 }}
             className="rounded-3xl border border-zinc-800 bg-white/[0.02] p-8"
           >
-            <span className="text-2xl">⭐</span>
-            <h3 className="mt-3 text-2xl font-bold text-white">Forge Free</h3>
-            <p className="mt-1 text-sm text-zinc-400">Ideal para descubrir Forge</p>
-            <p className="mt-6 text-4xl font-bold text-white">0€</p>
+            <span className="text-2xl">🧠</span>
+            <h3 className="mt-3 text-2xl font-bold text-white">Advisor</h3>
+            <p className="mt-1 text-sm text-zinc-400">Supervisión inteligente — ya tienes plan o entrenador, Forge te ayuda a decidir cómo ejecutarlo hoy.</p>
+            <p className="mt-6 text-2xl font-semibold text-zinc-500">Precio de lanzamiento próximamente</p>
             <div className="mt-8 space-y-3">
-              {gratisIncluye.map((item) => (
+              {advisorIncluye.map((item) => (
                 <div key={item} className="flex items-center gap-2 text-sm text-zinc-300">
                   <span className="text-orange-500">✓</span>
                   {item}
@@ -77,12 +62,12 @@ export default function Precios() {
               ))}
             </div>
             <a href="/app" className="mt-8 block rounded-full border border-zinc-700 py-4 text-center font-semibold text-white transition hover:border-orange-400">
-              Empieza gratis
+              Probar Forge gratis
             </a>
             <p className="mt-4 text-center text-xs text-zinc-500">Sin tarjeta · Configuración en menos de 3 minutos</p>
           </motion.div>
 
-          {/* Premium */}
+          {/* Coach */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -94,13 +79,12 @@ export default function Precios() {
               🚀 Oferta de lanzamiento
             </div>
             <span className="text-2xl">🔥</span>
-            <h3 className="mt-3 text-2xl font-bold text-white">Forge Premium</h3>
-            <p className="mt-1 text-sm text-zinc-400">Para atletas que quieren progresar durante todo el año</p>
+            <h3 className="mt-3 text-2xl font-bold text-white">Coach</h3>
+            <p className="mt-1 text-sm text-zinc-400">Planificación completa — Forge crea, adapta y gestiona tu entrenamiento entero.</p>
             <p className="mt-6 text-4xl font-bold text-white">9,99€<span className="text-lg font-normal text-zinc-400">/mes</span></p>
-            <p className="mt-2 text-sm text-orange-300">Los primeros usuarios disfrutarán de Premium gratuito durante 3 meses por ayudarnos a construir Forge.</p>
+            <p className="mt-2 text-sm text-orange-300">Acceso Premium gratuito durante 3 meses para los primeros atletas de la beta.</p>
             <div className="mt-8 space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Todo lo de Free, y además:</p>
-              {premiumIncluye.map((item) => (
+              {coachIncluye.map((item) => (
                 <div key={item} className="flex items-center gap-2 text-sm text-zinc-300">
                   <span className="text-orange-500">✓</span>
                   {item}
@@ -108,42 +92,10 @@ export default function Precios() {
               ))}
             </div>
             <a href="/app" className="mt-8 block rounded-full bg-orange-500 py-4 text-center font-semibold text-white transition hover:scale-105 hover:bg-orange-400">
-              Hazte Premium
+              Activar Coach
             </a>
           </motion.div>
         </div>
-
-        {/* Comparativa */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-          className="mt-20 overflow-x-auto rounded-3xl border border-zinc-800"
-        >
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-zinc-800 text-zinc-400">
-                <th className="p-4 font-normal">Función</th>
-                <th className="p-4 text-center font-normal">Free</th>
-                <th className="p-4 text-center font-normal">Premium</th>
-              </tr>
-            </thead>
-            <tbody>
-              {comparativa.map((row, i) => (
-                <tr key={row.funcion} className={i < comparativa.length - 1 ? "border-b border-zinc-900" : ""}>
-                  <td className="p-4 text-zinc-300">{row.funcion}</td>
-                  <td className="p-4 text-center">
-                    {typeof row.free === "boolean" ? (row.free ? <span className="text-orange-500">✓</span> : <span className="text-zinc-700">—</span>) : <span className="text-zinc-400">{row.free}</span>}
-                  </td>
-                  <td className="p-4 text-center">
-                    {typeof row.premium === "boolean" ? (row.premium ? <span className="text-orange-500">✓</span> : <span className="text-zinc-700">—</span>) : <span className="text-zinc-400">{row.premium}</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </motion.div>
 
         {/* Forge para entrenadores */}
         <motion.div
@@ -181,11 +133,11 @@ export default function Precios() {
           <p className="mx-auto mt-16 max-w-2xl text-2xl font-semibold leading-relaxed text-white md:text-3xl">
             No pagas por entrenamientos.
             <br />
-            Inviertes en entrenar mejor cada semana.
+            Inviertes en tomar mejores decisiones cada semana.
           </p>
 
           <a href="/app" className="mt-10 inline-block rounded-full bg-orange-500 px-8 py-4 font-semibold text-white transition hover:scale-105 hover:bg-orange-400">
-            Empieza gratis
+            Probar Forge gratis
           </a>
           <p className="mt-4 text-sm text-zinc-500">Únete a los primeros atletas que están ayudando a construir el futuro de Forge.</p>
         </motion.div>

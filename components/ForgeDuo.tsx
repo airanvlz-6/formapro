@@ -42,8 +42,8 @@ function Paso({ icono, titulo, texto, imagen, invertido }: PasoProps) {
 const idealPara = [
   { emoji: "🏋️", titulo: "Parejas de CrossFit", texto: "Entrenad juntos sin que uno tenga que copiar el entrenamiento del otro." },
   { emoji: "🏃", titulo: "Parejas de running", texto: "Mismo recorrido. Distintos ritmos. Mismo objetivo." },
-  { emoji: "👫", titulo: "Amigos", texto: "Cada uno con su nivel. Una única sesión." },
-  { emoji: "❤️", titulo: "Parejas", texto: "Entrenar juntos mejora la adherencia. Forge adapta el entrenamiento para ambos." },
+  { emoji: "🚴", titulo: "Compañeros de entrenamiento", texto: "Cada uno con su nivel. Una única sesión." },
+  { emoji: "👥", titulo: "Amigos y parejas", texto: "Entrenar juntos mejora la adherencia. Forge adapta el entrenamiento para ambos." },
 ];
 
 export default function ForgeDuo() {
@@ -61,7 +61,7 @@ export default function ForgeDuo() {
             Sin dejar de seguir tu propio plan.
           </h2>
           <p className="mt-8 text-xl leading-9 text-zinc-400">
-            Forge es capaz de generar una misma sesión para dos atletas diferentes respetando el nivel, las marcas, las limitaciones y la planificación individual de cada uno.
+            Entrena con otra persona sin tener que sacrificar tu propia progresión. Forge adapta la sesión que tengáis prevista al nivel, objetivos, marcas y limitaciones de cada atleta.
           </p>
         </div>
 

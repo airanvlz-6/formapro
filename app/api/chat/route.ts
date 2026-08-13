@@ -2145,6 +2145,89 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
     return NextResponse.json({ ok: true, nuevoModo });
   }
 
+  if (action === "extraer_metricas_imagen") {
+    // FORGE VISION EXTRACTION PIPELINE — el modelo EXTRAE datos de la imagen con nivel de confianza,
+    // NUNCA decide guardarlos. Solo el backend, tras validar la confianza, persiste o pide confirmacion.
+    // Mismo principio de autoridad que Sleep Metrics Parser, PR Detection y Pending Actions — el LLM
+    // interpreta y razona, el backend decide y ejecuta.
+    const { imagenBase64, tipoImagen } = datos;
+    if (!imagenBase64) return NextResponse.json({ error: "Falta imagen" }, { status: 400 });
+
+    const visionPrompt = `Analiza esta captura de pantalla de una app de fitness/wearable (Garmin, Apple Health, Whoop, etc).
+Extrae SOLO los datos fisiologicos de sueño/recuperacion que veas CLARAMENTE visibles, con un nivel de confianza real para cada uno.
+
+Responde SOLO con este JSON, sin texto adicional ni markdown:
+{"hrv":numero_o_null,"hrv_confianza":0.0_a_1.0,"sueno":numero_puntuacion_0_a_100_o_null,"sueno_confianza":0.0_a_1.0,"rhr":numero_o_null,"rhr_confianza":0.0_a_1.0,"duracion_horas":numero_decimal_o_null,"duracion_confianza":0.0_a_1.0}
+
+Si un dato no es visible o no estas seguro, pon el valor en null y confianza 0. NUNCA inventes un numero que no veas claramente en la imagen.`;
+
+    try {
+      const visionRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 400,
+          messages: [{ role: "user", content: [
+            { type: "image", source: { type: "base64", media_type: tipoImagen || "image/jpeg", data: imagenBase64 } },
+            { type: "text", text: visionPrompt }
+          ]}]
+        }),
+      });
+      const visionData = await visionRes.json();
+      const visionTexto = visionData.content?.map((b: any) => b.text || "").join("") || "{}";
+      const visionClean = visionTexto.replace(/```json|```/g, "").trim();
+      const visionMatch = visionClean.match(/\{[\s\S]*\}/);
+      if (!visionMatch) return NextResponse.json({ ok: true, extraido: false });
+
+      const extraido = JSON.parse(visionMatch[0]);
+
+      // FORGE CONFIDENCE GATE — umbral determinista: solo se guarda automaticamente si la confianza
+      // es alta (>=0.85). Por debajo, se devuelve para confirmacion explicita del usuario, nunca se
+      // guarda ni se descarta silenciosamente.
+      const UMBRAL_CONFIANZA = 0.85;
+      const camposAltaCorfianza: any = {};
+      const camposBajaConfianza: any = {};
+
+      if (extraido.hrv !== null && extraido.hrv_confianza >= UMBRAL_CONFIANZA) camposAltaCorfianza.hrv = extraido.hrv;
+      else if (extraido.hrv !== null) camposBajaConfianza.hrv = extraido.hrv;
+
+      if (extraido.sueno !== null && extraido.sueno_confianza >= UMBRAL_CONFIANZA) camposAltaCorfianza.sueno = extraido.sueno;
+      else if (extraido.sueno !== null) camposBajaConfianza.sueno = extraido.sueno;
+
+      if (extraido.rhr !== null && extraido.rhr_confianza >= UMBRAL_CONFIANZA) camposAltaCorfianza.rhr = extraido.rhr;
+      else if (extraido.rhr !== null) camposBajaConfianza.rhr = extraido.rhr;
+
+      // Auto-guardar SOLO los campos de alta confianza
+      if (Object.keys(camposAltaCorfianza).length > 0) {
+        const hoyImagen = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+        await supabase.from("physiology_records").upsert({
+          user_codigo: codigo,
+          fecha: hoyImagen,
+          ...camposAltaCorfianza,
+          source: "vision_extractor",
+          updated_at: new Date().toISOString()
+        }, { onConflict: "user_codigo,fecha" });
+
+        const { data: usuarioVision } = await supabase.from("usuarios").select("estado_fisiologico").eq("codigo", codigo).single();
+        await supabase.from("usuarios").update({
+          estado_fisiologico: { ...(usuarioVision?.estado_fisiologico || {}), ...camposAltaCorfianza }
+        }).eq("codigo", codigo);
+      }
+
+      return NextResponse.json({
+        ok: true,
+        extraido: true,
+        guardadoAutomatico: camposAltaCorfianza,
+        pendienteConfirmacion: camposBajaConfianza,
+        duracionHoras: extraido.duracion_horas
+      });
+    } catch (err: any) {
+      console.error("Error en extraccion visual:", err);
+      return NextResponse.json({ ok: true, extraido: false });
+    }
+  }
+
   if (action === "verificar_metricas_sueno_deterministico") {
     // FORGE SLEEP METRICS PARSER — Nivel 1: deteccion 100% deterministica, sin LLM. Se ejecuta
     // ANTES de enviar el mensaje al Coach. El extractor Haiku posterior fallaba de forma intermitente

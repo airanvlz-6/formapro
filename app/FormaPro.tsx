@@ -1532,6 +1532,23 @@ const forgeValidator=(texto:string):string=>{
       });
       contenido.push({type:"text",text:textoEnvio});
       contenidoUsuario=contenido;
+
+      // FORGE VISION EXTRACTION PIPELINE — si la imagen puede ser una captura de metricas fisiologicas
+      // (Garmin, Apple Health, etc.), la analizamos en paralelo. El modelo EXTRAE con confianza,
+      // el backend decide que guardar automaticamente y que dejar pendiente de confirmacion.
+      const primeraImagen=imagenesAdjuntas.find(img=>img.tipo!=="application/pdf");
+      if(primeraImagen && codigoUsuario){
+        const base64Solo=primeraImagen.base64.split(",")[1];
+        apiCall({action:"extraer_metricas_imagen",codigo:codigoUsuario,datos:{imagenBase64:base64Solo,tipoImagen:primeraImagen.tipo}}).then((resVision:any)=>{
+          if(resVision?.extraido && resVision?.guardadoAutomatico && Object.keys(resVision.guardadoAutomatico).length>0){
+            setSuenoConfirmado({fecha:new Date().toLocaleDateString('en-CA',{timeZone:'Europe/Madrid'}),valores:resVision.guardadoAutomatico});
+          }
+          if(resVision?.pendienteConfirmacion && Object.keys(resVision.pendienteConfirmacion).length>0){
+            console.log("Datos de imagen con baja confianza, pendientes de confirmacion:",resVision.pendienteConfirmacion);
+            // TODO siguiente iteracion: banner de confirmacion explicita para estos campos
+          }
+        });
+      }
     }
     const nuevoHist=[...historial,{role:"user",content:contenidoUsuario}];
     // CONTEXT ISOLATION: el Coach solo ve los ultimos 3 mensajes reales como conversacion inmediata.

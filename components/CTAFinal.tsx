@@ -21,6 +21,9 @@ export default function CTAFinal() {
           className="mb-20 rounded-3xl border border-orange-500/20 bg-white/[0.03] p-8 backdrop-blur-xl"
         >
           <h3 className="text-lg font-semibold text-white">¿Para quién es Forge?</h3>
+          <p className="mx-auto mt-3 max-w-md text-zinc-400">
+            Para atletas que ya tienen un plan —propio o de un entrenador— y quieren saber cómo adaptarlo a cómo están hoy.
+          </p>
           <div className="mt-5 flex flex-wrap justify-center gap-3">
             {disciplinas.map((d) => (
               <span key={d} className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-300">
@@ -28,7 +31,18 @@ export default function CTAFinal() {
               </span>
             ))}
           </div>
-          <p className="mt-5 text-zinc-400">Si entrenas para mejorar, Forge está diseñado para ti.</p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="mb-20"
+        >
+          <a href="/app" className="inline-block rounded-full bg-orange-500 px-8 py-4 text-lg font-semibold text-white transition hover:scale-105 hover:bg-orange-400">
+            Probar Forge gratis
+          </a>
         </motion.div>
 
         {/* Forge Labs */}
@@ -56,20 +70,20 @@ export default function CTAFinal() {
           transition={{ duration: 0.6 }}
         >
           <h2 className="text-4xl font-bold leading-tight text-white md:text-6xl">
-            Tu plan no debería
+            Tu entrenamiento cambia.
             <br />
-            ser el mismo cada semana.
+            Tu contexto también.
           </h2>
 
           <p className="mx-auto mt-8 max-w-2xl text-xl leading-9 text-zinc-400">
             Forge recuerda cómo has llegado a cada sesión, cómo respondes al esfuerzo y qué necesitas hoy.
             <br />
-            Cada decisión te conoce un poco mejor que la anterior.
+            Te ayuda a tomar mejores decisiones, sesión tras sesión.
           </p>
 
           <div className="mt-12 flex flex-wrap justify-center gap-5">
             <a href="/app" className="rounded-full bg-orange-500 px-8 py-4 text-lg font-semibold text-white transition hover:scale-105 hover:bg-orange-400">
-              Únete a la Beta de Forge
+              Probar Forge gratis
             </a>
             <a href="#como-funciona" className="flex items-center gap-3 rounded-full border border-zinc-700 px-8 py-4 text-lg text-white transition hover:border-orange-400">
               <Play size={18} />
@@ -78,7 +92,7 @@ export default function CTAFinal() {
           </div>
 
           <p className="mt-6 text-sm text-zinc-500">
-            Los primeros atletas tendrán acceso Premium gratuito durante 3 meses y ayudarán a construir el futuro de Forge.
+            Acceso Premium gratuito durante 3 meses para los primeros atletas de la beta.
           </p>
 
           <div className="mt-10 flex flex-wrap justify-center gap-x-8 gap-y-3 text-sm text-zinc-400">

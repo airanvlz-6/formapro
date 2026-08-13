@@ -2228,6 +2228,68 @@ Si un dato no es visible o no estas seguro, pon el valor en null y confianza 0. 
     }
   }
 
+  if (action === "extraer_sesion_imagen") {
+    // FORGE SESSION VISION EXTRACTION — mismo principio de autoridad: Vision EXTRAE los datos de la
+    // sesion (nunca decide registrarla). Genera el MISMO formato de objeto que ya usa sesionPendiente
+    // (tipo/fecha/notas/sensacion/analisis), asi el banner "Sesion detectada" y todo el pipeline
+    // posterior (Registrar, Session Duplication Validator, etc.) funcionan sin modificacion.
+    // Elimina la dependencia de que el Coach conversacional recuerde generar [SESION:] al ver una imagen.
+    const { imagenBase64, tipoImagen } = datos;
+    if (!imagenBase64) return NextResponse.json({ error: "Falta imagen" }, { status: 400 });
+
+    const hoySesionImg = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+
+    const sessionVisionPrompt = `Analiza esta captura de pantalla de un entrenamiento completado (WOD, carrera, sesion de fuerza, app de reloj deportivo, etc).
+
+Responde SOLO con este JSON, sin texto adicional ni markdown:
+{"es_entreno_completado":true_o_false,"confianza":0.0_a_1.0,"tipo":"tipo de sesion (ej: box, carrera, fuerza)","notas":"resumen breve y factual de lo que ves: ejercicios, tiempos, distancias, pesos, rondas — SOLO lo que aparece literalmente en la imagen","sensacion":"buena|normal|mala|null si no se puede determinar"}
+
+"es_entreno_completado" debe ser false si la imagen NO muestra claramente un entrenamiento ya realizado (ej: es solo una pantalla de planificacion futura, o no es una imagen de fitness en absoluto). Nunca inventes datos que no veas en la imagen.`;
+
+    try {
+      const sessionVisionRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 500,
+          messages: [{ role: "user", content: [
+            { type: "image", source: { type: "base64", media_type: tipoImagen || "image/jpeg", data: imagenBase64 } },
+            { type: "text", text: sessionVisionPrompt }
+          ]}]
+        }),
+      });
+      const sessionVisionData = await sessionVisionRes.json();
+      const sessionVisionTexto = sessionVisionData.content?.map((b: any) => b.text || "").join("") || "{}";
+      const sessionVisionClean = sessionVisionTexto.replace(/```json|```/g, "").trim();
+      const sessionVisionMatch = sessionVisionClean.match(/\{[\s\S]*\}/);
+      if (!sessionVisionMatch) return NextResponse.json({ ok: true, esEntreno: false });
+
+      const extraidoSesion = JSON.parse(sessionVisionMatch[0]);
+
+      // FORGE CONFIDENCE GATE: solo se ofrece el banner si el modelo esta razonablemente seguro
+      // de que ES un entreno completado real, evitando falsos positivos con capturas ambiguas.
+      if (!extraidoSesion.es_entreno_completado || extraidoSesion.confianza < 0.7) {
+        return NextResponse.json({ ok: true, esEntreno: false });
+      }
+
+      // Mismo formato exacto que espera el frontend para sesionPendiente
+      const sesionExtraida = {
+        tipo: extraidoSesion.tipo || "entreno",
+        fecha: new Date().toISOString(),
+        notas: extraidoSesion.notas || "",
+        sensacion: extraidoSesion.sensacion || null,
+        analisis: "Extraido automaticamente de imagen",
+        origen: "vision_extractor"
+      };
+
+      return NextResponse.json({ ok: true, esEntreno: true, sesion: sesionExtraida });
+    } catch (err: any) {
+      console.error("Error en extraccion visual de sesion:", err);
+      return NextResponse.json({ ok: true, esEntreno: false });
+    }
+  }
+
   if (action === "verificar_metricas_sueno_deterministico") {
     // FORGE SLEEP METRICS PARSER — Nivel 1: deteccion 100% deterministica, sin LLM. Se ejecuta
     // ANTES de enviar el mensaje al Coach. El extractor Haiku posterior fallaba de forma intermitente

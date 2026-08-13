@@ -1548,6 +1548,15 @@ const forgeValidator=(texto:string):string=>{
             // TODO siguiente iteracion: banner de confirmacion explicita para estos campos
           }
         });
+
+        // FORGE SESSION VISION EXTRACTION — en paralelo, verificar si la imagen es un entreno
+        // completado. Nunca depende de que el Coach genere [SESION:] al ver la imagen — elimina
+        // la vulnerabilidad confirmada hoy (Coach interpreta correctamente pero no genera el tag).
+        apiCall({action:"extraer_sesion_imagen",codigo:codigoUsuario,datos:{imagenBase64:base64Solo,tipoImagen:primeraImagen.tipo}}).then((resSesionImg:any)=>{
+          if(resSesionImg?.esEntreno && resSesionImg?.sesion && !sesionPendiente){
+            setSesionPendiente(resSesionImg.sesion);
+          }
+        });
       }
     }
     const nuevoHist=[...historial,{role:"user",content:contenidoUsuario}];

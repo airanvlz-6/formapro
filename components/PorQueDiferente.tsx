@@ -61,66 +61,48 @@ export default function PorQueDiferente() {
             ¿Por qué Forge es diferente?
           </h2>
           <p className="mt-8 text-xl leading-9 text-zinc-400">
-            No hemos construido una app que registra datos.
+            No hemos construido otra IA que te diga qué entrenar.
             <br />
-            Hemos construido algo que te conoce y te ayuda a decidir.
+            Hemos construido una herramienta que entiende cómo estás y te ayuda a decidir qué hacer hoy.
           </p>
         </div>
 
-        <div className="mt-20 grid gap-6 md:grid-cols-3">
+        <div className="mt-20 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <Tarjeta
             emoji="🧠"
-            etiqueta="Siempre activo"
-            titulo="Memoria persistente"
-            texto="No recuerda conversaciones sueltas. Recuerda al atleta."
-            checklist={["Objetivos", "Lesiones", "Disponibilidad", "Marcas", "Historial", "Cómo respondes a la fatiga"]}
+            etiqueta="1"
+            titulo="Conoce al atleta"
+            texto="Forge recuerda tus objetivos, historial, disponibilidad, marcas y cómo respondes al entrenamiento."
+            checklist={["Objetivos", "Lesiones", "Disponibilidad", "Marcas", "Historial"]}
             pie="Nunca tienes que volver a explicarlo todo."
             delay={0}
           />
           <Tarjeta
-            emoji="🎯"
-            etiqueta="Contextual"
-            titulo="Detecta lo que frena tu progreso"
-            texto="Forge identifica patrones y limitaciones recurrentes a partir de tu historial real, no de una suposición."
-            checklist={["Evidencias", "Patrones repetidos", "Seguimiento", "Aviso cuando algo cambia"]}
-            pie="No solo registra. También interpreta."
+            emoji="❤️"
+            etiqueta="2"
+            titulo="Entiende cómo llegas hoy"
+            texto="Sueño, HRV, FC en reposo, fatiga y tendencias se interpretan dentro de tu contexto."
+            checklist={["HRV", "Sueño", "FC reposo", "Fatiga", "Tendencias"]}
+            pie="Entrenar más no siempre es entrenar mejor."
             delay={0.1}
           />
           <Tarjeta
-            emoji="❤️"
-            etiqueta="Tiempo real"
-            titulo="Estado fisiológico"
-            texto="Cada recomendación tiene en cuenta cómo llegas realmente al entrenamiento de hoy."
-            checklist={["HRV", "Sueño", "Fatiga", "FC reposo", "Tendencias", "Alertas inteligentes"]}
-            pie="Entrenar más no siempre es entrenar mejor."
+            emoji="🎯"
+            etiqueta="3"
+            titulo="Detecta patrones"
+            texto="No analiza solo el día de hoy. Busca patrones y limitaciones que aparecen repetidamente en tu entrenamiento."
+            checklist={["Evidencias", "Patrones repetidos", "Aviso cuando algo cambia"]}
+            pie="No solo registra. También interpreta."
             delay={0.2}
           />
           <Tarjeta
             emoji="💬"
-            etiqueta="Explicable"
-            titulo="Explica cada recomendación"
-            texto="Cada sugerencia incluye el motivo por el que Forge la hace. Nunca es una caja negra."
-            checklist={["Qué ves hoy", "Por qué importa", "Qué hacer", "Nunca una orden ciega"]}
+            etiqueta="4"
+            titulo="Te explica por qué"
+            texto="No recibes una orden. Entiendes qué ha detectado Forge, por qué importa y qué puedes hacer."
+            checklist={["Qué ves hoy", "Por qué importa", "Qué hacer"]}
             pie="Entiendes la decisión, no solo la recibes."
             delay={0.3}
-          />
-          <Tarjeta
-            emoji="👥"
-            etiqueta="Colaborativo"
-            titulo="Entrena en equipo"
-            texto="Comparte sesiones con otra persona sin perder la personalización individual."
-            checklist={["Escalados distintos", "Memoria conjunta", "Aprendizaje compartido", "Adaptación individual"]}
-            pie="Entrenar juntos ya no implica entrenar igual."
-            delay={0.4}
-          />
-          <Tarjeta
-            emoji="📈"
-            etiqueta="Aprendizaje continuo"
-            titulo="Cada vez te conoce mejor"
-            texto="Forge analiza cómo respondes con el tiempo para afinar sus recomendaciones futuras."
-            checklist={["Adherencia", "Fatiga", "Respuesta real", "Tendencias", "Precisión creciente"]}
-            pie="Cuantos más datos, mejor el criterio."
-            delay={0.5}
           />
         </div>
 

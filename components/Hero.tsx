@@ -30,19 +30,19 @@ export default function Hero() {
               </div>
 
               <h1 className="mt-10 text-5xl font-bold leading-tight text-white md:text-7xl">
-                El entrenador
+                Tu plan dice qué hacer.
                 <br />
-                que mejora
-                <span className="text-orange-500"> contigo</span>
+                Forge te ayuda a decidir
+                <span className="text-orange-500"> cómo hacerlo hoy</span>
               </h1>
 
               <p className="mx-auto mt-8 max-w-3xl text-xl leading-9 text-zinc-400">
-                Forge construye un modelo vivo de cada atleta. Aprende de tus entrenamientos, recuperación y resultados para adaptar tu planificación y tomar mejores decisiones con el paso del tiempo.
+                Supervisión inteligente de tu entrenamiento basada en tus datos reales. Forge analiza tu entrenamiento, recuperación y contexto para ayudarte a tomar mejores decisiones cada día.
               </p>
 
               <div className="mt-12 flex flex-wrap justify-center gap-5">
                 <a href="/app" className="rounded-full bg-orange-500 px-8 py-4 font-semibold text-white transition hover:scale-105 hover:bg-orange-400">
-                  Empieza gratis
+                  Probar Forge
                 </a>
                 <a href="#como-funciona" className="flex items-center gap-3 rounded-full border border-zinc-700 px-8 py-4 text-white transition hover:border-orange-400">
                   <Play size={18} />
@@ -51,7 +51,7 @@ export default function Hero() {
               </div>
 
               <p className="mt-6 text-sm text-zinc-500">
-                Cada entrenamiento mejora dos cosas: tu rendimiento y la capacidad de Forge para ayudarte.
+                ¿Ya tienes entrenador o plan? Perfecto. Forge lo complementa, no lo sustituye.
               </p>
             </motion.div>
 

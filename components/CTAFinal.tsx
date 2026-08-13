@@ -56,15 +56,15 @@ export default function CTAFinal() {
           transition={{ duration: 0.6 }}
         >
           <h2 className="text-4xl font-bold leading-tight text-white md:text-6xl">
-            Tu próximo entrenador
+            Tu plan no debería
             <br />
-            no debería olvidarse nunca de ti.
+            ser el mismo cada semana.
           </h2>
 
           <p className="mx-auto mt-8 max-w-2xl text-xl leading-9 text-zinc-400">
-            Forge recuerda quién eres, cómo entrenas, cómo respondes al esfuerzo y qué necesitas para seguir mejorando.
+            Forge recuerda cómo has llegado a cada sesión, cómo respondes al esfuerzo y qué necesitas hoy.
             <br />
-            Cada sesión hace mejor al atleta. Y también al entrenador.
+            Cada decisión te conoce un poco mejor que la anterior.
           </p>
 
           <div className="mt-12 flex flex-wrap justify-center gap-5">
@@ -73,7 +73,7 @@ export default function CTAFinal() {
             </a>
             <a href="#como-funciona" className="flex items-center gap-3 rounded-full border border-zinc-700 px-8 py-4 text-lg text-white transition hover:border-orange-400">
               <Play size={18} />
-              Ver una planificación real
+              Ver cómo funciona
             </a>
           </div>
 
@@ -101,7 +101,7 @@ export default function CTAFinal() {
         </motion.p>
 
         <a href="/app" className="mt-10 inline-block rounded-full bg-orange-500 px-8 py-4 font-semibold text-white transition hover:scale-105 hover:bg-orange-400">
-          Empieza gratis
+          Probar Forge
         </a>
 
       </div>

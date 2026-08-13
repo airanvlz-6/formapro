@@ -3224,7 +3224,10 @@ ${testStr}`}]});
         // texto libre de "notas" o "analisis" cuando el formato es reconocible. Si no encuentra
         // nada, la Card simplemente muestra los campos vacios y el usuario puede completarlos.
         const textoFuente=`${sesionParaCompartir.notas||""} ${sesionParaCompartir.analisis||""}`;
-        const esCarrera=/carrera|running|correr/i.test(sesionParaCompartir.tipo||"");
+        // FIX: ampliar deteccion de disciplina "carrera" para reconocer tipos especificos de sesion que
+// el Coach genera habitualmente (fartlek, intervalos, series, rodaje, tempo, umbral) y que antes
+// caian por defecto en CrossFit, perdiendo los datos de distancia/ritmo/FC ya extraidos.
+const esCarrera=/carrera|running|correr|fartlek|intervalos|series|rodaje|tempo|umbral|trote|pista|maraton|10k|5k/i.test(sesionParaCompartir.tipo||"");
         const fechaFormateada=new Date(sesionParaCompartir.fecha).toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric"}).toUpperCase();
 
         const matchDistancia=textoFuente.match(/(\d+(?:[.,]\d+)?)\s*(?:km|kilometros)/i);

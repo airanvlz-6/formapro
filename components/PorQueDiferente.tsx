@@ -61,9 +61,9 @@ export default function PorQueDiferente() {
             ¿Por qué Forge es diferente?
           </h2>
           <p className="mt-8 text-xl leading-9 text-zinc-400">
-            No hemos construido una IA que genera entrenamientos.
+            No hemos construido una app que registra datos.
             <br />
-            Hemos construido un entrenador que aprende de cada atleta.
+            Hemos construido algo que te conoce y te ayuda a decidir.
           </p>
         </div>
 
@@ -72,25 +72,25 @@ export default function PorQueDiferente() {
             emoji="🧠"
             etiqueta="Siempre activo"
             titulo="Memoria persistente"
-            texto="No recuerda conversaciones. Recuerda al atleta."
-            checklist={["Objetivos", "Lesiones", "Disponibilidad", "Bloques", "Marcas", "Historial"]}
-            pie="Nunca tienes que empezar de cero."
+            texto="No recuerda conversaciones sueltas. Recuerda al atleta."
+            checklist={["Objetivos", "Lesiones", "Disponibilidad", "Marcas", "Historial", "Cómo respondes a la fatiga"]}
+            pie="Nunca tienes que volver a explicarlo todo."
             delay={0}
           />
           <Tarjeta
             emoji="🎯"
             etiqueta="Contextual"
-            titulo="Coaching correctivo"
-            texto="Forge detecta automáticamente limitaciones que frenan tu rendimiento y crea un plan específico para corregirlas."
-            checklist={["Evidencias", "Diagnóstico", "Plan de acción", "Seguimiento", "Resolución automática"]}
-            pie="No solo adapta. También desarrolla."
+            titulo="Detecta lo que frena tu progreso"
+            texto="Forge identifica patrones y limitaciones recurrentes a partir de tu historial real, no de una suposición."
+            checklist={["Evidencias", "Patrones repetidos", "Seguimiento", "Aviso cuando algo cambia"]}
+            pie="No solo registra. También interpreta."
             delay={0.1}
           />
           <Tarjeta
             emoji="❤️"
             etiqueta="Tiempo real"
             titulo="Estado fisiológico"
-            texto="Cada decisión tiene en cuenta cómo llegas al entrenamiento."
+            texto="Cada recomendación tiene en cuenta cómo llegas realmente al entrenamiento de hoy."
             checklist={["HRV", "Sueño", "Fatiga", "FC reposo", "Tendencias", "Alertas inteligentes"]}
             pie="Entrenar más no siempre es entrenar mejor."
             delay={0.2}
@@ -98,10 +98,10 @@ export default function PorQueDiferente() {
           <Tarjeta
             emoji="💬"
             etiqueta="Explicable"
-            titulo="Un entrenador que explica sus decisiones"
-            texto="Cada sesión incluye el motivo por el que Forge la recomienda. No es una caja negra."
-            checklist={["Objetivo del día", "Relación con el bloque", "Adaptaciones", "Cambios justificados"]}
-            pie="Aprendes mientras entrenas."
+            titulo="Explica cada recomendación"
+            texto="Cada sugerencia incluye el motivo por el que Forge la hace. Nunca es una caja negra."
+            checklist={["Qué ves hoy", "Por qué importa", "Qué hacer", "Nunca una orden ciega"]}
+            pie="Entiendes la decisión, no solo la recibes."
             delay={0.3}
           />
           <Tarjeta
@@ -116,10 +116,10 @@ export default function PorQueDiferente() {
           <Tarjeta
             emoji="📈"
             etiqueta="Aprendizaje continuo"
-            titulo="Mejora continua"
-            texto="Forge analiza el resultado de cada bloque para descubrir qué estrategias funcionan mejor contigo."
-            checklist={["Adherencia", "Fatiga", "Rendimiento", "Progreso", "Respuesta del atleta", "Optimización futura"]}
-            pie="Cada bloque mejora el siguiente."
+            titulo="Cada vez te conoce mejor"
+            texto="Forge analiza cómo respondes con el tiempo para afinar sus recomendaciones futuras."
+            checklist={["Adherencia", "Fatiga", "Respuesta real", "Tendencias", "Precisión creciente"]}
+            pie="Cuantos más datos, mejor el criterio."
             delay={0.5}
           />
         </div>
@@ -132,27 +132,25 @@ export default function PorQueDiferente() {
           className="mt-32 text-center"
         >
           <div className="mx-auto max-w-md space-y-3 text-zinc-400">
-            <p>Objetivos</p>
+            <p>Reportas cómo estás</p>
             <p className="text-orange-500">↓</p>
-            <p>Planificación</p>
+            <p>Forge lo interpreta en contexto</p>
             <p className="text-orange-500">↓</p>
-            <p>Entrenamientos</p>
+            <p>Recibes una decisión clara</p>
             <p className="text-orange-500">↓</p>
-            <p>Resultados</p>
+            <p>Entrenas con criterio</p>
             <p className="text-orange-500">↓</p>
-            <p>Nuevas decisiones</p>
+            <p>Forge aprende de tu respuesta</p>
             <p className="text-orange-500">↓</p>
-            <p>Más resultados</p>
-            <p className="text-orange-500">↓</p>
-            <p className="font-semibold text-white">Mejor entrenador</p>
+            <p className="font-semibold text-white">Mejor criterio la próxima vez</p>
           </div>
 
           <p className="mx-auto mt-16 max-w-2xl text-2xl font-semibold leading-relaxed text-white md:text-3xl">
-            Cuanto más entrenas, más preciso se vuelve Forge.
+            Cuanto más te conoce, mejor es su criterio.
           </p>
 
           <a href="/app" className="mt-10 inline-block rounded-full bg-orange-500 px-8 py-4 font-semibold text-white transition hover:scale-105 hover:bg-orange-400">
-            Empieza gratis
+            Probar Forge
           </a>
         </motion.div>
 

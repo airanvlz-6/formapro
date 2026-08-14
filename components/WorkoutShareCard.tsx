@@ -44,6 +44,7 @@ interface LineaTexto { texto: string; tamano: number; color: string; peso: numbe
 
 function construirBloqueTexto(disciplina: Disciplina, running: RunningData | undefined, crossfit: CrossfitData | undefined, alturaDisponible: number): LineaTexto[] {
   const GAP = 22;
+  const GAP_ETIQUETA = 38; // espacio extra especifico entre la etiqueta (RUN/WOD) y el valor principal
   const candidatas: LineaTexto[] = [];
 
   if (disciplina === 'carrera') {
@@ -136,10 +137,12 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
     if (!foto) return;
     e.preventDefault();
     if (gestoRef.current.modo === 'pan' && e.touches.length === 1) {
+      // FIX: signo invertido — arrastrar el dedo/foto hacia la derecha debe mover el ENCUADRE
+      // (focalX) hacia la derecha tambien, sensacion de "la foto sigue al dedo".
       const dxPantalla = e.touches[0].clientX - gestoRef.current.startX;
       const dyPantalla = e.touches[0].clientY - gestoRef.current.startY;
-      const nuevaFX = gestoRef.current.startFX + dxPantalla / (dims.w * escalaViewport);
-      const nuevaFY = gestoRef.current.startFY + dyPantalla / (dims.h * escalaViewport);
+      const nuevaFX = gestoRef.current.startFX - dxPantalla / (dims.w * escalaViewport);
+      const nuevaFY = gestoRef.current.startFY - dyPantalla / (dims.h * escalaViewport);
       setFocalX(Math.max(0, Math.min(1, nuevaFX)));
       setFocalY(Math.max(0, Math.min(1, nuevaFY)));
     } else if (gestoRef.current.modo === 'pinch' && e.touches.length === 2) {
@@ -155,8 +158,8 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
     if (!arrastreMouseRef.current.activo) return;
     const dxPantalla = e.clientX - arrastreMouseRef.current.startX;
     const dyPantalla = e.clientY - arrastreMouseRef.current.startY;
-    setFocalX(Math.max(0, Math.min(1, arrastreMouseRef.current.startFX + dxPantalla / (dims.w * escalaViewport))));
-    setFocalY(Math.max(0, Math.min(1, arrastreMouseRef.current.startFY + dyPantalla / (dims.h * escalaViewport))));
+    setFocalX(Math.max(0, Math.min(1, arrastreMouseRef.current.startFX - dxPantalla / (dims.w * escalaViewport))));
+    setFocalY(Math.max(0, Math.min(1, arrastreMouseRef.current.startFY - dyPantalla / (dims.h * escalaViewport))));
   };
   const onMouseUpOrLeave = () => { arrastreMouseRef.current.activo = false; };
 
@@ -166,12 +169,18 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
   const lineasBloque = construirBloqueTexto(disciplina, running, crossfit, alturaDisponible);
 
   // Posicionamiento por ACUMULACION real desde el borde inferior hacia arriba
-  const GAP = 22 * escala;
+  const gapEscalado = 22 * escala;
+  const gapEtiquetaEscalado = 38 * escala;
   let yAcumulado = dims.h - 90 * escala;
-  const lineasPosicionadas = [...lineasBloque].reverse().map((l) => {
+  const totalLineas = lineasBloque.length;
+  const lineasPosicionadas = [...lineasBloque].reverse().map((l, idxReverso) => {
     yAcumulado -= l.alturaLinea * escala;
     const y = yAcumulado;
-    yAcumulado -= GAP;
+    // La primera linea del array original (etiqueta RUN/WOD) es la ULTIMA en el reverso —
+    // usa el gap ampliado para separarla claramente del valor principal que va justo debajo.
+    const esUltimaDelReverso = idxReverso === totalLineas - 1;
+    yAcumulado -= esUltimaDelReverso ? 0 : gapEscalado;
+    if (idxReverso === totalLineas - 2) yAcumulado -= (gapEtiquetaEscalado - gapEscalado);
     return { ...l, y, tamano: l.tamano * escala };
   }).reverse();
 

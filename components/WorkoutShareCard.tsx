@@ -140,8 +140,8 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
       // FIX: multiplicador de sensibilidad — el rango real de movimiento util de la foto es mucho
       // mas amplio que 100 unidades cuando hay zoom aplicado, por eso el arrastre se sentia casi
       // imperceptible. Se amplifica la conversion de pixeles de pantalla a unidades de posicion.
-      const dx = (e.touches[0].clientX - gestoRef.current.startX) / (dims.w * escalaViewport) * 100 * 2.5;
-      const dy = (e.touches[0].clientY - gestoRef.current.startY) / (dims.h * escalaViewport) * 100 * 2.5;
+      const dx = (e.touches[0].clientX - gestoRef.current.startX) / (dims.w * escalaViewport) * 100 * 6;
+      const dy = (e.touches[0].clientY - gestoRef.current.startY) / (dims.h * escalaViewport) * 100 * 6;
       const { px, py } = limitarPos(gestoRef.current.startPosX - dx, gestoRef.current.startPosY - dy, zoom);
       setPosX(px); setPosY(py);
     } else if (gestoRef.current.modo === 'pinch' && e.touches.length === 2) {
@@ -155,8 +155,8 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
   const onMouseDown = (e: React.MouseEvent) => { if (foto) arrastreMouseRef.current = { activo: true, startX: e.clientX, startY: e.clientY, startPosX: posX, startPosY: posY }; };
   const onMouseMove = (e: React.MouseEvent) => {
     if (!arrastreMouseRef.current.activo) return;
-    const dx = (e.clientX - arrastreMouseRef.current.startX) / (dims.w * escalaViewport) * 100 * 2.5;
-    const dy = (e.clientY - arrastreMouseRef.current.startY) / (dims.h * escalaViewport) * 100 * 2.5;
+    const dx = (e.clientX - arrastreMouseRef.current.startX) / (dims.w * escalaViewport) * 100 * 6;
+    const dy = (e.clientY - arrastreMouseRef.current.startY) / (dims.h * escalaViewport) * 100 * 6;
     const { px, py } = limitarPos(arrastreMouseRef.current.startPosX - dx, arrastreMouseRef.current.startPosY - dy, zoom);
     setPosX(px); setPosY(py);
   };
@@ -172,6 +172,13 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
   let lineasTexto: { texto: string; y: number; tamano: number; color: string; peso: number; familia: string; alpha?: number }[] = [];
   let footerY = dims.h - dims.h * 0.035;
 
+  // FIX: el espaciado debe ser proporcional a la ALTURA real de cada formato (no al ancho), porque
+// Cuadrado (1080x1080) tiene mucho menos espacio vertical disponible que Story (1080x1920) — el
+// mismo espaciado en px absolutos se veia comprimido/superpuesto en formatos mas bajos.
+const escalaVertical = dims.h / 1920;
+  const tamanoTexto = (base: number) => base * escala; // tamaños de fuente: proporcionales al ancho
+  const espacio = (base: number) => base * escalaVertical; // espaciado entre lineas: proporcional al alto
+
   if (disciplina === 'carrera') {
     const { principal, secundario } = calcularResultadoPrincipalRunning(running || {});
     const etiqueta = calcularEtiquetaRunning(running || {});
@@ -181,21 +188,21 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
       running?.fcMax && `${running.fcMax} MAX`,
       running?.desnivel && `${running.desnivel} D+`,
     ].filter(Boolean).join(' · ');
-    let y = dims.h - anclaInferior - (metricas ? 45 * escala : 0);
-    lineasTexto.push({ texto: etiqueta, y, tamano: 27 * escala, color: C.accent, peso: 800, familia: 'DM Sans, sans-serif' });
-    y += 100 * escala;
-    lineasTexto.push({ texto: principal || '—', y, tamano: 100 * escala, color: C.ink, peso: 800, familia: 'Georgia, serif' });
-    if (secundario) { y += 60 * escala; lineasTexto.push({ texto: secundario, y, tamano: 42 * escala, color: C.ink, peso: 700, familia: 'Georgia, serif', alpha: 0.9 }); }
-    if (metricas) { y += 48 * escala; lineasTexto.push({ texto: metricas, y, tamano: 26 * escala, color: C.muted, peso: 600, familia: 'DM Sans, sans-serif' }); }
+    let y = dims.h - anclaInferior - (metricas ? espacio(45) : 0);
+    lineasTexto.push({ texto: etiqueta, y, tamano: tamanoTexto(27), color: C.accent, peso: 800, familia: 'DM Sans, sans-serif' });
+    y += espacio(95);
+    lineasTexto.push({ texto: principal || '—', y, tamano: tamanoTexto(95), color: C.ink, peso: 800, familia: 'Georgia, serif' });
+    if (secundario) { y += espacio(55); lineasTexto.push({ texto: secundario, y, tamano: tamanoTexto(40), color: C.ink, peso: 700, familia: 'Georgia, serif', alpha: 0.9 }); }
+    if (metricas) { y += espacio(44); lineasTexto.push({ texto: metricas, y, tamano: tamanoTexto(25), color: C.muted, peso: 600, familia: 'DM Sans, sans-serif' }); }
   } else {
     const movimientos = crossfit?.movimientos && crossfit.movimientos.length > 70 ? crossfit.movimientos.slice(0, 67).trim() + '...' : crossfit?.movimientos;
-    let y = dims.h - anclaInferior - 65 * escala;
-    lineasTexto.push({ texto: `WOD${crossfit?.tipo ? ` · ${crossfit.tipo.toUpperCase()}` : ''}`, y, tamano: 27 * escala, color: C.accent, peso: 800, familia: 'DM Sans, sans-serif' });
-    y += 70 * escala;
-    lineasTexto.push({ texto: crossfit?.nombreWod || 'Entreno de hoy', y, tamano: 50 * escala, color: C.ink, peso: 800, familia: 'DM Sans, sans-serif' });
-    y += 110 * escala;
-    lineasTexto.push({ texto: crossfit?.resultado || '—', y, tamano: 100 * escala, color: C.ink, peso: 800, familia: 'Georgia, serif' });
-    if (movimientos) { y += 56 * escala; lineasTexto.push({ texto: movimientos, y, tamano: 26 * escala, color: C.muted, peso: 500, familia: 'DM Sans, sans-serif' }); }
+    let y = dims.h - anclaInferior - espacio(60);
+    lineasTexto.push({ texto: `WOD${crossfit?.tipo ? ` · ${crossfit.tipo.toUpperCase()}` : ''}`, y, tamano: tamanoTexto(26), color: C.accent, peso: 800, familia: 'DM Sans, sans-serif' });
+    y += espacio(64);
+    lineasTexto.push({ texto: crossfit?.nombreWod || 'Entreno de hoy', y, tamano: tamanoTexto(46), color: C.ink, peso: 800, familia: 'DM Sans, sans-serif' });
+    y += espacio(100);
+    lineasTexto.push({ texto: crossfit?.resultado || '—', y, tamano: tamanoTexto(92), color: C.ink, peso: 800, familia: 'Georgia, serif' });
+    if (movimientos) { y += espacio(50); lineasTexto.push({ texto: movimientos, y, tamano: tamanoTexto(24), color: C.muted, peso: 500, familia: 'DM Sans, sans-serif' }); }
   }
 
   const svgId = 'forge-share-card-svg';

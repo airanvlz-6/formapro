@@ -1608,6 +1608,15 @@ const forgeValidator=(texto:string):string=>{
           }
         });
       }
+      // FORGE COACHING NOTES — detecta observaciones tecnicas/debilidades en la conversacion y las
+      // registra para el proximo cierre de semana. NUNCA modifica la sesion actual — solo registra.
+      if(codigoUsuario && texto.trim().length>=15){
+        apiCall({action:"detectar_coaching_note",codigo:codigoUsuario,datos:{mensaje:texto}}).then((resNote:any)=>{
+          if(resNote?.detectado){
+            console.log("Coaching note registrada:",resNote.issue,resNote.actualizado?"(actualizada, mencion repetida)":"(nueva)");
+          }
+        });
+      }
 
       // FORGE PENDING ACTIONS — deteccion 100% deterministica de confirmacion (regex simple), nunca
       // depende de que el LLM recuerde generar un tag tras la confirmacion del usuario.

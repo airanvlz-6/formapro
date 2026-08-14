@@ -2239,6 +2239,81 @@ Si un dato no es visible o no estas seguro, pon el valor en null y confianza 0. 
     }
   }
 
+  if (action === "detectar_coaching_note") {
+    // FORGE COACHING NOTES PIPELINE — el LLM (Haiku) EXTRAE y ESTRUCTURA una observacion tecnica
+    // o debilidad mencionada en conversacion, pero NUNCA decide si se guarda: si detecta contenido
+    // valido, el backend SIEMPRE lo persiste. La decision de si esa nota se convierte en programacion
+    // real corresponde exclusivamente a Weekly Strategy en el cierre de semana, nunca a esta capa.
+    const { mensaje } = datos;
+    if (!mensaje || mensaje.trim().length < 15) return NextResponse.json({ ok: true, detectado: false });
+
+    const notePrompt = `Analiza este mensaje de un atleta a su coach. Determina si contiene una OBSERVACION TECNICA, DEBILIDAD, o ALGO A TRABAJAR (ej: un problema tecnico recurrente, una limitacion, una intencion de mejora) — NO una simple pregunta, ni un reporte de entreno completado sin mas, ni charla casual.
+
+Responde SOLO con este JSON, sin texto adicional ni markdown:
+{"es_observacion":true_o_false,"type":"weakness|intencion","domain":"olympic_lifting|running|strength|conditioning|mobility|otro","movement":"nombre del movimiento o area especifica, o null","issue":"resumen breve y factual del problema/objetivo en pocas palabras","priority":"alta|normal|baja"}
+
+Mensaje: "${mensaje}"
+
+"es_observacion" debe ser false para preguntas simples, reportes de entreno sin problema mencionado, o mensajes sin contenido tecnico relevante. Nunca inventes datos que el mensaje no contenga.`;
+
+    try {
+      const noteRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 250, messages: [{ role: "user", content: notePrompt }] }),
+      });
+      const noteData = await noteRes.json();
+      const noteTexto = noteData.content?.map((b: any) => b.text || "").join("") || "{}";
+      const noteClean = noteTexto.replace(/```json|```/g, "").trim();
+      const noteMatch = noteClean.match(/\{[\s\S]*\}/);
+      if (!noteMatch) return NextResponse.json({ ok: true, detectado: false });
+
+      const extraido = JSON.parse(noteMatch[0]);
+      if (!extraido.es_observacion || !extraido.issue) {
+        return NextResponse.json({ ok: true, detectado: false });
+      }
+
+      // FORGE DEDUPLICATION: buscar si ya existe una nota similar activa (mismo movimiento/dominio)
+      // para incrementar veces_mencionado en vez de crear duplicados — permite detectar patrones
+      // recurrentes reales en vez de fragmentar la misma debilidad en multiples filas.
+      const { data: notaExistente } = await supabase.from("athlete_coaching_notes")
+        .select("id,veces_mencionado,confidence")
+        .eq("user_codigo", codigo)
+        .eq("movement", extraido.movement || null)
+        .in("status", ["pending", "considerada"])
+        .limit(1)
+        .maybeSingle();
+
+      if (notaExistente) {
+        const nuevaConfianza = Math.min(1, (notaExistente.confidence || 0.5) + 0.15);
+        await supabase.from("athlete_coaching_notes").update({
+          veces_mencionado: (notaExistente.veces_mencionado || 1) + 1,
+          confidence: nuevaConfianza,
+          last_mentioned_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }).eq("id", notaExistente.id);
+        return NextResponse.json({ ok: true, detectado: true, actualizado: true, issue: extraido.issue });
+      }
+
+      await supabase.from("athlete_coaching_notes").insert({
+        user_codigo: codigo,
+        type: extraido.type || "weakness",
+        domain: extraido.domain || null,
+        movement: extraido.movement || null,
+        issue: extraido.issue,
+        priority: extraido.priority || "normal",
+        source: "conversation",
+        status: "pending",
+        confidence: 0.5
+      });
+
+      return NextResponse.json({ ok: true, detectado: true, actualizado: false, issue: extraido.issue });
+    } catch (err: any) {
+      console.error("Error detectando coaching note:", err);
+      return NextResponse.json({ ok: true, detectado: false });
+    }
+  }
+
   if (action === "extraer_sesion_imagen") {
     // FORGE SESSION VISION EXTRACTION — mismo principio de autoridad: Vision EXTRAE los datos de la
     // sesion (nunca decide registrarla). Genera el MISMO formato de objeto que ya usa sesionPendiente

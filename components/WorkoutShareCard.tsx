@@ -137,8 +137,11 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
     if (!foto) return;
     e.preventDefault();
     if (gestoRef.current.modo === 'pan' && e.touches.length === 1) {
-      const dx = (e.touches[0].clientX - gestoRef.current.startX) / (dims.w * escalaViewport) * 100;
-      const dy = (e.touches[0].clientY - gestoRef.current.startY) / (dims.h * escalaViewport) * 100;
+      // FIX: multiplicador de sensibilidad — el rango real de movimiento util de la foto es mucho
+      // mas amplio que 100 unidades cuando hay zoom aplicado, por eso el arrastre se sentia casi
+      // imperceptible. Se amplifica la conversion de pixeles de pantalla a unidades de posicion.
+      const dx = (e.touches[0].clientX - gestoRef.current.startX) / (dims.w * escalaViewport) * 100 * 2.5;
+      const dy = (e.touches[0].clientY - gestoRef.current.startY) / (dims.h * escalaViewport) * 100 * 2.5;
       const { px, py } = limitarPos(gestoRef.current.startPosX - dx, gestoRef.current.startPosY - dy, zoom);
       setPosX(px); setPosY(py);
     } else if (gestoRef.current.modo === 'pinch' && e.touches.length === 2) {
@@ -152,8 +155,8 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
   const onMouseDown = (e: React.MouseEvent) => { if (foto) arrastreMouseRef.current = { activo: true, startX: e.clientX, startY: e.clientY, startPosX: posX, startPosY: posY }; };
   const onMouseMove = (e: React.MouseEvent) => {
     if (!arrastreMouseRef.current.activo) return;
-    const dx = (e.clientX - arrastreMouseRef.current.startX) / (dims.w * escalaViewport) * 100;
-    const dy = (e.clientY - arrastreMouseRef.current.startY) / (dims.h * escalaViewport) * 100;
+    const dx = (e.clientX - arrastreMouseRef.current.startX) / (dims.w * escalaViewport) * 100 * 2.5;
+    const dy = (e.clientY - arrastreMouseRef.current.startY) / (dims.h * escalaViewport) * 100 * 2.5;
     const { px, py } = limitarPos(arrastreMouseRef.current.startPosX - dx, arrastreMouseRef.current.startPosY - dy, zoom);
     setPosX(px); setPosY(py);
   };
@@ -178,21 +181,21 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
       running?.fcMax && `${running.fcMax} MAX`,
       running?.desnivel && `${running.desnivel} D+`,
     ].filter(Boolean).join(' · ');
-    let y = dims.h - anclaInferior - (metricas ? 30 * escala : 0);
+    let y = dims.h - anclaInferior - (metricas ? 45 * escala : 0);
     lineasTexto.push({ texto: etiqueta, y, tamano: 27 * escala, color: C.accent, peso: 800, familia: 'DM Sans, sans-serif' });
-    y += 68 * escala;
+    y += 100 * escala;
     lineasTexto.push({ texto: principal || '—', y, tamano: 100 * escala, color: C.ink, peso: 800, familia: 'Georgia, serif' });
-    if (secundario) { y += 44 * escala; lineasTexto.push({ texto: secundario, y, tamano: 42 * escala, color: C.ink, peso: 700, familia: 'Georgia, serif', alpha: 0.9 }); }
-    if (metricas) { y += 40 * escala; lineasTexto.push({ texto: metricas, y, tamano: 26 * escala, color: C.muted, peso: 600, familia: 'DM Sans, sans-serif' }); }
+    if (secundario) { y += 60 * escala; lineasTexto.push({ texto: secundario, y, tamano: 42 * escala, color: C.ink, peso: 700, familia: 'Georgia, serif', alpha: 0.9 }); }
+    if (metricas) { y += 48 * escala; lineasTexto.push({ texto: metricas, y, tamano: 26 * escala, color: C.muted, peso: 600, familia: 'DM Sans, sans-serif' }); }
   } else {
     const movimientos = crossfit?.movimientos && crossfit.movimientos.length > 70 ? crossfit.movimientos.slice(0, 67).trim() + '...' : crossfit?.movimientos;
-    let y = dims.h - anclaInferior - 50 * escala;
+    let y = dims.h - anclaInferior - 65 * escala;
     lineasTexto.push({ texto: `WOD${crossfit?.tipo ? ` · ${crossfit.tipo.toUpperCase()}` : ''}`, y, tamano: 27 * escala, color: C.accent, peso: 800, familia: 'DM Sans, sans-serif' });
-    y += 56 * escala;
+    y += 70 * escala;
     lineasTexto.push({ texto: crossfit?.nombreWod || 'Entreno de hoy', y, tamano: 50 * escala, color: C.ink, peso: 800, familia: 'DM Sans, sans-serif' });
-    y += 90 * escala;
+    y += 110 * escala;
     lineasTexto.push({ texto: crossfit?.resultado || '—', y, tamano: 100 * escala, color: C.ink, peso: 800, familia: 'Georgia, serif' });
-    if (movimientos) { y += 48 * escala; lineasTexto.push({ texto: movimientos, y, tamano: 26 * escala, color: C.muted, peso: 500, familia: 'DM Sans, sans-serif' }); }
+    if (movimientos) { y += 56 * escala; lineasTexto.push({ texto: movimientos, y, tamano: 26 * escala, color: C.muted, peso: 500, familia: 'DM Sans, sans-serif' }); }
   }
 
   const svgId = 'forge-share-card-svg';
@@ -227,7 +230,8 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
           <text key={i} x={px} y={l.y} fontSize={l.tamano} fontWeight={l.peso} fontFamily={l.familia} fill={l.color} opacity={l.alpha ?? 1} style={{ filter: 'drop-shadow(0 2px 10px rgba(0,0,0,0.6))' }}>{l.texto}</text>
         ))}
         <text x={dims.w - px} y={footerY} fontSize={22 * escala} fontWeight={500} fill={C.muted} textAnchor="end" fontFamily="DM Sans, sans-serif">{fecha}</text>
-        <text x={px + 30 * escala} y={footerY} fontSize={28 * escala} fontWeight={800} fill={C.accent} letterSpacing="3" fontFamily="DM Sans, sans-serif">FORGE</text>
+        <image href="/logo-forge.png" x={px} y={footerY - 22 * escala} width={26 * escala} height={26 * escala} />
+        <text x={px + 34 * escala} y={footerY} fontSize={28 * escala} fontWeight={800} fill={C.accent} letterSpacing="3" fontFamily="DM Sans, sans-serif">FORGE</text>
       </g>
     </svg>
   );

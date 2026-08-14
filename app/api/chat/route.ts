@@ -1462,6 +1462,22 @@ if (action === "analizar_bloque_semana") {
       }
     }
 
+    // FORGE COACHING NOTES — observaciones tecnicas capturadas en conversacion durante la semana,
+    // NUNCA aplicadas directamente a una sesion (ver regla de prompt), su unico canal de entrada
+    // a la planificacion real es aqui, en el Block Analyzer del cierre de semana. Priorizadas por
+    // confianza y veces_mencionado — una nota mencionada varias veces pesa mas que una unica mencion.
+    const { data: coachingNotesPendientes } = await supabase.from("athlete_coaching_notes")
+      .select("id,type,domain,movement,issue,priority,confidence,veces_mencionado")
+      .eq("user_codigo", codigo)
+      .in("status", ["pending", "considerada"])
+      .order("confidence", { ascending: false })
+      .limit(5);
+
+    let coachingNotesTexto = "";
+    if (coachingNotesPendientes && coachingNotesPendientes.length > 0) {
+      coachingNotesTexto = `\nOBSERVACIONES TECNICAS PENDIENTES (registradas en conversacion, NUNCA aplicadas todavia a ninguna sesion — evalua si alguna encaja con el bloque/fase actual y merece incorporarse esta semana):\n${coachingNotesPendientes.map((n: any) => `- [${n.movement || n.domain || "general"}] ${n.issue} (mencionado ${n.veces_mencionado}x, confianza ${n.confidence})`).join("\n")}`;
+    }
+
     // FIX CRITICO DE RAIZ: el Block Analyzer nunca recibia especialidad ni objetivo del atleta,
     // generando estructuras genericas sin anclaje a la disciplina real (ej: CrossFit/halterofilia).
     const analyzerPrompt = `Eres un analizador de bloques de entrenamiento. Tu ÚNICA tarea es devolver un JSON pequeño describiendo la estructura de la PRÓXIMA semana. NO generes entrenamientos ni sesiones detalladas.
@@ -1473,9 +1489,12 @@ Ciclo actual: ${JSON.stringify(estado.ciclo)}
 Debilidad prioritaria activa: ${debilidadPrioritaria ? debilidadPrioritaria.nombre_visible : "ninguna"}
 Disponibilidad: ${usuarioAnalyzer?.distribucion_semanal || "no especificada"}
 ${metodosYaProbadosTexto}
+${coachingNotesTexto}
+
+Si alguna observacion tecnica pendiente encaja con el bloque/fase actual y no compromete el objetivo principal de la semana, puedes incorporarla como parte del objetivo o debilidad_prioritaria. Si decides incorporar una, incluye su id en el campo "coaching_notes_incorporadas" (array de ids, puede estar vacio).
 
 Responde SOLO con este JSON, sin texto adicional ni markdown:
-{"tipo_semana":"acumulacion|intensificacion|realizacion|deload","objetivo":"frase corta del objetivo de esta semana","volumen_relativo":0.0-1.0,"intensidad_relativa":0.0-1.0,"debilidad_prioritaria":"nombre o null","dias_entreno_sugeridos":número}`;
+{"tipo_semana":"acumulacion|intensificacion|realizacion|deload","objetivo":"frase corta del objetivo de esta semana","volumen_relativo":0.0-1.0,"intensidad_relativa":0.0-1.0,"debilidad_prioritaria":"nombre o null","dias_entreno_sugeridos":número,"coaching_notes_incorporadas":[]}`;
 
     try {
       const analyzerRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -1489,6 +1508,13 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
       const analyzerMatch = analyzerClean.match(/\{[\s\S]*\}/);
       if (!analyzerMatch) throw new Error("Block Analyzer no devolvio JSON valido");
       const analisisBloque = JSON.parse(analyzerMatch[0]);
+
+      // Marcar como "considerada" las notas que el Block Analyzer decidio incorporar al analisis
+      // de esta semana — avanza su ciclo de vida sin borrarlas, siguen visibles para Weekly Strategy.
+      if (Array.isArray(analisisBloque.coaching_notes_incorporadas) && analisisBloque.coaching_notes_incorporadas.length > 0) {
+        await supabase.from("athlete_coaching_notes").update({ status: "considerada", updated_at: new Date().toISOString() }).in("id", analisisBloque.coaching_notes_incorporadas).eq("user_codigo", codigo);
+      }
+
       return NextResponse.json({ ok: true, analisis: analisisBloque });
     } catch (err: any) {
       return NextResponse.json({ error: "Error en Block Analyzer: " + err.message }, { status: 500 });

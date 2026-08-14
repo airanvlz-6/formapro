@@ -199,10 +199,22 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
       const html2canvas = (await import('html2canvas')).default;
       const el = cardRef.current;
       if (!el) return;
-      // El nodo capturado siempre tiene sus dimensiones fisicas reales (dims.w x dims.h) —
-      // el ajuste visual a pantalla vive UNICAMENTE en el contenedor padre (zoom CSS), nunca
-      // en este nodo, asi que html2canvas mide exactamente lo que se ve.
-      const canvas = await html2canvas(el, { backgroundColor: null, scale: 2, useCORS: true, width: dims.w, height: dims.h });
+
+      // FIX: html2canvas no soporta correctamente la propiedad CSS "zoom" (no estandar) al medir
+      // el nodo — sin anularla, captura con el layout escalado, produciendo el bug de imagen
+      // desplazada + fondo negro. Se anula temporalmente para que el nodo tenga su tamaño fisico
+      // real de exportacion (dims.w x dims.h a zoom 1), y se restaura SIEMPRE, incluso si la
+      // captura falla — try/finally anidado especifico para esta operacion.
+      const zoomOriginal = el.style.zoom;
+      let canvas: HTMLCanvasElement;
+      try {
+        el.style.zoom = '1';
+        void el.offsetHeight; // fuerza recalculo de layout antes de capturar
+        canvas = await html2canvas(el, { backgroundColor: null, scale: 2, useCORS: true, width: dims.w, height: dims.h });
+      } finally {
+        el.style.zoom = zoomOriginal;
+      }
+
       const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
       if (!blob) return;
       const file = new File([blob], `forge-${disciplina}-${Date.now()}.png`, { type: 'image/png' });

@@ -11,45 +11,30 @@ const C = {
 type Disciplina = 'carrera' | 'crossfit';
 type Formato = '9:16' | '4:5' | '1:1';
 
+// Dimensiones matematicas fijas, base 1080 de ancho para todos los formatos
 const FORMATOS: Record<Formato, { w: number; h: number; label: string }> = {
-  '9:16': { w: 405, h: 720, label: 'Story' },
-  '4:5': { w: 480, h: 600, label: 'Feed' },
-  '1:1': { w: 480, h: 480, label: 'Cuadrado' },
+  '9:16': { w: 1080, h: 1920, label: 'Story' },
+  '4:5': { w: 1080, h: 1350, label: 'Feed' },
+  '1:1': { w: 1080, h: 1080, label: 'Cuadrado' },
 };
 
-const FILTROS: { id: string; label: string; css: string }[] = [
-  { id: 'original', label: 'Original', css: 'none' },
-  { id: 'mono', label: 'Mono', css: 'grayscale(1) contrast(1.1)' },
-  { id: 'contraste', label: 'Contraste', css: 'contrast(1.35) saturate(1.15)' },
-  { id: 'calido', label: 'Cálido', css: 'sepia(0.25) saturate(1.3) contrast(1.05)' },
-  { id: 'frio', label: 'Frío', css: 'hue-rotate(-8deg) saturate(1.1) brightness(0.97)' },
-  { id: 'noche', label: 'Noche', css: 'brightness(0.85) contrast(1.2) saturate(0.9)' },
+const FILTROS: { id: string; label: string; svgFilter: string }[] = [
+  { id: 'original', label: 'Original', svgFilter: '' },
+  { id: 'mono', label: 'Mono', svgFilter: 'grayscale(1) contrast(1.1)' },
+  { id: 'contraste', label: 'Contraste', svgFilter: 'contrast(1.35) saturate(1.15)' },
+  { id: 'calido', label: 'Cálido', svgFilter: 'sepia(0.25) saturate(1.3) contrast(1.05)' },
+  { id: 'frio', label: 'Frío', svgFilter: 'hue-rotate(-8deg) saturate(1.1) brightness(0.97)' },
+  { id: 'noche', label: 'Noche', svgFilter: 'brightness(0.85) contrast(1.2) saturate(0.9)' },
 ];
 
 interface RunningData {
-  distancia?: string;
-  tiempo?: string;
-  ritmo?: string;
-  fcMedia?: string;
-  fcMax?: string;
-  desnivel?: string;
-  intervalos?: string;
-  etiquetaTipo?: string;
+  distancia?: string; tiempo?: string; ritmo?: string; fcMedia?: string; fcMax?: string; desnivel?: string; intervalos?: string; etiquetaTipo?: string;
 }
-
 interface CrossfitData {
-  nombreWod?: string;
-  resultado?: string;
-  tipo?: string;
-  movimientos?: string;
+  nombreWod?: string; resultado?: string; tipo?: string; movimientos?: string;
 }
-
 interface WorkoutShareCardProps {
-  disciplina: Disciplina;
-  fecha: string;
-  running?: RunningData;
-  crossfit?: CrossfitData;
-  onClose?: () => void;
+  disciplina: Disciplina; fecha: string; running?: RunningData; crossfit?: CrossfitData; onClose?: () => void;
 }
 
 function calcularResultadoPrincipalRunning(data: RunningData): { principal: string; secundario: string | null } {
@@ -60,66 +45,20 @@ function calcularResultadoPrincipalRunning(data: RunningData): { principal: stri
   if (data.tiempo) return { principal: data.tiempo, secundario: data.ritmo ? `${data.ritmo} /KM` : null };
   return { principal: '', secundario: null };
 }
-
 function calcularEtiquetaRunning(data: RunningData): string {
   if (data.etiquetaTipo) return data.etiquetaTipo;
   if (data.intervalos) return 'INTERVALS';
   return 'RUN';
 }
-
-// ============================================================
-// Overlay de datos — JSX real, la MISMA representacion que se ve
-// en pantalla y la que se captura. Sin duplicacion de logica.
-// ============================================================
-function RunningOverlay({ data }: { data: RunningData }) {
-  const { principal, secundario } = calcularResultadoPrincipalRunning(data);
-  const etiqueta = calcularEtiquetaRunning(data);
-  const metricas = [
-    data.intervalos && data.distancia && `${data.distancia} KM`,
-    data.fcMedia && `${data.fcMedia} FC`,
-    data.fcMax && `${data.fcMax} MAX`,
-    data.desnivel && `${data.desnivel} D+`,
-  ].filter(Boolean).slice(0, 3) as string[];
-
-  return (
-    <div style={{ position: 'relative', zIndex: 3, padding: '0 26px 18px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <p style={{ color: C.accent, fontSize: 11, fontWeight: 800, letterSpacing: 2, margin: 0 }}>{etiqueta}</p>
-      {principal ? (
-        <p style={{ color: C.ink, fontSize: 40, fontWeight: 800, fontFamily: 'Georgia, serif', lineHeight: 1, margin: 0, textShadow: '0 2px 16px rgba(0,0,0,0.6)' }}>{principal}</p>
-      ) : (
-        <p style={{ color: C.muted, fontSize: 14, fontStyle: 'italic', margin: 0 }}>Añade los datos de tu entreno</p>
-      )}
-      {secundario && <p style={{ color: C.ink, fontSize: 17, fontWeight: 700, fontFamily: 'Georgia, serif', opacity: 0.9, margin: 0, textShadow: '0 2px 10px rgba(0,0,0,0.6)' }}>{secundario}</p>}
-      {metricas.length > 0 && <p style={{ color: C.muted, fontSize: 11.5, fontWeight: 600, letterSpacing: 0.4, margin: '3px 0 0' }}>{metricas.join(' · ')}</p>}
-    </div>
-  );
-}
-
-function CrossfitOverlay({ data }: { data: CrossfitData }) {
-  const movimientos = data.movimientos && data.movimientos.length > 70 ? data.movimientos.slice(0, 67).trim() + '...' : data.movimientos;
-  return (
-    <div style={{ position: 'relative', zIndex: 3, padding: '0 26px 18px', display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <p style={{ color: C.accent, fontSize: 11, fontWeight: 800, letterSpacing: 2, margin: 0 }}>WOD{data.tipo ? ` · ${data.tipo.toUpperCase()}` : ''}</p>
-      <p style={{ color: C.ink, fontSize: 20, fontWeight: 800, margin: 0, lineHeight: 1.15, textShadow: '0 2px 12px rgba(0,0,0,0.6)' }}>{data.nombreWod || 'Entreno de hoy'}</p>
-      {data.resultado ? (
-        <p style={{ color: C.ink, fontSize: 38, fontWeight: 800, fontFamily: 'Georgia, serif', lineHeight: 1, margin: '4px 0 0', textShadow: '0 2px 16px rgba(0,0,0,0.6)' }}>{data.resultado}</p>
-      ) : (
-        <p style={{ color: C.muted, fontSize: 14, fontStyle: 'italic', margin: '4px 0 0' }}>Añade tu resultado</p>
-      )}
-      {movimientos && <p style={{ color: C.muted, fontSize: 11, margin: '5px 0 0', lineHeight: 1.4 }}>{movimientos}</p>}
-    </div>
-  );
-}
-
 function distanciaEntreToques(t0: React.Touch, t1: React.Touch) {
   return Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
 }
 
 // ============================================================
-// Componente principal — HTML/CSS real. La Card SIEMPRE se renderiza
-// a tamaño fisico fijo (dims.w x dims.h reales en px); el ajuste a
-// pantalla se hace unicamente sobre el CONTENEDOR padre via zoom CSS
-// (no transform), que no afecta a como html2canvas mide el nodo hijo.
+// FORGE SHARE CARD — renderer SVG puro. Coordenadas matematicas fijas,
+// sin DOM que medir, sin zoom/transform que interpretar de forma distinta
+// entre navegador y herramienta de exportacion. El MISMO SVG se usa para
+// preview (embebido en pantalla) y para exportacion (serializado -> canvas -> PNG).
 // ============================================================
 export default function WorkoutShareCard({ disciplina, fecha, running, crossfit, onClose }: WorkoutShareCardProps) {
   const [foto, setFoto] = useState<string | null>(null);
@@ -127,12 +66,13 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
   const [formato, setFormato] = useState<Formato>('9:16');
   const [filtro, setFiltro] = useState('original');
   const [zoom, setZoom] = useState(1);
-  const [posX, setPosX] = useState(50);
+  const [posX, setPosX] = useState(50); // 0-100 %
   const [posY, setPosY] = useState(50);
+  const [imgDims, setImgDims] = useState({ w: 0, h: 0 });
   const [procesando, setProcesando] = useState(false);
-  const [escalaViewport, setEscalaViewport] = useState(1);
+  const [escalaViewport, setEscalaViewport] = useState(0.3);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cardRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const dims = FORMATOS[formato];
 
   useEffect(() => {
@@ -150,7 +90,10 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
     const file = e.target.files?.[0];
     if (!file) return;
     const img = new window.Image();
-    img.onload = () => setFotoBajaResolucion(img.width < 700 || img.height < 850);
+    img.onload = () => {
+      setFotoBajaResolucion(img.width < 1080 || img.height < 1080);
+      setImgDims({ w: img.width, h: img.height });
+    };
     const reader = new FileReader();
     reader.onload = (ev) => {
       const resultado = ev.target?.result as string;
@@ -159,6 +102,29 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
       setZoom(1); setPosX(50); setPosY(50);
     };
     reader.readAsDataURL(file);
+  };
+
+  // Calcula el rectangulo de "cover" real (matematico) de la foto dentro del marco dims.w x dims.h
+  const calcularRectFoto = () => {
+    if (!imgDims.w || !imgDims.h) return { x: 0, y: 0, w: dims.w, h: dims.h };
+    const coverBase = Math.max(dims.w / imgDims.w, dims.h / imgDims.h);
+    const escalaFinal = coverBase * zoom;
+    const anchoDibujo = imgDims.w * escalaFinal;
+    const altoDibujo = imgDims.h * escalaFinal;
+    const x = (dims.w - anchoDibujo) / 2 - (posX - 50) / 100 * (anchoDibujo - dims.w);
+    const y = (dims.h - altoDibujo) / 2 - (posY - 50) / 100 * (altoDibujo - dims.h);
+    return { x, y, w: anchoDibujo, h: altoDibujo };
+  };
+  const rectFoto = calcularRectFoto();
+
+  const limitarPos = (px: number, py: number, z: number) => {
+    if (!imgDims.w) return { px, py };
+    const coverBase = Math.max(dims.w / imgDims.w, dims.h / imgDims.h);
+    const anchoDibujo = imgDims.w * coverBase * z;
+    const altoDibujo = imgDims.h * coverBase * z;
+    const margenX = anchoDibujo > dims.w ? 50 : 50;
+    const margenY = altoDibujo > dims.h ? 50 : 50;
+    return { px: Math.max(0, Math.min(100, px)), py: Math.max(0, Math.min(100, py)) };
   };
 
   const gestoRef = useRef({ modo: 'ninguno' as 'ninguno' | 'pan' | 'pinch', startX: 0, startY: 0, startPosX: 50, startPosY: 50, startDist: 0, startZoom: 1 });
@@ -173,8 +139,8 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
     if (gestoRef.current.modo === 'pan' && e.touches.length === 1) {
       const dx = (e.touches[0].clientX - gestoRef.current.startX) / (dims.w * escalaViewport) * 100;
       const dy = (e.touches[0].clientY - gestoRef.current.startY) / (dims.h * escalaViewport) * 100;
-      setPosX(Math.max(0, Math.min(100, gestoRef.current.startPosX - dx)));
-      setPosY(Math.max(0, Math.min(100, gestoRef.current.startPosY - dy)));
+      const { px, py } = limitarPos(gestoRef.current.startPosX - dx, gestoRef.current.startPosY - dy, zoom);
+      setPosX(px); setPosY(py);
     } else if (gestoRef.current.modo === 'pinch' && e.touches.length === 2) {
       const nuevaDist = distanciaEntreToques(e.touches[0], e.touches[1]);
       setZoom(Math.max(1, Math.min(3, gestoRef.current.startZoom * (nuevaDist / gestoRef.current.startDist))));
@@ -188,32 +154,105 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
     if (!arrastreMouseRef.current.activo) return;
     const dx = (e.clientX - arrastreMouseRef.current.startX) / (dims.w * escalaViewport) * 100;
     const dy = (e.clientY - arrastreMouseRef.current.startY) / (dims.h * escalaViewport) * 100;
-    setPosX(Math.max(0, Math.min(100, arrastreMouseRef.current.startPosX - dx)));
-    setPosY(Math.max(0, Math.min(100, arrastreMouseRef.current.startPosY - dy)));
+    const { px, py } = limitarPos(arrastreMouseRef.current.startPosX - dx, arrastreMouseRef.current.startPosY - dy, zoom);
+    setPosX(px); setPosY(py);
   };
   const onMouseUpOrLeave = () => { arrastreMouseRef.current.activo = false; };
 
+  const filtroActivo = FILTROS.find(f => f.id === filtro) || FILTROS[0];
+
+  // Datos textuales precalculados (mismos para preview y export)
+  const escala = dims.w / 1080;
+  const px = 66 * escala;
+  const anclaInferior = dims.h * 0.14;
+
+  let lineasTexto: { texto: string; y: number; tamano: number; color: string; peso: number; familia: string; alpha?: number }[] = [];
+  let footerY = dims.h - dims.h * 0.035;
+
+  if (disciplina === 'carrera') {
+    const { principal, secundario } = calcularResultadoPrincipalRunning(running || {});
+    const etiqueta = calcularEtiquetaRunning(running || {});
+    const metricas = [
+      running?.intervalos && running?.distancia && `${running.distancia} KM`,
+      running?.fcMedia && `${running.fcMedia} FC`,
+      running?.fcMax && `${running.fcMax} MAX`,
+      running?.desnivel && `${running.desnivel} D+`,
+    ].filter(Boolean).join(' · ');
+    let y = dims.h - anclaInferior - (metricas ? 30 * escala : 0);
+    lineasTexto.push({ texto: etiqueta, y, tamano: 27 * escala, color: C.accent, peso: 800, familia: 'DM Sans, sans-serif' });
+    y += 68 * escala;
+    lineasTexto.push({ texto: principal || '—', y, tamano: 100 * escala, color: C.ink, peso: 800, familia: 'Georgia, serif' });
+    if (secundario) { y += 44 * escala; lineasTexto.push({ texto: secundario, y, tamano: 42 * escala, color: C.ink, peso: 700, familia: 'Georgia, serif', alpha: 0.9 }); }
+    if (metricas) { y += 40 * escala; lineasTexto.push({ texto: metricas, y, tamano: 26 * escala, color: C.muted, peso: 600, familia: 'DM Sans, sans-serif' }); }
+  } else {
+    const movimientos = crossfit?.movimientos && crossfit.movimientos.length > 70 ? crossfit.movimientos.slice(0, 67).trim() + '...' : crossfit?.movimientos;
+    let y = dims.h - anclaInferior - 50 * escala;
+    lineasTexto.push({ texto: `WOD${crossfit?.tipo ? ` · ${crossfit.tipo.toUpperCase()}` : ''}`, y, tamano: 27 * escala, color: C.accent, peso: 800, familia: 'DM Sans, sans-serif' });
+    y += 56 * escala;
+    lineasTexto.push({ texto: crossfit?.nombreWod || 'Entreno de hoy', y, tamano: 50 * escala, color: C.ink, peso: 800, familia: 'DM Sans, sans-serif' });
+    y += 90 * escala;
+    lineasTexto.push({ texto: crossfit?.resultado || '—', y, tamano: 100 * escala, color: C.ink, peso: 800, familia: 'Georgia, serif' });
+    if (movimientos) { y += 48 * escala; lineasTexto.push({ texto: movimientos, y, tamano: 26 * escala, color: C.muted, peso: 500, familia: 'DM Sans, sans-serif' }); }
+  }
+
+  const svgId = 'forge-share-card-svg';
+
+  const SvgContent = ({ width, height }: { width: number; height: number }) => (
+    <svg id={svgId} ref={svgRef} viewBox={`0 0 ${dims.w} ${dims.h}`} width={width} height={height} xmlns="http://www.w3.org/2000/svg" style={{ display: 'block', borderRadius: 20 * escalaViewport, background: '#161616' }}>
+      <defs>
+        <clipPath id="cardClip"><rect x="0" y="0" width={dims.w} height={dims.h} rx="0" /></clipPath>
+        <linearGradient id="cardGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#050505" stopOpacity="0" />
+          <stop offset="30%" stopColor="#050505" stopOpacity="0" />
+          <stop offset="62%" stopColor="#050505" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="#050505" stopOpacity="0.94" />
+        </linearGradient>
+        {filtroActivo.svgFilter && (
+          <filter id="fotoFiltro">
+            {filtro === 'mono' && <><feColorMatrix type="saturate" values="0" /><feComponentTransfer><feFuncR type="linear" slope="1.1" intercept="-0.05" /><feFuncG type="linear" slope="1.1" intercept="-0.05" /><feFuncB type="linear" slope="1.1" intercept="-0.05" /></feComponentTransfer></>}
+            {filtro === 'contraste' && <feComponentTransfer><feFuncR type="linear" slope="1.35" intercept="-0.15" /><feFuncG type="linear" slope="1.35" intercept="-0.15" /><feFuncB type="linear" slope="1.35" intercept="-0.15" /></feComponentTransfer>}
+            {filtro === 'calido' && <feColorMatrix type="matrix" values="1.1 0 0 0 0.03  0 1.02 0 0 0.01  0 0 0.85 0 0  0 0 0 1 0" />}
+            {filtro === 'frio' && <feColorMatrix type="matrix" values="0.95 0 0 0 0  0 1 0 0 0  0 0 1.1 0 0.02  0 0 0 1 0" />}
+            {filtro === 'noche' && <feComponentTransfer><feFuncR type="linear" slope="0.85" /><feFuncG type="linear" slope="0.85" /><feFuncB type="linear" slope="0.85" /></feComponentTransfer>}
+          </filter>
+        )}
+      </defs>
+      <g clipPath="url(#cardClip)">
+        <rect x="0" y="0" width={dims.w} height={dims.h} fill="#161616" />
+        {foto && (
+          <image href={foto} x={rectFoto.x} y={rectFoto.y} width={rectFoto.w} height={rectFoto.h} preserveAspectRatio="none" filter={filtroActivo.svgFilter ? 'url(#fotoFiltro)' : undefined} />
+        )}
+        <rect x="0" y="0" width={dims.w} height={dims.h} fill="url(#cardGrad)" />
+        {lineasTexto.map((l, i) => (
+          <text key={i} x={px} y={l.y} fontSize={l.tamano} fontWeight={l.peso} fontFamily={l.familia} fill={l.color} opacity={l.alpha ?? 1} style={{ filter: 'drop-shadow(0 2px 10px rgba(0,0,0,0.6))' }}>{l.texto}</text>
+        ))}
+        <text x={dims.w - px} y={footerY} fontSize={22 * escala} fontWeight={500} fill={C.muted} textAnchor="end" fontFamily="DM Sans, sans-serif">{fecha}</text>
+        <text x={px + 30 * escala} y={footerY} fontSize={28 * escala} fontWeight={800} fill={C.accent} letterSpacing="3" fontFamily="DM Sans, sans-serif">FORGE</text>
+      </g>
+    </svg>
+  );
+
+  // Exportacion: serializa el MISMO svg a tamaño real 1080xN, rasteriza a canvas, exporta PNG
   const compartirCard = async () => {
     setProcesando(true);
     try {
-      const html2canvas = (await import('html2canvas')).default;
-      const el = cardRef.current;
-      if (!el) return;
+      const svgMarkup = document.getElementById(svgId)?.outerHTML;
+      if (!svgMarkup) return;
+      // Reconstruir con viewBox y tamaño real de exportacion explicitos (independiente del preview)
+      const svgExport = svgMarkup.replace(/width="[^"]*"/, `width="${dims.w}"`).replace(/height="[^"]*"/, `height="${dims.h}"`);
+      const svgBlob = new Blob([svgExport], { type: 'image/svg+xml;charset=utf-8' });
+      const svgUrl = URL.createObjectURL(svgBlob);
 
-      // FIX: html2canvas no soporta correctamente la propiedad CSS "zoom" (no estandar) al medir
-      // el nodo — sin anularla, captura con el layout escalado, produciendo el bug de imagen
-      // desplazada + fondo negro. Se anula temporalmente para que el nodo tenga su tamaño fisico
-      // real de exportacion (dims.w x dims.h a zoom 1), y se restaura SIEMPRE, incluso si la
-      // captura falla — try/finally anidado especifico para esta operacion.
-      const zoomOriginal = el.style.zoom;
-      let canvas: HTMLCanvasElement;
-      try {
-        el.style.zoom = '1';
-        void el.offsetHeight; // fuerza recalculo de layout antes de capturar
-        canvas = await html2canvas(el, { backgroundColor: null, scale: 2, useCORS: true, width: dims.w, height: dims.h });
-      } finally {
-        el.style.zoom = zoomOriginal;
-      }
+      const img = new window.Image();
+      await new Promise<void>((resolve, reject) => { img.onload = () => resolve(); img.onerror = reject; img.src = svgUrl; });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = dims.w * 2;
+      canvas.height = dims.h * 2;
+      const ctx = canvas.getContext('2d')!;
+      ctx.scale(2, 2);
+      ctx.drawImage(img, 0, 0, dims.w, dims.h);
+      URL.revokeObjectURL(svgUrl);
 
       const blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
       if (!blob) return;
@@ -231,8 +270,6 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
     }
   };
 
-  const filtroActivo = FILTROS.find(f => f.id === filtro) || FILTROS[0];
-
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.93)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, flexDirection: 'column', gap: 12, padding: 16, fontFamily: "'DM Sans', sans-serif", overflowY: 'auto' }}>
       {onClose && (
@@ -245,56 +282,29 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
         {(Object.keys(FORMATOS) as Formato[]).map(f => (
           <button key={f} onClick={() => setFormato(f)} style={{
             background: formato === f ? C.accent : '#141414', color: formato === f ? '#fff' : C.muted,
-            border: `1px solid ${formato === f ? C.accent : '#232323'}`, borderRadius: 100, padding: '7px 16px',
-            fontSize: 12, fontWeight: 700, cursor: 'pointer',
+            border: `1px solid ${formato === f ? C.accent : '#232323'}`, borderRadius: 100, padding: '7px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
           }}>
             {FORMATOS[f].label}
           </button>
         ))}
       </div>
 
-      {/* Contenedor de ajuste visual: SOLO aqui vive el escalado a pantalla (zoom CSS,
-          no transform), asi el nodo hijo (cardRef) siempre tiene su tamaño fisico real */}
-      <div style={{ width: dims.w * escalaViewport, height: dims.h * escalaViewport, overflow: 'hidden', borderRadius: 20, boxShadow: '0 40px 100px -30px rgba(0,0,0,0.7)' }}>
-        <div ref={cardRef}
-          onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUpOrLeave} onMouseLeave={onMouseUpOrLeave}
-          onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
-          style={{
-            width: dims.w, height: dims.h, zoom: escalaViewport as any, position: 'relative', overflow: 'hidden',
-            background: `linear-gradient(155deg, #161616 0%, ${C.bg} 60%)`,
-            display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-            cursor: foto ? 'grab' : 'default', touchAction: foto ? 'none' : 'auto',
+      <div
+        onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUpOrLeave} onMouseLeave={onMouseUpOrLeave}
+        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
+        style={{ position: 'relative', cursor: foto ? 'grab' : 'default', touchAction: foto ? 'none' : 'auto', boxShadow: '0 40px 100px -30px rgba(0,0,0,0.7)', borderRadius: 20 * escalaViewport, overflow: 'hidden' }}
+      >
+        <SvgContent width={dims.w * escalaViewport} height={dims.h * escalaViewport} />
+        {!foto && (
+          <button onClick={() => fileInputRef.current?.click()} style={{
+            position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+            background: 'none', border: `1.5px dashed ${C.muted}`, borderRadius: 16, padding: '24px 32px', cursor: 'pointer',
           }}>
-          {foto && (
-            <img src={foto} draggable={false} style={{
-              position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
-              objectPosition: `${posX}% ${posY}%`, transform: `scale(${zoom})`, transformOrigin: 'center',
-              filter: filtroActivo.css, zIndex: 0, userSelect: 'none', pointerEvents: 'none',
-            }} />
-          )}
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, transparent 30%, rgba(5,5,5,0.55) 62%, rgba(5,5,5,0.94) 100%)', zIndex: 1 }} />
-
-          {!foto && (
-            <button onClick={() => fileInputRef.current?.click()} style={{
-              position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', zIndex: 2,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
-              background: 'none', border: `1.5px dashed ${C.muted}`, borderRadius: 16, padding: '24px 32px', cursor: 'pointer',
-            }}>
-              <ImageIcon size={26} color={C.muted} />
-              <span style={{ color: C.muted, fontSize: 12.5, fontWeight: 600 }}>Añadir foto</span>
-            </button>
-          )}
-
-          {disciplina === 'carrera' ? <RunningOverlay data={running || {}} /> : <CrossfitOverlay data={crossfit || {}} />}
-
-          <div style={{ position: 'relative', zIndex: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 26px 18px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <img src="/logo-forge.png" alt="" style={{ width: 20, height: 20, objectFit: 'contain', filter: 'drop-shadow(0 1px 4px rgba(0,0,0,0.5))', display: 'block' }} />
-              <span style={{ color: C.accent, fontSize: 12, fontWeight: 800, letterSpacing: 2.5 }}>FORGE</span>
-            </div>
-            <span style={{ color: C.muted, fontSize: 10, letterSpacing: 0.3 }}>{fecha}</span>
-          </div>
-        </div>
+            <ImageIcon size={26} color={C.muted} />
+            <span style={{ color: C.muted, fontSize: 12.5, fontWeight: 600 }}>Añadir foto</span>
+          </button>
+        )}
       </div>
 
       <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFotoSeleccionada} style={{ display: 'none' }} />
@@ -309,14 +319,11 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
       {foto && (
         <>
           <p style={{ color: C.muted, fontSize: 11.5, textAlign: 'center' }}>Arrastra para mover · pellizca para zoom</p>
-
-          {/* Filtros */}
           <div style={{ display: 'flex', gap: 8, overflowX: 'auto', maxWidth: dims.w * escalaViewport, paddingBottom: 2 }}>
             {FILTROS.map(f => (
               <button key={f.id} onClick={() => setFiltro(f.id)} style={{
                 flexShrink: 0, background: filtro === f.id ? C.accent : '#141414', color: filtro === f.id ? '#fff' : C.muted,
-                border: `1px solid ${filtro === f.id ? C.accent : '#232323'}`, borderRadius: 100, padding: '6px 14px',
-                fontSize: 11.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                border: `1px solid ${filtro === f.id ? C.accent : '#232323'}`, borderRadius: 100, padding: '6px 14px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
               }}>
                 {f.label}
               </button>

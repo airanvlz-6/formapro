@@ -151,41 +151,56 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
 
   // FIX FASE 2: arrastre 1:1 real — delta de pantalla / escalaViewport = delta en coordenadas
   // reales de la card, directamente sobre offsetX/offsetY (sin pasar por focal 0-1 intermedio).
-  const gestoRef = useRef({ modo: 'ninguno' as 'ninguno' | 'pan' | 'pinch', startX: 0, startY: 0, startOffX: 0, startOffY: 0, startDist: 0, startZoom: 1 });
-  const onTouchStart = (e: React.TouchEvent) => {
+  // FIX: sistema UNICO de gestos con Pointer Events reales — Map de punteros activos para pinch
+// multi-touch genuino (Pointer Events no expone e.touches, hay que rastrear punteros manualmente).
+// Un solo camino de codigo para dedo y raton, sin duplicacion Touch/Mouse.
+const gestoRef = useRef({ modo: 'ninguno' as 'ninguno' | 'pan' | 'pinch', startX: 0, startY: 0, startOffX: 0, startOffY: 0, startDist: 0, startZoom: 1, pointerId: null as number | null });
+  const punterosActivosRef = useRef(new Map<number, { x: number; y: number }>());
+
+  const onPointerDown = (e: React.PointerEvent) => {
     if (!foto) return;
-    if (e.touches.length === 1) gestoRef.current = { ...gestoRef.current, modo: 'pan', startX: e.touches[0].clientX, startY: e.touches[0].clientY, startOffX: offsetX, startOffY: offsetY };
-    else if (e.touches.length === 2) gestoRef.current = { ...gestoRef.current, modo: 'pinch', startDist: distanciaEntreToques(e.touches[0], e.touches[1]), startZoom: zoom };
-  };
-  const onTouchMove = (e: React.TouchEvent) => {
-    if (!foto) return;
-    e.preventDefault();
-    if (gestoRef.current.modo === 'pan' && e.touches.length === 1) {
-      const dxPantalla = e.touches[0].clientX - gestoRef.current.startX;
-      const dyPantalla = e.touches[0].clientY - gestoRef.current.startY;
-      const dxReal = dxPantalla / escalaViewport;
-      const dyReal = dyPantalla / escalaViewport;
-      const nuevoRect = calculateImageRect(imgDims.w, imgDims.h, dims.w, dims.h, zoom, gestoRef.current.startOffX + dxReal, gestoRef.current.startOffY + dyReal);
-      setOffsetX(nuevoRect.offsetXClamped);
-      setOffsetY(nuevoRect.offsetYClamped);
-    } else if (gestoRef.current.modo === 'pinch' && e.touches.length === 2) {
-      const nuevaDist = distanciaEntreToques(e.touches[0], e.touches[1]);
-      setZoom(Math.max(1, Math.min(3, gestoRef.current.startZoom * (nuevaDist / gestoRef.current.startDist))));
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    punterosActivosRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (punterosActivosRef.current.size === 1) {
+      gestoRef.current = { ...gestoRef.current, modo: 'pan', pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, startOffX: offsetX, startOffY: offsetY };
+    } else if (punterosActivosRef.current.size === 2) {
+      const puntos = Array.from(punterosActivosRef.current.values());
+      const dist = Math.hypot(puntos[0].x - puntos[1].x, puntos[0].y - puntos[1].y);
+      gestoRef.current = { ...gestoRef.current, modo: 'pinch', startDist: dist, startZoom: zoom };
     }
   };
-  const onTouchEnd = () => { gestoRef.current.modo = 'ninguno'; };
 
-  const arrastreMouseRef = useRef({ activo: false, startX: 0, startY: 0, startOffX: 0, startOffY: 0 });
-  const onMouseDown = (e: React.MouseEvent) => { if (foto) arrastreMouseRef.current = { activo: true, startX: e.clientX, startY: e.clientY, startOffX: offsetX, startOffY: offsetY }; };
-  const onMouseMove = (e: React.MouseEvent) => {
-    if (!arrastreMouseRef.current.activo) return;
-    const dxReal = (e.clientX - arrastreMouseRef.current.startX) / escalaViewport;
-    const dyReal = (e.clientY - arrastreMouseRef.current.startY) / escalaViewport;
-    const nuevoRect = calculateImageRect(imgDims.w, imgDims.h, dims.w, dims.h, zoom, arrastreMouseRef.current.startOffX + dxReal, arrastreMouseRef.current.startOffY + dyReal);
-    setOffsetX(nuevoRect.offsetXClamped);
-    setOffsetY(nuevoRect.offsetYClamped);
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!foto || !punterosActivosRef.current.has(e.pointerId)) return;
+    punterosActivosRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    e.preventDefault();
+
+    if (gestoRef.current.modo === 'pan' && gestoRef.current.pointerId === e.pointerId && punterosActivosRef.current.size === 1) {
+      const dxReal = (e.clientX - gestoRef.current.startX) / escalaViewport;
+      const dyReal = (e.clientY - gestoRef.current.startY) / escalaViewport;
+      const rect = calculateImageRect(imgDims.w, imgDims.h, dims.w, dims.h, zoom, gestoRef.current.startOffX + dxReal, gestoRef.current.startOffY + dyReal);
+      setOffsetX(rect.offsetXClamped);
+      setOffsetY(rect.offsetYClamped);
+    } else if (gestoRef.current.modo === 'pinch' && punterosActivosRef.current.size === 2) {
+      const puntos = Array.from(punterosActivosRef.current.values());
+      const distActual = Math.hypot(puntos[0].x - puntos[1].x, puntos[0].y - puntos[1].y);
+      setZoom(Math.max(1, Math.min(3, gestoRef.current.startZoom * (distActual / gestoRef.current.startDist))));
+    }
   };
-  const onMouseUpOrLeave = () => { arrastreMouseRef.current.activo = false; };
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    punterosActivosRef.current.delete(e.pointerId);
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+    if (punterosActivosRef.current.size === 0) {
+      gestoRef.current.modo = 'ninguno';
+      gestoRef.current.pointerId = null;
+    } else if (punterosActivosRef.current.size === 1) {
+      // Quedo 1 dedo tras soltar el segundo — retomar modo pan desde la posicion actual
+      const [restante] = Array.from(punterosActivosRef.current.values());
+      gestoRef.current = { ...gestoRef.current, modo: 'pan', startX: restante.x, startY: restante.y, startOffX: offsetX, startOffY: offsetY };
+    }
+  };
 
   const escala = dims.w / 1080;
   const px = 66 * escala;
@@ -291,9 +306,8 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
         ))}
       </div>
 
-      <div onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUpOrLeave} onMouseLeave={onMouseUpOrLeave}
-        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
-        style={{ position: 'relative', cursor: foto ? 'grab' : 'default', touchAction: 'none', boxShadow: '0 40px 100px -30px rgba(0,0,0,0.7)', borderRadius: 20 * escalaViewport, overflow: 'hidden' }}>
+      <div onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
+        style={{ position: 'relative', cursor: foto ? 'grab' : 'default', touchAction: 'none', userSelect: 'none', boxShadow: '0 40px 100px -30px rgba(0,0,0,0.7)', borderRadius: 20 * escalaViewport, overflow: 'hidden' }}>
         <SvgContent width={dims.w * escalaViewport} height={dims.h * escalaViewport} />
         {!foto && (
           <button onClick={() => fileInputRef.current?.click()} style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, background: 'none', border: `1.5px dashed ${C.muted}`, borderRadius: 16, padding: '24px 32px', cursor: 'pointer' }}>

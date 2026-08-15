@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useId } from 'react';
 import { X, Upload, Image as ImageIcon, AlertTriangle, Share2, ZoomIn, ZoomOut } from 'lucide-react';
 
 const C = { bg: '#050505', ink: '#F5F2EC', muted: '#7A756E', accent: '#FF6B00' };
@@ -36,17 +36,22 @@ function calcularEtiquetaRunning(data: RunningData): string {
 }
 function distanciaEntreToques(t0: React.Touch, t1: React.Touch) { return Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY); }
 
-// FORGE CARD LAYOUT ENGINE — construye el bloque de texto por ACUMULACION real (altura de cada
-// linea + gap fijo), nunca con formulas de escala dispersas. Un unico tamaño de fuente FIJO en
-// px reales (1080 de ancho base) para los 3 formatos — Cuadrado muestra MENOS lineas si no caben,
-// nunca comprime el tamaño de fuente ni el espaciado. Adaptacion != compresion.
+function fileToDataUrl(file: string): Promise<string> {
+  // Si ya es data: URL, devolver tal cual. Si es ruta relativa (logo), fetch + convertir.
+  if (file.startsWith('data:')) return Promise.resolve(file);
+  return fetch(file).then(r => r.blob()).then(blob => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  }));
+}
+
 interface LineaTexto { texto: string; tamano: number; color: string; peso: number; familia: string; alpha?: number; alturaLinea: number; }
 
 function construirBloqueTexto(disciplina: Disciplina, running: RunningData | undefined, crossfit: CrossfitData | undefined, alturaDisponible: number): LineaTexto[] {
   const GAP = 22;
-  const GAP_ETIQUETA = 38; // espacio extra especifico entre la etiqueta (RUN/WOD) y el valor principal
   const candidatas: LineaTexto[] = [];
-
   if (disciplina === 'carrera') {
     const { principal, secundario } = calcularResultadoPrincipalRunning(running || {});
     const etiqueta = calcularEtiquetaRunning(running || {});
@@ -67,27 +72,39 @@ function construirBloqueTexto(disciplina: Disciplina, running: RunningData | und
     candidatas.push({ texto: crossfit?.resultado || '—', tamano: 88, color: C.ink, peso: 800, familia: 'Georgia, serif', alturaLinea: 88 });
     if (movimientos) candidatas.push({ texto: movimientos, tamano: 22, color: C.muted, peso: 500, familia: 'DM Sans, sans-serif', alturaLinea: 22 });
   }
-
-  // Si no cabe todo en el espacio disponible, quitar lineas secundarias desde el final
-  // (nunca la etiqueta ni el resultado principal, que son el nucleo de la Card)
   let lineas = [...candidatas];
   const alturaTotal = () => lineas.reduce((sum, l) => sum + l.alturaLinea, 0) + GAP * (lineas.length - 1);
-  while (lineas.length > 2 && alturaTotal() > alturaDisponible) {
-    lineas.pop();
-  }
+  while (lineas.length > 2 && alturaTotal() > alturaDisponible) lineas.pop();
   return lineas;
 }
 
+// FORGE calculateImageRect — funcion CENTRAL unica, usada por preview Y export. offsetX/offsetY
+// son desplazamientos en COORDENADAS REALES DE LA CARD (px de 1080 base), no focal 0-1 — elimina
+// la escala variable que causaba el arrastre brusco/imperceptible. zoom=1 es el minimo COVER real
+// (sin huecos); zoom>1 amplia. El clamp de offset se calcula sobre el rect real, no aproximado.
+function calculateImageRect(imgW: number, imgH: number, cardW: number, cardH: number, zoom: number, offsetX: number, offsetY: number) {
+  if (!imgW || !imgH) return { x: 0, y: 0, w: cardW, h: cardH, offsetXClamped: 0, offsetYClamped: 0 };
+  const coverBase = Math.max(cardW / imgW, cardH / imgH) * zoom;
+  const w = imgW * coverBase, h = imgH * coverBase;
+  const maxOffsetX = Math.max(0, (w - cardW) / 2);
+  const maxOffsetY = Math.max(0, (h - cardH) / 2);
+  const offsetXClamped = Math.max(-maxOffsetX, Math.min(maxOffsetX, offsetX));
+  const offsetYClamped = Math.max(-maxOffsetY, Math.min(maxOffsetY, offsetY));
+  const x = (cardW - w) / 2 + offsetXClamped;
+  const y = (cardH - h) / 2 + offsetYClamped;
+  return { x, y, w, h, offsetXClamped, offsetYClamped };
+}
+
 export default function WorkoutShareCard({ disciplina, fecha, running, crossfit, onClose }: WorkoutShareCardProps) {
+  const instanceId = useId().replace(/:/g, '');
   const [foto, setFoto] = useState<string | null>(null);
   const [fotoBajaResolucion, setFotoBajaResolucion] = useState(false);
   const [formato, setFormato] = useState<Formato>('9:16');
-  const [filtroCss, setFiltroCss] = useState('none');
+  const [filtroCss, setFiltroCss] = useState('original');
   const [zoom, setZoom] = useState(1);
-  // FIX: coordenadas normalizadas 0-1 (focalX/focalY), independientes del formato — el mismo
-  // encuadre funciona igual en Story/Feed/Cuadrado sin reconvertir unidades.
-  const [focalX, setFocalX] = useState(0.5);
-  const [focalY, setFocalY] = useState(0.5);
+  // FIX FASE 2: offsetX/offsetY en px reales de la card (1080 base), no focal 0-1 — movimiento 1:1 real.
+  const [offsetX, setOffsetX] = useState(0);
+  const [offsetY, setOffsetY] = useState(0);
   const [imgDims, setImgDims] = useState({ w: 0, h: 0 });
   const [procesando, setProcesando] = useState(false);
   const [escalaViewport, setEscalaViewport] = useState(0.3);
@@ -105,46 +122,52 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
     return () => window.removeEventListener('resize', calcular);
   }, [dims.w, dims.h]);
 
+  // FIX FASE 2: al cambiar de formato, recalcular offset para mantener el CENTRO relativo del
+  // encuadre en vez de reutilizar px absolutos de un formato distinto (que producia resultados
+  // visuales incoherentes entre Story/Feed/Cuadrado).
+  const dimsAnteriorRef = useRef(dims);
+  useEffect(() => {
+    if (dimsAnteriorRef.current !== dims && imgDims.w) {
+      const factorX = offsetX / (dimsAnteriorRef.current.w || 1);
+      const factorY = offsetY / (dimsAnteriorRef.current.h || 1);
+      setOffsetX(factorX * dims.w);
+      setOffsetY(factorY * dims.h);
+    }
+    dimsAnteriorRef.current = dims;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formato]);
+
   const handleFotoSeleccionada = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const img = new window.Image();
     img.onload = () => { setFotoBajaResolucion(img.width < 1080 || img.height < 1080); setImgDims({ w: img.width, h: img.height }); };
     const reader = new FileReader();
-    reader.onload = (ev) => { const r = ev.target?.result as string; img.src = r; setFoto(r); setZoom(1); setFocalX(0.5); setFocalY(0.5); };
+    reader.onload = (ev) => { const r = ev.target?.result as string; img.src = r; setFoto(r); setZoom(1); setOffsetX(0); setOffsetY(0); };
     reader.readAsDataURL(file);
   };
 
-  const rectFoto = (() => {
-    if (!imgDims.w || !imgDims.h) return { x: 0, y: 0, w: dims.w, h: dims.h };
-    const coverBase = Math.max(dims.w / imgDims.w, dims.h / imgDims.h) * zoom;
-    const w = imgDims.w * coverBase, h = imgDims.h * coverBase;
-    const x = (dims.w - w) * focalX;
-    const y = (dims.h - h) * focalY;
-    return { x, y, w, h };
-  })();
+  const rectFoto = calculateImageRect(imgDims.w, imgDims.h, dims.w, dims.h, zoom, offsetX, offsetY);
 
-  // FIX: gesto mapeado 1:1 al movimiento real del dedo/mouse en pantalla — se calcula un delta
-  // en unidades normalizadas (0-1) directamente proporcional al desplazamiento en px de pantalla
-  // dividido por el tamaño VISUAL del marco (dims.w * escalaViewport), sin multiplicadores arbitrarios.
-  const gestoRef = useRef({ modo: 'ninguno' as 'ninguno' | 'pan' | 'pinch', startX: 0, startY: 0, startFX: 0.5, startFY: 0.5, startDist: 0, startZoom: 1 });
+  // FIX FASE 2: arrastre 1:1 real — delta de pantalla / escalaViewport = delta en coordenadas
+  // reales de la card, directamente sobre offsetX/offsetY (sin pasar por focal 0-1 intermedio).
+  const gestoRef = useRef({ modo: 'ninguno' as 'ninguno' | 'pan' | 'pinch', startX: 0, startY: 0, startOffX: 0, startOffY: 0, startDist: 0, startZoom: 1 });
   const onTouchStart = (e: React.TouchEvent) => {
     if (!foto) return;
-    if (e.touches.length === 1) gestoRef.current = { ...gestoRef.current, modo: 'pan', startX: e.touches[0].clientX, startY: e.touches[0].clientY, startFX: focalX, startFY: focalY };
+    if (e.touches.length === 1) gestoRef.current = { ...gestoRef.current, modo: 'pan', startX: e.touches[0].clientX, startY: e.touches[0].clientY, startOffX: offsetX, startOffY: offsetY };
     else if (e.touches.length === 2) gestoRef.current = { ...gestoRef.current, modo: 'pinch', startDist: distanciaEntreToques(e.touches[0], e.touches[1]), startZoom: zoom };
   };
   const onTouchMove = (e: React.TouchEvent) => {
     if (!foto) return;
     e.preventDefault();
     if (gestoRef.current.modo === 'pan' && e.touches.length === 1) {
-      // FIX: signo invertido — arrastrar el dedo/foto hacia la derecha debe mover el ENCUADRE
-      // (focalX) hacia la derecha tambien, sensacion de "la foto sigue al dedo".
       const dxPantalla = e.touches[0].clientX - gestoRef.current.startX;
       const dyPantalla = e.touches[0].clientY - gestoRef.current.startY;
-      const nuevaFX = gestoRef.current.startFX - dxPantalla / (dims.w * escalaViewport);
-      const nuevaFY = gestoRef.current.startFY - dyPantalla / (dims.h * escalaViewport);
-      setFocalX(Math.max(0, Math.min(1, nuevaFX)));
-      setFocalY(Math.max(0, Math.min(1, nuevaFY)));
+      const dxReal = dxPantalla / escalaViewport;
+      const dyReal = dyPantalla / escalaViewport;
+      const nuevoRect = calculateImageRect(imgDims.w, imgDims.h, dims.w, dims.h, zoom, gestoRef.current.startOffX + dxReal, gestoRef.current.startOffY + dyReal);
+      setOffsetX(nuevoRect.offsetXClamped);
+      setOffsetY(nuevoRect.offsetYClamped);
     } else if (gestoRef.current.modo === 'pinch' && e.touches.length === 2) {
       const nuevaDist = distanciaEntreToques(e.touches[0], e.touches[1]);
       setZoom(Math.max(1, Math.min(3, gestoRef.current.startZoom * (nuevaDist / gestoRef.current.startDist))));
@@ -152,14 +175,15 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
   };
   const onTouchEnd = () => { gestoRef.current.modo = 'ninguno'; };
 
-  const arrastreMouseRef = useRef({ activo: false, startX: 0, startY: 0, startFX: 0.5, startFY: 0.5 });
-  const onMouseDown = (e: React.MouseEvent) => { if (foto) arrastreMouseRef.current = { activo: true, startX: e.clientX, startY: e.clientY, startFX: focalX, startFY: focalY }; };
+  const arrastreMouseRef = useRef({ activo: false, startX: 0, startY: 0, startOffX: 0, startOffY: 0 });
+  const onMouseDown = (e: React.MouseEvent) => { if (foto) arrastreMouseRef.current = { activo: true, startX: e.clientX, startY: e.clientY, startOffX: offsetX, startOffY: offsetY }; };
   const onMouseMove = (e: React.MouseEvent) => {
     if (!arrastreMouseRef.current.activo) return;
-    const dxPantalla = e.clientX - arrastreMouseRef.current.startX;
-    const dyPantalla = e.clientY - arrastreMouseRef.current.startY;
-    setFocalX(Math.max(0, Math.min(1, arrastreMouseRef.current.startFX - dxPantalla / (dims.w * escalaViewport))));
-    setFocalY(Math.max(0, Math.min(1, arrastreMouseRef.current.startFY - dyPantalla / (dims.h * escalaViewport))));
+    const dxReal = (e.clientX - arrastreMouseRef.current.startX) / escalaViewport;
+    const dyReal = (e.clientY - arrastreMouseRef.current.startY) / escalaViewport;
+    const nuevoRect = calculateImageRect(imgDims.w, imgDims.h, dims.w, dims.h, zoom, arrastreMouseRef.current.startOffX + dxReal, arrastreMouseRef.current.startOffY + dyReal);
+    setOffsetX(nuevoRect.offsetXClamped);
+    setOffsetY(nuevoRect.offsetYClamped);
   };
   const onMouseUpOrLeave = () => { arrastreMouseRef.current.activo = false; };
 
@@ -168,7 +192,6 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
   const alturaDisponible = dims.contentBottom - 70;
   const lineasBloque = construirBloqueTexto(disciplina, running, crossfit, alturaDisponible);
 
-  // Posicionamiento por ACUMULACION real desde el borde inferior hacia arriba
   const gapEscalado = 22 * escala;
   const gapEtiquetaEscalado = 38 * escala;
   let yAcumulado = dims.h - 90 * escala;
@@ -176,8 +199,6 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
   const lineasPosicionadas = [...lineasBloque].reverse().map((l, idxReverso) => {
     yAcumulado -= l.alturaLinea * escala;
     const y = yAcumulado;
-    // La primera linea del array original (etiqueta RUN/WOD) es la ULTIMA en el reverso —
-    // usa el gap ampliado para separarla claramente del valor principal que va justo debajo.
     const esUltimaDelReverso = idxReverso === totalLineas - 1;
     yAcumulado -= esUltimaDelReverso ? 0 : gapEscalado;
     if (idxReverso === totalLineas - 2) yAcumulado -= (gapEtiquetaEscalado - gapEscalado);
@@ -185,28 +206,35 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
   }).reverse();
 
   const footerY = dims.h - 55 * escala;
-  const svgId = 'forge-share-card-svg';
+  const svgId = `forge-share-card-svg-${instanceId}`;
+  const filterId = `fotoFiltro-${instanceId}`;
+  const clipId = `cardClip-${instanceId}`;
+  const gradientId = `cardGrad-${instanceId}`;
 
-  const filtroSvgId = filtroCss !== 'none' ? 'fotoFiltro' : undefined;
-
+  // FIX FASE 1: filter SIEMPRE presente en el DOM con id unico por instancia. "original" usa
+  // matriz identidad matematica en vez de ausencia — el <image> SIEMPRE referencia el mismo id,
+  // nunca transiciona entre "con filtro" y "sin filtro".
   const SvgContent = ({ width, height }: { width: number; height: number }) => (
     <svg id={svgId} viewBox={`0 0 ${dims.w} ${dims.h}`} width={width} height={height} xmlns="http://www.w3.org/2000/svg" style={{ display: 'block', background: '#161616' }}>
       <defs>
-        <clipPath id="cardClip"><rect x="0" y="0" width={dims.w} height={dims.h} /></clipPath>
-        <linearGradient id="cardGrad" x1="0" y1="0" x2="0" y2="1">
+        <clipPath id={clipId}><rect x="0" y="0" width={dims.w} height={dims.h} /></clipPath>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#050505" stopOpacity="0" /><stop offset="30%" stopColor="#050505" stopOpacity="0" />
           <stop offset="62%" stopColor="#050505" stopOpacity="0.55" /><stop offset="100%" stopColor="#050505" stopOpacity="0.94" />
         </linearGradient>
-        {filtroCss === 'mono' && <filter id="fotoFiltro"><feColorMatrix type="saturate" values="0.05" /></filter>}
-        {filtroCss === 'contraste' && <filter id="fotoFiltro"><feComponentTransfer><feFuncR type="linear" slope="1.3" intercept="-0.12" /><feFuncG type="linear" slope="1.3" intercept="-0.12" /><feFuncB type="linear" slope="1.3" intercept="-0.12" /></feComponentTransfer></filter>}
-        {filtroCss === 'calido' && <filter id="fotoFiltro"><feColorMatrix type="matrix" values="1.1 0 0 0 0.04  0 1.02 0 0 0.01  0 0 0.82 0 0  0 0 0 1 0" /></filter>}
-        {filtroCss === 'frio' && <filter id="fotoFiltro"><feColorMatrix type="matrix" values="0.92 0 0 0 0  0 1 0 0 0  0 0 1.12 0 0.02  0 0 0 1 0" /></filter>}
-        {filtroCss === 'noche' && <filter id="fotoFiltro"><feComponentTransfer><feFuncR type="linear" slope="0.82" /><feFuncG type="linear" slope="0.82" /><feFuncB type="linear" slope="0.82" /></feComponentTransfer></filter>}
+        <filter id={filterId}>
+          {filtroCss === 'original' && <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1 0" />}
+          {filtroCss === 'mono' && <feColorMatrix type="saturate" values="0.05" />}
+          {filtroCss === 'contraste' && <feComponentTransfer><feFuncR type="linear" slope="1.3" intercept="-0.12" /><feFuncG type="linear" slope="1.3" intercept="-0.12" /><feFuncB type="linear" slope="1.3" intercept="-0.12" /></feComponentTransfer>}
+          {filtroCss === 'calido' && <feColorMatrix type="matrix" values="1.1 0 0 0 0.04  0 1.02 0 0 0.01  0 0 0.82 0 0  0 0 0 1 0" />}
+          {filtroCss === 'frio' && <feColorMatrix type="matrix" values="0.92 0 0 0 0  0 1 0 0 0  0 0 1.12 0 0.02  0 0 0 1 0" />}
+          {filtroCss === 'noche' && <feComponentTransfer><feFuncR type="linear" slope="0.82" /><feFuncG type="linear" slope="0.82" /><feFuncB type="linear" slope="0.82" /></feComponentTransfer>}
+        </filter>
       </defs>
-      <g clipPath="url(#cardClip)">
+      <g clipPath={`url(#${clipId})`}>
         <rect x="0" y="0" width={dims.w} height={dims.h} fill="#161616" />
-        {foto && <image href={foto} x={rectFoto.x} y={rectFoto.y} width={rectFoto.w} height={rectFoto.h} preserveAspectRatio="none" filter={filtroSvgId ? `url(#${filtroSvgId})` : undefined} />}
-        <rect x="0" y="0" width={dims.w} height={dims.h} fill="url(#cardGrad)" />
+        {foto && <image href={foto} x={rectFoto.x} y={rectFoto.y} width={rectFoto.w} height={rectFoto.h} preserveAspectRatio="none" filter={`url(#${filterId})`} />}
+        <rect x="0" y="0" width={dims.w} height={dims.h} fill={`url(#${gradientId})`} />
         {lineasPosicionadas.map((l, i) => (
           <text key={i} x={px} y={l.y} fontSize={l.tamano} fontWeight={l.peso} fontFamily={l.familia} fill={l.color} opacity={l.alpha ?? 1}>{l.texto}</text>
         ))}
@@ -217,13 +245,24 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
     </svg>
   );
 
+  // FIX FASE 4: SVG autocontenido — logo convertido a data URL antes de exportar, elimina la
+  // dependencia de resolver una ruta relativa dentro del Blob serializado.
   const compartirCard = async () => {
     setProcesando(true);
     try {
-      const svgMarkup = document.getElementById(svgId)?.outerHTML;
-      if (!svgMarkup) return;
-      const svgExport = svgMarkup.replace(/width="[^"]*"/, `width="${dims.w}"`).replace(/height="[^"]*"/, `height="${dims.h}"`);
-      const svgBlob = new Blob([svgExport], { type: 'image/svg+xml;charset=utf-8' });
+      const svgEl = document.getElementById(svgId);
+      if (!svgEl) return;
+      const logoDataUrl = await fileToDataUrl('/logo-forge.png').catch(() => null);
+
+      const clone = svgEl.cloneNode(true) as SVGSVGElement;
+      clone.setAttribute('width', String(dims.w));
+      clone.setAttribute('height', String(dims.h));
+      if (logoDataUrl) {
+        const logoImg = clone.querySelector('image[href="/logo-forge.png"]');
+        if (logoImg) logoImg.setAttribute('href', logoDataUrl);
+      }
+      const svgMarkup = new XMLSerializer().serializeToString(clone);
+      const svgBlob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' });
       const svgUrl = URL.createObjectURL(svgBlob);
       const img = new window.Image();
       await new Promise<void>((resolve, reject) => { img.onload = () => resolve(); img.onerror = reject; img.src = svgUrl; });
@@ -275,9 +314,9 @@ export default function WorkoutShareCard({ disciplina, fecha, running, crossfit,
         <>
           <p style={{ color: C.muted, fontSize: 11.5, textAlign: 'center' }}>Arrastra para mover</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button onClick={() => setZoom(z => Math.max(1, z - 0.15))} style={{ background: '#141414', border: '1px solid #232323', borderRadius: 100, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ZoomOut size={15} color={C.ink} /></button>
+            <button onClick={() => setZoom(z => Math.max(1, z - 0.1))} style={{ background: '#141414', border: '1px solid #232323', borderRadius: 100, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ZoomOut size={15} color={C.ink} /></button>
             <input type="range" min={1} max={3} step={0.02} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} style={{ width: 140, accentColor: C.accent }} />
-            <button onClick={() => setZoom(z => Math.min(3, z + 0.15))} style={{ background: '#141414', border: '1px solid #232323', borderRadius: 100, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ZoomIn size={15} color={C.ink} /></button>
+            <button onClick={() => setZoom(z => Math.min(3, z + 0.1))} style={{ background: '#141414', border: '1px solid #232323', borderRadius: 100, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ZoomIn size={15} color={C.ink} /></button>
           </div>
           <div style={{ display: 'flex', gap: 8, overflowX: 'auto', maxWidth: dims.w * escalaViewport, paddingBottom: 2 }}>
             {FILTROS.map(f => (

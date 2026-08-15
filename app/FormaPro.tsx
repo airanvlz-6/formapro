@@ -2082,13 +2082,13 @@ ${testStr}`}]});
             <img src="/logo-forge.png" alt="Forge" style={{width:80,height:80,objectFit:"contain"}}/>
             <div style={{textAlign:"left"}}>
               <div style={{fontSize:"clamp(28px,6vw,42px)",fontWeight:900,color:"#F0EDE8",fontFamily:"'DM Sans',sans-serif",letterSpacing:"-1px",lineHeight:1}}>FORGE</div>
-              <div style={{fontSize:"clamp(10px,2vw,13px)",fontWeight:500,color:"#FF6B00",fontFamily:"'DM Sans',sans-serif",letterSpacing:"3px",textTransform:"uppercase"}}>AI Training Coach</div>
+              <div style={{fontSize:"clamp(10px,2vw,13px)",fontWeight:500,color:"#FF6B00",fontFamily:"'DM Sans',sans-serif",letterSpacing:"3px",textTransform:"uppercase"}}>Supervisión inteligente</div>
             </div>
           </div>
-          <p style={{color:C.muted,fontSize:17,lineHeight:1.65,marginBottom:4,fontWeight:600}}>No generamos entrenamientos. Construimos atletas.</p>
-          <p style={{color:C.muted,fontSize:15,lineHeight:1.65,marginBottom:8}}>Forge aprende quién eres, planifica cada semana según tu evolución y adapta tu entrenamiento utilizando tu historial, estado fisiológico y objetivos deportivos.</p>
+          <p style={{color:C.muted,fontSize:17,lineHeight:1.65,marginBottom:4,fontWeight:600}}>Tu plan dice qué hacer. Forge te ayuda a decidir cómo hacerlo hoy.</p>
+          <p style={{color:C.muted,fontSize:15,lineHeight:1.65,marginBottom:8}}>Forge utiliza tu entrenamiento, recuperación, historial y objetivos para ayudarte a tomar mejores decisiones cada día.</p>
           <button className="btn-main" onClick={()=>setPantalla("bifurcacion")} style={{background:"#FF6B00",color:"#fff",border:"none",borderRadius:14,padding:"16px 40px",fontSize:16,fontWeight:600,cursor:"pointer",width:"100%",maxWidth:360,marginTop:16,marginBottom:8}}>
-            Empezar
+            Empezar con Forge
           </button>
           <p style={{color:C.muted,fontSize:12,marginBottom:24}}>Empieza en menos de 3 minutos.</p>
           <div style={{maxWidth:360,margin:"0 auto"}}>
@@ -2122,9 +2122,9 @@ ${testStr}`}]});
   </div>
 )}
           </div>
-          <p style={{color:C.muted,fontSize:13,marginTop:20,fontWeight:500}}>Comienza gratis y deja que Forge aprenda de ti desde la primera sesión.</p>
+          <p style={{color:C.muted,fontSize:13,marginTop:20,fontWeight:500}}>¿Ya tienes entrenador o plan? Perfecto. Forge lo complementa, no lo sustituye.</p>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,maxWidth:400,margin:"20px auto 0",textAlign:"left"}}>
-            {["Plan semanal personalizado","Seguimiento del progreso","Diario del atleta","Adaptación automática","Historial fisiológico","Coaching correctivo"].map(t=>(
+            {["Recomendaciones diarias explicadas","Seguimiento del progreso","Diario del atleta","Estado fisiológico y HRV","Detección de patrones","Planificación completa (opcional)"].map(t=>(
               <span key={t} style={{color:C.muted,fontSize:13,display:"flex",alignItems:"center",gap:6}}><span style={{color:C.accent}}>✓</span>{t}</span>
             ))}
           </div>
@@ -2134,16 +2134,19 @@ ${testStr}`}]});
       {pantalla==="bifurcacion"&&(
         <div className="fade-up" style={{maxWidth:560,width:"100%"}}>
           <button onClick={()=>setPantalla("inicio")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14,marginBottom:28}}>Volver</button>
-          <h2 style={{fontSize:"clamp(24px,5vw,32px)",color:C.ink,marginBottom:10,fontFamily:"'Playfair Display',serif",fontWeight:700}}>¿Qué necesitas hoy?</h2>
-          <p style={{color:C.muted,fontSize:14,marginBottom:28}}>Forge se adapta a cómo quieras usarlo — puedes cambiarlo cuando quieras.</p>
+          <h2 style={{fontSize:"clamp(24px,5vw,32px)",color:C.ink,marginBottom:10,fontFamily:"'Playfair Display',serif",fontWeight:700}}>¿Cómo quieres usar Forge?</h2>
+          <p style={{color:C.muted,fontSize:14,marginBottom:28}}>Elige cómo quieres empezar. Puedes cambiarlo más adelante.</p>
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
             {[
-              {modo:"planificacion",emoji:"📅",titulo:"Que Forge planifique mi entrenamiento",desc:"Cuestionario completo, objetivos, disponibilidad — Forge diseña tu plan desde cero."},
-              {modo:"supervision",emoji:"👥",titulo:"Ya tengo entrenador o planificación propia",desc:"Forge no sustituye tu plan — te acompaña entre sesiones: registra, analiza y resuelve dudas."},
-              {modo:"consulta",emoji:"💬",titulo:"Solo quiero asesoramiento puntual",desc:"Sin cuestionarios. Cuéntame tus entrenos y te iré conociendo poco a poco."},
-              {modo:"empezando",emoji:"🌱",titulo:"Estoy empezando a entrenar",desc:"Te guío desde cero, sin dar por hecho que sabes nada todavía."},
+              {modo:"supervision",emoji:"👥",titulo:"Tengo entrenador o ya tengo un plan",desc:"Forge complementa tu planificación y te ayuda a decidir cómo entrenar hoy.",recomendado:true},
+              {modo:"planificacion",emoji:"📅",titulo:"Quiero que Forge planifique mi entrenamiento",desc:"Forge diseña y adapta tu planificación según tus objetivos y evolución."},
+              {modo:"consulta",emoji:"💬",titulo:"Solo quiero consultar",desc:"Resuelve dudas de entrenamiento y recibe orientación contextual."},
+              {modo:"empezando",emoji:"🌱",titulo:"Estoy empezando",desc:"Forge te guía desde cero."},
             ].map(op=>(
-              <div key={op.modo} onClick={()=>{setModoEntrada(op.modo);setPantalla("categoria");}} className="cat-card" style={{background:C.card,border:`2px solid ${C.border}`,borderRadius:16,padding:"18px 20px",cursor:"pointer",display:"flex",alignItems:"center",gap:16}}>
+              <div key={op.modo} onClick={()=>{setModoEntrada(op.modo);setPantalla("categoria");}} className="cat-card" style={{background:C.card,border:op.recomendado?`2px solid ${C.accent}`:`2px solid ${C.border}`,borderRadius:16,padding:"18px 20px",cursor:"pointer",display:"flex",alignItems:"center",gap:16,position:"relative"}}>
+                {op.recomendado&&(
+                  <span style={{position:"absolute",top:-10,left:16,background:C.accent,color:"#fff",fontSize:10,fontWeight:700,padding:"2px 10px",borderRadius:100,letterSpacing:0.5,textTransform:"uppercase"}}>Recomendado si ya tienes plan</span>
+                )}
                 <span style={{fontSize:28}}>{op.emoji}</span>
                 <div style={{textAlign:"left"}}>
                   <p style={{color:C.ink,fontSize:15,fontWeight:700,marginBottom:3}}>{op.titulo}</p>

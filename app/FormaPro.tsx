@@ -2161,8 +2161,8 @@ ${testStr}`}]});
       {pantalla==="categoria"&&(
         <div className="fade-up" style={{maxWidth:580,width:"100%"}}>
           <button onClick={()=>setPantalla("bifurcacion")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14,marginBottom:28}}>Volver</button>
-          <h2 style={{fontSize:"clamp(22px,5vw,30px)",color:C.ink,marginBottom:8}}>¿Qué tipo de atleta eres?</h2>
-          <p style={{color:C.muted,fontSize:14,marginBottom:6}}>Forge adaptará tu planificación, tus métricas y tu seguimiento según el deporte que practiques.</p>
+          <h2 style={{fontSize:"clamp(22px,5vw,30px)",color:C.ink,marginBottom:8}}>{modoEntrada==="supervision"?"¿Qué entrenas?":modoEntrada==="consulta"?"¿Sobre qué entrenas habitualmente?":"¿Qué tipo de atleta eres?"}</h2>
+          <p style={{color:C.muted,fontSize:14,marginBottom:6}}>{modoEntrada==="supervision"?"Forge adaptará sus recomendaciones y análisis a tu disciplina y a la forma en que entrenas.":modoEntrada==="consulta"?"Así Forge podrá contextualizar mejor tus consultas desde el principio.":"Forge utilizará tu disciplina, objetivos y disponibilidad para construir tu planificación."}</p>
           <p style={{color:C.muted,fontSize:12,marginBottom:28,fontStyle:"italic"}}>Podrás cambiar esta especialidad más adelante desde Mi Atleta.</p>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(240px, 1fr))",gap:14}}>
             {CATEGORIAS.map((c:Categoria)=>(
@@ -2895,7 +2895,9 @@ ${testStr}`}]});
               </div>
             )}
             {mostrarBotonNuevaSemana&&!generandoSemana&&(
-              <div style={{display:"flex",justifyContent:"center",marginTop:4}}>
+              <div style={{background:"linear-gradient(135deg,#4CAF50,#2E7D32)",borderRadius:16,padding:"16px 18px",marginBottom:10,textAlign:"center"}}>
+                <p style={{color:"#fff",fontSize:14,fontWeight:700,marginBottom:4}}>✅ Semana completada</p>
+                <p style={{color:"#fff",fontSize:12.5,opacity:0.9,marginBottom:12}}>Has terminado esta semana. Forge ya tiene tus resultados y los tendrá en cuenta para preparar la siguiente.</p>
                 <button onClick={async()=>{
                   setMostrarBotonNuevaSemana(false);
                   // FORGE CAPABILITY GUARD (temprano) — defensa en profundidad, aunque este boton

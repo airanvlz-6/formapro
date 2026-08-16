@@ -1811,13 +1811,12 @@ const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:build
         // FIX CRITICO: esta verificacion solo existia en enviarSilencioso, nunca en enviar() (la funcion
         // principal usada en el 99% de los mensajes). Por eso el cierre de semana nunca se disparaba.
         if(!mostrarBotonNuevaSemana){
-          apiCall({action:"verificar_semana_completa_sin_cierre",codigo:codigoUsuario}).then((resCierre)=>{
-            if(resCierre?.semanaCompleta && !resCierre?.yaCerrada){
+          // FORGE CHECK_WEEK_CLOSURE — solo lectura, nunca genera nada por si sola. Si la semana
+          // esta lista pero aun NO cerrada, mostramos el banner "Semana completada" para que el
+          // usuario confirme explicitamente el cierre real (accion CLOSE_WEEK separada).
+          apiCall({action:"check_week_closure",codigo:codigoUsuario}).then((resCheck:any)=>{
+            if(resCheck?.ready && !resCheck?.yaCerrada && resCheck?.canGenerateNextWeek){
               setMostrarBotonNuevaSemana(true);
-              // FORGE CARDS — si la semana se completo al 100%, ofrecer compartir
-              if(resCierre?.cardSemanaData){
-                setSemanaPendienteCompartir(resCierre.cardSemanaData);
-              }
             }
           });
         }
@@ -2904,6 +2903,14 @@ ${testStr}`}]});
                   // teoricamente solo deberia mostrarse en modo planificacion.
                   if(modoEntrada==="supervision"||modoEntrada==="consulta"){
                     setMensajes(prev=>[...prev,{role:"assistant",content:"Ahora mismo estás en modo Supervisión — no genero planificaciones en este modo. Si quieres que Forge se encargue de tu entrenamiento, dímelo y cambiamos al modo Coach."}]);
+                    return;
+                  }
+                  // FORGE CLOSE_WEEK — ejecucion real del cierre (Insight, Summary, Weakness Exposure,
+                  // Celebrations), SOLO ahora tras confirmacion explicita del usuario. Idempotente:
+                  // si ya estaba cerrada (doble clic, race condition), simplemente no repite el trabajo.
+                  const resClose=await apiCall({action:"close_week",codigo:codigoUsuario});
+                  if(!resClose?.ok && !resClose?.semanaCompleta){
+                    setMensajes(prev=>[...prev,{role:"assistant",content:"⚠️ Hubo un problema cerrando la semana. Inténtalo de nuevo en unos segundos."}]);
                     return;
                   }
                   // FIX: preguntar disponibilidad ANTES de generar, en vez de asumir silenciosamente

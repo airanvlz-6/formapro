@@ -1503,7 +1503,7 @@ const forgeValidator=(texto:string):string=>{
           console.log("FRONTEND: llamando a check_week_closure");
           apiCall({action:"check_week_closure",codigo:codigoUsuario}).then((resCierre:any)=>{
             console.log("FRONTEND: respuesta de check_week_closure:", JSON.stringify(resCierre));
-            if(resCierre?.ready && !resCierre?.yaCerrada && resCierre?.canGenerateNextWeek){
+            if(resCierre?.ready && resCierre?.canGenerateNextWeek){
               setMostrarBotonNuevaSemana(true);
             }
           });
@@ -1819,7 +1819,10 @@ const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:build
           // esta lista pero aun NO cerrada, mostramos el banner "Semana completada" para que el
           // usuario confirme explicitamente el cierre real (accion CLOSE_WEEK separada).
           apiCall({action:"check_week_closure",codigo:codigoUsuario}).then((resCheck:any)=>{
-            if(resCheck?.ready && !resCheck?.yaCerrada && resCheck?.canGenerateNextWeek){
+            // FIX: el banner debe aparecer TANTO si la semana esta lista para cerrar (yaCerrada=false)
+            // COMO si ya se cerro pero aun no existe plan para la semana siguiente (yaCerrada=true +
+            // sin plan futuro) — antes solo cubriamos el primer caso, dejando el segundo paso sin CTA.
+            if(resCheck?.ready && resCheck?.canGenerateNextWeek){
               setMostrarBotonNuevaSemana(true);
             }
           });

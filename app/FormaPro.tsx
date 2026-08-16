@@ -867,7 +867,11 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     lunesOrch.setDate(hoyOrch.getDate()-diaSemOrch+1);
     const weekStartSemanaActual=lunesOrch.toISOString().split('T')[0];
 
-    const resVerificarCierreActual=await apiCall({action:"verificar_semana_completa_sin_cierre",codigo:codigoUsuario});
+    // FIX CRITICO: usar la nueva accion check_week_closure (solo lectura) en vez de la antigua
+    // verificar_semana_completa_sin_cierre, que dejo de existir en el backend hoy y siempre
+    // devolvia undefined — causando que el Orchestrator SIEMPRE creyera que la semana seguia
+    // abierta y regenerara la semana actual en vez de avanzar a la siguiente.
+    const resVerificarCierreActual=await apiCall({action:"check_week_closure",codigo:codigoUsuario});
     const semanaActualYaCerrada=resVerificarCierreActual?.yaCerrada===true;
 
     const weekStartOrchestrator=semanaActualYaCerrada
@@ -1496,10 +1500,10 @@ const forgeValidator=(texto:string):string=>{
         apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histLimpio}});
         console.log("FRONTEND: mostrarBotonNuevaSemana actual=", mostrarBotonNuevaSemana);
         if(!mostrarBotonNuevaSemana){
-          console.log("FRONTEND: llamando a verificar_semana_completa_sin_cierre");
-          apiCall({action:"verificar_semana_completa_sin_cierre",codigo:codigoUsuario}).then((resCierre)=>{
-            console.log("FRONTEND: respuesta de verificar_semana_completa_sin_cierre:", JSON.stringify(resCierre));
-            if(resCierre?.semanaCompleta && !resCierre?.yaCerrada){
+          console.log("FRONTEND: llamando a check_week_closure");
+          apiCall({action:"check_week_closure",codigo:codigoUsuario}).then((resCierre:any)=>{
+            console.log("FRONTEND: respuesta de check_week_closure:", JSON.stringify(resCierre));
+            if(resCierre?.ready && !resCierre?.yaCerrada && resCierre?.canGenerateNextWeek){
               setMostrarBotonNuevaSemana(true);
             }
           });

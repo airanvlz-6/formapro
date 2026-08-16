@@ -1807,21 +1807,79 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
     }
   }
 
-  if (action === "verificar_semana_completa_sin_cierre") {
-    // Deteccion determinista: si las 7 sesiones estan completadas pero NO existe ya un forge_insight
-    // para esta semana, generamos el Insight AQUI MISMO — sin depender de que el modelo genere el tag.
-    const ahoraCierre = new Date();
-    const hoyCierreStr = ahoraCierre.toLocaleDateString('en-CA', {timeZone: 'Europe/Madrid'});
-    const hoyCierreFecha = new Date(hoyCierreStr + 'T12:00:00');
-    const diaSemCierre = hoyCierreFecha.getDay() || 7;
-    const lunesCierre = new Date(hoyCierreFecha);
-    lunesCierre.setDate(hoyCierreFecha.getDate() - diaSemCierre + 1);
-    const weekStartCierre = lunesCierre.toISOString().split('T')[0];
+  if (action === "check_week_closure") {
+    // FORGE CHECK_WEEK_CLOSURE — SOLO LECTURA, sin efectos secundarios. Nunca genera Insight, Summary,
+    // Weakness Exposure ni Celebrations. Su unica funcion es responder: "¿esta semana lista para
+    // cerrarse?" para que el FRONTEND decida si mostrar el banner. La ejecucion real vive en CLOSE_WEEK,
+    // disparada solo cuando el usuario confirma explicitamente pulsando el boton.
+    const ahoraCheck = new Date();
+    const hoyCheckStr = ahoraCheck.toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+    const hoyCheckFecha = new Date(hoyCheckStr + 'T12:00:00');
+    const diaSemCheck = hoyCheckFecha.getDay() || 7;
+    const lunesCheck = new Date(hoyCheckFecha);
+    lunesCheck.setDate(hoyCheckFecha.getDate() - diaSemCheck + 1);
+    const weekStartCheck = lunesCheck.toISOString().split('T')[0];
 
-    console.log("VERIFICAR CIERRE: weekStartCierre calculado=", weekStartCierre);
-    const { data: planSemana } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", weekStartCierre).single();
-    console.log("VERIFICAR CIERRE: planSemana encontrado?", !!planSemana);
-    if (!planSemana) return NextResponse.json({ semanaCompleta: false });
+    const { data: planSemanaCheck } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", weekStartCheck).single();
+    if (!planSemanaCheck) return NextResponse.json({ ready: false });
+
+    const ORDEN_DIAS_CHECK = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"];
+    const normalizarDiaCheck = (d: string) => (d || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const sesionesCheck = planSemanaCheck.sessions || [];
+    const sesionesQueRequierenReporteCheck = sesionesCheck.filter((s: any) => s.tipo !== "descanso");
+    const todasCompletadasCheck = sesionesQueRequierenReporteCheck.length > 0 && sesionesQueRequierenReporteCheck.every((s: any) => s.completada === true);
+
+    const domingoSemanaCheck = new Date(lunesCheck);
+    domingoSemanaCheck.setDate(lunesCheck.getDate() + 6);
+    const semanaTerminadaCronologicamenteCheck = hoyCheckFecha.getTime() > domingoSemanaCheck.getTime();
+
+    if (!todasCompletadasCheck && !semanaTerminadaCronologicamenteCheck) {
+      return NextResponse.json({ ready: false });
+    }
+
+    // FORGE IDEMPOTENCY CHECK — comprueba si esta semana ya tiene un registro de cierre explicito
+    // en week_closure_log (tabla dedicada, no infiere del Insight que ya sabemos que es fragil).
+    const { data: cierreExistente } = await supabase.from("week_closure_log").select("id").eq("user_codigo", codigo).eq("week_start", weekStartCheck).limit(1);
+    const yaCerrada = !!(cierreExistente && cierreExistente.length > 0);
+
+    const { data: usuarioModoCheck } = await supabase.from("usuarios").select("modo_entrada").eq("codigo", codigo).single();
+    const puedeGenerarSiguiente = usuarioModoCheck?.modo_entrada === "planificacion";
+
+    return NextResponse.json({
+      ready: true,
+      weekStart: weekStartCheck,
+      yaCerrada,
+      canGenerateNextWeek: puedeGenerarSiguiente,
+      adherencia: `${sesionesQueRequierenReporteCheck.filter((s: any) => s.completada).length}/${sesionesQueRequierenReporteCheck.length}`
+    });
+  }
+
+  if (action === "close_week") {
+    // FORGE CLOSE_WEEK — ejecucion REAL del cierre, disparada SOLO cuando el usuario confirma
+    // explicitamente pulsando el boton. Idempotente por diseño: verifica week_closure_log ANTES
+    // de generar nada — si ya existe registro de cierre para esta semana, no repite el trabajo.
+    const ahoraClose = new Date();
+    const hoyCloseStr = ahoraClose.toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+    const hoyCloseFecha = new Date(hoyCloseStr + 'T12:00:00');
+    const diaSemClose = hoyCloseFecha.getDay() || 7;
+    const lunesClose = new Date(hoyCloseFecha);
+    lunesClose.setDate(hoyCloseFecha.getDate() - diaSemClose + 1);
+    const weekStartClose = lunesClose.toISOString().split('T')[0];
+
+    const { data: cierreYaExisteClose } = await supabase.from("week_closure_log").select("id").eq("user_codigo", codigo).eq("week_start", weekStartClose).limit(1);
+    if (cierreYaExisteClose && cierreYaExisteClose.length > 0) {
+      console.error(`🚨 CLOSE_WEEK bloqueado — semana ${weekStartClose} ya tiene registro de cierre para ${codigo}, evitando duplicacion`);
+      return NextResponse.json({ ok: true, alreadyClosed: true, weekStart: weekStartClose });
+    }
+
+    const { data: planSemana } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", weekStartClose).single();
+    if (!planSemana) return NextResponse.json({ error: "No hay plan para esta semana" }, { status: 404 });
+    // Alias para reutilizar el resto de la logica original sin renombrar mas variables innecesariamente
+    const hoyCierreStr = hoyCloseStr;
+    const hoyCierreFecha = hoyCloseFecha;
+    const diaSemCierre = diaSemClose;
+    const lunesCierre = lunesClose;
+    const weekStartCierre = weekStartClose;
 
     // FIX: dias de descanso/recuperacion que ya PASARON (fecha anterior a hoy) sin reporte explicito
     // se marcan automaticamente como completados al momento de verificar el cierre — un descanso no
@@ -2056,6 +2114,11 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
       : null;
 
     const adherenciaReal = sesionesQueRequierenReporte.length > 0 ? Math.round((sesionesCompletadasCierre / sesionesQueRequierenReporte.length) * 100) : 0;
+
+    // FORGE WEEK CLOSURE LOG — registro final e IDEMPOTENTE. Es lo unico que check_week_closure
+    // consulta para saber si ya se cerro esta semana.
+    await supabase.from("week_closure_log").insert({ user_codigo: codigo, week_start: weekStartCierre });
+
     return NextResponse.json({ semanaCompleta: true, yaCerrada: false, weekStart: weekStartCierre, insightGenerado: true, cardSemanaData, adherenciaPorcentaje: adherenciaReal, sesionesCompletadas: sesionesCompletadasCierre, sesionesTotales: sesionesQueRequierenReporte.length });
   }
 

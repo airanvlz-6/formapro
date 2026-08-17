@@ -2028,6 +2028,30 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
       console.log("BLOCK WEEK SUMMARY generado:", JSON.stringify(summaryEstructurado), "sesiones_no_completadas:", JSON.stringify(sesionesNoCompletadas));
     }
 
+    // FORGE BLOCK HISTORY — DETERMINISTICO, ya no depende de que el extractor LLM detecte "fin_bloque"
+    // en conversacion (fallaba de forma silenciosa, dejando analisis_bloques desactualizado durante
+    // semanas y confundiendo al Coach sobre en que fase/semana esta realmente el atleta). Se dispara
+    // SIEMPRE al cerrar la ULTIMA semana de un bloque (semana === totalSemanas), usando el dato real
+    // de ciclo_actual como unica fuente de verdad — nunca inferido de conversacion.
+    if (cicloSummary.semana && cicloSummary.totalSemanas && cicloSummary.semana === cicloSummary.totalSemanas) {
+      const { data: usuarioBlockHist } = await supabase.from("usuarios").select("analisis_bloques").eq("codigo", codigo).single();
+      const analisisActualHist = usuarioBlockHist?.analisis_bloques || [];
+      const yaRegistradoEsteBloque = analisisActualHist.some((a: any) => a.bloque_completado === cicloSummary.bloque && a.fecha === hoyCierreStr);
+      if (!yaRegistradoEsteBloque) {
+        const nuevoRegistroBloque = {
+          bloque_completado: cicloSummary.bloque || "desconocido",
+          fecha: hoyCierreStr,
+          objetivo_bloque: cicloSummary.objetivo || "",
+          resultado: adherenciaRealCalc >= 85 ? "cumplido" : "parcial",
+          carga: summaryEstructurado?.fatiga === "alta" ? "alta" : summaryEstructurado?.fatiga === "baja" ? "baja" : "adecuada",
+          siguiente_bloque: "pendiente de definir",
+          adherencia_estimada: String(adherenciaRealCalc)
+        };
+        await supabase.from("usuarios").update({ analisis_bloques: [...analisisActualHist.slice(-5), nuevoRegistroBloque] }).eq("codigo", codigo);
+        console.log("BLOCK HISTORY (deterministico): registrado cierre de bloque", JSON.stringify(nuevoRegistroBloque));
+      }
+    }
+
     // FORGE WEAKNESS EXPOSURE — entidad dedicada: cuanto se trabajo REALMENTE cada debilidad esta
     // semana (no solo si aparece en BLOCK_WEEK_SUMMARY). Deterministico, agrupado por debilidad real.
     // FIX: capturar tambien el METODO especifico usado cada vez (titulo de la sesion), para que Forge

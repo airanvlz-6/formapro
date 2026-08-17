@@ -1807,6 +1807,17 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
     }
   }
 
+  if (action === "obtener_codigo_por_auth_user_id") {
+    // FORGE IDENTITY BRIDGE — dado un auth_user_id de Supabase Auth (usado por Forge Mobile),
+    // devuelve el "codigo" real de Forge vinculado. Punto de entrada unico para que el cliente
+    // movil pueda operar con el mismo backend/acciones que la web, sin duplicar logica de negocio.
+    const { authUserId } = datos;
+    if (!authUserId) return NextResponse.json({ error: "Falta authUserId" }, { status: 400 });
+    const { data: usuarioPorAuth } = await supabase.from("usuarios").select("codigo").eq("auth_user_id", authUserId).single();
+    if (!usuarioPorAuth) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+    return NextResponse.json({ ok: true, codigo: usuarioPorAuth.codigo });
+  }
+
   if (action === "check_week_closure") {
     // FORGE CHECK_WEEK_CLOSURE — SOLO LECTURA, sin efectos secundarios. Nunca genera Insight, Summary,
     // Weakness Exposure ni Celebrations. Su unica funcion es responder: "¿esta semana lista para

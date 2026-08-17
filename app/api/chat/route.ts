@@ -703,6 +703,23 @@ export async function POST(req: NextRequest) {
 
   const { messages, system, model, max_tokens, action, codigo, datos, email, codigoConjunto } = await req.json();
 
+  // FORGE MOBILE IDENTITY BRIDGE — colocada AQUI AL PRINCIPIO (antes del rate limiting y cualquier
+  // otra logica) porque esta accion no envia "codigo" en el nivel raiz del payload (solo authUserId
+  // dentro de datos) — colocarla mas abajo en la cadena de ifs la exponia a fallar por logica
+  // intermedia que asumia la presencia de codigo sin verificarla explicitamente.
+  if (action === "obtener_codigo_por_auth_user_id") {
+    try {
+      const { authUserId } = datos || {};
+      if (!authUserId) return NextResponse.json({ error: "Falta authUserId" }, { status: 400 });
+      const { data: usuarioPorAuth, error: errorPorAuth } = await supabase.from("usuarios").select("codigo").eq("auth_user_id", authUserId).single();
+      if (errorPorAuth || !usuarioPorAuth) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+      return NextResponse.json({ ok: true, codigo: usuarioPorAuth.codigo });
+    } catch (err: any) {
+      console.error("Error en obtener_codigo_por_auth_user_id:", err);
+      return NextResponse.json({ error: "Error interno: " + err.message }, { status: 500 });
+    }
+  }
+
   // Rate limiting: máximo 30 peticiones por minuto por código
   if (codigo && (action === undefined || messages)) {
     const ahora = new Date();
@@ -1805,17 +1822,6 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
     } catch (err: any) {
       return NextResponse.json({ error: "Error en Session Builder: " + err.message }, { status: 500 });
     }
-  }
-
-  if (action === "obtener_codigo_por_auth_user_id") {
-    // FORGE IDENTITY BRIDGE — dado un auth_user_id de Supabase Auth (usado por Forge Mobile),
-    // devuelve el "codigo" real de Forge vinculado. Punto de entrada unico para que el cliente
-    // movil pueda operar con el mismo backend/acciones que la web, sin duplicar logica de negocio.
-    const { authUserId } = datos;
-    if (!authUserId) return NextResponse.json({ error: "Falta authUserId" }, { status: 400 });
-    const { data: usuarioPorAuth } = await supabase.from("usuarios").select("codigo").eq("auth_user_id", authUserId).single();
-    if (!usuarioPorAuth) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
-    return NextResponse.json({ ok: true, codigo: usuarioPorAuth.codigo });
   }
 
   if (action === "check_week_closure") {

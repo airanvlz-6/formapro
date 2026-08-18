@@ -720,6 +720,19 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // FORGE MOBILE — DIAGNOSTICO TEMPORAL: verifica que getAthleteContext() construye correctamente
+  // el contexto antes de conectar nada mas. Se eliminara una vez confirmada la prueba de equivalencia.
+  if (action === "diagnostico_athlete_context") {
+    try {
+      const { getAthleteContext } = await import("@/lib/mobile/getAthleteContext");
+      const contexto = await getAthleteContext(codigo);
+      return NextResponse.json({ ok: true, contexto });
+    } catch (err: any) {
+      console.error("Error en diagnostico_athlete_context:", err);
+      return NextResponse.json({ error: "Error: " + err.message }, { status: 500 });
+    }
+  }
+
   // Rate limiting: máximo 30 peticiones por minuto por código
   if (codigo && (action === undefined || messages)) {
     const ahora = new Date();

@@ -2519,6 +2519,25 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
     }
   }
 
+  if (action === "guardar_readiness_checkin") {
+    // FORGE READINESS CHECKIN — V1: captura pura del estado percibido al despertar, un toque,
+    // sin LLM ni interpretacion. La correlacion con datos objetivos (HRV, sueño, FC) vive en
+    // V2/V3 como analisis separado — esta accion SOLO persiste el dato crudo, deterministico.
+    const { readinessScore, fecha } = datos;
+    if (!readinessScore || readinessScore < 1 || readinessScore > 5) {
+      return NextResponse.json({ error: "readinessScore debe estar entre 1 y 5" }, { status: 400 });
+    }
+    const fechaCheckin = fecha || new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+    const { error: errorReadiness } = await supabase.from("readiness_checkins").upsert({
+      user_codigo: codigo,
+      fecha: fechaCheckin,
+      readiness_score: readinessScore,
+      fuente: "checkin_manual"
+    }, { onConflict: "user_codigo,fecha" });
+    if (errorReadiness) return NextResponse.json({ error: errorReadiness.message }, { status: 500 });
+    return NextResponse.json({ ok: true, fecha: fechaCheckin, readinessScore });
+  }
+
   if (action === "verificar_metricas_sueno_deterministico") {
     // FORGE SLEEP METRICS PARSER — Nivel 1: deteccion 100% deterministica, sin LLM. Se ejecuta
     // ANTES de enviar el mensaje al Coach. El extractor Haiku posterior fallaba de forma intermitente

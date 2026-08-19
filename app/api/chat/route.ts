@@ -733,6 +733,58 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  if (action === "enviar_mensaje_coach") {
+    // FORGE MOBILE COACH — endpoint exclusivo para Forge Mobile. NUNCA toca /api/chat original
+    // ni el buildPrompt de la web. Usa la copia aislada (getAthleteContext + buildPrompt) en
+    // lib/mobile/, verificada con contrato de equivalencia el 19/08/2026.
+    //
+    // SEGURIDAD: nunca confiamos solo en "codigo" como identidad — el cliente movil debe probar,
+    // via authUserId (obtenido de la sesion real de Supabase Auth en el dispositivo), que ese
+    // codigo realmente le pertenece. Sin esto, cualquiera podria consultar/hablar con el Coach
+    // de otro atleta simplemente adivinando o probando codigos.
+    try {
+      const { mensaje, authUserId } = datos || {};
+      if (!mensaje || !authUserId) {
+        return NextResponse.json({ error: "Faltan mensaje o authUserId" }, { status: 400 });
+      }
+
+      const { data: usuarioAuthCheck, error: errorAuthCheck } = await supabase.from("usuarios").select("codigo,auth_user_id").eq("codigo", codigo).single();
+      if (errorAuthCheck || !usuarioAuthCheck) {
+        return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+      }
+      if (usuarioAuthCheck.auth_user_id !== authUserId) {
+        console.error(`🚨 SEGURIDAD enviar_mensaje_coach: authUserId no coincide para codigo=${codigo} — intento de acceso no autorizado`);
+        return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+      }
+
+      const { getAthleteContext } = await import("@/lib/mobile/getAthleteContext");
+      const { buildPrompt } = await import("@/lib/mobile/buildPrompt");
+      const ctx = await getAthleteContext(codigo);
+
+      const fechaHoyMobile = new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Madrid" });
+      const mensajeConFecha = `${mensaje}\n\n[Fecha actual del sistema: ${fechaHoyMobile}]\n[Contexto temporal del mensaje: CONSULTA_GENERAL]`;
+
+      const systemPrompt = buildPrompt(ctx.catObj, ctx.perfil, ctx.marcas, ctx.resumen, ctx.memoriaCoach, ctx.cicloActual, ctx.perfilPsicologico, ctx.esPremiumOAdmin, ctx.athleteState, ctx.datosEntrenamiento, ctx.estadoFisiologico, ctx.historialFisiologico, ctx.distribucionSemanal, ctx.objetivoPrincipal, ctx.planSemanal, ctx.debilidades, ctx.blockOutcomes, ctx.estadoCanonico);
+
+      const mensajesParaAPI = [...(ctx.historial || []).slice(-3), { role: "user", content: mensajeConFecha }];
+
+      const coachRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 4000, system: systemPrompt, messages: mensajesParaAPI }),
+      });
+      const coachData = await coachRes.json();
+      const respuestaTexto = coachData.content?.map((b: any) => b.text || "").join("") || "Error al conectar.";
+
+      // Nota: por ahora se devuelve la respuesta cruda (sin procesar tags [SESION:], [PLAN:], etc.)
+      // — el procesamiento de tags es una pieza siguiente, deliberadamente fuera de este primer paso.
+      return NextResponse.json({ ok: true, respuesta: respuestaTexto });
+    } catch (err: any) {
+      console.error("Error en enviar_mensaje_coach:", err);
+      return NextResponse.json({ error: "Error: " + err.message }, { status: 500 });
+    }
+  }
+
   // Rate limiting: máximo 30 peticiones por minuto por código
   if (codigo && (action === undefined || messages)) {
     const ahora = new Date();

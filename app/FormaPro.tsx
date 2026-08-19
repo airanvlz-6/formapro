@@ -702,7 +702,9 @@ export default function Forge() {
         verificarSaludoProactivo(u.codigo);
         // FORGE PENDING ACTION BANNER — restaurar el banner de confirmacion si quedo un pending_action
         // sin resolver de una sesion anterior (ej: el usuario cerro la app antes de confirmar/rechazar).
+        console.log("DEBUG: verificando pending action activo para", u.codigo);
         apiCall({action:"obtener_pending_action_activo",codigo:u.codigo}).then((resPending:any)=>{
+          console.log("DEBUG: respuesta obtener_pending_action_activo:", JSON.stringify(resPending));
           if(resPending?.hayPending){
             setModificacionPendienteConfirmar({pendingId:"restaurado",dia:resPending.dia,titulo:resPending.titulo,motivo:resPending.motivo});
           }

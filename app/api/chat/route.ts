@@ -2337,6 +2337,16 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
     return NextResponse.json({ ok: true, ejecutado: true, tipo: pendiente.tipo });
   }
 
+  if (action === "obtener_pending_action_activo") {
+    // Solo lectura — permite al frontend restaurar el banner de confirmacion tras recargar la
+    // pagina, sin ejecutar ni modificar nada. Nunca resuelve el pending, solo informa si existe.
+    const { data: pendienteActivo } = await supabase.from("pending_actions").select("id,tipo,accion").eq("user_codigo", codigo).eq("estado", "pendiente").order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (!pendienteActivo || pendienteActivo.tipo !== "modificar_sesion") {
+      return NextResponse.json({ hayPending: false });
+    }
+    return NextResponse.json({ hayPending: true, dia: pendienteActivo.accion?.dia, titulo: pendienteActivo.accion?.titulo, motivo: pendienteActivo.accion?.motivo });
+  }
+
   if (action === "rechazar_pending_action") {
     // El usuario decide explicitamente NO aplicar el cambio propuesto — marcamos como rechazado
     // (nunca eliminamos el registro, queda auditado) y el plan original permanece intacto.

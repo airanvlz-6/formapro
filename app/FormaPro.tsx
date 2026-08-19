@@ -700,6 +700,13 @@ export default function Forge() {
         cargarEstadoCanonico(u.codigo);
         verificarDescubrimientoPendiente(u.codigo);
         verificarSaludoProactivo(u.codigo);
+        // FORGE PENDING ACTION BANNER — restaurar el banner de confirmacion si quedo un pending_action
+        // sin resolver de una sesion anterior (ej: el usuario cerro la app antes de confirmar/rechazar).
+        apiCall({action:"obtener_pending_action_activo",codigo:u.codigo}).then((resPending:any)=>{
+          if(resPending?.hayPending){
+            setModificacionPendienteConfirmar({pendingId:"restaurado",dia:resPending.dia,titulo:resPending.titulo,motivo:resPending.motivo});
+          }
+        });
         if((u as any).is_beta_founder){ apiCall({action:"verificar_renovacion_beta",codigo:u.codigo}); }
         apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
       },500);

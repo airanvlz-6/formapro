@@ -776,8 +776,14 @@ export async function POST(req: NextRequest) {
       const coachData = await coachRes.json();
       const respuestaTexto = coachData.content?.map((b: any) => b.text || "").join("") || "Error al conectar.";
 
-      // Nota: por ahora se devuelve la respuesta cruda (sin procesar tags [SESION:], [PLAN:], etc.)
-      // — el procesamiento de tags es una pieza siguiente, deliberadamente fuera de este primer paso.
+      // FIX: persistir el intercambio en el historial real, igual que hace la web — sin esto, la
+      // conversacion movil nunca sobrevivia a un recargo de la app (vivia solo en memoria de React).
+      const historialActualizado = [...(ctx.historial || []), { role: "user", content: mensaje }, { role: "assistant", content: respuestaTexto }];
+      await supabase.from("usuarios").update({ historial: historialActualizado.slice(-15), updated_at: new Date().toISOString() }).eq("codigo", codigo);
+
+      // Nota: los tags [SESION:], [PLAN:], etc. siguen sin procesarse aqui de forma centralizada —
+      // cada Safety Net deterministico (verificar_sesion_completada_..., verificar_modificacion_...)
+      // se encarga de su propio dominio de forma independiente, disparado desde el cliente movil.
       return NextResponse.json({ ok: true, respuesta: respuestaTexto });
     } catch (err: any) {
       console.error("Error en enviar_mensaje_coach:", err);

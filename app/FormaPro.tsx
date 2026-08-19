@@ -1641,6 +1641,16 @@ const forgeValidator=(texto:string):string=>{
           }
         });
       }
+      // FORGE SESSION COMPLETION SAFETY NET — mismo patron robusto que modificaciones/PRs/sueno.
+      // Nunca depende del tag [SESION:] generado por el Coach — analiza el mensaje del usuario
+      // directamente y guarda el reporte de entreno de forma determinista.
+      if(codigoUsuario && texto.trim().length>=10){
+        apiCall({action:"verificar_sesion_completada_deterministico",codigo:codigoUsuario,datos:{mensaje:texto}}).then((resSesionDet:any)=>{
+          if(resSesionDet?.detectado){
+            console.log("🛡️ Session safety net: entreno detectado y registrado automaticamente");
+          }
+        });
+      }
 
       // FORGE PENDING ACTIONS — deteccion 100% deterministica de confirmacion (regex simple), nunca
       // depende de que el LLM recuerde generar un tag tras la confirmacion del usuario.

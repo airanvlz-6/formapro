@@ -2669,6 +2669,105 @@ Respuesta del coach: "${respuestaCoach}"
     }
   }
 
+  if (action === "verificar_sesion_completada_deterministico") {
+    // FORGE SESSION COMPLETION SAFETY NET — mismo patron robusto que ya usamos para modificaciones,
+    // PRs, sueno y coaching notes. NUNCA depende de que el LLM genere el tag [SESION:] en su
+    // respuesta conversacional — analiza el MENSAJE DEL USUARIO directamente con Haiku dedicado,
+    // detecta si esta reportando un entreno completado, y guarda el registro sin importar si el
+    // Coach genero o no el tag correspondiente en su respuesta.
+    const { mensaje } = datos;
+    if (!mensaje || mensaje.trim().length < 10) return NextResponse.json({ ok: true, detectado: false });
+
+    // Filtro rapido: evitar llamar a Haiku para mensajes que claramente no son reportes de entreno
+    // (ej: solo metricas de sueno nocturno, que ya tiene su propio parser dedicado)
+    const pareceSoloSueno = /métricas de sueño|dormí|puntuación de sueño|durante la noche|sueño profundo|sueño rem/i.test(mensaje.toLowerCase()) && !/entren|wod|sesion realizada|serie|repeticion|corri|entrené|hice|complet/i.test(mensaje.toLowerCase());
+    if (pareceSoloSueno) return NextResponse.json({ ok: true, detectado: false });
+
+    const sesionPrompt = `Analiza este mensaje de un atleta a su coach de entrenamiento. Determina si el atleta esta reportando que ACABA DE COMPLETAR un entrenamiento (no una pregunta sobre entrenos futuros, no una peticion de plan, no solo metricas de sueno).
+
+Responde SOLO con este JSON, sin texto adicional ni markdown:
+{"es_reporte_entreno":true_o_false,"tipo":"tipo de sesion (ej: carrera, box, fuerza)","notas":"resumen factual breve de lo que reporta: distancia, tiempo, series, sensacion — SOLO lo que aparece literalmente en el mensaje","sensacion":"buena|normal|mala|null si no se menciona"}
+
+Mensaje: "${mensaje}"
+
+"es_reporte_entreno" debe ser true SOLO si el atleta claramente reporta haber COMPLETADO un entrenamiento (usa frases como "he terminado", "acabo de hacer", "hice", "completé", "sesion realizada"). Nunca inventes datos que el mensaje no contenga.`;
+
+    try {
+      const sesionRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 300, messages: [{ role: "user", content: sesionPrompt }] }),
+      });
+      const sesionData = await sesionRes.json();
+      const sesionTexto = sesionData.content?.map((b: any) => b.text || "").join("") || "{}";
+      const sesionClean = sesionTexto.replace(/```json|```/g, "").trim();
+      const sesionMatch = sesionClean.match(/\{[\s\S]*\}/);
+      if (!sesionMatch) return NextResponse.json({ ok: true, detectado: false });
+
+      const extraido = JSON.parse(sesionMatch[0]);
+      if (!extraido.es_reporte_entreno) return NextResponse.json({ ok: true, detectado: false });
+
+      // Fecha de hoy real, misma logica que usa el resto del sistema
+      const hoySesionStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+
+      // FIX: si ya existe una sesion del mismo tipo hoy, ENRIQUECER en vez de bloquear o duplicar —
+      // cubre tanto el caso de reporte fragmentado en varios mensajes (el usuario añade detalles
+      // despues) como el de correccion de un dato ya reportado.
+      const { data: usuarioWorkoutCheck } = await supabase.from("usuarios").select("workout_history").eq("codigo", codigo).single();
+      const workoutHistoryActual = usuarioWorkoutCheck?.workout_history || [];
+      const idxSesionHoyExistente = workoutHistoryActual.findIndex((w: any) => w.fecha?.startsWith(hoySesionStr) && w.tipo === extraido.tipo);
+
+      const nuevaSesionSafety = {
+        tipo: extraido.tipo || "entrenamiento",
+        fecha: idxSesionHoyExistente >= 0 ? workoutHistoryActual[idxSesionHoyExistente].fecha : new Date().toISOString(),
+        notas: idxSesionHoyExistente >= 0
+          ? `${workoutHistoryActual[idxSesionHoyExistente].notas || ""} ${extraido.notas || ""}`.trim()
+          : (extraido.notas || ""),
+        duracion: null,
+        sensacion: extraido.sensacion || workoutHistoryActual[idxSesionHoyExistente]?.sensacion || "normal",
+        analisis: "",
+        source: "safety_net_deterministico"
+      };
+
+      let workoutHistoryActualizado;
+      if (idxSesionHoyExistente >= 0) {
+        workoutHistoryActualizado = [...workoutHistoryActual];
+        workoutHistoryActualizado[idxSesionHoyExistente] = nuevaSesionSafety;
+        console.log("🛡️ SESSION SAFETY NET: enriqueciendo sesion ya existente de hoy con nuevos detalles");
+      } else {
+        workoutHistoryActualizado = [...workoutHistoryActual, nuevaSesionSafety];
+      }
+
+      await supabase.from("usuarios").update({ workout_history: workoutHistoryActualizado }).eq("codigo", codigo);
+
+      // Marcar tambien la sesion del dia correspondiente en weekly_plan como completada, si existe
+      const diaSemSesionNum = new Date().getDay() || 7;
+      const lunesSesion = new Date();
+      lunesSesion.setDate(new Date().getDate() - diaSemSesionNum + 1);
+      const weekStartSesion = lunesSesion.toISOString().split('T')[0];
+      const DIAS_SESION = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+      const diaHoySesion = DIAS_SESION[new Date().getDay()];
+      const normalizarDiaSesion = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+      const { data: planParaMarcar } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", weekStartSesion).single();
+      if (planParaMarcar) {
+        const sessionsMarcadas = planParaMarcar.sessions.map((s: any) => {
+          if (normalizarDiaSesion(s.dia) === normalizarDiaSesion(diaHoySesion) && !s.completada) {
+            return { ...s, completada: true, titulo_real: extraido.tipo, descripcion_real: extraido.notas || "" };
+          }
+          return s;
+        });
+        await supabase.from("weekly_plan").update({ sessions: sessionsMarcadas }).eq("user_codigo", codigo).eq("week_start", weekStartSesion);
+      }
+
+      console.log("🛡️ SESSION SAFETY NET: reporte de entreno detectado y guardado automaticamente:", JSON.stringify(nuevaSesionSafety));
+      return NextResponse.json({ ok: true, detectado: true, sesion: nuevaSesionSafety });
+    } catch (err: any) {
+      console.error("Error en verificar_sesion_completada_deterministico:", err);
+      return NextResponse.json({ ok: true, detectado: false });
+    }
+  }
+
   if (action === "guardar_readiness_checkin") {
     // FORGE READINESS CHECKIN — V1: captura pura del estado percibido al despertar, un toque,
     // sin LLM ni interpretacion. La correlacion con datos objetivos (HRV, sueño, FC) vive en

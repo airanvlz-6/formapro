@@ -2315,7 +2315,9 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
           // FIX: siempre establecer "completada" explicitamente (nunca dejarlo undefined) para que el
           // calculo de cierre de semana funcione correctamente. No se marca automaticamente al confirmar
           // el cambio — se completa por reporte del usuario, igual que cualquier otra sesion.
-          return { ...s, tipo: acc.tipo, titulo: acc.titulo, descripcion: acc.descripcion, modificado: true, motivo_modificacion: acc.motivo || "", modificado_at: new Date().toISOString(), completada: s.completada ?? false };
+          // FIX: por_que tambien debe actualizarse al modificar la sesion — antes quedaba con el valor
+        // de la sesion original, mostrando una justificacion incoherente con el nuevo titulo/tipo.
+        return { ...s, tipo: acc.tipo, titulo: acc.titulo, descripcion: acc.descripcion, por_que: acc.motivo || s.por_que, modificado: true, motivo_modificacion: acc.motivo || "", modificado_at: new Date().toISOString(), completada: s.completada ?? false };
         }
         return s;
       });

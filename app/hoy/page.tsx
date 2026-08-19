@@ -10,6 +10,9 @@ export default function Hoy() {
   const [iniciado, setIniciado] = useState(false);
   const [error, setError] = useState("");
   const [mostrarMas, setMostrarMas] = useState(false);
+  const [readinessHoy, setReadinessHoy] = useState<number | null>(null);
+  const [readinessCargado, setReadinessCargado] = useState(false);
+  const [guardandoReadiness, setGuardandoReadiness] = useState(false);
 
   const C = {
     bg: "#0D0D0D", card: "#1A1A1A", ink: "#F0EDE8", muted: "#9A9590",
@@ -41,8 +44,21 @@ export default function Hoy() {
       const resBriefing = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "obtener_daily_briefing", codigo: cod }) });
       const dataBriefing = await resBriefing.json();
       if (dataBriefing?.briefing) setBriefing(dataBriefing.briefing);
+
+      // FORGE READINESS — verificar si ya respondio hoy, para no volver a preguntar
+      const resReadiness = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "obtener_readiness_hoy", codigo: cod }) });
+      const dataReadiness = await resReadiness.json();
+      setReadinessHoy(dataReadiness?.readinessScore ?? null);
+      setReadinessCargado(true);
     } catch { setError("Error de conexión"); }
     finally { setCargando(false); setIniciado(true); }
+  };
+
+  const guardarReadiness = async (score: number) => {
+    setGuardandoReadiness(true);
+    await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "guardar_readiness_checkin", codigo, datos: { readinessScore: score } }) });
+    setReadinessHoy(score);
+    setGuardandoReadiness(false);
   };
 
   if (cargando && !iniciado) return (
@@ -94,6 +110,34 @@ export default function Hoy() {
           <h1 style={{ fontSize: 22, fontWeight: 800, color: C.ink, fontFamily: "Georgia, serif", marginBottom: 4 }}>{saludo}{primerNombre ? `, ${primerNombre}` : ""} 👋</h1>
           <p style={{ color: C.muted, fontSize: 13 }}>{(briefing?.modoEntrada==="supervision"||briefing?.modoEntrada==="consulta")?"Tu resumen de hoy.":"Esto es lo más importante hoy."}</p>
         </div>
+
+        {/* FORGE READINESS CHECKIN — un toque, sin friccion. Solo se muestra si aun no respondio hoy. */}
+        {readinessCargado && readinessHoy === null && (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "18px", marginBottom: 14 }}>
+            <p style={{ color: C.muted, fontSize: 13, fontWeight: 600, marginBottom: 12, textAlign: "center" }}>¿Cómo te has levantado hoy?</p>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 6 }}>
+              {[
+                { score: 1, emoji: "🔴", label: "Muy cansado" },
+                { score: 2, emoji: "🟠", label: "Cansado" },
+                { score: 3, emoji: "🟡", label: "Normal" },
+                { score: 4, emoji: "🟢", label: "Bien" },
+                { score: 5, emoji: "🟢", label: "A tope" },
+              ].map(opt => (
+                <button key={opt.score} onClick={() => guardarReadiness(opt.score)} disabled={guardandoReadiness}
+                  style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, background: "transparent", border: "none", cursor: "pointer", padding: "6px 2px", opacity: guardandoReadiness ? 0.5 : 1 }}>
+                  <span style={{ fontSize: 24 }}>{opt.emoji}</span>
+                  <span style={{ fontSize: 9, color: C.muted, textAlign: "center", lineHeight: 1.2 }}>{opt.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {readinessHoy !== null && (
+          <div style={{ background: C.successLight, border: `1px solid ${C.success}40`, borderRadius: 16, padding: "12px 18px", marginBottom: 14, display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 18 }}>✅</span>
+            <p style={{ color: C.ink, fontSize: 12.5 }}>Estado de hoy registrado. Gracias por contármelo.</p>
+          </div>
+        )}
 
         {(briefing?.modoEntrada==="supervision"||briefing?.modoEntrada==="consulta") && (
           <>

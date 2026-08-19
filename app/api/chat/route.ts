@@ -2538,6 +2538,12 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
     return NextResponse.json({ ok: true, fecha: fechaCheckin, readinessScore });
   }
 
+  if (action === "obtener_readiness_hoy") {
+    const hoyReadiness = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+    const { data: readinessData } = await supabase.from("readiness_checkins").select("readiness_score").eq("user_codigo", codigo).eq("fecha", hoyReadiness).maybeSingle();
+    return NextResponse.json({ readinessScore: readinessData?.readiness_score ?? null });
+  }
+
   if (action === "verificar_metricas_sueno_deterministico") {
     // FORGE SLEEP METRICS PARSER — Nivel 1: deteccion 100% deterministica, sin LLM. Se ejecuta
     // ANTES de enviar el mensaje al Coach. El extractor Haiku posterior fallaba de forma intermitente

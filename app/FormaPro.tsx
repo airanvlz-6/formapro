@@ -2899,6 +2899,31 @@ ${testStr}`}]});
                 </div>
               </div>
             )}
+            {modificacionPendienteConfirmar&&(
+              <div style={{background:"linear-gradient(135deg,#FF6B00,#CC5500)",borderRadius:16,padding:"16px 18px",marginBottom:10}}>
+                <p style={{color:"#fff",fontSize:14,fontWeight:700,marginBottom:4}}>⚠️ Cambio de sesión detectado</p>
+                <p style={{color:"#fff",fontSize:12.5,opacity:0.95,marginBottom:4}}>{modificacionPendienteConfirmar.dia?.charAt(0).toUpperCase()+modificacionPendienteConfirmar.dia?.slice(1)}: <strong>{modificacionPendienteConfirmar.titulo}</strong></p>
+                <p style={{color:"#fff",fontSize:11.5,opacity:0.85,marginBottom:12}}>{modificacionPendienteConfirmar.motivo}</p>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={async()=>{
+                    const res=await apiCall({action:"confirmar_pending_action",codigo:codigoUsuario});
+                    if(res?.ejecutado){
+                      setMensajes(prev=>[...prev,{role:"assistant",content:"✅ Sesión actualizada correctamente en Mi Plan."}]);
+                      cargarPlanSemanal(codigoUsuario);
+                    }
+                    setModificacionPendienteConfirmar(null);
+                  }} style={{flex:1,background:"#fff",color:"#CC5500",border:"none",borderRadius:100,padding:"10px 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                    Sí, confirmar cambio
+                  </button>
+                  <button onClick={async()=>{
+                    await apiCall({action:"rechazar_pending_action",codigo:codigoUsuario});
+                    setModificacionPendienteConfirmar(null);
+                  }} style={{flex:1,background:"transparent",color:"#fff",border:"1px solid rgba(255,255,255,0.5)",borderRadius:100,padding:"10px 16px",fontSize:13,fontWeight:600,cursor:"pointer"}}>
+                    No, mantener plan
+                  </button>
+                </div>
+              </div>
+            )}
             {mostrarBannerCambioModo&&(
               <div style={{display:"flex",justifyContent:"center",marginTop:4,gap:10}}>
                 <button onClick={async()=>{

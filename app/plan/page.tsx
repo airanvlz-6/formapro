@@ -227,7 +227,11 @@ export default function Plan() {
               const sesion = sesiones.find((s:any) => normalizar(s.dia) === normalizar(dia));
               const esHoy = dia === diaHoy;
               const config = sesion ? getTipoConfig(sesion.tipo, sesion.titulo) : {emoji:"—",color:C.muted};
-              const esDescansoTotal = /descanso completo|descanso total|^descanso$/i.test(`${sesion?.tipo||""} ${sesion?.titulo||""}`.trim()) || !sesion;
+              // FIX: una sesion MODIFICADA (ej: "Descanso completo con movilidad suave", titulo real que
+        // contiene contenido de movilidad + descripcion real) NUNCA debe clasificarse como descanso
+        // vacio solo por tener "completo" en el titulo — eso bloqueaba el modal de detalle justo
+        // para las sesiones donde mas importa poder ver el motivo/contenido del cambio.
+        const esDescansoTotal = !sesion?.modificado && (/descanso completo|descanso total|^descanso$/i.test(`${sesion?.tipo||""} ${sesion?.titulo||""}`.trim()) || !sesion);
               const esDescanso = esDescansoTotal;
 
               return (

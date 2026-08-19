@@ -2571,6 +2571,83 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
     }
   }
 
+  if (action === "verificar_modificacion_sesion_deterministico") {
+    // FORGE MODIFICATION SAFETY NET — red de seguridad determinista: NUNCA confiamos en que el
+    // LLM principal genere el tag [PROPONER_MODIFICACION:] de forma consistente (patron de fallo
+    // real confirmado: el Coach anuncia verbalmente un cambio de sesion sin incluir el tag tecnico,
+    // especialmente en mensajes con contenido emocional/dolor). Esta accion analiza la respuesta
+    // YA GENERADA del Coach con una llamada Haiku dedicada y, si detecta un anuncio de modificacion
+    // sin tag correspondiente, crea el pending_action directamente — el backend decide, no el LLM.
+    const { respuestaCoach, weekStartActual } = datos;
+    if (!respuestaCoach || respuestaCoach.includes("[PROPONER_MODIFICACION:")) {
+      // Si el tag ya esta presente, el flujo normal de procesarTag ya lo maneja — no duplicar.
+      return NextResponse.json({ ok: true, detectado: false, yaViaTagNormal: true });
+    }
+
+    const detectorPrompt = `Analiza esta respuesta de un coach de entrenamiento a su atleta. Determina si el coach esta ANUNCIANDO un cambio/modificacion a una sesion YA PLANIFICADA (hoy, mañana, o cualquier dia de la semana actual) — por ejemplo, decir que hoy toca descanso en vez de la sesion prevista, cambiar box por movilidad, reducir intensidad, etc.
+
+Responde SOLO con este JSON, sin texto adicional ni markdown:
+{"anuncia_modificacion":true_o_false,"dia":"nombre del dia en minusculas sin tildes (hoy/mañana segun corresponda) o null","tipo":"tipo de sesion nueva propuesta o null","titulo":"titulo breve de la nueva sesion o null","motivo":"motivo del cambio segun el coach o null","descripcion":"descripcion de la sesion nueva tal como la explico el coach, resumida, o null"}
+
+Respuesta del coach: "${respuestaCoach}"
+
+"anuncia_modificacion" debe ser true SOLO si el coach claramente esta cambiando una sesion ya planificada, no si solo esta dando consejo general o respondiendo una pregunta sin modificar nada.`;
+
+    try {
+      const detectorRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 400, messages: [{ role: "user", content: detectorPrompt }] }),
+      });
+      const detectorData = await detectorRes.json();
+      const detectorTexto = detectorData.content?.map((b: any) => b.text || "").join("") || "{}";
+      const detectorClean = detectorTexto.replace(/```json|```/g, "").trim();
+      const detectorMatch = detectorClean.match(/\{[\s\S]*\}/);
+      if (!detectorMatch) return NextResponse.json({ ok: true, detectado: false });
+
+      const extraido = JSON.parse(detectorMatch[0]);
+      if (!extraido.anuncia_modificacion || !extraido.dia) {
+        return NextResponse.json({ ok: true, detectado: false });
+      }
+
+      // Determinar el dia real (hoy/mañana) segun estado canonico, ya que el detector puede
+      // devolver "hoy"/"mañana" en vez del nombre real del dia de la semana
+      const estadoParaDetector = await generarEstadoCanonico(supabase, codigo);
+      const diaRealDetectado = extraido.dia === "hoy" ? estadoParaDetector.dia_semana_hoy
+        : extraido.dia === "mañana" || extraido.dia === "manana" ? estadoParaDetector.dia_semana_manana
+        : extraido.dia;
+
+      const weekStartDetector = weekStartActual || (() => {
+        const hoyDet = new Date();
+        const diaSemDet = hoyDet.getDay() || 7;
+        const lunesDet = new Date(hoyDet);
+        lunesDet.setDate(hoyDet.getDate() - diaSemDet + 1);
+        return lunesDet.toISOString().split('T')[0];
+      })();
+
+      const { data: nuevaPendingDet, error: errorPendingDet } = await supabase.from("pending_actions").insert({
+        user_codigo: codigo,
+        tipo: "modificar_sesion",
+        accion: {
+          week_start: weekStartDetector,
+          dia: diaRealDetectado,
+          tipo: extraido.tipo || "modificado",
+          titulo: extraido.titulo || "Sesión modificada",
+          motivo: extraido.motivo || "Modificación detectada automáticamente",
+          descripcion: extraido.descripcion || ""
+        },
+        estado: "pendiente"
+      }).select().single();
+
+      if (errorPendingDet) return NextResponse.json({ error: errorPendingDet.message }, { status: 500 });
+      console.log("🛡️ SAFETY NET: modificacion detectada sin tag, pending_action creado automaticamente:", JSON.stringify(extraido));
+      return NextResponse.json({ ok: true, detectado: true, pendingId: nuevaPendingDet.id });
+    } catch (err: any) {
+      console.error("Error en verificar_modificacion_sesion_deterministico:", err);
+      return NextResponse.json({ ok: true, detectado: false });
+    }
+  }
+
   if (action === "guardar_readiness_checkin") {
     // FORGE READINESS CHECKIN — V1: captura pura del estado percibido al despertar, un toque,
     // sin LLM ni interpretacion. La correlacion con datos objetivos (HRV, sueño, FC) vive en

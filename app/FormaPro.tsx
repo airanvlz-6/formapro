@@ -1405,6 +1405,17 @@ const forgeValidator=(texto:string):string=>{
     await procesarTag("[PROPONER_MODIFICACION:",24,async(data)=>{
       await apiCall({action:"guardar_pending_action",codigo:codigoUsuario,datos:{tipo:"modificar_sesion",accion:data}});
     });
+    // FORGE MODIFICATION SAFETY NET — se ejecuta SIEMPRE tras procesar los tags normales, sin
+    // bloquear la respuesta al usuario (fire-and-forget). Si el LLM anuncio un cambio de sesion
+    // SIN generar el tag tecnico, esta verificacion determinista lo detecta y crea el pending_action
+    // de todos modos — nunca dejamos que el LLM decida silenciosamente si algo importante se registra.
+    if(codigoUsuario){
+      apiCall({action:"verificar_modificacion_sesion_deterministico",codigo:codigoUsuario,datos:{respuestaCoach:texto}}).then((resSafety:any)=>{
+        if(resSafety?.detectado){
+          console.log("🛡️ Safety net: modificacion detectada y registrada automaticamente");
+        }
+      });
+    }
     await procesarTag("[DEBILIDAD_DEV:",15,async(data)=>{
       await apiCall({action:"registrar_debilidad_dev",codigo:codigoUsuario,datos:data});
     });

@@ -2337,6 +2337,15 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
     return NextResponse.json({ ok: true, ejecutado: true, tipo: pendiente.tipo });
   }
 
+  if (action === "rechazar_pending_action") {
+    // El usuario decide explicitamente NO aplicar el cambio propuesto — marcamos como rechazado
+    // (nunca eliminamos el registro, queda auditado) y el plan original permanece intacto.
+    const { data: pendienteRechazo } = await supabase.from("pending_actions").select("id").eq("user_codigo", codigo).eq("estado", "pendiente").order("created_at", { ascending: false }).limit(1).single();
+    if (!pendienteRechazo) return NextResponse.json({ ok: true, rechazado: false, motivo: "no_hay_pending" });
+    await supabase.from("pending_actions").update({ estado: "rechazado", resuelto_at: new Date().toISOString() }).eq("id", pendienteRechazo.id);
+    return NextResponse.json({ ok: true, rechazado: true });
+  }
+
   if (action === "cambiar_modo_entrada") {
     // FORGE MODE TRANSITION — accion determinista, unica autorizada para cambiar modo_entrada tras
     // el registro inicial. El LLM detecta intencion y puede sugerir el cambio, pero NUNCA lo ejecuta
@@ -2641,7 +2650,7 @@ Respuesta del coach: "${respuestaCoach}"
 
       if (errorPendingDet) return NextResponse.json({ error: errorPendingDet.message }, { status: 500 });
       console.log("🛡️ SAFETY NET: modificacion detectada sin tag, pending_action creado automaticamente:", JSON.stringify(extraido));
-      return NextResponse.json({ ok: true, detectado: true, pendingId: nuevaPendingDet.id });
+      return NextResponse.json({ ok: true, detectado: true, pendingId: nuevaPendingDet.id, dia: diaRealDetectado, titulo: extraido.titulo, motivo: extraido.motivo });
     } catch (err: any) {
       console.error("Error en verificar_modificacion_sesion_deterministico:", err);
       return NextResponse.json({ ok: true, detectado: false });

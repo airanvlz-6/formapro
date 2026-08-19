@@ -745,6 +745,7 @@ const [rachaPendienteCompartir,setRachaPendienteCompartir]=useState<number|null>
 const [modoEntrada,setModoEntrada]=useState<string>("planificacion");
 const [esperandoConfirmacionDisponibilidad,setEsperandoConfirmacionDisponibilidad]=useState(false);
 const [mostrarBannerCambioModo,setMostrarBannerCambioModo]=useState(false);
+const [modificacionPendienteConfirmar,setModificacionPendienteConfirmar]=useState<{pendingId:string;dia:string;titulo:string;motivo:string}|null>(null);
 const [sesionParaCompartir,setSesionParaCompartir]=useState<any>(null);
 const [suenoConfirmado,setSuenoConfirmado]=useState<{fecha:string;valores:any}|null>(null);
 const [objetivoPendienteCompartir,setObjetivoPendienteCompartir]=useState<{objetivo:string;resultado:string}|null>(null);
@@ -1413,6 +1414,7 @@ const forgeValidator=(texto:string):string=>{
       apiCall({action:"verificar_modificacion_sesion_deterministico",codigo:codigoUsuario,datos:{respuestaCoach:texto}}).then((resSafety:any)=>{
         if(resSafety?.detectado){
           console.log("🛡️ Safety net: modificacion detectada y registrada automaticamente");
+          setModificacionPendienteConfirmar({pendingId:resSafety.pendingId,dia:resSafety.dia,titulo:resSafety.titulo,motivo:resSafety.motivo});
         }
       });
     }

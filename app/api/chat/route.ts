@@ -2672,6 +2672,16 @@ Respuesta del coach: "${respuestaCoach}"
         extraido.vuelta_calma ? `**Vuelta a la calma**\n${extraido.vuelta_calma}` : ""
       ].filter(Boolean).join("\n\n");
 
+      // FIX: expirar cualquier pending_action anterior sin resolver para el MISMO dia antes de crear
+      // uno nuevo — evita acumular pendings huerfanos cuando el Coach ajusta su propuesta varias
+      // veces en la misma conversacion (cada ajuste generaba un pending nuevo, dejando el anterior
+      // invisible para obtener_pending_action_activo, que solo consulta el mas reciente).
+      const { data: pendingsAnteriores } = await supabase.from("pending_actions").select("id").eq("user_codigo", codigo).eq("estado", "pendiente").eq("accion->>dia", diaRealDetectado);
+      if (pendingsAnteriores && pendingsAnteriores.length > 0) {
+        await supabase.from("pending_actions").update({ estado: "expirado" }).in("id", pendingsAnteriores.map((p: any) => p.id));
+        console.log(`🛡️ SAFETY NET: expirados ${pendingsAnteriores.length} pending(s) anterior(es) sin resolver para ${diaRealDetectado}`);
+      }
+
       const { data: nuevaPendingDet, error: errorPendingDet } = await supabase.from("pending_actions").insert({
         user_codigo: codigo,
         tipo: "modificar_sesion",

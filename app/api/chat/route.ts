@@ -707,6 +707,23 @@ export async function POST(req: NextRequest) {
   // otra logica) porque esta accion no envia "codigo" en el nivel raiz del payload (solo authUserId
   // dentro de datos) — colocarla mas abajo en la cadena de ifs la exponia a fallar por logica
   // intermedia que asumia la presencia de codigo sin verificarla explicitamente.
+  if (action === "verificar_email_registrado") {
+    // FORGE MOBILE — verificacion honesta de email ya existente ANTES del registro. Supabase Auth
+    // signUp() nunca devuelve error real para emails ya registrados (por diseño de seguridad, evita
+    // enumeracion de cuentas desde el cliente) — el frontend recibia "exito" y el mensaje enganoso
+    // "revisa tu correo" aunque el email ya existiera. Esta accion consulta directamente auth.users
+    // con la service_role key (solo disponible en backend) para dar feedback honesto al usuario.
+    try {
+      const { email } = datos || {};
+      if (!email) return NextResponse.json({ error: "Falta email" }, { status: 400 });
+      const { data: usuarioExistente } = await supabase.from("usuarios").select("codigo").eq("email", email.toLowerCase().trim()).maybeSingle();
+      return NextResponse.json({ yaExiste: !!usuarioExistente });
+    } catch (err: any) {
+      console.error("Error en verificar_email_registrado:", err);
+      return NextResponse.json({ yaExiste: false });
+    }
+  }
+
   if (action === "obtener_codigo_por_auth_user_id") {
     try {
       const { authUserId } = datos || {};

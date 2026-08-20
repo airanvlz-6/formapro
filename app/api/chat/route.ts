@@ -739,6 +739,86 @@ export async function POST(req: NextRequest) {
 
   // FORGE MOBILE — DIAGNOSTICO TEMPORAL: verifica que getAthleteContext() construye correctamente
   // el contexto antes de conectar nada mas. Se eliminara una vez confirmada la prueba de equivalencia.
+  if (action === "completar_onboarding") {
+    // FORGE MOBILE ONBOARDING V1 — backend-first, idempotente. El movil manda datos minimos
+    // (categoria, objetivo, disponibilidad) y el backend hace TODO el trabajo: validar identidad,
+    // completar el perfil, generar el mensaje de bienvenida (parte LLM/generativa), y persistir.
+    // Idempotencia REAL: si ya existe bienvenida generada, no se repite nada, se devuelve el estado ya completado.
+    try {
+      const { authUserId, categoria, objetivo, disponibilidad, modoEntrada } = datos || {};
+      if (!authUserId || !categoria) {
+        return NextResponse.json({ error: "Faltan datos obligatorios (authUserId, categoria)" }, { status: 400 });
+      }
+
+      // Verificacion de identidad real, mismo patron que enviar_mensaje_coach
+      const { data: usuarioOnboarding, error: errorUsuarioOnboarding } = await supabase.from("usuarios").select("codigo,auth_user_id,onboarding_completado,historial,perfil,categoria").eq("codigo", codigo).single();
+      if (errorUsuarioOnboarding || !usuarioOnboarding) {
+        return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+      }
+      if (usuarioOnboarding.auth_user_id !== authUserId) {
+        return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+      }
+
+      // IDEMPOTENCIA: si ya se completo el onboarding, no repetir nada — devolver estado ya existente
+      if (usuarioOnboarding.onboarding_completado) {
+        return NextResponse.json({
+          ok: true,
+          yaCompletado: true,
+          codigo,
+          welcomeMessage: (usuarioOnboarding.historial || []).find((m: any) => m.role === "assistant")?.content || ""
+        });
+      }
+
+      // PARTE DETERMINISTA — construir el perfil minimo V1, sin LLM. Reutiliza exactamente las
+      // mismas categorias/valores que la web (funcional/carrera/fuerza/hibrido), sin inventar taxonomia nueva.
+      const perfilMinimo = { objetivo_general: objetivo || "No especificado" };
+      const distribucionMinima = disponibilidad ? JSON.stringify(disponibilidad) : "";
+      const modoEntradaFinal = modoEntrada || "supervision";
+
+      await supabase.from("usuarios").update({
+        categoria,
+        especialidad: categoria,
+        perfil: perfilMinimo,
+        distribucion_semanal: distribucionMinima,
+        modo_entrada: modoEntradaFinal,
+        marcas: [],
+      }).eq("codigo", codigo);
+
+      // PARTE GENERATIVA — mensaje de bienvenida via LLM, EQUIVALENTE a iniciarChat() de la web
+      // pero simplificado (sin distinguir rehab/supervision con prompts extensos por ahora, V1).
+      const catLabel: Record<string, string> = { funcional: "Functional Training (CrossFit/Hyrox/Fitness)", carrera: "Carrera (Running/Trail)", fuerza: "Fuerza (Powerlifting/Halterofilia/Strongman)", hibrido: "Híbrido (Resistencia + Fuerza)" };
+      const catObjOnboarding = { id: categoria, titulo: catLabel[categoria] || categoria };
+
+      const promptBienvenida = modoEntradaFinal === "supervision"
+        ? "¡Hola! Ya tengo mi propia planificación o entrenador — no necesito que Forge me genere un plan. Preséntate brevemente explicando cómo me vas a ayudar en este modo: puedo registrar mis entrenos y métricas para que los organices, preguntarte dudas técnicas, y avisarte si necesito adaptar algo por fatiga o molestias."
+        : "¡Hola! Acabo de completar mi perfil. Preséntate brevemente, demuestra que conoces mi disciplina y objetivo, y pregúntame cómo puedo empezar a contarte sobre mi entrenamiento.";
+
+      const { buildPrompt } = await import("@/lib/mobile/buildPrompt");
+      const systemBienvenida = buildPrompt(catObjOnboarding, perfilMinimo, [], "", undefined, undefined, undefined, false, undefined, undefined, undefined, undefined, distribucionMinima, objetivo ? { descripcion: objetivo } : undefined);
+
+      let textoBienvenida = "¡Bienvenido a Forge! Cuéntame cómo puedo ayudarte.";
+      try {
+        const bienvenidaRes = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+          body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1000, system: systemBienvenida, messages: [{ role: "user", content: promptBienvenida }] }),
+        });
+        const bienvenidaData = await bienvenidaRes.json();
+        textoBienvenida = bienvenidaData.content?.map((b: any) => b.text || "").join("") || textoBienvenida;
+      } catch (err) {
+        console.error("Error generando bienvenida onboarding:", err);
+      }
+
+      const historialInicial = [{ role: "user", content: "[Inicio de conversación]" }, { role: "assistant", content: textoBienvenida }];
+      await supabase.from("usuarios").update({ historial: historialInicial, onboarding_completado: true, updated_at: new Date().toISOString() }).eq("codigo", codigo);
+
+      return NextResponse.json({ ok: true, yaCompletado: false, codigo, welcomeMessage: textoBienvenida });
+    } catch (err: any) {
+      console.error("Error en completar_onboarding:", err);
+      return NextResponse.json({ error: "Error: " + err.message }, { status: 500 });
+    }
+  }
+
   if (action === "diagnostico_athlete_context") {
     try {
       const { getAthleteContext } = await import("@/lib/mobile/getAthleteContext");

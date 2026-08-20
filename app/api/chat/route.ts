@@ -2323,7 +2323,11 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
           // el cambio — se completa por reporte del usuario, igual que cualquier otra sesion.
           // FIX: por_que tambien debe actualizarse al modificar la sesion — antes quedaba con el valor
         // de la sesion original, mostrando una justificacion incoherente con el nuevo titulo/tipo.
-        return { ...s, tipo: acc.tipo, titulo: acc.titulo, descripcion: acc.descripcion, por_que: acc.motivo || s.por_que, modificado: true, motivo_modificacion: acc.motivo || "", modificado_at: new Date().toISOString(), completada: s.completada ?? false };
+        // FIX: debilidad_relacionada tambien debe limpiarse/actualizarse al modificar la sesion — antes
+        // quedaba con el valor de la sesion original, mostrando "Trabaja: X" incoherente con el
+        // nuevo contenido (una sesion de emergencia por molestia no necesariamente trabaja la misma
+        // debilidad que la sesion planificada originalmente).
+        return { ...s, tipo: acc.tipo, titulo: acc.titulo, descripcion: acc.descripcion, por_que: acc.motivo || s.por_que, debilidad_relacionada: acc.debilidad_relacionada ?? null, modificado: true, motivo_modificacion: acc.motivo || "", modificado_at: new Date().toISOString(), completada: s.completada ?? false };
         }
         return s;
       });
@@ -2614,11 +2618,11 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
     const detectorPrompt = `Analiza esta respuesta de un coach de entrenamiento a su atleta. Determina si el coach esta ANUNCIANDO un cambio/modificacion a una sesion YA PLANIFICADA (hoy, mañana, o cualquier dia de la semana actual) — por ejemplo, decir que hoy toca descanso en vez de la sesion prevista, cambiar box por movilidad, reducir intensidad, etc.
 
 Responde SOLO con este JSON, sin texto adicional ni markdown:
-{"anuncia_modificacion":true_o_false,"dia":"nombre del dia en minusculas sin tildes (hoy/mañana segun corresponda) o null","tipo":"tipo de sesion nueva propuesta o null","titulo":"titulo breve de la nueva sesion o null","motivo":"motivo del cambio segun el coach o null","descripcion":"descripcion de la sesion nueva tal como la explico el coach, resumida, o null"}
+{"anuncia_modificacion":true_o_false,"dia":"nombre del dia en minusculas sin tildes (hoy/mañana segun corresponda) o null","tipo":"tipo de sesion nueva propuesta o null","titulo":"titulo breve de la nueva sesion o null","motivo":"motivo del cambio segun el coach o null","calentamiento":"contenido del calentamiento si se menciona, o null","bloque_principal":"contenido del bloque principal/ejercicios si se menciona, o null","vuelta_calma":"contenido de la vuelta a la calma si se menciona, o null","debilidad_relacionada":"nombre de la debilidad que esta nueva sesion trabaja, SOLO si es evidente y coincide con una debilidad conocida, o null si no aplica"}
 
 Respuesta del coach: "${respuestaCoach}"
 
-"anuncia_modificacion" debe ser true SOLO si el coach claramente esta cambiando una sesion ya planificada, no si solo esta dando consejo general o respondiendo una pregunta sin modificar nada.`;
+"anuncia_modificacion" debe ser true SOLO si el coach claramente esta cambiando una sesion ya planificada, no si solo esta dando consejo general o respondiendo una pregunta sin modificar nada. Divide el contenido de la sesion en calentamiento/bloque_principal/vuelta_calma cuando sea posible identificarlos en el texto — si el coach no distingue estas partes claramente, pon todo el contenido en bloque_principal y deja los otros dos en null.`;
 
     try {
       const detectorRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -2652,6 +2656,15 @@ Respuesta del coach: "${respuestaCoach}"
         return lunesDet.toISOString().split('T')[0];
       })();
 
+      // FIX: construir la descripcion con la MISMA estructura de bloques (Calentamiento/Bloque
+      // principal/Vuelta a la calma) que usa el resto de sesiones generadas por el Orchestrator —
+      // antes se guardaba como parrafo unico y el parser visual de la web no podia formatearla.
+      const descripcionEstructurada = [
+        extraido.calentamiento ? `**Calentamiento**\n${extraido.calentamiento}` : "",
+        extraido.bloque_principal ? `**Bloque principal**\n${extraido.bloque_principal}` : "",
+        extraido.vuelta_calma ? `**Vuelta a la calma**\n${extraido.vuelta_calma}` : ""
+      ].filter(Boolean).join("\n\n");
+
       const { data: nuevaPendingDet, error: errorPendingDet } = await supabase.from("pending_actions").insert({
         user_codigo: codigo,
         tipo: "modificar_sesion",
@@ -2661,7 +2674,8 @@ Respuesta del coach: "${respuestaCoach}"
           tipo: extraido.tipo || "modificado",
           titulo: extraido.titulo || "Sesión modificada",
           motivo: extraido.motivo || "Modificación detectada automáticamente",
-          descripcion: extraido.descripcion || ""
+          descripcion: descripcionEstructurada || extraido.bloque_principal || "",
+          debilidad_relacionada: extraido.debilidad_relacionada || null
         },
         estado: "pendiente"
       }).select().single();

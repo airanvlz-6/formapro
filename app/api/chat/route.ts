@@ -2710,34 +2710,84 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
   }
 
   if (action === "verificar_modificacion_sesion_deterministico") {
-    // FORGE MODIFICATION SAFETY NET — red de seguridad determinista: NUNCA confiamos en que el
-    // LLM principal genere el tag [PROPONER_MODIFICACION:] de forma consistente (patron de fallo
-    // real confirmado: el Coach anuncia verbalmente un cambio de sesion sin incluir el tag tecnico,
-    // especialmente en mensajes con contenido emocional/dolor). Esta accion analiza la respuesta
-    // YA GENERADA del Coach con una llamada Haiku dedicada y, si detecta un anuncio de modificacion
-    // sin tag correspondiente, crea el pending_action directamente — el backend decide, no el LLM.
-    const { respuestaCoach, weekStartActual } = datos;
-    if (!respuestaCoach || respuestaCoach.includes("[PROPONER_MODIFICACION:")) {
-      // Si el tag ya esta presente, el flujo normal de procesarTag ya lo maneja — no duplicar.
-      return NextResponse.json({ ok: true, detectado: false, yaViaTagNormal: true });
+    // FORGE MODIFICATION SAFETY NET v2 — REDISEÑO ARQUITECTONICO tras hallazgo real: el detector v1
+    // inferia "intencion de modificar" a partir del lenguaje libre de la respuesta del Coach, lo cual
+    // es inherentemente fragil — confirmado con evidencia real: un comentario de FEEDBACK sobre una
+    // sesion ya completada ("me parecio facil, subi las repes") disparo una modificacion de la sesion
+    // del dia siguiente, violando la regla "una conversacion nunca modifica el plan por si sola".
+    //
+    // NUEVO MODELO: una conversacion NUNCA puede crear una modificacion por si sola. Primero debe
+    // existir un TRIGGER AUTORIZADO en el MENSAJE DEL USUARIO (no en la respuesta del Coach) — un
+    // conjunto CERRADO de causas operativas reales. Feedback de rendimiento NUNCA es trigger valido;
+    // eso es Coaching Notes / evidencia para el cierre de semana, nunca modificacion inmediata.
+    const { respuestaCoach, mensajeUsuario, weekStartActual } = datos;
+    if (!respuestaCoach || !mensajeUsuario || respuestaCoach.includes("[PROPONER_MODIFICACION:")) {
+      return NextResponse.json({ ok: true, detectado: false, yaViaTagNormal: !!respuestaCoach?.includes("[PROPONER_MODIFICACION:") });
     }
 
-    const detectorPrompt = `Analiza esta respuesta de un coach de entrenamiento a su atleta. Determina si el coach esta ANUNCIANDO un cambio/modificacion a una sesion YA PLANIFICADA (hoy, mañana, o cualquier dia de la semana actual) — por ejemplo, decir que hoy toca descanso en vez de la sesion prevista, cambiar box por movilidad, reducir intensidad, etc.
+    // PASO 1 — clasificar el TRIGGER del mensaje del usuario contra una lista CERRADA. Ningun
+    // trigger fuera de esta lista puede abrir una modificacion, sin importar lo que diga el Coach despues.
+    const triggerPrompt = `Clasifica el TRIGGER (causa) de este mensaje de un atleta a su coach de entrenamiento. Responde SOLO con JSON, sin texto adicional ni markdown.
+
+TRIGGERS AUTORIZADOS (causas operativas reales que pueden justificar cambiar una sesion futura):
+- injury: lesion o molestia fisica real (dolor, chasquido, inflamacion)
+- fatigue_severe: fatiga o falta de sueño EXTREMA explicitamente mencionada (ej: "he dormido 3 horas", "estoy agotado y no puedo mas"), no cansancio normal de entrenar
+- availability: cambio de disponibilidad, no puede entrenar cuando estaba previsto
+- equipment: falta de material o acceso al lugar de entrenamiento habitual
+- user_request: el atleta PIDE EXPLICITAMENTE cambiar una sesion futura ("¿podemos cambiar mañana?", "quiero hacer otra cosa mañana")
+
+NO SON TRIGGERS AUTORIZADOS (nunca deben abrir una modificacion, aunque el Coach reaccione a ellos):
+- performance_feedback: comentarios sobre como fue una sesion YA COMPLETADA (facil, dificil, subio repeticiones, bajo peso, sensaciones) — esto es evidencia de rendimiento, no una causa operativa
+- coaching_note: observaciones tecnicas, debilidades, dudas
+- none: pregunta general, saludo, o cualquier otra cosa sin relacion
+
+Mensaje del atleta: "${mensajeUsuario}"
+
+Responde con este formato exacto:
+{"trigger":"injury|fatigue_severe|availability|equipment|user_request|performance_feedback|coaching_note|none","confidence":0.0-1.0}`;
+
+    let triggerAutorizado = false;
+    try {
+      const triggerRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 100, messages: [{ role: "user", content: triggerPrompt }] }),
+      });
+      const triggerData = await triggerRes.json();
+      const triggerTexto = triggerData.content?.map((b: any) => b.text || "").join("") || "{}";
+      const triggerClean = triggerTexto.replace(/```json|```/g, "").trim();
+      const triggerMatch = triggerClean.match(/\{[\s\S]*\}/);
+      if (triggerMatch) {
+        const triggerExtraido = JSON.parse(triggerMatch[0]);
+        const TRIGGERS_AUTORIZADOS = ["injury", "fatigue_severe", "availability", "equipment", "user_request"];
+        triggerAutorizado = TRIGGERS_AUTORIZADOS.includes(triggerExtraido.trigger) && (triggerExtraido.confidence ?? 0) >= 0.6;
+        console.log("🛡️ SAFETY NET v2: trigger clasificado =", triggerExtraido.trigger, "confidence =", triggerExtraido.confidence, "autorizado =", triggerAutorizado);
+      }
+    } catch (err) {
+      console.error("Error clasificando trigger:", err);
+    }
+
+    // GUARD PRINCIPAL: sin trigger autorizado, NUNCA se procede a construir ninguna modificacion,
+    // sin importar lo que diga la respuesta del Coach. Esto es lo que elimina de raiz el bug real.
+    if (!triggerAutorizado) {
+      return NextResponse.json({ ok: true, detectado: false, motivo: "sin_trigger_autorizado" });
+    }
+
+    // PASO 2 — SOLO si hay trigger autorizado, extraer los detalles de la modificacion propuesta
+    // por el Coach (esto ya es seguro, porque sabemos que hay una causa operativa real detras).
+    const detectorPrompt = `Analiza esta respuesta de un coach de entrenamiento a su atleta. El atleta ya reporto una causa operativa real (lesion/fatiga/disponibilidad/material/peticion explicita) que justifica revisar una sesion futura. Extrae los detalles de la modificacion que el coach esta proponiendo.
 
 Responde SOLO con este JSON, sin texto adicional ni markdown:
-{"anuncia_modificacion":true_o_false,"dia":"nombre del dia en minusculas sin tildes (hoy/mañana segun corresponda) o null","tipo":"tipo de sesion nueva propuesta o null","titulo":"titulo breve de la nueva sesion o null","motivo_cambio":"la CAUSA del cambio — por que se modifico la sesion original (ej: molestia fisica, cansancio, falta de tiempo), o null","justificacion_sesion":"por que ESTA sesion concreta con este contenido tiene sentido ahora — la explicacion tecnica/de programacion del coach (ej: mantener estimulo sin impacto en la zona afectada), o null si el coach no la da explicitamente","calentamiento":"contenido del calentamiento si se menciona, o null","bloque_principal":"contenido del bloque principal/ejercicios si se menciona, o null","vuelta_calma":"contenido de la vuelta a la calma si se menciona, o null","debilidad_relacionada":"nombre de la debilidad que esta nueva sesion trabaja, SOLO si es evidente y coincide con una debilidad conocida, o null si no aplica"}
+{"anuncia_modificacion":true_o_false,"dia":"nombre del dia en minusculas sin tildes (hoy/mañana segun corresponda) o null","tipo":"tipo de sesion nueva propuesta o null","titulo":"titulo breve de la nueva sesion o null","motivo_cambio":"la CAUSA del cambio segun el atleta, o null","justificacion_sesion":"por que ESTA sesion concreta con este contenido tiene sentido ahora, o null","calentamiento":"contenido del calentamiento si se menciona, o null","bloque_principal":"contenido del bloque principal/ejercicios si se menciona, o null","vuelta_calma":"contenido de la vuelta a la calma si se menciona, o null","debilidad_relacionada":"nombre de la debilidad que esta nueva sesion trabaja, SOLO si es evidente, o null"}
 
 Respuesta del coach: "${respuestaCoach}"
 
-"anuncia_modificacion" debe ser true SOLO si el coach claramente esta cambiando una sesion ya planificada, no si solo esta dando consejo general o respondiendo una pregunta sin modificar nada. Divide el contenido de la sesion en calentamiento/bloque_principal/vuelta_calma cuando sea posible identificarlos en el texto — si el coach no distingue estas partes claramente, pon todo el contenido en bloque_principal y deja los otros dos en null. IMPORTANTE: motivo_cambio y justificacion_sesion son conceptos DIFERENTES — no repitas el mismo texto en ambos. motivo_cambio es la causa (ej: "molestia en rodilla"), justificacion_sesion es el razonamiento tecnico de por que este contenido concreto (ej: "mantener fuerza sin impacto articular").`;
+Divide el contenido de la sesion en calentamiento/bloque_principal/vuelta_calma cuando sea posible identificarlos en el texto.`;
 
     try {
       const detectorRes = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-        // FIX: max_tokens aumentado de 400 a 1000 — el JSON ahora incluye calentamiento/bloque_principal/
-        // vuelta_calma por separado (mas largo que antes), y con 400 el modelo se quedaba sin espacio
-        // y cortaba el campo motivo a mitad de palabra (confirmado con evidencia real: "asintomática" -> "asin").
         body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1000, messages: [{ role: "user", content: detectorPrompt }] }),
       });
       const detectorData = await detectorRes.json();

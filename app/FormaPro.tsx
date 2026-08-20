@@ -1338,7 +1338,7 @@ const forgeValidator=(texto:string):string=>{
     return textoCorregido;
   };
 
-  const procesarTags=async(textoOriginal:string, esMensajeDeSueno:boolean=false):Promise<string>=>{
+  const procesarTags=async(textoOriginal:string, esMensajeDeSueno:boolean=false, mensajeUsuarioOriginal:string=""):Promise<string>=>{
     // Limpieza de residuos de markdown/JSON que el modelo a veces genera antes del tag real (ej: "```json" suelto)
     let texto=textoOriginal.replace(/\[STATE_UPDATE\][\s\S]*?\[\/STATE_UPDATE\]/g,"").replace(/```json|```/gi,"").trim();
 
@@ -1418,7 +1418,7 @@ const forgeValidator=(texto:string):string=>{
     // SIN generar el tag tecnico, esta verificacion determinista lo detecta y crea el pending_action
     // de todos modos — nunca dejamos que el LLM decida silenciosamente si algo importante se registra.
     if(codigoUsuario){
-      apiCall({action:"verificar_modificacion_sesion_deterministico",codigo:codigoUsuario,datos:{respuestaCoach:texto}}).then((resSafety:any)=>{
+      apiCall({action:"verificar_modificacion_sesion_deterministico",codigo:codigoUsuario,datos:{respuestaCoach:texto,mensajeUsuario:mensajeUsuarioOriginal}}).then((resSafety:any)=>{
         if(resSafety?.detectado){
           console.log("🛡️ Safety net: modificacion detectada y registrada automaticamente");
           setModificacionPendienteConfirmar({pendingId:resSafety.pendingId,dia:resSafety.dia,titulo:resSafety.titulo,motivo:resSafety.motivo});
@@ -1512,7 +1512,7 @@ const forgeValidator=(texto:string):string=>{
       if(data.aborted) return;
       const respTextRaw=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.");
       const respTextValidado=forgeValidator(respTextRaw);
-      const respText=await procesarTags(respTextValidado, esSuenoSilencioso);
+      const respText=await procesarTags(respTextValidado, esSuenoSilencioso, texto.trim());
       const histLimpio=[...historial,{role:"user",content:texto.trim()},{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);
       setHistorial(histLimpio);
@@ -1818,7 +1818,7 @@ const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:build
         }catch{}
       }
 
-      const respText=await procesarTags(respTextRaw2, esSuenoParaResumen);
+      const respText=await procesarTags(respTextRaw2, esSuenoParaResumen, texto);
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);
       // FORGE PROPOSAL PARSER — Nivel 1 deterministico: detecta si el Coach acaba de proponer un

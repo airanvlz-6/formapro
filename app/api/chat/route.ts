@@ -739,6 +739,12 @@ export async function POST(req: NextRequest) {
 
   // FORGE MOBILE — DIAGNOSTICO TEMPORAL: verifica que getAthleteContext() construye correctamente
   // el contexto antes de conectar nada mas. Se eliminara una vez confirmada la prueba de equivalencia.
+  if (action === "verificar_onboarding_completado") {
+    // Consulta minima y rapida, solo lectura, para que el movil sepa si mostrar Onboarding u Home.
+    const { data: usuarioOnb } = await supabase.from("usuarios").select("onboarding_completado").eq("codigo", codigo).single();
+    return NextResponse.json({ completado: !!usuarioOnb?.onboarding_completado });
+  }
+
   if (action === "completar_onboarding") {
     // FORGE MOBILE ONBOARDING V1 — backend-first, idempotente. El movil manda datos minimos
     // (categoria, objetivo, disponibilidad) y el backend hace TODO el trabajo: validar identidad,

@@ -704,6 +704,11 @@ export default function Forge() {
         verificarSaludoProactivo(u.codigo);
         // FORGE PENDING ACTION BANNER — restaurar el banner de confirmacion si quedo un pending_action
         // sin resolver de una sesion anterior (ej: el usuario cerro la app antes de confirmar/rechazar).
+        apiCall({action:"obtener_estado_atleta_activo",codigo:u.codigo}).then((resEstado:any)=>{
+          if(resEstado?.estado&&resEstado.estado!=="normal"){
+            setEstadoAtletaActivo({estado:resEstado.estado,motivo:resEstado.motivo,desde:resEstado.desde});
+          }
+        });
         apiCall({action:"obtener_pending_action_activo",codigo:u.codigo}).then((resPending:any)=>{
           if(resPending?.hayPending){
             setModificacionPendienteConfirmar({pendingId:"restaurado",dia:resPending.dia,titulo:resPending.titulo,motivo:resPending.motivo});
@@ -755,6 +760,7 @@ const [modoEntrada,setModoEntrada]=useState<string>("planificacion");
 const [esperandoConfirmacionDisponibilidad,setEsperandoConfirmacionDisponibilidad]=useState(false);
 const [mostrarBannerCambioModo,setMostrarBannerCambioModo]=useState(false);
 const [modificacionPendienteConfirmar,setModificacionPendienteConfirmar]=useState<{pendingId:string;dia:string;titulo:string;motivo:string}|null>(null);
+const [estadoAtletaActivo,setEstadoAtletaActivo]=useState<{estado:string;motivo:string;desde:string}|null>(null);
 const [sesionParaCompartir,setSesionParaCompartir]=useState<any>(null);
 const [suenoConfirmado,setSuenoConfirmado]=useState<{fecha:string;valores:any}|null>(null);
 const [objetivoPendienteCompartir,setObjetivoPendienteCompartir]=useState<{objetivo:string;resultado:string}|null>(null);
@@ -2907,6 +2913,22 @@ ${testStr}`}]});
                     Ver en Mi Atleta →
                   </a>
                 </div>
+              </div>
+            )}
+            {estadoAtletaActivo&&(
+              <div style={{background:"linear-gradient(135deg,#8B0000,#5C0000)",borderRadius:16,padding:"16px 18px",marginBottom:10}}>
+                <p style={{color:"#fff",fontSize:14,fontWeight:700,marginBottom:4}}>🔴 Gestión de restricción activa</p>
+                <p style={{color:"#fff",fontSize:12.5,opacity:0.95,marginBottom:4}}>Desde {new Date(estadoAtletaActivo.desde).toLocaleDateString('es-ES')}: {estadoAtletaActivo.motivo}</p>
+                <p style={{color:"#fff",fontSize:11.5,opacity:0.85,marginBottom:12}}>Tu planificación se está adaptando automáticamente a esta situación mientras dure.</p>
+                <button onClick={async()=>{
+                  const res=await apiCall({action:"resolver_restriccion_atleta",codigo:codigoUsuario});
+                  if(res?.resuelto){
+                    setEstadoAtletaActivo(null);
+                    setMensajes(prev=>[...prev,{role:"assistant",content:"Perfecto, me alegra que la molestia se haya resuelto. Antes de retomar la carga habitual, vamos a comprobar juntos qué tolerancia tienes ahora mismo — no volveremos automáticamente a donde estabas, reconstruiremos progresivamente."}]);
+                  }
+                }} style={{width:"100%",background:"#fff",color:"#8B0000",border:"none",borderRadius:100,padding:"10px 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                  Ya no tengo molestia — marcar como resuelto
+                </button>
               </div>
             )}
             {modificacionPendienteConfirmar&&(

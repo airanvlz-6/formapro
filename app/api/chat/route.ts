@@ -1702,6 +1702,8 @@ Disponibilidad: ${usuarioAnalyzer?.distribucion_semanal || "no especificada"}
 ${metodosYaProbadosTexto}
 ${restriccionesTexto}
 ${coachingNotesTexto}
+${estado.athlete_state?.estado && estado.athlete_state.estado !== "normal" ? `
+🔴 ESTADO DEL ATLETA — RESTRICCIÓN ACTIVA (${estado.athlete_state.estado.toUpperCase()}) desde ${estado.athlete_state.desde}, motivo: ${estado.athlete_state.motivo}. Esta semana debe planificarse como semana de gestión de restricción: prioriza mantenimiento/adaptación sobre progresión de carga, respeta estrictamente las restricciones duras listadas arriba, y considera reducir el volumen/intensidad global hasta que el atleta confirme resolución. NO trates esta semana como una semana normal del bloque.` : ""}
 
 Si alguna observacion tecnica pendiente encaja con el bloque/fase actual y no compromete el objetivo principal de la semana, puedes incorporarla como parte del objetivo o debilidad_prioritaria. Si decides incorporar una, incluye su id en el campo "coaching_notes_incorporadas" (array de ids, puede estar vacio).
 
@@ -3149,6 +3151,39 @@ Mensaje: "${mensaje}"
       console.error("Error en verificar_sesion_completada_deterministico:", err);
       return NextResponse.json({ ok: true, detectado: false });
     }
+  }
+
+  if (action === "obtener_estado_atleta_activo") {
+    // Solo lectura — permite al frontend saber si hay una restriccion activa, para mostrar UI
+    // adecuada (ej: banner de "en gestion de lesion" con opcion de marcar como resuelto).
+    const { data: estadoActivo } = await supabase.from("athlete_state_events").select("*").eq("user_codigo", codigo).eq("activo", true).maybeSingle();
+    return NextResponse.json({ estado: estadoActivo?.estado || "normal", motivo: estadoActivo?.motivo || null, desde: estadoActivo?.fecha_inicio || null });
+  }
+
+  if (action === "resolver_restriccion_atleta") {
+    // FORGE ATHLETE STATE ENGINE — transicion de salida, SIEMPRE disparada por confirmacion
+    // EXPLICITA del usuario (nunca inferida del lenguaje libre del Coach). El atleta pasa a
+    // REASSESSMENT: reconocemos que la restriccion se resolvio pero NO asumimos retorno automatico
+    // a la carga previa — la siguiente semana debe evaluar tolerancia real antes de progresar.
+    const { data: estadoParaResolver } = await supabase.from("athlete_state_events").select("id,estado,motivo,fecha_inicio").eq("user_codigo", codigo).eq("activo", true).maybeSingle();
+    if (!estadoParaResolver || estadoParaResolver.estado === "normal") {
+      return NextResponse.json({ ok: true, resuelto: false, motivo: "sin_restriccion_activa" });
+    }
+
+    await supabase.from("athlete_state_events").update({ activo: false, fecha_fin: new Date().toISOString().split('T')[0] }).eq("id", estadoParaResolver.id);
+    await supabase.from("athlete_state_events").insert({
+      user_codigo: codigo,
+      estado: "reassessment",
+      motivo: `Resolución confirmada de: ${estadoParaResolver.motivo}`,
+      activo: true
+    });
+
+    // Marcar tambien la(s) hard constraint(s) relacionadas como resueltas, para que el Constraint
+    // Engine deje de bloquearlas en la siguiente planificacion.
+    await supabase.from("athlete_coaching_notes").update({ status: "resuelta" }).eq("user_codigo", codigo).eq("constraint_level", "hard").in("status", ["pending", "considerada"]);
+
+    console.log("🟡 ATHLETE STATE ENGINE:", codigo, "transiciona de", estadoParaResolver.estado, "a REASSESSMENT");
+    return NextResponse.json({ ok: true, resuelto: true, nuevoEstado: "reassessment" });
   }
 
   if (action === "guardar_readiness_checkin") {

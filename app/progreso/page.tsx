@@ -270,7 +270,7 @@ useEffect(() => {
                   <ResponsiveContainer width="100%" height={140}>
                     <LineChart data={datosActivos}>
                       <CartesianGrid strokeDasharray="3 3" stroke={C.border}/>
-                      <XAxis dataKey="fecha" stroke={C.muted} fontSize={10}/>
+                      <XAxis dataKey="fecha" stroke={C.muted} fontSize={10} interval={0} tickFormatter={(v)=>v.split('-').slice(1).join('/')}/>
                       <YAxis stroke={C.muted} fontSize={10}/>
                       <Tooltip contentStyle={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,fontSize:12}} labelStyle={{color:C.ink}}/>
                       <Line type="monotone" dataKey="valor" stroke={C.accent} strokeWidth={2} dot={{fill:C.accent,r:3}}/>

@@ -2365,14 +2365,44 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
   }
 
   if (action === "guardar_pending_action") {
-    // FORGE PENDING ACTIONS — cuando el Coach propone un cambio (modificar sesion, etc.), se guarda
-    // AQUI como propuesta pendiente, ANTES de que el usuario confirme. El guardado real NUNCA depende
-    // de que el LLM recuerde generar un tag tras la confirmacion — el backend ya tiene todo lo necesario.
+    // FORGE PENDING ACTIONS — PUNTO DE CONVERGENCIA UNICO para cualquier modificacion de sesion,
+    // sin importar si se detecto via tag [PROPONER_MODIFICACION:] del Coach o via el Safety Net
+    // determinista. Hallazgo real critico: el flujo del tag escribia directamente aqui sin pasar
+    // por el Modification Ledger (sin captura de prescripcion original, sin trigger classification,
+    // sin session_modification_events) — una bifurcacion arquitectonica que dejaba una ruta de
+    // modificacion sin ningun control determinista. Ahora AMBOS caminos convergen aqui.
     const { tipo, accion } = datos;
-    // Expirar automaticamente cualquier pending anterior del mismo tipo sin resolver (evita acumular)
+
+    // Expirar automaticamente cualquier pending anterior del mismo tipo/dia sin resolver
     await supabase.from("pending_actions").update({ estado: "expirado" }).eq("user_codigo", codigo).eq("tipo", tipo).eq("estado", "pendiente");
+
+    let accionEnriquecida = accion;
+    if (tipo === "modificar_sesion" && accion?.dia && accion?.week_start) {
+      // Si la accion NO trae ya modification_event_pendiente (viene del flujo legacy del tag,
+      // no del Safety Net), lo construimos aqui — capturando la prescripcion original ANTES de
+      // que se pierda, exactamente igual que hace el Safety Net.
+      if (!accion.modification_event_pendiente) {
+        const normalizarDiaConvergencia = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        const { data: planOriginalConvergencia } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", accion.week_start).single();
+        const sesionOriginalConvergencia = planOriginalConvergencia?.sessions?.find((s: any) => normalizarDiaConvergencia(s.dia) === normalizarDiaConvergencia(accion.dia));
+
+        accionEnriquecida = {
+          ...accion,
+          modification_event_pendiente: {
+            trigger_type: "legacy_tag",
+            reason_code: accion.motivo || null,
+            affected_exercise: null,
+            original_titulo: sesionOriginalConvergencia?.titulo || null,
+            original_descripcion: sesionOriginalConvergencia?.descripcion || null,
+            original_tipo: sesionOriginalConvergencia?.tipo || null,
+          }
+        };
+        console.log("🔗 PENDING ACTIONS: modification_event construido para flujo legacy (tag), prescripcion original capturada");
+      }
+    }
+
     const { data: nuevaPending, error } = await supabase.from("pending_actions").insert({
-      user_codigo: codigo, tipo, accion, estado: "pendiente"
+      user_codigo: codigo, tipo, accion: accionEnriquecida, estado: "pendiente"
     }).select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true, pendingId: nuevaPending.id });
@@ -2542,10 +2572,25 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
 
   if (action === "rechazar_pending_action") {
     // El usuario decide explicitamente NO aplicar el cambio propuesto — marcamos como rechazado
-    // (nunca eliminamos el registro, queda auditado) y el plan original permanece intacto.
-    const { data: pendienteRechazo } = await supabase.from("pending_actions").select("id").eq("user_codigo", codigo).eq("estado", "pendiente").order("created_at", { ascending: false }).limit(1).single();
+    // (nunca eliminamos el registro, queda auditado) y el plan original permanece INTACTO.
+    // GUARD EXPLICITO: rechazar una propuesta de modificacion NUNCA debe coincidir con marcar la
+    // sesion original como completada — son dos eventos independientes que no deben confundirse.
+    const { data: pendienteRechazo } = await supabase.from("pending_actions").select("id,accion").eq("user_codigo", codigo).eq("estado", "pendiente").order("created_at", { ascending: false }).limit(1).single();
     if (!pendienteRechazo) return NextResponse.json({ ok: true, rechazado: false, motivo: "no_hay_pending" });
+
     await supabase.from("pending_actions").update({ estado: "rechazado", resuelto_at: new Date().toISOString() }).eq("id", pendienteRechazo.id);
+
+    // Verificacion explicita: confirmar que la sesion del dia afectado NO quedo marcada completada
+    // incorrectamente en la misma ventana temporal (defensa en profundidad tras el bug real de hoy).
+    const diaAfectadoRechazo = pendienteRechazo.accion?.dia;
+    const weekStartRechazo = pendienteRechazo.accion?.week_start;
+    if (diaAfectadoRechazo && weekStartRechazo) {
+      const normalizarDiaRechazo = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      const { data: planRechazo } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", weekStartRechazo).single();
+      const sesionRechazo = planRechazo?.sessions?.find((s: any) => normalizarDiaRechazo(s.dia) === normalizarDiaRechazo(diaAfectadoRechazo));
+      console.log(`🛡️ GUARD rechazar_pending_action: sesion ${diaAfectadoRechazo} tras rechazo — completada=${sesionRechazo?.completada}`);
+    }
+
     return NextResponse.json({ ok: true, rechazado: true });
   }
 

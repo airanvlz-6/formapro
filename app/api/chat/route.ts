@@ -2980,6 +2980,19 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
     const pareceSoloSueno = /métricas de sueño|dormí|puntuación de sueño|durante la noche|sueño profundo|sueño rem/i.test(mensaje.toLowerCase()) && !/entren|wod|sesion realizada|serie|repeticion|corri|entrené|hice|complet/i.test(mensaje.toLowerCase());
     if (pareceSoloSueno) return NextResponse.json({ ok: true, detectado: false });
 
+    // 🚨 FIX CRITICO: FILTRO DETERMINISTICO DE NEGACION — bug real confirmado: el mensaje "Hoy no
+    // he completado ninguna sesión de entreno" fue mal interpretado por el LLM como reporte
+    // POSITIVO de entreno completado, marcando erroneamente completada=true. Este filtro regex
+    // detecta negacion explicita ANTES de llamar a Haiku, sin depender de que el modelo entienda
+    // correctamente la negacion — mas rapido, mas barato, y elimina el riesgo de raiz.
+    const contieneNegacionExplicita = /\bno\s+(he|hice|complet|realiz|termin|acab|entren)/i.test(mensaje) ||
+      /\b(ninguna|nada de|sin hacer|no realizado|no completado)\b.*(sesion|entreno|entrenamiento)/i.test(mensaje) ||
+      /(sesion|entreno|entrenamiento).*\bno\b.*(complet|realiz|hice|hecho)/i.test(mensaje);
+    if (contieneNegacionExplicita) {
+      console.log("🛡️ SESSION SAFETY NET: negacion explicita detectada, NO se marca como completado:", mensaje.substring(0, 100));
+      return NextResponse.json({ ok: true, detectado: false, motivo: "negacion_detectada" });
+    }
+
     const sesionPrompt = `Analiza este mensaje de un atleta a su coach de entrenamiento. Determina si el atleta esta reportando que ACABA DE COMPLETAR un entrenamiento (no una pregunta sobre entrenos futuros, no una peticion de plan, no solo metricas de sueno).
 
 Responde SOLO con este JSON, sin texto adicional ni markdown:

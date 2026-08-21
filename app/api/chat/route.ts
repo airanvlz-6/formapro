@@ -58,6 +58,11 @@ async function generarEstadoCanonico(supabase: any, codigo: string) {
 
   const { data: usuario } = await supabase.from("usuarios").select("ciclo_actual,estado_fisiologico,objetivo_principal,debilidades,athlete_development").eq("codigo", codigo).single();
   const { data: plan } = await supabase.from("weekly_plan").select("*").eq("user_codigo", codigo).eq("week_start", weekStart).single();
+
+  // FORGE ATHLETE STATE ENGINE — estado activo del atleta (normal/restricted/paused/etc). Fuente
+  // unica de verdad consultada tanto por el Coach conversacional como por el Block Analyzer, para
+  // que ambos sepan si el atleta esta en un periodo de restriccion que gobierna toda la planificacion.
+  const { data: estadoAtletaActivo } = await supabase.from("athlete_state_events").select("estado,motivo,fecha_inicio").eq("user_codigo", codigo).eq("activo", true).maybeSingle();
   // FUENTE ATOMICA: physiology_records reemplaza el JSON historial_fisiologico, elimina RMW
   const { data: fisioRecords } = await supabase.from("physiology_records").select("fecha,hrv,sueno,rhr,fatiga_aguda").eq("user_codigo", codigo).order("fecha", { ascending: false }).limit(30);
   const historialFisiologicoAtomico = (fisioRecords || []).map((r: any) => ({ fecha: r.fecha, hrv: r.hrv, sueno: r.sueno, rhr: r.rhr, fatiga_aguda: r.fatiga_aguda }));
@@ -106,6 +111,7 @@ async function generarEstadoCanonico(supabase: any, codigo: string) {
     tendencia_fisiologica: tendenciaFisio,
     objetivo_principal: usuario?.objetivo_principal || null,
     debilidades_activas: (usuario?.athlete_development || []).filter((d: any) => d.estado !== "resuelta").map((d: any) => d.nombre_visible || d.indicador),
+    athlete_state: estadoAtletaActivo ? { estado: estadoAtletaActivo.estado, motivo: estadoAtletaActivo.motivo, desde: estadoAtletaActivo.fecha_inicio } : { estado: "normal" },
     generado_at: ahora.toISOString()
   };
 
@@ -2531,6 +2537,28 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
 
       // Si la persistencia es active_constraint o permanent Y hay un ejercicio afectado concreto,
       // generar automaticamente una Coaching Note para que el planificador la respete en el futuro.
+      // FORGE ATHLETE STATE ENGINE — cuando se confirma una restriccion dura persistente, el atleta
+      // entra en estado RESTRICTED de forma determinista. Mientras este estado siga activo, el
+      // sistema NO debe volver a reaccionar sesion-a-sesion al mismo problema — la restriccion ya
+      // gobierna toda la planificacion futura hasta que se resuelva explicitamente.
+      if (config.persistence === "active_constraint" || config.persistence === "permanent") {
+        const { data: estadoActivoExistente } = await supabase.from("athlete_state_events").select("id,estado").eq("user_codigo", codigo).eq("activo", true).maybeSingle();
+        if (!estadoActivoExistente || estadoActivoExistente.estado === "normal") {
+          if (estadoActivoExistente) {
+            await supabase.from("athlete_state_events").update({ activo: false, fecha_fin: new Date().toISOString().split('T')[0] }).eq("id", estadoActivoExistente.id);
+          }
+          await supabase.from("athlete_state_events").insert({
+            user_codigo: codigo,
+            estado: "restricted",
+            motivo: evt.reason_code || "restriccion activa",
+            activo: true
+          });
+          console.log("🔴 ATHLETE STATE ENGINE: atleta", codigo, "entra en estado RESTRICTED por", evt.reason_code);
+        } else {
+          console.log("🔴 ATHLETE STATE ENGINE: atleta", codigo, "ya estaba en estado", estadoActivoExistente.estado, "— no se duplica transicion");
+        }
+      }
+
       if ((config.persistence === "active_constraint" || config.persistence === "permanent") && evt.affected_exercise) {
         // constraint_level explicito ('hard') como campo real de la tabla — no inferido desde
         // "source", que es fragil y depende de una convencion implicita.

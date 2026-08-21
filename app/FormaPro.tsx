@@ -1638,6 +1638,13 @@ const forgeValidator=(texto:string):string=>{
           if(resSuenoDet?.detectado && resSuenoDet?.guardado){
             setSuenoConfirmado({fecha:resSuenoDet.fecha,valores:resSuenoDet.valores});
           }
+          // FIX: alerta explicita cuando se descarta un valor por estar fuera de rango fisiologico
+          // razonable (bug real: HRV "888ms" se perdio silenciosamente sin avisar al usuario).
+          if(resSuenoDet?.valoresSospechosos){
+            const vs=resSuenoDet.valoresSospechosos;
+            const partesSospechosas=[vs.hrv!==null?`HRV ${vs.hrv}ms`:null,vs.sueno!==null?`sueño ${vs.sueno}`:null,vs.rhr!==null?`FC ${vs.rhr}`:null].filter(Boolean).join(", ");
+            setMensajes(prev=>[...prev,{role:"assistant",content:`⚠️ No he podido registrar este valor porque parece fuera de rango: ${partesSospechosas}. ¿Puedes confirmarme el dato correcto?`}]);
+          }
         });
       }
       // FORGE COACHING NOTES — detecta observaciones tecnicas/debilidades en la conversacion y las

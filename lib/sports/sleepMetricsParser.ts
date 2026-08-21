@@ -9,6 +9,7 @@ export interface ParsedSleepMetrics {
   sueno: number | null; // puntuacion 0-100
   rhr: number | null; // frecuencia cardiaca reposo/media
   duracionHoras: number | null;
+  valoresSospechosos?: { hrv: number | null; sueno: number | null; rhr: number | null };
 }
 
 // FIX: ampliado para reconocer TAMBIEN menciones directas de una sola metrica (ej: "VFC 80ms",
@@ -40,12 +41,36 @@ export function parseSleepMetrics(mensaje: string): ParsedSleepMetrics {
     ? parseFloat(matchDuracion[1]) + (matchDuracion[2] ? parseInt(matchDuracion[2]) / 60 : 0)
     : null;
 
-  const hrv = matchHrv ? parseInt(matchHrv[1]) : null;
-  const sueno = matchSueno ? parseInt(matchSueno[1]) : null;
-  const rhr = matchRhr ? parseInt(matchRhr[1]) : null;
+  // FIX CRITICO: validacion de rango fisiologico razonable ANTES de aceptar el valor. Bug real
+  // confirmado: "888ms" (typo probable de "88ms") se persistio sin ninguna validacion porque el
+  // regex \d{1,3} tecnicamente permite hasta 999 — un HRV real nunca supera ~200ms en reposo.
+  // Fuera de rango => se descarta el campo especifico (no todo el reporte) y se marca como
+  // "sospechoso" para que el backend pueda pedir confirmacion en vez de guardar silenciosamente.
+  const RANGO_HRV = { min: 10, max: 200 };
+  const RANGO_SUENO = { min: 0, max: 100 };
+  const RANGO_RHR = { min: 30, max: 120 };
 
-  // Se considera detectado solo si extrajimos AL MENOS un valor numerico real
+  const hrvBruto = matchHrv ? parseInt(matchHrv[1]) : null;
+  const suenoBruto = matchSueno ? parseInt(matchSueno[1]) : null;
+  const rhrBruto = matchRhr ? parseInt(matchRhr[1]) : null;
+
+  const hrvSospechoso = hrvBruto !== null && (hrvBruto < RANGO_HRV.min || hrvBruto > RANGO_HRV.max);
+  const suenoSospechoso = suenoBruto !== null && (suenoBruto < RANGO_SUENO.min || suenoBruto > RANGO_SUENO.max);
+  const rhrSospechoso = rhrBruto !== null && (rhrBruto < RANGO_RHR.min || rhrBruto > RANGO_RHR.max);
+
+  const hrv = hrvSospechoso ? null : hrvBruto;
+  const sueno = suenoSospechoso ? null : suenoBruto;
+  const rhr = rhrSospechoso ? null : rhrBruto;
+
+  // Se considera detectado solo si extrajimos AL MENOS un valor numerico real (ya validado)
   const detected = hrv !== null || sueno !== null || rhr !== null || duracionHoras !== null;
 
-  return { detected, hrv, sueno, rhr, duracionHoras };
+  return {
+    detected, hrv, sueno, rhr, duracionHoras,
+    valoresSospechosos: {
+      hrv: hrvSospechoso ? hrvBruto : null,
+      sueno: suenoSospechoso ? suenoBruto : null,
+      rhr: rhrSospechoso ? rhrBruto : null,
+    }
+  };
 }

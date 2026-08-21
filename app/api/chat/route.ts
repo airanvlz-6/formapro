@@ -3248,7 +3248,12 @@ Mensaje: "${mensaje}"
       }).eq("codigo", codigo);
     }
 
-    return NextResponse.json({ ok: true, detectado: true, guardado: true, valores: valoresGuardar, fecha: hoySueno });
+    // FIX: si hubo valores descartados por estar fuera de rango fisiologico razonable, informar
+    // al frontend para que pueda preguntar explicitamente al usuario en vez de guardar silenciosamente
+    // o simplemente perder el dato sin decir nada — bug real confirmado: "888ms" de HRV se persistio
+    // sin ninguna alerta porque no existia validacion de rango.
+    const haySospechosos = parsedSueno.valoresSospechosos && Object.values(parsedSueno.valoresSospechosos).some(v => v !== null);
+    return NextResponse.json({ ok: true, detectado: true, guardado: Object.keys(valoresGuardar).length > 0, valores: valoresGuardar, fecha: hoySueno, valoresSospechosos: haySospechosos ? parsedSueno.valoresSospechosos : null });
   }
 
   if (action === "verificar_pr_deterministico") {

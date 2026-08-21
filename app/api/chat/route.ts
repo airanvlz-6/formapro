@@ -2732,11 +2732,13 @@ Si un dato no es visible o no estas seguro, pon el valor en null y confianza 0. 
     const notePrompt = `Analiza este mensaje de un atleta a su coach. Determina si contiene una OBSERVACION TECNICA, DEBILIDAD, o ALGO A TRABAJAR (ej: un problema tecnico recurrente, una limitacion, una intencion de mejora) — NO una simple pregunta, ni un reporte de entreno completado sin mas, ni charla casual.
 
 Responde SOLO con este JSON, sin texto adicional ni markdown:
-{"es_observacion":true_o_false,"type":"weakness|intencion","domain":"olympic_lifting|running|strength|conditioning|mobility|otro","movement":"nombre del movimiento o area especifica, o null","issue":"resumen breve y factual del problema/objetivo en pocas palabras","priority":"alta|normal|baja"}
+{"es_observacion":true_o_false,"type":"weakness|intencion|injury","domain":"olympic_lifting|running|strength|conditioning|mobility|otro","movement":"identificador CONSISTENTE del area/articulacion/musculo afectado (ej: rodilla, hombro, lumbar), o del movimiento tecnico si es una debilidad de ejecucion (ej: snatch), o null","issue":"resumen breve y factual del problema/objetivo en pocas palabras","priority":"alta|normal|baja"}
 
 Mensaje: "${mensaje}"
 
-"es_observacion" debe ser false para preguntas simples, reportes de entreno sin problema mencionado, o mensajes sin contenido tecnico relevante. Nunca inventes datos que el mensaje no contenga.`;
+"es_observacion" debe ser false para preguntas simples, reportes de entreno sin problema mencionado, o mensajes sin contenido tecnico relevante. Nunca inventes datos que el mensaje no contenga.
+
+CRITICO sobre "movement": si el mensaje reporta DOLOR/MOLESTIA FISICA (type="injury"), "movement" DEBE ser la zona corporal afectada en su forma mas simple y consistente (ej: "rodilla", NO "rodilla derecha cara interior", NO "box exercises", NO el ejercicio que se estaba haciendo cuando aparecio). Esto es esencial porque el sistema deduplica menciones repetidas del MISMO problema comparando este campo — usa siempre la misma palabra simple para la misma zona corporal, sin importar en que sesion o contexto se menciono.`;
 
     try {
       const noteRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -2927,9 +2929,11 @@ Responde con este formato exacto:
     const intencionPrompt = `Analiza esta respuesta de un coach de entrenamiento a su atleta. El atleta ya reporto una causa operativa real que justifica revisar una sesion futura. Extrae la INTENCION de la modificacion (que dia, que tipo de sesion nueva, por que).
 
 Responde SOLO con este JSON, sin texto adicional ni markdown:
-{"anuncia_modificacion":true_o_false,"dia":"nombre del dia en minusculas sin tildes (hoy/mañana segun corresponda) o null","tipo_nuevo":"tipo de sesion nueva propuesta (ej: movilidad, tren_superior, descanso, carrera_suave) o null","titulo_breve":"titulo breve de la nueva sesion o null","reason_code":"codigo breve de la causa real en snake_case (ej: rodilla_dolor, disponibilidad_viaje, material_no_disponible) o null","affected_exercise":"nombre del ejercicio/movimiento especifico que causo el problema, SOLO si aplica (ej: snatch_balance), o null"}
+{"anuncia_modificacion":true_o_false,"dia":"hoy|mañana|nombre del dia en minusculas sin tildes, o null","tipo_nuevo":"tipo de sesion nueva propuesta (ej: movilidad, tren_superior, descanso, carrera_suave) o null","titulo_breve":"titulo breve de la nueva sesion o null","reason_code":"codigo breve de la causa real en snake_case (ej: rodilla_dolor, disponibilidad_viaje, material_no_disponible) o null","affected_exercise":"nombre del ejercicio/movimiento especifico que causo el problema, SOLO si aplica (ej: snatch_balance), o null"}
 
-Respuesta del coach: "${respuestaCoach}"`;
+Respuesta del coach: "${respuestaCoach}"
+
+IMPORTANTE sobre "dia": si el coach esta claramente adaptando la sesion de HOY (respondiendo a un problema actual del atleta, sin mencionar explicitamente otro dia como "mañana" o el nombre de un dia futuro), asume "dia":"hoy" por defecto — NO devuelvas null solo porque el coach no repitio la palabra "hoy" literalmente en su respuesta. Solo usa un dia distinto a "hoy" si el coach lo menciona explicitamente (ej: "mañana", "el sábado").`;
 
     try {
       const intencionRes = await fetch("https://api.anthropic.com/v1/messages", {

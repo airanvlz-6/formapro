@@ -1425,10 +1425,8 @@ const forgeValidator=(texto:string):string=>{
     // bloquear la respuesta al usuario (fire-and-forget). Si el LLM anuncio un cambio de sesion
     // SIN generar el tag tecnico, esta verificacion determinista lo detecta y crea el pending_action
     // de todos modos — nunca dejamos que el LLM decida silenciosamente si algo importante se registra.
-    console.log("DEBUG SAFETY NET: codigoUsuario=",codigoUsuario,"mensajeUsuarioOriginal=",mensajeUsuarioOriginal,"contieneTag=",texto.includes("[PROPONER_MODIFICACION:"));
     if(codigoUsuario){
       apiCall({action:"verificar_modificacion_sesion_deterministico",codigo:codigoUsuario,datos:{respuestaCoach:texto,mensajeUsuario:mensajeUsuarioOriginal}}).then((resSafety:any)=>{
-        console.log("DEBUG SAFETY NET respuesta:",JSON.stringify(resSafety));
         if(resSafety?.detectado){
           console.log("🛡️ Safety net: modificacion detectada y registrada automaticamente");
           setModificacionPendienteConfirmar({pendingId:resSafety.pendingId,dia:resSafety.dia,titulo:resSafety.titulo,motivo:resSafety.motivo});

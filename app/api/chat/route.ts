@@ -2948,7 +2948,9 @@ IMPORTANTE sobre "dia": si el coach esta claramente adaptando la sesion de HOY (
       if (!intencionMatch) return NextResponse.json({ ok: true, detectado: false });
 
       const intencion = JSON.parse(intencionMatch[0]);
+      console.log("🔍 DEBUG intencion extraida:", JSON.stringify(intencion));
       if (!intencion.anuncia_modificacion || !intencion.dia) {
+        console.log("🔍 DEBUG: bloqueado por anuncia_modificacion=", intencion.anuncia_modificacion, "dia=", intencion.dia);
         return NextResponse.json({ ok: true, detectado: false });
       }
 

@@ -1803,7 +1803,7 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
       // Si lo metemos dentro de un template string se convierte en "[object Object]" y se pierde la imagen.
       // Debemos preservar el array, anteponiendo el texto de instrucciones como un bloque de texto adicional.
       const prefijoInstrucciones=datoInmutableRecibido
-        ? `[DATO INMUTABLE — ${datoInmutableRecibido.tipo}: ${JSON.stringify(datoInmutableRecibido.valor)}]\n[INSTRUCCIÓN: Esto es una consulta de un dato ya existente, no una petición de planificación. Reproduce el dato anterior fielmente, sin modificar ningún número ni ejercicio. Puedes añadir contexto o motivación DESPUÉS.]\n\n${instruccionCapacidadesRecibida}`
+        ? `[DATO INMUTABLE — ${datoInmutableRecibido.tipo}: ${JSON.stringify(datoInmutableRecibido.valor)}]\n[INSTRUCCIÓN: Esto es una consulta de un dato ya existente, no una petición de planificación. Reproduce el dato anterior fielmente, sin modificar ningún número ni ejercicio.]\n[REGLA CRÍTICA SI EL ATLETA ESTÁ EN ESTADO RESTRICTED: aunque reproduzcas el dato fielmente, DEBES añadir DESPUÉS una nota clara señalando que esa sesión puede necesitar revisión dado el estado de restricción activo — nunca dejes pasar en silencio una sesión con carga/impacto potencialmente incompatible con la restricción. No modifiques el dato, solo alerta explícitamente.]\n\n${instruccionCapacidadesRecibida}`
         : instruccionCapacidadesRecibida;
       let contenidoConDato:any;
       if(Array.isArray(contenidoUsuario)){

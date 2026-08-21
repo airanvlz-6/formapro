@@ -2450,6 +2450,56 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
         dia_afectado: acc.dia,
         confirmado_por_usuario: true
       });
+
+      // FORGE MODIFICATION LEDGER — registro estructurado completo. reason_code determina
+      // deterministicamente objective_impact/persistence, SIN depender de que el LLM decida esto.
+      const evt = acc.modification_event_pendiente || {};
+      const REASON_TO_PERSISTENCE: Record<string, { persistence: string; objective_impact: string }> = {
+        rodilla_dolor: { persistence: "active_constraint", objective_impact: "partial" },
+        lesion: { persistence: "active_constraint", objective_impact: "partial" },
+        dolor: { persistence: "active_constraint", objective_impact: "partial" },
+        molestia: { persistence: "active_constraint", objective_impact: "partial" },
+        disponibilidad_viaje: { persistence: "session", objective_impact: "preserved" },
+        material_no_disponible: { persistence: "session", objective_impact: "preserved" },
+        fatiga_extrema: { persistence: "short_term", objective_impact: "partial" },
+      };
+      const reasonKey = (evt.reason_code || "").toLowerCase();
+      const matchReason = Object.keys(REASON_TO_PERSISTENCE).find(k => reasonKey.includes(k));
+      const config = matchReason ? REASON_TO_PERSISTENCE[matchReason] : { persistence: "session", objective_impact: "preserved" };
+
+      await supabase.from("session_modification_events").insert({
+        user_codigo: codigo,
+        week_start: acc.week_start,
+        dia: acc.dia,
+        trigger_type: evt.trigger_type || "unknown",
+        reason_code: evt.reason_code || null,
+        original_titulo: evt.original_titulo || null,
+        original_descripcion: evt.original_descripcion || null,
+        original_tipo: evt.original_tipo || null,
+        modified_titulo: acc.titulo || null,
+        modified_descripcion: acc.descripcion || null,
+        modified_tipo: acc.tipo || null,
+        affected_exercise: evt.affected_exercise || null,
+        objective_impact: config.objective_impact,
+        persistence: config.persistence,
+      });
+
+      // Si la persistencia es active_constraint o permanent Y hay un ejercicio afectado concreto,
+      // generar automaticamente una Coaching Note para que el planificador la respete en el futuro.
+      if ((config.persistence === "active_constraint" || config.persistence === "permanent") && evt.affected_exercise) {
+        await supabase.from("athlete_coaching_notes").insert({
+          user_codigo: codigo,
+          type: "weakness",
+          domain: null,
+          movement: evt.affected_exercise,
+          issue: `Molestia/restricción reportada con ${evt.affected_exercise} (motivo: ${evt.reason_code}). Evitar prescribir hasta revisión.`,
+          priority: "alta",
+          source: "modification_ledger",
+          status: "pending",
+          confidence: 0.7
+        });
+        console.log("🛡️ MODIFICATION LEDGER: coaching note automatica creada para restriccion de", evt.affected_exercise);
+      }
     }
 
     await supabase.from("pending_actions").update({ estado: "ejecutado", resuelto_at: new Date().toISOString() }).eq("id", pendiente.id);
@@ -2773,40 +2823,36 @@ Responde con este formato exacto:
       return NextResponse.json({ ok: true, detectado: false, motivo: "sin_trigger_autorizado" });
     }
 
-    // PASO 2 — SOLO si hay trigger autorizado, extraer los detalles de la modificacion propuesta
-    // por el Coach (esto ya es seguro, porque sabemos que hay una causa operativa real detras).
-    const detectorPrompt = `Analiza esta respuesta de un coach de entrenamiento a su atleta. El atleta ya reporto una causa operativa real (lesion/fatiga/disponibilidad/material/peticion explicita) que justifica revisar una sesion futura. Extrae los detalles de la modificacion que el coach esta proponiendo.
+    // PASO 2 — extraer SOLO la intencion/motivo de la propuesta (no el contenido tecnico detallado,
+    // que ahora se genera aparte con un Session Builder real, igual que hace el Orchestrator).
+    const intencionPrompt = `Analiza esta respuesta de un coach de entrenamiento a su atleta. El atleta ya reporto una causa operativa real que justifica revisar una sesion futura. Extrae la INTENCION de la modificacion (que dia, que tipo de sesion nueva, por que).
 
 Responde SOLO con este JSON, sin texto adicional ni markdown:
-{"anuncia_modificacion":true_o_false,"dia":"nombre del dia en minusculas sin tildes (hoy/mañana segun corresponda) o null","tipo":"tipo de sesion nueva propuesta o null","titulo":"titulo breve de la nueva sesion o null","motivo_cambio":"la CAUSA del cambio segun el atleta, o null","justificacion_sesion":"por que ESTA sesion concreta con este contenido tiene sentido ahora, o null","calentamiento":"contenido del calentamiento si se menciona, o null","bloque_principal":"contenido del bloque principal/ejercicios si se menciona, o null","vuelta_calma":"contenido de la vuelta a la calma si se menciona, o null","debilidad_relacionada":"nombre de la debilidad que esta nueva sesion trabaja, SOLO si es evidente, o null"}
+{"anuncia_modificacion":true_o_false,"dia":"nombre del dia en minusculas sin tildes (hoy/mañana segun corresponda) o null","tipo_nuevo":"tipo de sesion nueva propuesta (ej: movilidad, tren_superior, descanso, carrera_suave) o null","titulo_breve":"titulo breve de la nueva sesion o null","reason_code":"codigo breve de la causa real en snake_case (ej: rodilla_dolor, disponibilidad_viaje, material_no_disponible) o null","affected_exercise":"nombre del ejercicio/movimiento especifico que causo el problema, SOLO si aplica (ej: snatch_balance), o null"}
 
-Respuesta del coach: "${respuestaCoach}"
-
-Divide el contenido de la sesion en calentamiento/bloque_principal/vuelta_calma cuando sea posible identificarlos en el texto.`;
+Respuesta del coach: "${respuestaCoach}"`;
 
     try {
-      const detectorRes = await fetch("https://api.anthropic.com/v1/messages", {
+      const intencionRes = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1000, messages: [{ role: "user", content: detectorPrompt }] }),
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 400, messages: [{ role: "user", content: intencionPrompt }] }),
       });
-      const detectorData = await detectorRes.json();
-      const detectorTexto = detectorData.content?.map((b: any) => b.text || "").join("") || "{}";
-      const detectorClean = detectorTexto.replace(/```json|```/g, "").trim();
-      const detectorMatch = detectorClean.match(/\{[\s\S]*\}/);
-      if (!detectorMatch) return NextResponse.json({ ok: true, detectado: false });
+      const intencionData = await intencionRes.json();
+      const intencionTexto = intencionData.content?.map((b: any) => b.text || "").join("") || "{}";
+      const intencionClean = intencionTexto.replace(/```json|```/g, "").trim();
+      const intencionMatch = intencionClean.match(/\{[\s\S]*\}/);
+      if (!intencionMatch) return NextResponse.json({ ok: true, detectado: false });
 
-      const extraido = JSON.parse(detectorMatch[0]);
-      if (!extraido.anuncia_modificacion || !extraido.dia) {
+      const intencion = JSON.parse(intencionMatch[0]);
+      if (!intencion.anuncia_modificacion || !intencion.dia) {
         return NextResponse.json({ ok: true, detectado: false });
       }
 
-      // Determinar el dia real (hoy/mañana) segun estado canonico, ya que el detector puede
-      // devolver "hoy"/"mañana" en vez del nombre real del dia de la semana
       const estadoParaDetector = await generarEstadoCanonico(supabase, codigo);
-      const diaRealDetectado = extraido.dia === "hoy" ? estadoParaDetector.dia_semana_hoy
-        : extraido.dia === "mañana" || extraido.dia === "manana" ? estadoParaDetector.dia_semana_manana
-        : extraido.dia;
+      const diaRealDetectado = intencion.dia === "hoy" ? estadoParaDetector.dia_semana_hoy
+        : intencion.dia === "mañana" || intencion.dia === "manana" ? estadoParaDetector.dia_semana_manana
+        : intencion.dia;
 
       const weekStartDetector = weekStartActual || (() => {
         const hoyDet = new Date();
@@ -2816,23 +2862,50 @@ Divide el contenido de la sesion en calentamiento/bloque_principal/vuelta_calma 
         return lunesDet.toISOString().split('T')[0];
       })();
 
-      // FIX: construir la descripcion con la MISMA estructura de bloques (Calentamiento/Bloque
-      // principal/Vuelta a la calma) que usa el resto de sesiones generadas por el Orchestrator —
-      // antes se guardaba como parrafo unico y el parser visual de la web no podia formatearla.
-      const descripcionEstructurada = [
-        extraido.calentamiento ? `**Calentamiento**\n${extraido.calentamiento}` : "",
-        extraido.bloque_principal ? `**Bloque principal**\n${extraido.bloque_principal}` : "",
-        extraido.vuelta_calma ? `**Vuelta a la calma**\n${extraido.vuelta_calma}` : ""
-      ].filter(Boolean).join("\n\n");
+      // FORGE MODIFICATION LEDGER — capturar la PRESCRIPCION ORIGINAL antes de modificar nada.
+      // Esto resuelve el hallazgo real de que no podiamos recuperar el contenido original tras
+      // una modificacion incorrecta — ahora siempre queda un registro inmutable del "antes".
+      const normalizarDiaLedger = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      const { data: planOriginalLedger } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", weekStartDetector).single();
+      const sesionOriginal = planOriginalLedger?.sessions?.find((s: any) => normalizarDiaLedger(s.dia) === normalizarDiaLedger(diaRealDetectado));
 
-      // FIX: expirar cualquier pending_action anterior sin resolver para el MISMO dia antes de crear
-      // uno nuevo — evita acumular pendings huerfanos cuando el Coach ajusta su propuesta varias
-      // veces en la misma conversacion (cada ajuste generaba un pending nuevo, dejando el anterior
-      // invisible para obtener_pending_action_activo, que solo consulta el mas reciente).
+      // PASO 3 — generar la sesion nueva con un SESSION BUILDER real (misma calidad que el
+      // Orchestrator), no un resumen extraido de la conversacion. Esto corrige el hallazgo de que
+      // las sesiones modificadas quedaban como "resumen" en vez de prescripcion tecnica completa.
+      const { data: usuarioParaBuilder } = await supabase.from("usuarios").select("categoria,especialidad").eq("codigo", codigo).single();
+      const builderPrompt = `Eres el Session Builder de Forge. Genera una sesion de entrenamiento COMPLETA y tecnica (con series, repeticiones, pesos/intensidad cuando aplique, tiempos), estructurada en Calentamiento/Bloque principal/Vuelta a la calma.
+
+CONTEXTO:
+Disciplina del atleta: ${usuarioParaBuilder?.especialidad || usuarioParaBuilder?.categoria || "general"}
+Tipo de sesion requerido: ${intencion.tipo_nuevo || "adaptada"}
+Motivo del cambio: ${intencion.reason_code || "no especificado"}
+${intencion.affected_exercise ? `Ejercicio a EVITAR (causo el problema): ${intencion.affected_exercise}` : ""}
+Sesion original que se sustituye: ${sesionOriginal?.titulo || "no disponible"} — ${(sesionOriginal?.descripcion || "").substring(0, 200)}
+
+Responde SOLO con este JSON, sin texto adicional ni markdown:
+{"titulo":"titulo breve de la sesion","calentamiento":"contenido tecnico completo del calentamiento","bloque_principal":"contenido tecnico completo con series/reps/pesos o intensidad","vuelta_calma":"contenido tecnico completo de vuelta a la calma","por_que":"una frase tecnica explicando por que esta sesion concreta tiene sentido ahora"}`;
+
+      const builderRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 900, messages: [{ role: "user", content: builderPrompt }] }),
+      });
+      const builderData = await builderRes.json();
+      const builderTexto = builderData.content?.map((b: any) => b.text || "").join("") || "{}";
+      const builderClean = builderTexto.replace(/```json|```/g, "").trim();
+      const builderMatch = builderClean.match(/\{[\s\S]*\}/);
+      const sesionConstruida = builderMatch ? JSON.parse(builderMatch[0]) : null;
+
+      const descripcionEstructurada = sesionConstruida ? [
+        sesionConstruida.calentamiento ? `**Calentamiento**\n${sesionConstruida.calentamiento}` : "",
+        sesionConstruida.bloque_principal ? `**Bloque principal**\n${sesionConstruida.bloque_principal}` : "",
+        sesionConstruida.vuelta_calma ? `**Vuelta a la calma**\n${sesionConstruida.vuelta_calma}` : ""
+      ].filter(Boolean).join("\n\n") : "";
+
+      // Expirar pending anteriores sin resolver para el mismo dia (fix ya existente, se mantiene)
       const { data: pendingsAnteriores } = await supabase.from("pending_actions").select("id").eq("user_codigo", codigo).eq("estado", "pendiente").eq("accion->>dia", diaRealDetectado);
       if (pendingsAnteriores && pendingsAnteriores.length > 0) {
         await supabase.from("pending_actions").update({ estado: "expirado" }).in("id", pendingsAnteriores.map((p: any) => p.id));
-        console.log(`🛡️ SAFETY NET: expirados ${pendingsAnteriores.length} pending(s) anterior(es) sin resolver para ${diaRealDetectado}`);
       }
 
       const { data: nuevaPendingDet, error: errorPendingDet } = await supabase.from("pending_actions").insert({
@@ -2841,19 +2914,28 @@ Divide el contenido de la sesion en calentamiento/bloque_principal/vuelta_calma 
         accion: {
           week_start: weekStartDetector,
           dia: diaRealDetectado,
-          tipo: extraido.tipo || "modificado",
-          titulo: extraido.titulo || "Sesión modificada",
-          motivo: extraido.motivo_cambio || "Modificación detectada automáticamente",
-          por_que: extraido.justificacion_sesion || extraido.motivo_cambio || "",
-          descripcion: descripcionEstructurada || extraido.bloque_principal || "",
-          debilidad_relacionada: extraido.debilidad_relacionada || null
+          tipo: intencion.tipo_nuevo || "modificado",
+          titulo: sesionConstruida?.titulo || intencion.titulo_breve || "Sesión modificada",
+          motivo: intencion.reason_code || "Modificación detectada automáticamente",
+          por_que: sesionConstruida?.por_que || "",
+          descripcion: descripcionEstructurada || "Sesión adaptada — consulta con tu Coach los detalles.",
+          debilidad_relacionada: null,
+          // Referencia al evento del ledger, para que confirmar_pending_action pueda completarlo
+          modification_event_pendiente: {
+            trigger_type: intencion.reason_code ? "authorized" : "unknown",
+            reason_code: intencion.reason_code || null,
+            affected_exercise: intencion.affected_exercise || null,
+            original_titulo: sesionOriginal?.titulo || null,
+            original_descripcion: sesionOriginal?.descripcion || null,
+            original_tipo: sesionOriginal?.tipo || null,
+          }
         },
         estado: "pendiente"
       }).select().single();
 
       if (errorPendingDet) return NextResponse.json({ error: errorPendingDet.message }, { status: 500 });
-      console.log("🛡️ SAFETY NET: modificacion detectada sin tag, pending_action creado automaticamente:", JSON.stringify(extraido));
-      return NextResponse.json({ ok: true, detectado: true, pendingId: nuevaPendingDet.id, dia: diaRealDetectado, titulo: extraido.titulo, motivo: extraido.motivo });
+      console.log("🛡️ SAFETY NET: modificacion detectada, sesion construida por Session Builder real, pending_action creado:", JSON.stringify(intencion));
+      return NextResponse.json({ ok: true, detectado: true, pendingId: nuevaPendingDet.id, dia: diaRealDetectado, titulo: sesionConstruida?.titulo || intencion.titulo_breve, motivo: intencion.reason_code });
     } catch (err: any) {
       console.error("Error en verificar_modificacion_sesion_deterministico:", err);
       return NextResponse.json({ ok: true, detectado: false });

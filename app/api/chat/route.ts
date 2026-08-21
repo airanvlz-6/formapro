@@ -1657,16 +1657,30 @@ if (action === "analizar_bloque_semana") {
     // NUNCA aplicadas directamente a una sesion (ver regla de prompt), su unico canal de entrada
     // a la planificacion real es aqui, en el Block Analyzer del cierre de semana. Priorizadas por
     // confianza y veces_mencionado — una nota mencionada varias veces pesa mas que una unica mencion.
+    const hoyConstraintCheck = new Date().toISOString().split('T')[0];
     const { data: coachingNotesPendientes } = await supabase.from("athlete_coaching_notes")
-      .select("id,type,domain,movement,issue,priority,confidence,veces_mencionado")
+      .select("id,type,domain,movement,issue,priority,confidence,veces_mencionado,source,constraint_level,valid_until")
       .eq("user_codigo", codigo)
       .in("status", ["pending", "considerada"])
       .order("confidence", { ascending: false })
-      .limit(5);
+      .limit(10);
+
+    // FORGE CONSTRAINT ENGINE — usa el campo EXPLICITO constraint_level (no inferido desde source,
+    // fragil e implicito). Respeta vigencia: una restriccion con valid_until pasado ya no aplica
+    // (la molestia pudo resolverse), evitando bloqueos permanentes por una lesion ya curada.
+    const restriccionesDuras = (coachingNotesPendientes || []).filter((n: any) =>
+      n.constraint_level === "hard" && (!n.valid_until || n.valid_until >= hoyConstraintCheck)
+    );
+    const observacionesSuaves = (coachingNotesPendientes || []).filter((n: any) => n.constraint_level !== "hard");
+
+    let restriccionesTexto = "";
+    if (restriccionesDuras.length > 0) {
+      restriccionesTexto = `\n🚫 RESTRICCIONES ACTIVAS — OBLIGATORIO RESPETAR, NO SON SUGERENCIAS:\n${restriccionesDuras.map((n: any) => `- NO prescribir "${n.movement}": ${n.issue}`).join("\n")}\nEstas restricciones vienen de modificaciones reales confirmadas por el atleta (lesion/molestia). Debes evitar estos ejercicios/movimientos en la planificacion de esta semana sin excepcion, hasta que exista evidencia de que el atleta ya no tiene molestia con ellos.`;
+    }
 
     let coachingNotesTexto = "";
-    if (coachingNotesPendientes && coachingNotesPendientes.length > 0) {
-      coachingNotesTexto = `\nOBSERVACIONES TECNICAS PENDIENTES (registradas en conversacion, NUNCA aplicadas todavia a ninguna sesion — evalua si alguna encaja con el bloque/fase actual y merece incorporarse esta semana):\n${coachingNotesPendientes.map((n: any) => `- [${n.movement || n.domain || "general"}] ${n.issue} (mencionado ${n.veces_mencionado}x, confianza ${n.confidence})`).join("\n")}`;
+    if (observacionesSuaves.length > 0) {
+      coachingNotesTexto = `\nOBSERVACIONES TECNICAS PENDIENTES (registradas en conversacion, NUNCA aplicadas todavia a ninguna sesion — evalua si alguna encaja con el bloque/fase actual y merece incorporarse esta semana):\n${observacionesSuaves.map((n: any) => `- [${n.movement || n.domain || "general"}] ${n.issue} (mencionado ${n.veces_mencionado}x, confianza ${n.confidence})`).join("\n")}`;
     }
 
     // FIX CRITICO DE RAIZ: el Block Analyzer nunca recibia especialidad ni objetivo del atleta,
@@ -1680,6 +1694,7 @@ Ciclo actual: ${JSON.stringify(estado.ciclo)}
 Debilidad prioritaria activa: ${debilidadPrioritaria ? debilidadPrioritaria.nombre_visible : "ninguna"}
 Disponibilidad: ${usuarioAnalyzer?.distribucion_semanal || "no especificada"}
 ${metodosYaProbadosTexto}
+${restriccionesTexto}
 ${coachingNotesTexto}
 
 Si alguna observacion tecnica pendiente encaja con el bloque/fase actual y no compromete el objetivo principal de la semana, puedes incorporarla como parte del objetivo o debilidad_prioritaria. Si decides incorporar una, incluye su id en el campo "coaching_notes_incorporadas" (array de ids, puede estar vacio).
@@ -2487,6 +2502,13 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
       // Si la persistencia es active_constraint o permanent Y hay un ejercicio afectado concreto,
       // generar automaticamente una Coaching Note para que el planificador la respete en el futuro.
       if ((config.persistence === "active_constraint" || config.persistence === "permanent") && evt.affected_exercise) {
+        // constraint_level explicito ('hard') como campo real de la tabla — no inferido desde
+        // "source", que es fragil y depende de una convencion implicita.
+        const validUntilConstraint = config.persistence === "permanent" ? null : (() => {
+          const fecha = new Date();
+          fecha.setDate(fecha.getDate() + 21); // active_constraint expira en 3 semanas salvo revision
+          return fecha.toISOString().split('T')[0];
+        })();
         await supabase.from("athlete_coaching_notes").insert({
           user_codigo: codigo,
           type: "weakness",
@@ -2496,9 +2518,11 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
           priority: "alta",
           source: "modification_ledger",
           status: "pending",
-          confidence: 0.7
+          confidence: 0.7,
+          constraint_level: "hard",
+          valid_until: validUntilConstraint
         });
-        console.log("🛡️ MODIFICATION LEDGER: coaching note automatica creada para restriccion de", evt.affected_exercise);
+        console.log("🛡️ MODIFICATION LEDGER: HARD CONSTRAINT creada para", evt.affected_exercise, "valida hasta", validUntilConstraint || "sin caducidad (permanente)");
       }
     }
 
@@ -3762,6 +3786,46 @@ if (action === "obtener_daily_briefing") {
       } catch (errIncrCiclo) {
         console.error("Error incrementando ciclo_actual.semana:", errIncrCiclo);
       }
+    }
+
+    // FORGE DETERMINISTIC PLAN VALIDATOR — ultima linea de defensa antes de persistir. El prompt del
+    // Block Analyzer ya recibe las restricciones, pero eso es interpretacion, no garantia. Este
+    // validator comprueba el plan REALMENTE GENERADO contra las hard constraints activas — si el
+    // LLM ignoro la instruccion, el codigo lo detecta y corrige/bloquea, nunca confia ciegamente.
+    const { data: hardConstraintsValidator } = await supabase.from("athlete_coaching_notes")
+      .select("movement,issue")
+      .eq("user_codigo", codigo)
+      .eq("constraint_level", "hard")
+      .in("status", ["pending", "considerada"])
+      .or(`valid_until.is.null,valid_until.gte.${new Date().toISOString().split('T')[0]}`);
+
+    if (hardConstraintsValidator && hardConstraintsValidator.length > 0 && Array.isArray(plan.sessions)) {
+      const normalizarTextoValidator = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      const violaciones: { dia: string; movement: string }[] = [];
+
+      plan.sessions.forEach((s: any) => {
+        const textoSesionValidator = normalizarTextoValidator(`${s.titulo || ""} ${s.descripcion || ""}`);
+        hardConstraintsValidator.forEach((c: any) => {
+          const movimientoNormalizado = normalizarTextoValidator(c.movement || "");
+          if (movimientoNormalizado && textoSesionValidator.includes(movimientoNormalizado)) {
+            violaciones.push({ dia: s.dia, movement: c.movement });
+          }
+        });
+      });
+
+      if (violaciones.length > 0) {
+        console.error(`🚨 PLAN VALIDATOR: ${violaciones.length} violacion(es) de hard constraint detectada(s):`, JSON.stringify(violaciones));
+        // No auto-corregimos generando contenido nuevo (eso requeriria otra llamada LLM, con el
+        // mismo riesgo de fallo) — bloqueamos el guardado y devolvemos el detalle exacto, para que
+        // el Orchestrator pueda regenerar esa sesion especifica o el usuario sea informado.
+        return NextResponse.json({
+          error: "El plan generado viola restricciones activas del atleta",
+          blocked: true,
+          reason: "HARD_CONSTRAINT_VIOLATION",
+          violaciones
+        }, { status: 422 });
+      }
+      console.log(`✅ PLAN VALIDATOR: plan verificado contra ${hardConstraintsValidator.length} hard constraint(s), sin violaciones`);
     }
 
     // Si NO es la semana actual (es una semana futura nueva), se guarda tal cual, sin fusionar con nada existente

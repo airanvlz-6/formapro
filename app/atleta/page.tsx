@@ -11,6 +11,9 @@ export default function MiAtleta() {
   const [cargando, setCargando] = useState(true);
   const [iniciado, setIniciado] = useState(false);
   const [error, setError] = useState("");
+  const [estadoAtleta, setEstadoAtleta] = useState<{estado:string;motivo:string;desde:string;restricciones:{movement:string;issue:string;priority:string}[]}|null>(null);
+  const [confirmandoReevaluacion, setConfirmandoReevaluacion] = useState(false);
+  const [reevaluacionEnviada, setReevaluacionEnviada] = useState(false);
 
   const C = {
     bg:"#0D0D0D", card:"#1A1A1A", ink:"#F0EDE8", muted:"#9A9590",
@@ -45,6 +48,10 @@ export default function MiAtleta() {
       const resNivel = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"calcular_nivel_conocimiento",codigo:cod})});
       const dataNivel = await resNivel.json();
       setNivelConocimientoReal(dataNivel?.nivelConocimiento ?? 0);
+      // FORGE ATHLETE STATE ENGINE — estado de restriccion completo, con detalle de movimientos evitados
+      const resEstado = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"obtener_detalle_estado_atleta",codigo:cod})});
+      const dataEstado = await resEstado.json();
+      if(dataEstado?.estado && dataEstado.estado!=="normal") setEstadoAtleta(dataEstado);
     }catch{ setError("Error de conexión"); }
     finally{ setCargando(false); setIniciado(true); }
   };
@@ -61,6 +68,51 @@ export default function MiAtleta() {
         <div style={{textAlign:"center",marginBottom:24}}>
           <img src="/logo-forge.png" alt="Forge" style={{width:60,height:60,objectFit:"contain",marginBottom:12}}/>
           <h1 style={{fontSize:24,fontWeight:700,color:C.ink,fontFamily:"Georgia,serif"}}>Mi Atleta</h1>
+
+        {estadoAtleta&&(
+          <div style={{background:"linear-gradient(135deg,#8B0000,#5C0000)",borderRadius:16,padding:"20px 22px",marginBottom:20}}>
+            <p style={{color:"#fff",fontSize:16,fontWeight:800,marginBottom:6}}>🔴 Estado: Restringido</p>
+            <p style={{color:"#fff",fontSize:13,opacity:0.9,marginBottom:14}}>Desde {new Date(estadoAtleta.desde).toLocaleDateString('es-ES')}: {estadoAtleta.motivo}</p>
+            {estadoAtleta.restricciones&&estadoAtleta.restricciones.length>0&&(
+              <div style={{background:"rgba(255,255,255,0.1)",borderRadius:10,padding:"12px 14px",marginBottom:14}}>
+                <p style={{color:"#fff",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>Forge está evitando:</p>
+                {estadoAtleta.restricciones.map((r,i)=>(
+                  <p key={i} style={{color:"#fff",fontSize:12.5,opacity:0.9,marginBottom:4}}>• {r.movement}: {r.issue}</p>
+                ))}
+              </div>
+            )}
+            {!confirmandoReevaluacion&&!reevaluacionEnviada&&(
+              <>
+                <p style={{color:"#fff",fontSize:12,opacity:0.85,marginBottom:12}}>Si ya no tienes molestias, puedes iniciar una reevaluación. Forge no retomará automáticamente tu planificación anterior hasta comprobar tu estado actual.</p>
+                <button onClick={()=>setConfirmandoReevaluacion(true)} style={{width:"100%",background:"#fff",color:"#8B0000",border:"none",borderRadius:100,padding:"12px 18px",fontSize:14,fontWeight:700,cursor:"pointer"}}>
+                  Iniciar reevaluación
+                </button>
+              </>
+            )}
+            {confirmandoReevaluacion&&!reevaluacionEnviada&&(
+              <div>
+                <p style={{color:"#fff",fontSize:13,fontWeight:600,marginBottom:10,textAlign:"center"}}>Confirmo que ya no tengo molestias y quiero iniciar la reevaluación.</p>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={async()=>{
+                    const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"resolver_restriccion_atleta",codigo})});
+                    const data=await res.json();
+                    if(data?.resuelto){
+                      setReevaluacionEnviada(true);
+                    }
+                  }} style={{flex:1,background:"#fff",color:"#8B0000",border:"none",borderRadius:100,padding:"12px 18px",fontSize:14,fontWeight:700,cursor:"pointer"}}>
+                    Sí, confirmar
+                  </button>
+                  <button onClick={()=>setConfirmandoReevaluacion(false)} style={{flex:1,background:"transparent",color:"#fff",border:"1px solid rgba(255,255,255,0.5)",borderRadius:100,padding:"12px 18px",fontSize:14,fontWeight:600,cursor:"pointer"}}>
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+            {reevaluacionEnviada&&(
+              <p style={{color:"#fff",fontSize:13,fontWeight:600,textAlign:"center"}}>✅ Reevaluación iniciada. Habla con tu Coach para valorar juntos tu tolerancia actual antes de retomar la carga habitual.</p>
+            )}
+          </div>
+        )}
           <p style={{color:C.muted,fontSize:13,marginTop:4}}>Quién eres como atleta</p>
         </div>
         <input value={codigo} onChange={e=>setCodigo(e.target.value.toUpperCase())}

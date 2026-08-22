@@ -2549,10 +2549,17 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
           if (estadoActivoExistente) {
             await supabase.from("athlete_state_events").update({ activo: false, fecha_fin: new Date().toISOString().split('T')[0] }).eq("id", estadoActivoExistente.id);
           }
+          const descripcionHumana = evt.body_area
+            ? `Molestia/restricción en ${evt.body_area}${evt.affected_exercise ? ` (especialmente con ${evt.affected_exercise})` : ''}. Forge evita cargas/movimientos que puedan agravarla mientras se evalúa tu evolución.`
+            : evt.affected_exercise
+            ? `Molestia/restricción reportada con ${evt.affected_exercise}. Evitar prescribir hasta revisión.`
+            : null;
           await supabase.from("athlete_state_events").insert({
             user_codigo: codigo,
             estado: "restricted",
             motivo: evt.reason_code || "restriccion activa",
+            body_area: evt.body_area || null,
+            reason_description: descripcionHumana,
             activo: true
           });
           console.log("🔴 ATHLETE STATE ENGINE: atleta", codigo, "entra en estado RESTRICTED por", evt.reason_code);
@@ -2561,9 +2568,10 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
         }
       }
 
-      if ((config.persistence === "active_constraint" || config.persistence === "permanent") && evt.affected_exercise) {
-        // constraint_level explicito ('hard') como campo real de la tabla — no inferido desde
-        // "source", que es fragil y depende de una convencion implicita.
+      // FIX ARQUITECTONICO: usar body_area como identificador cuando no hay affected_exercise
+      // especifico — antes "rodilla" sin ejercicio concreto nunca generaba constraint visible.
+      const identificadorRestriccion = evt.affected_exercise || evt.body_area;
+      if ((config.persistence === "active_constraint" || config.persistence === "permanent") && identificadorRestriccion) {
         const validUntilConstraint = config.persistence === "permanent" ? null : (() => {
           const fecha = new Date();
           fecha.setDate(fecha.getDate() + 21); // active_constraint expira en 3 semanas salvo revision
@@ -2573,8 +2581,8 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
           user_codigo: codigo,
           type: "weakness",
           domain: null,
-          movement: evt.affected_exercise,
-          issue: `Molestia/restricción reportada con ${evt.affected_exercise} (motivo: ${evt.reason_code}). Evitar prescribir hasta revisión.`,
+          movement: identificadorRestriccion,
+          issue: evt.que_evitar || `Molestia/restricción relacionada con ${identificadorRestriccion} (motivo: ${evt.reason_code}). Evitar prescribir hasta revisión.`,
           priority: "alta",
           source: "modification_ledger",
           status: "pending",
@@ -2582,7 +2590,7 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
           constraint_level: "hard",
           valid_until: validUntilConstraint
         });
-        console.log("🛡️ MODIFICATION LEDGER: HARD CONSTRAINT creada para", evt.affected_exercise, "valida hasta", validUntilConstraint || "sin caducidad (permanente)");
+        console.log("🛡️ MODIFICATION LEDGER: HARD CONSTRAINT creada para", identificadorRestriccion, "valida hasta", validUntilConstraint || "sin caducidad (permanente)");
       }
     }
 
@@ -2929,7 +2937,7 @@ Responde con este formato exacto:
     const intencionPrompt = `Analiza esta respuesta de un coach de entrenamiento a su atleta. El atleta ya reporto una causa operativa real que justifica revisar una sesion futura. Extrae la INTENCION de la modificacion (que dia, que tipo de sesion nueva, por que).
 
 Responde SOLO con este JSON, sin texto adicional ni markdown:
-{"anuncia_modificacion":true_o_false,"dia":"hoy|mañana|nombre del dia en minusculas sin tildes, o null","tipo_nuevo":"tipo de sesion nueva propuesta (ej: movilidad, tren_superior, descanso, carrera_suave) o null","titulo_breve":"titulo breve de la nueva sesion o null","reason_code":"codigo breve de la causa real en snake_case (ej: rodilla_dolor, disponibilidad_viaje, material_no_disponible) o null","body_area":"zona corporal afectada en su forma mas simple, SOLO si la causa es una molestia/lesion fisica (ej: rodilla, hombro, lumbar), o null si no aplica","affected_exercise":"nombre del ejercicio/movimiento ESPECIFICO que causo el problema, SOLO si el atleta lo menciono explicitamente (ej: snatch_balance), o null — no confundir con body_area, son campos distintos"}
+{"anuncia_modificacion":true_o_false,"dia":"hoy|mañana|nombre del dia en minusculas sin tildes, o null","tipo_nuevo":"tipo de sesion nueva propuesta (ej: movilidad, tren_superior, descanso, carrera_suave) o null","titulo_breve":"titulo breve de la nueva sesion o null","reason_code":"codigo breve de la causa real en snake_case (ej: rodilla_dolor, disponibilidad_viaje, material_no_disponible) o null","body_area":"zona corporal afectada en su forma mas simple, SOLO si la causa es una molestia/lesion fisica (ej: rodilla, hombro, lumbar), o null si no aplica","affected_exercise":"nombre del ejercicio/movimiento ESPECIFICO que causo el problema, SOLO si el atleta lo menciono explicitamente (ej: snatch_balance), o null","que_evitar":"lista breve y ESPECIFICA de tipos de movimiento/carga a evitar mientras la restriccion este activa (ej: 'carrera, saltos, sentadillas con peso' para una molestia de rodilla), distinta de la explicacion general, o null si no hay suficiente informacion para ser especifico"}
 
 Respuesta del coach: "${respuestaCoach}"
 
@@ -3029,6 +3037,7 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
             reason_code: intencion.reason_code || null,
             body_area: intencion.body_area || null,
             affected_exercise: intencion.affected_exercise || null,
+            que_evitar: intencion.que_evitar || null,
             original_titulo: sesionOriginal?.titulo || null,
             original_descripcion: sesionOriginal?.descripcion || null,
             original_tipo: sesionOriginal?.tipo || null,

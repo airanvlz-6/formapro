@@ -2929,7 +2929,7 @@ Responde con este formato exacto:
     const intencionPrompt = `Analiza esta respuesta de un coach de entrenamiento a su atleta. El atleta ya reporto una causa operativa real que justifica revisar una sesion futura. Extrae la INTENCION de la modificacion (que dia, que tipo de sesion nueva, por que).
 
 Responde SOLO con este JSON, sin texto adicional ni markdown:
-{"anuncia_modificacion":true_o_false,"dia":"hoy|mañana|nombre del dia en minusculas sin tildes, o null","tipo_nuevo":"tipo de sesion nueva propuesta (ej: movilidad, tren_superior, descanso, carrera_suave) o null","titulo_breve":"titulo breve de la nueva sesion o null","reason_code":"codigo breve de la causa real en snake_case (ej: rodilla_dolor, disponibilidad_viaje, material_no_disponible) o null","affected_exercise":"nombre del ejercicio/movimiento especifico que causo el problema, SOLO si aplica (ej: snatch_balance), o null"}
+{"anuncia_modificacion":true_o_false,"dia":"hoy|mañana|nombre del dia en minusculas sin tildes, o null","tipo_nuevo":"tipo de sesion nueva propuesta (ej: movilidad, tren_superior, descanso, carrera_suave) o null","titulo_breve":"titulo breve de la nueva sesion o null","reason_code":"codigo breve de la causa real en snake_case (ej: rodilla_dolor, disponibilidad_viaje, material_no_disponible) o null","body_area":"zona corporal afectada en su forma mas simple, SOLO si la causa es una molestia/lesion fisica (ej: rodilla, hombro, lumbar), o null si no aplica","affected_exercise":"nombre del ejercicio/movimiento ESPECIFICO que causo el problema, SOLO si el atleta lo menciono explicitamente (ej: snatch_balance), o null — no confundir con body_area, son campos distintos"}
 
 Respuesta del coach: "${respuestaCoach}"
 
@@ -3027,6 +3027,7 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
           modification_event_pendiente: {
             trigger_type: intencion.reason_code ? "authorized" : "unknown",
             reason_code: intencion.reason_code || null,
+            body_area: intencion.body_area || null,
             affected_exercise: intencion.affected_exercise || null,
             original_titulo: sesionOriginal?.titulo || null,
             original_descripcion: sesionOriginal?.descripcion || null,
@@ -3165,9 +3166,9 @@ Mensaje: "${mensaje}"
   }
 
   if (action === "obtener_detalle_estado_atleta") {
-    // Detalle completo del estado activo + restricciones duras asociadas, para la seccion de
-    // Mi Atleta donde el usuario entiende que esta pasando y decide conscientemente iniciar
-    // la reevaluacion — nunca desde un boton rapido en el banner del chat.
+    // Detalle completo del estado activo — la UI lee el estado ESTRUCTURADO real (reason_description,
+    // body_area), nunca infiere la explicacion desde una Coaching Note asociada (consecuencia
+    // secundaria). Las Coaching Notes/restricciones se muestran como EVIDENCIA complementaria.
     const { data: estadoDetalle } = await supabase.from("athlete_state_events").select("*").eq("user_codigo", codigo).eq("activo", true).maybeSingle();
     if (!estadoDetalle || estadoDetalle.estado === "normal") {
       return NextResponse.json({ estado: "normal" });
@@ -3182,6 +3183,8 @@ Mensaje: "${mensaje}"
     return NextResponse.json({
       estado: estadoDetalle.estado,
       motivo: estadoDetalle.motivo,
+      bodyArea: estadoDetalle.body_area,
+      reasonDescription: estadoDetalle.reason_description,
       desde: estadoDetalle.fecha_inicio,
       restricciones: restriccionesDetalle || []
     });

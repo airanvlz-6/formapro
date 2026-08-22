@@ -11,7 +11,7 @@ export default function MiAtleta() {
   const [cargando, setCargando] = useState(true);
   const [iniciado, setIniciado] = useState(false);
   const [error, setError] = useState("");
-  const [estadoAtleta, setEstadoAtleta] = useState<{estado:string;motivo:string;desde:string;restricciones:{movement:string;issue:string;priority:string}[]}|null>(null);
+  const [estadoAtleta, setEstadoAtleta] = useState<{estado:string;motivo:string;bodyArea:string|null;reasonDescription:string|null;desde:string;restricciones:{movement:string;issue:string;priority:string}[]}|null>(null);
   const [confirmandoReevaluacion, setConfirmandoReevaluacion] = useState(false);
   const [reevaluacionEnviada, setReevaluacionEnviada] = useState(false);
 
@@ -106,7 +106,8 @@ export default function MiAtleta() {
         {estadoAtleta&&(
           <div style={{background:"linear-gradient(135deg,#8B0000,#5C0000)",borderRadius:16,padding:"20px 22px",marginBottom:20}}>
             <p style={{color:"#fff",fontSize:16,fontWeight:800,marginBottom:6}}>🔴 Estado: Restringido</p>
-            <p style={{color:"#fff",fontSize:13,opacity:0.9,marginBottom:14}}>Desde {new Date(estadoAtleta.desde).toLocaleDateString('es-ES')}: {estadoAtleta.motivo}</p>
+            <p style={{color:"#fff",fontSize:11,opacity:0.7,marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>Desde {new Date(estadoAtleta.desde).toLocaleDateString('es-ES')}</p>
+            <p style={{color:"#fff",fontSize:13.5,opacity:0.95,marginBottom:14,lineHeight:1.5}}>{estadoAtleta.reasonDescription || `Restricción activa relacionada con ${estadoAtleta.bodyArea || estadoAtleta.motivo}.`}</p>
             {estadoAtleta.restricciones&&estadoAtleta.restricciones.length>0&&(
               <div style={{background:"rgba(255,255,255,0.1)",borderRadius:10,padding:"12px 14px",marginBottom:14}}>
                 <p style={{color:"#fff",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>Forge está evitando:</p>

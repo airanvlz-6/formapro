@@ -68,6 +68,40 @@ export default function MiAtleta() {
         <div style={{textAlign:"center",marginBottom:24}}>
           <img src="/logo-forge.png" alt="Forge" style={{width:60,height:60,objectFit:"contain",marginBottom:12}}/>
           <h1 style={{fontSize:24,fontWeight:700,color:C.ink,fontFamily:"Georgia,serif"}}>Mi Atleta</h1>
+          <p style={{color:C.muted,fontSize:13,marginTop:4}}>Quién eres como atleta</p>
+        </div>
+        <input value={codigo} onChange={e=>setCodigo(e.target.value.toUpperCase())}
+          placeholder="Tu código FP-XXXXX"
+          onKeyDown={e=>e.key==="Enter"&&cargarDatos(codigo)}
+          style={{width:"100%",border:`2px solid ${C.accent}`,borderRadius:12,padding:"12px 14px",fontSize:15,color:C.ink,background:C.bg,letterSpacing:2,textAlign:"center",marginBottom:12,fontFamily:"inherit"}}/>
+        {error&&<p style={{color:C.accent,fontSize:12,marginBottom:12,textAlign:"center"}}>{error}</p>}
+        <button onClick={()=>cargarDatos(codigo)} style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:12,padding:14,fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+          Ver mi atleta
+        </button>
+      </div>
+    </div>
+  );
+
+  const test = datos?.test_atleta?.informe;
+  const fechaTest = datos?.test_atleta_fecha;
+  const diasDesdeTest = fechaTest ? Math.round((new Date().getTime()-new Date(fechaTest).getTime())/(24*60*60*1000)) : null;
+  const debilidades = datos?.debilidades || [];
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'DM Sans', sans-serif", padding: "24px 16px", paddingBottom: 90 }}>
+      <div style={{ maxWidth: 600, margin: "0 auto" }}>
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+          <img src="/logo-forge.png" alt="Forge" style={{ width: 40, height: 40, objectFit: "contain" }} />
+          <div>
+            <h1 style={{ fontSize: 20, fontWeight: 700, color: C.ink, fontFamily: "Georgia, serif" }}>Mi Atleta</h1>
+            <p style={{ color: C.accent, fontSize: 12, fontWeight: 600 }}>••••••</p>
+          </div>
+          <a href={`/app?codigo=${codigo}`} style={{ marginLeft: "auto", background: C.accent, color: "#fff", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
+            💬 Coach
+          </a>
+        </div>
 
         {estadoAtleta&&(
           <div style={{background:"linear-gradient(135deg,#8B0000,#5C0000)",borderRadius:16,padding:"20px 22px",marginBottom:20}}>
@@ -113,40 +147,6 @@ export default function MiAtleta() {
             )}
           </div>
         )}
-          <p style={{color:C.muted,fontSize:13,marginTop:4}}>Quién eres como atleta</p>
-        </div>
-        <input value={codigo} onChange={e=>setCodigo(e.target.value.toUpperCase())}
-          placeholder="Tu código FP-XXXXX"
-          onKeyDown={e=>e.key==="Enter"&&cargarDatos(codigo)}
-          style={{width:"100%",border:`2px solid ${C.accent}`,borderRadius:12,padding:"12px 14px",fontSize:15,color:C.ink,background:C.bg,letterSpacing:2,textAlign:"center",marginBottom:12,fontFamily:"inherit"}}/>
-        {error&&<p style={{color:C.accent,fontSize:12,marginBottom:12,textAlign:"center"}}>{error}</p>}
-        <button onClick={()=>cargarDatos(codigo)} style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:12,padding:14,fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-          Ver mi atleta
-        </button>
-      </div>
-    </div>
-  );
-
-  const test = datos?.test_atleta?.informe;
-  const fechaTest = datos?.test_atleta_fecha;
-  const diasDesdeTest = fechaTest ? Math.round((new Date().getTime()-new Date(fechaTest).getTime())/(24*60*60*1000)) : null;
-  const debilidades = datos?.debilidades || [];
-
-  return (
-    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'DM Sans', sans-serif", padding: "24px 16px", paddingBottom: 90 }}>
-      <div style={{ maxWidth: 600, margin: "0 auto" }}>
-
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-          <img src="/logo-forge.png" alt="Forge" style={{ width: 40, height: 40, objectFit: "contain" }} />
-          <div>
-            <h1 style={{ fontSize: 20, fontWeight: 700, color: C.ink, fontFamily: "Georgia, serif" }}>Mi Atleta</h1>
-            <p style={{ color: C.accent, fontSize: 12, fontWeight: 600 }}>••••••</p>
-          </div>
-          <a href={`/app?codigo=${codigo}`} style={{ marginLeft: "auto", background: C.accent, color: "#fff", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>
-            💬 Coach
-          </a>
-        </div>
 
         {/* Conocimiento del atleta — usa la fuente REAL independiente (athlete_knowledge_points) */}
         <div style={{ background: C.card, border: `1px solid ${C.accent}60`, borderRadius: 16, padding: "18px 18px", marginBottom: 16 }}>

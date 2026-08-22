@@ -3164,6 +3164,29 @@ Mensaje: "${mensaje}"
     return NextResponse.json({ estado: estadoActivo?.estado || "normal", motivo: estadoActivo?.motivo || null, desde: estadoActivo?.fecha_inicio || null });
   }
 
+  if (action === "obtener_detalle_estado_atleta") {
+    // Detalle completo del estado activo + restricciones duras asociadas, para la seccion de
+    // Mi Atleta donde el usuario entiende que esta pasando y decide conscientemente iniciar
+    // la reevaluacion — nunca desde un boton rapido en el banner del chat.
+    const { data: estadoDetalle } = await supabase.from("athlete_state_events").select("*").eq("user_codigo", codigo).eq("activo", true).maybeSingle();
+    if (!estadoDetalle || estadoDetalle.estado === "normal") {
+      return NextResponse.json({ estado: "normal" });
+    }
+    const hoyDetalle = new Date().toISOString().split('T')[0];
+    const { data: restriccionesDetalle } = await supabase.from("athlete_coaching_notes")
+      .select("movement,issue,priority")
+      .eq("user_codigo", codigo)
+      .eq("constraint_level", "hard")
+      .in("status", ["pending", "considerada"])
+      .or(`valid_until.is.null,valid_until.gte.${hoyDetalle}`);
+    return NextResponse.json({
+      estado: estadoDetalle.estado,
+      motivo: estadoDetalle.motivo,
+      desde: estadoDetalle.fecha_inicio,
+      restricciones: restriccionesDetalle || []
+    });
+  }
+
   if (action === "resolver_restriccion_atleta") {
     // FORGE ATHLETE STATE ENGINE — transicion de salida, SIEMPRE disparada por confirmacion
     // EXPLICITA del usuario (nunca inferida del lenguaje libre del Coach). El atleta pasa a

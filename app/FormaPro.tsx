@@ -2924,18 +2924,11 @@ ${testStr}`}]});
             )}
             {estadoAtletaActivo&&(
               <div style={{background:"linear-gradient(135deg,#8B0000,#5C0000)",borderRadius:16,padding:"16px 18px",marginBottom:10}}>
-                <p style={{color:"#fff",fontSize:14,fontWeight:700,marginBottom:4}}>🔴 Gestión de restricción activa</p>
-                <p style={{color:"#fff",fontSize:12.5,opacity:0.95,marginBottom:4}}>Desde {new Date(estadoAtletaActivo.desde).toLocaleDateString('es-ES')}: {estadoAtletaActivo.motivo}</p>
-                <p style={{color:"#fff",fontSize:11.5,opacity:0.85,marginBottom:12}}>Tu planificación se está adaptando automáticamente a esta situación mientras dure.</p>
-                <button onClick={async()=>{
-                  const res=await apiCall({action:"resolver_restriccion_atleta",codigo:codigoUsuario});
-                  if(res?.resuelto){
-                    setEstadoAtletaActivo(null);
-                    setMensajes(prev=>[...prev,{role:"assistant",content:"Perfecto, me alegra que la molestia se haya resuelto. Antes de retomar la carga habitual, vamos a comprobar juntos qué tolerancia tienes ahora mismo — no volveremos automáticamente a donde estabas, reconstruiremos progresivamente."}]);
-                  }
-                }} style={{width:"100%",background:"#fff",color:"#8B0000",border:"none",borderRadius:100,padding:"10px 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>
-                  Ya no tengo molestia — marcar como resuelto
-                </button>
+                <p style={{color:"#fff",fontSize:14,fontWeight:700,marginBottom:4}}>🔴 Entrenamiento restringido</p>
+                <p style={{color:"#fff",fontSize:12.5,opacity:0.9,marginBottom:12}}>Forge está adaptando tu planificación debido a una restricción activa.</p>
+                <a href={`/atleta?codigo=${codigoUsuario}`} style={{display:"block",width:"100%",background:"#fff",color:"#8B0000",border:"none",borderRadius:100,padding:"10px 16px",fontSize:13,fontWeight:700,textAlign:"center",textDecoration:"none"}}>
+                  Ver estado y restricciones →
+                </a>
               </div>
             )}
             {modificacionPendienteConfirmar&&(

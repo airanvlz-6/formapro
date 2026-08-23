@@ -2070,9 +2070,12 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
     const sesionesQueRequierenReporteCheck = sesionesCheck.filter((s: any) => s.tipo !== "descanso");
     const todasCompletadasCheck = sesionesQueRequierenReporteCheck.length > 0 && sesionesQueRequierenReporteCheck.every((s: any) => s.completada === true);
 
-    const domingoSemanaCheck = new Date(lunesCheck);
-    domingoSemanaCheck.setDate(lunesCheck.getDate() + 6);
-    const semanaTerminadaCronologicamenteCheck = hoyCheckFecha.getTime() > domingoSemanaCheck.getTime();
+    // FIX CRITICO: bug real confirmado — el domingo (ultimo dia REAL de la semana) nunca cumplia
+      // "semana terminada cronologicamente" porque la comparacion exigia ESTRICTAMENTE posterior al
+      // domingo. Ahora incluye el domingo mismo como dia valido para considerar la semana terminada.
+      const domingoSemanaCheck = new Date(lunesCheck);
+      domingoSemanaCheck.setDate(lunesCheck.getDate() + 6);
+      const semanaTerminadaCronologicamenteCheck = hoyCheckFecha.getTime() >= domingoSemanaCheck.getTime();
 
     if (!todasCompletadasCheck && !semanaTerminadaCronologicamenteCheck) {
       return NextResponse.json({ ready: false });

@@ -3694,6 +3694,22 @@ Menciona el numero exacto de dias en la frase.`;
     lunes.setDate(hoy.getDate() - diaSemana + 1);
     const weekStart = lunes.toISOString().split('T')[0];
     const { data: plan } = await supabase.from("weekly_plan").select("*").eq("user_codigo", codigo).eq("week_start", weekStart).single();
+
+    // FIX ARQUITECTONICO: cada sesion se marca explicitamente como historica o futura respecto a
+    // HOY — corrige un bug real donde el Coach confundia dias ya transcurridos de la semana con
+    // dias futuros al mencionarlos en conversacion libre (fuera del flujo hoy/manana ya protegido).
+    // El consumidor (buildPrompt) ya no necesita inferir esto — el dato llega con su semantica temporal.
+    if (plan?.sessions) {
+      const DIAS_ORDEN_SEMANTICA = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"];
+      const normalizarDiaSemantica = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      const indiceHoySemantica = DIAS_ORDEN_SEMANTICA.indexOf(normalizarDiaSemantica(hoy.toLocaleDateString("es-ES", { weekday: "long" })));
+      plan.sessions = plan.sessions.map((s: any) => {
+        const indiceSesion = DIAS_ORDEN_SEMANTICA.indexOf(normalizarDiaSemantica(s.dia));
+        const esHistorica = indiceSesion >= 0 && indiceHoySemantica >= 0 && indiceSesion < indiceHoySemantica;
+        return { ...s, es_historica: esHistorica || !!s.completada, es_futura: !esHistorica && !s.completada && indiceSesion !== indiceHoySemantica };
+      });
+    }
+
     return NextResponse.json({ plan: plan || null, weekStart });
   }
 

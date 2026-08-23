@@ -354,7 +354,7 @@ ${planSemana&&planSemana.sessions?`
 📅 PLAN SEMANAL — RESTO DE LA SEMANA (hoy y mañana ya están en el ESTADO CANÓNICO de arriba, no los repitas de aquí):
 Bloque: ${planSemana.block_name} · Semana ${planSemana.week_number}${planSemana.total_weeks_block?` de ${planSemana.total_weeks_block}`:""}
 Objetivo semana: ${planSemana.week_objective||"no definido"}
-${planSemana.sessions.filter((s:any)=>{const dn=s.dia.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();return estadoCanonico?dn!==estadoCanonico.dia_semana_hoy&&dn!==estadoCanonico.dia_semana_manana:true;}).map((s:any)=>`\n### ${s.dia.toUpperCase()} ###\nTítulo: ${s.titulo}\nContenido completo: ${s.descripcion||"no detallado"}\nPor qué: ${s.por_que||""}${s.completada?`\n[YA COMPLETADO — reportó: ${s.titulo_real||""}: ${s.descripcion_real||""}]`:""}${s.modificado?`\n[MODIFICADO: ${s.motivo_modificacion}]`:""}`).join("\n")}
+${planSemana.sessions.filter((s:any)=>{const dn=s.dia.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();return (estadoCanonico?dn!==estadoCanonico.dia_semana_hoy&&dn!==estadoCanonico.dia_semana_manana:true)&&!s.es_historica;}).map((s:any)=>`\n### ${s.dia.toUpperCase()} ###\nTítulo: ${s.titulo}\nContenido completo: ${s.descripcion||"no detallado"}\nPor qué: ${s.por_que||""}${s.completada?`\n[YA COMPLETADO — reportó: ${s.titulo_real||""}: ${s.descripcion_real||""}]`:""}${s.modificado?`\n[MODIFICADO: ${s.motivo_modificacion}]`:""}`).join("\n")}
 REGLA: Si el atleta pregunta por hoy o mañana, usa el ESTADO CANÓNICO de arriba, no esta lista. Esta lista es solo para el resto de días de la semana.`:"⚠️ NO HAY PLAN SEMANAL GUARDADO EN MI PLAN."}
 
 ${distribucion?`DISPONIBILIDAD RÍGIDA POR DÍA — RESTRICCIÓN ABSOLUTA E INQUEBRANTABLE:

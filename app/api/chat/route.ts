@@ -3183,6 +3183,73 @@ Mensaje: "${mensaje}"
     }
   }
 
+  if (action === "verificar_referencia_sesion_futura") {
+    // FORGE FUTURE SESSION SAFETY — capa determinista que se ejecuta DESPUES de que el Coach genere
+    // su respuesta. Si el atleta esta RESTRICTED y la respuesta menciona una sesion futura existente
+    // en weekly_plan, verifica compatibilidad contra las hard constraints ANTES de que la mencion
+    // llegue al usuario como valida. El LLM puede mencionar la sesion espontaneamente (fuera del
+    // flujo de "dato inmutable"), pero su compatibilidad la determina SIEMPRE el codigo, nunca el LLM.
+    const { respuestaCoach } = datos;
+    if (!respuestaCoach) return NextResponse.json({ ok: true, alerta: null });
+
+    const { data: estadoAtletaFuturo } = await supabase.from("athlete_state_events").select("estado,body_area,motivo").eq("user_codigo", codigo).eq("activo", true).maybeSingle();
+    if (!estadoAtletaFuturo || estadoAtletaFuturo.estado === "normal") {
+      return NextResponse.json({ ok: true, alerta: null });
+    }
+
+    const hoyFuturo = new Date().toISOString().split('T')[0];
+    const { data: hardConstraintsFuturo } = await supabase.from("athlete_coaching_notes")
+      .select("movement,issue")
+      .eq("user_codigo", codigo)
+      .eq("constraint_level", "hard")
+      .in("status", ["pending", "considerada"])
+      .or(`valid_until.is.null,valid_until.gte.${hoyFuturo}`);
+    if (!hardConstraintsFuturo || hardConstraintsFuturo.length === 0) {
+      return NextResponse.json({ ok: true, alerta: null });
+    }
+
+    // Determinar week_start actual y buscar el plan real
+    const hoyDetFuturo = new Date();
+    const diaSemFuturo = hoyDetFuturo.getDay() || 7;
+    const lunesFuturo = new Date(hoyDetFuturo);
+    lunesFuturo.setDate(hoyDetFuturo.getDate() - diaSemFuturo + 1);
+    const weekStartFuturo = lunesFuturo.toISOString().split('T')[0];
+    const { data: planFuturo } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", weekStartFuturo).single();
+    if (!planFuturo?.sessions) return NextResponse.json({ ok: true, alerta: null });
+
+    // Deteccion determinista: ¿la respuesta del Coach coincide textualmente con el titulo de alguna
+    // sesion futura (no completada) del plan? Si es asi, comparar esa sesion real contra las constraints.
+    const normalizarFuturo = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const respuestaNormalizada = normalizarFuturo(respuestaCoach);
+    const DIAS_FUTURO = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
+
+    for (const sesion of planFuturo.sessions) {
+      if (sesion.completada) continue;
+      const tituloNormalizado = normalizarFuturo(sesion.titulo || "");
+      if (!tituloNormalizado || tituloNormalizado.length < 5) continue;
+      if (!respuestaNormalizada.includes(tituloNormalizado)) continue;
+
+      // La respuesta menciona esta sesion real — verificar compatibilidad contra las hard constraints
+      const textoSesionFuturo = normalizarFuturo(`${sesion.titulo || ""} ${sesion.tipo || ""} ${sesion.descripcion || ""}`);
+      for (const constraint of hardConstraintsFuturo) {
+        const movimientoNorm = normalizarFuturo(constraint.movement || "");
+        if (movimientoNorm && textoSesionFuturo.includes(movimientoNorm)) {
+          return NextResponse.json({
+            ok: true,
+            alerta: {
+              dia: sesion.dia,
+              tituloSesion: sesion.titulo,
+              constraintViolada: constraint.movement,
+              issue: constraint.issue
+            }
+          });
+        }
+      }
+    }
+
+    return NextResponse.json({ ok: true, alerta: null });
+  }
+
   if (action === "obtener_estado_atleta_activo") {
     // Solo lectura — permite al frontend saber si hay una restriccion activa, para mostrar UI
     // adecuada (ej: banner de "en gestion de lesion" con opcion de marcar como resuelto).

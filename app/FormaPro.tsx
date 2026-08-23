@@ -761,6 +761,7 @@ const [esperandoConfirmacionDisponibilidad,setEsperandoConfirmacionDisponibilida
 const [mostrarBannerCambioModo,setMostrarBannerCambioModo]=useState(false);
 const [modificacionPendienteConfirmar,setModificacionPendienteConfirmar]=useState<{pendingId:string;dia:string;titulo:string;motivo:string}|null>(null);
 const [estadoAtletaActivo,setEstadoAtletaActivo]=useState<{estado:string;motivo:string;desde:string}|null>(null);
+const [alertaSesionFuturaIncompatible,setAlertaSesionFuturaIncompatible]=useState<{dia:string;tituloSesion:string;constraintViolada:string;issue:string}|null>(null);
 const [sesionParaCompartir,setSesionParaCompartir]=useState<any>(null);
 const [suenoConfirmado,setSuenoConfirmado]=useState<{fecha:string;valores:any}|null>(null);
 const [objetivoPendienteCompartir,setObjetivoPendienteCompartir]=useState<{objetivo:string;resultado:string}|null>(null);
@@ -1430,6 +1431,15 @@ const forgeValidator=(texto:string):string=>{
         if(resSafety?.detectado){
           console.log("🛡️ Safety net: modificacion detectada y registrada automaticamente");
           setModificacionPendienteConfirmar({pendingId:resSafety.pendingId,dia:resSafety.dia,titulo:resSafety.titulo,motivo:resSafety.motivo});
+        }
+      });
+      // FORGE FUTURE SESSION SAFETY — verifica si el Coach menciono espontaneamente una sesion futura
+      // incompatible con una restriccion activa (vector de fallo real confirmado: el Coach dijo
+      // "mantén la sesión Z2 de carrera" mientras el atleta tenia restriccion activa de rodilla).
+      apiCall({action:"verificar_referencia_sesion_futura",codigo:codigoUsuario,datos:{respuestaCoach:texto}}).then((resFuturo:any)=>{
+        if(resFuturo?.alerta){
+          console.log("🛡️ Future session safety: sesion incompatible mencionada, mostrando alerta");
+          setAlertaSesionFuturaIncompatible(resFuturo.alerta);
         }
       });
     }
@@ -2929,6 +2939,16 @@ ${testStr}`}]});
                 <a href={`/atleta?codigo=${codigoUsuario}`} style={{display:"block",width:"100%",background:"#fff",color:"#8B0000",border:"none",borderRadius:100,padding:"10px 16px",fontSize:13,fontWeight:700,textAlign:"center",textDecoration:"none"}}>
                   Ver estado y restricciones →
                 </a>
+              </div>
+            )}
+            {alertaSesionFuturaIncompatible&&(
+              <div style={{background:"linear-gradient(135deg,#8B0000,#5C0000)",borderRadius:16,padding:"16px 18px",marginBottom:10}}>
+                <p style={{color:"#fff",fontSize:14,fontWeight:700,marginBottom:4}}>⚠️ Sesión futura requiere revisión</p>
+                <p style={{color:"#fff",fontSize:12.5,opacity:0.95,marginBottom:4}}>{alertaSesionFuturaIncompatible.dia?.charAt(0).toUpperCase()+alertaSesionFuturaIncompatible.dia?.slice(1)}: <strong>{alertaSesionFuturaIncompatible.tituloSesion}</strong></p>
+                <p style={{color:"#fff",fontSize:11.5,opacity:0.85,marginBottom:12}}>Esta sesión puede ser incompatible con tu restricción activa ({alertaSesionFuturaIncompatible.issue}). No la realices sin confirmar tolerancia primero.</p>
+                <button onClick={()=>setAlertaSesionFuturaIncompatible(null)} style={{width:"100%",background:"#fff",color:"#8B0000",border:"none",borderRadius:100,padding:"10px 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                  Entendido
+                </button>
               </div>
             )}
             {modificacionPendienteConfirmar&&(

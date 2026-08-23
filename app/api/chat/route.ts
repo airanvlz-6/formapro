@@ -2999,11 +2999,19 @@ IMPORTANTE sobre "dia": si el coach esta claramente adaptando la sesion de HOY (
         : intencion.dia === "mañana" || intencion.dia === "manana" ? estadoParaDetector.dia_semana_manana
         : intencion.dia;
 
+      // FIX CRITICO: si el dia detectado es "lunes" y HOY no es lunes (ej: hoy domingo), ese lunes
+      // pertenece a la SEMANA SIGUIENTE, no a la semana actual — mismo tipo de bug de limites de
+      // semana ya corregido para "mañana" en generarEstadoCanonico, aqui replicado para el calculo
+      // de week_start del Modification Ledger. Bug real confirmado: creaba pending_actions para el
+      // lunes de la semana que se estaba cerrando, en vez de la semana nueva aun sin generar.
       const weekStartDetector = weekStartActual || (() => {
         const hoyDet = new Date();
         const diaSemDet = hoyDet.getDay() || 7;
         const lunesDet = new Date(hoyDet);
         lunesDet.setDate(hoyDet.getDate() - diaSemDet + 1);
+        if (diaRealDetectado === "lunes" && diaSemDet !== 1) {
+          lunesDet.setDate(lunesDet.getDate() + 7);
+        }
         return lunesDet.toISOString().split('T')[0];
       })();
 

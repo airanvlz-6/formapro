@@ -59,6 +59,17 @@ async function generarEstadoCanonico(supabase: any, codigo: string) {
   const { data: usuario } = await supabase.from("usuarios").select("ciclo_actual,estado_fisiologico,objetivo_principal,debilidades,athlete_development").eq("codigo", codigo).single();
   const { data: plan } = await supabase.from("weekly_plan").select("*").eq("user_codigo", codigo).eq("week_start", weekStart).single();
 
+  // FIX CRITICO: cuando "mañana" cruza a otra semana (ej: hoy domingo, mañana lunes de la semana
+  // siguiente), sesion_manana debe buscarse en el plan de LA SEMANA DE MAÑANA, no en el plan de
+  // hoy — bug real confirmado: mostraba el lunes YA COMPLETADO de la semana actual como si fuera
+  // la sesion de mañana, porque ambos comparten el mismo nombre de dia pero pertenecen a weeks distintas.
+  const cruzaSemana = mananaFecha.getDay() === 1; // mañana es lunes = cruza a semana siguiente
+  let planParaManana = plan;
+  if (cruzaSemana) {
+    const { data: planSiguiente } = await supabase.from("weekly_plan").select("*").eq("user_codigo", codigo).eq("week_start", mananaFecha.toISOString().split('T')[0]).maybeSingle();
+    planParaManana = planSiguiente || null;
+  }
+
   // FORGE ATHLETE STATE ENGINE — estado activo del atleta (normal/restricted/paused/etc). Fuente
   // unica de verdad consultada tanto por el Coach conversacional como por el Block Analyzer, para
   // que ambos sepan si el atleta esta en un periodo de restriccion que gobierna toda la planificacion.
@@ -69,7 +80,7 @@ async function generarEstadoCanonico(supabase: any, codigo: string) {
 
   const normalizar = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
   const sesionHoy = plan?.sessions?.find((s: any) => normalizar(s.dia) === normalizar(diaSemanaHoy));
-  const sesionManana = plan?.sessions?.find((s: any) => normalizar(s.dia) === normalizar(diaSemanaManana));
+  const sesionManana = planParaManana?.sessions?.find((s: any) => normalizar(s.dia) === normalizar(diaSemanaManana));
 
   const histFisio = historialFisiologicoAtomico;
   const ultimosRegistrosFisio = [...histFisio].sort((a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()).slice(0, 3);

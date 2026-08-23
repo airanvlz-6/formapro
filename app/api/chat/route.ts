@@ -1964,6 +1964,7 @@ ESPECIALIDAD: ${usuarioBuilder?.especialidad || usuarioBuilder?.categoria}
 MARCAS DEL ATLETA: ${JSON.stringify(usuarioBuilder?.marcas_especificas || {})}
 ${debilidadInfo ? `DEBILIDAD A TRABAJAR HOY: ${debilidadInfo.nombre_visible} — ${debilidadInfo.diagnostico}` : ""}
 ${restriccionesBuilderTexto}
+${hardConstraintsBuilder && hardConstraintsBuilder.length > 0 ? `\n🚨 REGLA CRÍTICA DE TÍTULO: NUNCA incluyas en el "titulo" de la sesión el nombre del movimiento/zona restringida como referencia al estímulo original que sustituyes (ej: NO titules "Carrera larga adaptada (bici)" — en su lugar usa el nombre de la modalidad real que SÍ vas a usar, ej: "Bici estática Z2 60min"). El título debe describir fielmente lo que el atleta va a hacer, nunca lo que está evitando.` : ""}
 
 ZONAS DE FRECUENCIA CARDIACA REALES DEL ATLETA (usar SIEMPRE estos rangos de pulsaciones exactas, NUNCA
 uses porcentajes de FCmax genericos como "70-80% FCmax" — el atleta necesita el rango de ppm directo):

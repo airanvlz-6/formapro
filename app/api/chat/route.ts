@@ -4078,9 +4078,18 @@ if (action === "obtener_daily_briefing") {
         const { data: usuarioCicloIncr } = await supabase.from("usuarios").select("ciclo_actual").eq("codigo", codigo).single();
         const cicloIncr = usuarioCicloIncr?.ciclo_actual;
         if (cicloIncr && typeof cicloIncr.semana === "number") {
-          const nuevaSemana = cicloIncr.semana + 1;
-          await supabase.from("usuarios").update({ ciclo_actual: { ...cicloIncr, semana: nuevaSemana } }).eq("codigo", codigo);
-          console.log(`CICLO ACTUAL: semana incrementada automaticamente de ${cicloIncr.semana} a ${nuevaSemana} al generar nueva semana ${plan.week_start}`);
+          // FIX CRITICO: bug real confirmado — "semana 23 de 4". El contador se incrementaba SIN
+          // limite ni verificacion contra totalSemanas, nunca transicionaba de bloque. Ahora: si la
+          // nueva semana superaria totalSemanas, el bloque actual TERMINA y arranca uno nuevo en
+          // semana 1 — usando el nombre del bloque tal como lo decidio el plan.block_name real
+          // (viene del Block Analyzer/Coach, ya reflejado en el plan que se esta guardando).
+          const totalSemanasCiclo = cicloIncr.totalSemanas || 4;
+          const superariaLimite = (cicloIncr.semana + 1) > totalSemanasCiclo;
+          const nuevoCiclo = superariaLimite
+            ? { ...cicloIncr, bloque: plan.block_name || cicloIncr.bloque, semana: 1, totalSemanas: plan.total_weeks_block || totalSemanasCiclo }
+            : { ...cicloIncr, semana: cicloIncr.semana + 1 };
+          await supabase.from("usuarios").update({ ciclo_actual: nuevoCiclo }).eq("codigo", codigo);
+          console.log(`CICLO ACTUAL: ${superariaLimite ? `TRANSICION DE BLOQUE — nuevo bloque "${nuevoCiclo.bloque}" semana 1` : `semana incrementada de ${cicloIncr.semana} a ${nuevoCiclo.semana}`} al generar nueva semana ${plan.week_start}`);
         }
       } catch (errIncrCiclo) {
         console.error("Error incrementando ciclo_actual.semana:", errIncrCiclo);

@@ -4108,30 +4108,45 @@ if (action === "obtener_daily_briefing") {
       // sesiones legitimamente seguras. Ahora: para zonas corporales genericas (rodilla/hombro/
       // lumbar/etc, sin ejercicio especifico), solo se considera violacion si el texto contiene
       // un MOVIMIENTO DE ALTO RIESGO conocido para esa zona, no la simple mencion de la palabra.
-      const MOVIMIENTOS_ALTO_RIESGO_POR_ZONA: Record<string, string[]> = {
-        rodilla: ["sentadilla", "squat", "salto", "jump", "carrera", "running", "zancada", "lunge", "burpee", "box jump", "double under", "step up", "step-up"],
-        hombro: ["press militar", "overhead press", "push press", "snatch", "jerk", "handstand", "hspu", "muscle up", "muscle-up", "pull up", "pull-up", "dip"],
-        lumbar: ["peso muerto", "deadlift", "clean", "buenos dias", "good morning", "sentadilla trasera", "back squat"],
+      // FIX SEGUNDO: falso positivo real confirmado de nuevo — "burpees SIN SALTO" seguia bloqueando
+      // porque la palabra "burpee" seguia en la lista de riesgo, sin considerar que la propia
+      // prescripcion ya modificaba el movimiento para eliminar el impacto. Solucion definitiva por
+      // ahora (sin reconstruir otra lista fragil): separar movimientos INEQUIVOCOS (implican impacto/
+      // carga real SIEMPRE, sin importar contexto — bloquean de verdad) de movimientos AMBIGUOS
+      // (dependen de como se prescriban — solo generan advertencia/log, nunca bloquean el guardado).
+      // Esto reconoce el limite real de un validator basado en texto: la ambiguedad autentica no se
+      // resuelve con mas palabras, se resuelve NO bloqueando lo que no podemos clasificar con certeza.
+      const MOVIMIENTOS_INEQUIVOCOS_POR_ZONA: Record<string, string[]> = {
+        rodilla: ["carrera", "running", "correr", "trote", "sprint"],
+        hombro: ["press militar", "overhead press", "push press", "snatch", "jerk", "handstand", "hspu"],
+        lumbar: ["peso muerto", "deadlift", "sentadilla trasera", "back squat"],
       };
+      const MOVIMIENTOS_AMBIGUOS_POR_ZONA: Record<string, string[]> = {
+        rodilla: ["sentadilla", "squat", "salto", "jump", "zancada", "lunge", "burpee", "box jump", "double under", "step up", "step-up"],
+        hombro: ["muscle up", "muscle-up", "pull up", "pull-up", "dip"],
+        lumbar: ["clean", "buenos dias", "good morning"],
+      };
+      const advertenciasValidator: { dia: string; movement: string }[] = [];
       plan.sessions.forEach((s: any) => {
         const textoSesionValidator = normalizarTextoValidator(`${s.titulo || ""} ${s.descripcion || ""}`);
         hardConstraintsValidator.forEach((c: any) => {
           const movimientoNormalizado = normalizarTextoValidator(c.movement || "");
           if (!movimientoNormalizado) return;
-          const listaRiesgoZona = MOVIMIENTOS_ALTO_RIESGO_POR_ZONA[movimientoNormalizado];
-          if (listaRiesgoZona) {
-            // Es zona corporal generica — solo violacion si contiene un movimiento de riesgo conocido
-            if (listaRiesgoZona.some(mov => textoSesionValidator.includes(mov))) {
-              violaciones.push({ dia: s.dia, movement: c.movement });
-            }
-          } else {
-            // Es un ejercicio/movimiento especifico (no zona generica) — mantiene el match textual directo
-            if (textoSesionValidator.includes(movimientoNormalizado)) {
-              violaciones.push({ dia: s.dia, movement: c.movement });
-            }
+          const listaInequivoca = MOVIMIENTOS_INEQUIVOCOS_POR_ZONA[movimientoNormalizado];
+          const listaAmbigua = MOVIMIENTOS_AMBIGUOS_POR_ZONA[movimientoNormalizado];
+          if (listaInequivoca && listaInequivoca.some(mov => textoSesionValidator.includes(mov))) {
+            violaciones.push({ dia: s.dia, movement: c.movement });
+          } else if (listaAmbigua && listaAmbigua.some(mov => textoSesionValidator.includes(mov))) {
+            advertenciasValidator.push({ dia: s.dia, movement: c.movement });
+          } else if (!listaInequivoca && !listaAmbigua && textoSesionValidator.includes(movimientoNormalizado)) {
+            // Ejercicio/movimiento especifico (no zona generica) — mantiene el match directo como bloqueo
+            violaciones.push({ dia: s.dia, movement: c.movement });
           }
         });
       });
+      if (advertenciasValidator.length > 0) {
+        console.log("⚠️ PLAN VALIDATOR: coincidencias AMBIGUAS detectadas (no bloquean, quedan como aviso):", JSON.stringify(advertenciasValidator));
+      }
 
       if (violaciones.length > 0) {
         console.error(`🚨 PLAN VALIDATOR: ${violaciones.length} violacion(es) de hard constraint detectada(s):`, JSON.stringify(violaciones));

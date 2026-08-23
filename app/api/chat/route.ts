@@ -1909,6 +1909,21 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
 
     const debilidadInfo = (usuarioBuilder?.athlete_development || []).find((d: any) => d.nombre_visible === debilidad_relacionada);
 
+    // FORGE CONSTRAINT ENGINE — segunda defensa en el punto donde se materializa CADA sesion
+    // individual, nunca sustituto del Deterministic Plan Validator final. El Block Analyzer ya
+    // decidio la estructura semanal respetando restricciones, pero el Session Builder tambien
+    // debe recibirlas directamente — no confiamos en que la intencion heredada sea suficiente.
+    const hoyConstraintBuilder = new Date().toISOString().split('T')[0];
+    const { data: hardConstraintsBuilder } = await supabase.from("athlete_coaching_notes")
+      .select("movement,issue")
+      .eq("user_codigo", codigo)
+      .eq("constraint_level", "hard")
+      .in("status", ["pending", "considerada"])
+      .or(`valid_until.is.null,valid_until.gte.${hoyConstraintBuilder}`);
+    const restriccionesBuilderTexto = (hardConstraintsBuilder && hardConstraintsBuilder.length > 0)
+      ? `\n🚫 RESTRICCIONES ACTIVAS DEL ATLETA — OBLIGATORIO RESPETAR, NO SON SUGERENCIAS:\n${hardConstraintsBuilder.map((c: any) => `- Evitar "${c.movement}": ${c.issue}`).join("\n")}\nEstas restricciones vienen de una molestia/lesion real confirmada. La sesion que generes NO puede incluir estos movimientos ni cargas que los agraven, sin excepcion.`
+      : "";
+
     // FORGE ATHLETE SNAPSHOT — contexto real y auditable del atleta, elimina la duda de "¿usa mis datos?"
     // COLD-START SAFE: envuelto en try/catch propio, un usuario nuevo sin historial no debe bloquear el flujo.
     let snapshot: any = { ultimas_5_sesiones: [], sesiones_ultimos_7_dias: 0, volumen_carrera_7dias: 0, volumen_box_7dias: 0, marcas: {}, fatiga_actual: null };
@@ -1937,6 +1952,7 @@ CONTEXTO DEL BLOQUE: ${JSON.stringify(analisisSesion)}
 ESPECIALIDAD: ${usuarioBuilder?.especialidad || usuarioBuilder?.categoria}
 MARCAS DEL ATLETA: ${JSON.stringify(usuarioBuilder?.marcas_especificas || {})}
 ${debilidadInfo ? `DEBILIDAD A TRABAJAR HOY: ${debilidadInfo.nombre_visible} — ${debilidadInfo.diagnostico}` : ""}
+${restriccionesBuilderTexto}
 
 ZONAS DE FRECUENCIA CARDIACA REALES DEL ATLETA (usar SIEMPRE estos rangos de pulsaciones exactas, NUNCA
 uses porcentajes de FCmax genericos como "70-80% FCmax" — el atleta necesita el rango de ppm directo):

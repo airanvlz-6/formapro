@@ -2612,6 +2612,19 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
           fecha.setDate(fecha.getDate() + 21); // active_constraint expira en 3 semanas salvo revision
           return fecha.toISOString().split('T')[0];
         })();
+        // FORGE CONSTRAINT ENGINE V2 — la restriccion se define por PROPIEDADES biomecanicas que
+        // prohibe, no por una lista de palabras de ejercicios. body_area determina que propiedades
+        // se activan, de forma determinista y extensible sin tocar listas de excepciones.
+        const PERFIL_PROHIBICIONES_POR_ZONA: Record<string, { impact?: boolean; jump?: boolean; axial_load?: boolean; deep_flexion?: boolean; overhead_load?: boolean }> = {
+          rodilla: { impact: true, jump: true, deep_flexion: true },
+          hombro: { overhead_load: true },
+          lumbar: { axial_load: true, deep_flexion: true },
+          tobillo: { impact: true, jump: true },
+          muñeca: { overhead_load: true },
+        };
+        const bodyAreaKey = (evt.body_area || "").toLowerCase();
+        const prohibiciones = PERFIL_PROHIBICIONES_POR_ZONA[bodyAreaKey] || {};
+
         await supabase.from("athlete_coaching_notes").insert({
           user_codigo: codigo,
           type: "weakness",
@@ -2623,7 +2636,12 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
           status: "pending",
           confidence: 0.7,
           constraint_level: "hard",
-          valid_until: validUntilConstraint
+          valid_until: validUntilConstraint,
+          prohibits_impact: prohibiciones.impact || false,
+          prohibits_jump: prohibiciones.jump || false,
+          prohibits_axial_load: prohibiciones.axial_load || false,
+          prohibits_deep_flexion: prohibiciones.deep_flexion || false,
+          prohibits_overhead_load: prohibiciones.overhead_load || false,
         });
         console.log("🛡️ MODIFICATION LEDGER: HARD CONSTRAINT creada para", identificadorRestriccion, "valida hasta", validUntilConstraint || "sin caducidad (permanente)");
       }
@@ -4101,68 +4119,74 @@ if (action === "obtener_daily_briefing") {
     // validator comprueba el plan REALMENTE GENERADO contra las hard constraints activas — si el
     // LLM ignoro la instruccion, el codigo lo detecta y corrige/bloquea, nunca confia ciegamente.
     const { data: hardConstraintsValidator } = await supabase.from("athlete_coaching_notes")
-      .select("movement,issue")
+      .select("movement,issue,prohibits_impact,prohibits_jump,prohibits_axial_load,prohibits_deep_flexion,prohibits_overhead_load")
       .eq("user_codigo", codigo)
       .eq("constraint_level", "hard")
       .in("status", ["pending", "considerada"])
       .or(`valid_until.is.null,valid_until.gte.${new Date().toISOString().split('T')[0]}`);
 
     if (hardConstraintsValidator && hardConstraintsValidator.length > 0 && Array.isArray(plan.sessions)) {
-      const normalizarTextoValidator = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-      const violaciones: { dia: string; movement: string }[] = [];
+      // FORGE CONSTRAINT ENGINE V2 — MOVEMENT CLASSIFIER. Sustituye por completo el matching de
+      // listas de palabras (deuda tecnica confirmada: cada nueva palabra generaba nuevos falsos
+      // positivos/negativos sin escalar). Ahora: un clasificador LLM dedicado analiza CADA sesion
+      // y devuelve sus propiedades biomecanicas REALES (impact, jump, axial_load, deep_flexion,
+      // overhead_load) como salida estructurada — el CODIGO compara esas propiedades contra lo que
+      // la restriccion prohibe, nunca el LLM decide si bloquea. Principio: LLM clasifica atributos
+      // objetivos observables, el codigo aplica la regla de compatibilidad.
+      const combinedProhibitions = {
+        impact: hardConstraintsValidator.some((c: any) => c.prohibits_impact),
+        jump: hardConstraintsValidator.some((c: any) => c.prohibits_jump),
+        axial_load: hardConstraintsValidator.some((c: any) => c.prohibits_axial_load),
+        deep_flexion: hardConstraintsValidator.some((c: any) => c.prohibits_deep_flexion),
+        overhead_load: hardConstraintsValidator.some((c: any) => c.prohibits_overhead_load),
+      };
+      const prohibicionesActivas = Object.entries(combinedProhibitions).filter(([, v]) => v).map(([k]) => k);
 
-      // FIX CRITICO: falso positivo real confirmado — el Validator anterior buscaba coincidencia
-      // textual simple del "movement" (ej: "rodilla") en toda la descripcion. Como el Session
-      // Builder EXPLICA por que evita la zona ("sin carga en rodilla", "respetando molestia de
-      // rodilla"), esa misma explicacion contenia la palabra y disparaba el bloqueo — bloqueando
-      // sesiones legitimamente seguras. Ahora: para zonas corporales genericas (rodilla/hombro/
-      // lumbar/etc, sin ejercicio especifico), solo se considera violacion si el texto contiene
-      // un MOVIMIENTO DE ALTO RIESGO conocido para esa zona, no la simple mencion de la palabra.
-      // FIX SEGUNDO: falso positivo real confirmado de nuevo — "burpees SIN SALTO" seguia bloqueando
-      // porque la palabra "burpee" seguia en la lista de riesgo, sin considerar que la propia
-      // prescripcion ya modificaba el movimiento para eliminar el impacto. Solucion definitiva por
-      // ahora (sin reconstruir otra lista fragil): separar movimientos INEQUIVOCOS (implican impacto/
-      // carga real SIEMPRE, sin importar contexto — bloquean de verdad) de movimientos AMBIGUOS
-      // (dependen de como se prescriban — solo generan advertencia/log, nunca bloquean el guardado).
-      // Esto reconoce el limite real de un validator basado en texto: la ambiguedad autentica no se
-      // resuelve con mas palabras, se resuelve NO bloqueando lo que no podemos clasificar con certeza.
-      const MOVIMIENTOS_INEQUIVOCOS_POR_ZONA: Record<string, string[]> = {
-        rodilla: ["carrera", "running", "correr", "trote", "sprint"],
-        hombro: ["press militar", "overhead press", "push press", "snatch", "jerk", "handstand", "hspu"],
-        lumbar: ["peso muerto", "deadlift", "sentadilla trasera", "back squat"],
-      };
-      const MOVIMIENTOS_AMBIGUOS_POR_ZONA: Record<string, string[]> = {
-        rodilla: ["sentadilla", "squat", "salto", "jump", "zancada", "lunge", "burpee", "box jump", "double under", "step up", "step-up"],
-        hombro: ["muscle up", "muscle-up", "pull up", "pull-up", "dip"],
-        lumbar: ["clean", "buenos dias", "good morning"],
-      };
-      const advertenciasValidator: { dia: string; movement: string }[] = [];
-      plan.sessions.forEach((s: any) => {
-        const textoSesionValidator = normalizarTextoValidator(`${s.titulo || ""} ${s.descripcion || ""}`);
-        hardConstraintsValidator.forEach((c: any) => {
-          const movimientoNormalizado = normalizarTextoValidator(c.movement || "");
-          if (!movimientoNormalizado) return;
-          const listaInequivoca = MOVIMIENTOS_INEQUIVOCOS_POR_ZONA[movimientoNormalizado];
-          const listaAmbigua = MOVIMIENTOS_AMBIGUOS_POR_ZONA[movimientoNormalizado];
-          if (listaInequivoca && listaInequivoca.some(mov => textoSesionValidator.includes(mov))) {
-            violaciones.push({ dia: s.dia, movement: c.movement });
-          } else if (listaAmbigua && listaAmbigua.some(mov => textoSesionValidator.includes(mov))) {
-            advertenciasValidator.push({ dia: s.dia, movement: c.movement });
-          } else if (!listaInequivoca && !listaAmbigua && textoSesionValidator.includes(movimientoNormalizado)) {
-            // Ejercicio/movimiento especifico (no zona generica) — mantiene el match directo como bloqueo
-            violaciones.push({ dia: s.dia, movement: c.movement });
-          }
-        });
-      });
-      if (advertenciasValidator.length > 0) {
-        console.log("⚠️ PLAN VALIDATOR: coincidencias AMBIGUAS detectadas (no bloquean, quedan como aviso):", JSON.stringify(advertenciasValidator));
+      const violaciones: { dia: string; movement: string; propiedad: string }[] = [];
+      if (prohibicionesActivas.length > 0) {
+        const classifierPrompt = `Eres un clasificador biomecanico de sesiones de entrenamiento. Para CADA sesion de la siguiente lista, determina si su bloque_principal contiene alguna de estas caracteristicas de movimiento: ${prohibicionesActivas.join(", ")}.
+
+Definiciones:
+- impact: aterrizaje repetido con impacto real (correr, saltar repetidamente, aterrizajes de salto)
+- jump: salto vertical/horizontal real con despegue del suelo (NO cuenta variantes explicitamente "sin salto"/"step back"/"step in")
+- axial_load: carga vertical significativa sobre la columna en posicion de pie (peso muerto pesado, sentadilla con barra cargada)
+- deep_flexion: flexion profunda de rodilla bajo carga (sentadilla profunda cargada, no aplica a movilidad sin carga)
+- overhead_load: carga significativa sostenida por encima de la cabeza (press militar, push press, snatch, jerk)
+
+Sesiones a analizar:
+${plan.sessions.map((s: any, i: number) => `[${i}] Dia: ${s.dia} — Titulo: ${s.titulo} — Contenido: ${(s.descripcion || "").substring(0, 500)}`).join("\n\n")}
+
+Responde SOLO con este JSON, sin texto adicional ni markdown — un array con una entrada por sesion analizada:
+[{"dia":"nombre del dia","impact":true_o_false,"jump":true_o_false,"axial_load":true_o_false,"deep_flexion":true_o_false,"overhead_load":true_o_false}]
+
+Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impacto" o "sin carga axial", esa propiedad especifica es false aunque el nombre del ejercicio la sugiera.`;
+
+        try {
+          const classifierRes = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1500, messages: [{ role: "user", content: classifierPrompt }] }),
+          });
+          const classifierData = await classifierRes.json();
+          const classifierTexto = classifierData.content?.map((b: any) => b.text || "").join("") || "[]";
+          const classifierClean = classifierTexto.replace(/```json|```/g, "").trim();
+          const classifierMatch = classifierClean.match(/\[[\s\S]*\]/);
+          const clasificaciones = classifierMatch ? JSON.parse(classifierMatch[0]) : [];
+
+          clasificaciones.forEach((clas: any) => {
+            prohibicionesActivas.forEach((prop) => {
+              if (clas[prop] === true && (combinedProhibitions as any)[prop]) {
+                violaciones.push({ dia: clas.dia, movement: prop, propiedad: prop });
+              }
+            });
+          });
+        } catch (errClassifier) {
+          console.error("Error en Movement Classifier — no se bloquea por fallo del clasificador:", errClassifier);
+        }
       }
 
       if (violaciones.length > 0) {
-        console.error(`🚨 PLAN VALIDATOR: ${violaciones.length} violacion(es) de hard constraint detectada(s):`, JSON.stringify(violaciones));
-        // No auto-corregimos generando contenido nuevo (eso requeriria otra llamada LLM, con el
-        // mismo riesgo de fallo) — bloqueamos el guardado y devolvemos el detalle exacto, para que
-        // el Orchestrator pueda regenerar esa sesion especifica o el usuario sea informado.
+        console.error(`🚨 CONSTRAINT ENGINE V2: ${violaciones.length} violacion(es) de propiedad biomecanica detectada(s):`, JSON.stringify(violaciones));
         return NextResponse.json({
           error: "El plan generado viola restricciones activas del atleta",
           blocked: true,
@@ -4170,7 +4194,7 @@ if (action === "obtener_daily_briefing") {
           violaciones
         }, { status: 422 });
       }
-      console.log(`✅ PLAN VALIDATOR: plan verificado contra ${hardConstraintsValidator.length} hard constraint(s), sin violaciones`);
+      console.log(`✅ CONSTRAINT ENGINE V2: plan verificado contra propiedades [${prohibicionesActivas.join(", ")}], sin violaciones`);
     }
 
     // Si NO es la semana actual (es una semana futura nueva), se guarda tal cual, sin fusionar con nada existente

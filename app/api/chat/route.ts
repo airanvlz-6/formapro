@@ -4101,12 +4101,34 @@ if (action === "obtener_daily_briefing") {
       const normalizarTextoValidator = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
       const violaciones: { dia: string; movement: string }[] = [];
 
+      // FIX CRITICO: falso positivo real confirmado — el Validator anterior buscaba coincidencia
+      // textual simple del "movement" (ej: "rodilla") en toda la descripcion. Como el Session
+      // Builder EXPLICA por que evita la zona ("sin carga en rodilla", "respetando molestia de
+      // rodilla"), esa misma explicacion contenia la palabra y disparaba el bloqueo — bloqueando
+      // sesiones legitimamente seguras. Ahora: para zonas corporales genericas (rodilla/hombro/
+      // lumbar/etc, sin ejercicio especifico), solo se considera violacion si el texto contiene
+      // un MOVIMIENTO DE ALTO RIESGO conocido para esa zona, no la simple mencion de la palabra.
+      const MOVIMIENTOS_ALTO_RIESGO_POR_ZONA: Record<string, string[]> = {
+        rodilla: ["sentadilla", "squat", "salto", "jump", "carrera", "running", "zancada", "lunge", "burpee", "box jump", "double under", "step up", "step-up"],
+        hombro: ["press militar", "overhead press", "push press", "snatch", "jerk", "handstand", "hspu", "muscle up", "muscle-up", "pull up", "pull-up", "dip"],
+        lumbar: ["peso muerto", "deadlift", "clean", "buenos dias", "good morning", "sentadilla trasera", "back squat"],
+      };
       plan.sessions.forEach((s: any) => {
         const textoSesionValidator = normalizarTextoValidator(`${s.titulo || ""} ${s.descripcion || ""}`);
         hardConstraintsValidator.forEach((c: any) => {
           const movimientoNormalizado = normalizarTextoValidator(c.movement || "");
-          if (movimientoNormalizado && textoSesionValidator.includes(movimientoNormalizado)) {
-            violaciones.push({ dia: s.dia, movement: c.movement });
+          if (!movimientoNormalizado) return;
+          const listaRiesgoZona = MOVIMIENTOS_ALTO_RIESGO_POR_ZONA[movimientoNormalizado];
+          if (listaRiesgoZona) {
+            // Es zona corporal generica — solo violacion si contiene un movimiento de riesgo conocido
+            if (listaRiesgoZona.some(mov => textoSesionValidator.includes(mov))) {
+              violaciones.push({ dia: s.dia, movement: c.movement });
+            }
+          } else {
+            // Es un ejercicio/movimiento especifico (no zona generica) — mantiene el match textual directo
+            if (textoSesionValidator.includes(movimientoNormalizado)) {
+              violaciones.push({ dia: s.dia, movement: c.movement });
+            }
           }
         });
       });

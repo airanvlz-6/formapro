@@ -2156,9 +2156,13 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
     // (100% adherencia). Antes se exigia 100% para siquiera considerar el cierre, dejando semanas
     // incompletas "abiertas" indefinidamente. Ahora: si la semana termino cronologicamente (domingo real
     // ya paso segun Europe/Madrid), se cierra igualmente, calculando el resultado real (sea 100% o no).
+    // FIX CRITICO: mismo bug real que en check_week_closure — el domingo mismo (ultimo dia real de
+    // la semana) nunca cumplia "semana terminada cronologicamente" por la comparacion estrictamente
+    // "mayor que". Esta es una copia INDEPENDIENTE de la misma logica en close_week (ejecucion real),
+    // separada de check_week_closure (verificacion) — ambas necesitaban el mismo fix por separado.
     const domingoDeEstaSemana = new Date(lunesCierre);
     domingoDeEstaSemana.setDate(lunesCierre.getDate() + 6);
-    const semanaTerminadaCronologicamente = hoyCierreFecha.getTime() > domingoDeEstaSemana.getTime();
+    const semanaTerminadaCronologicamente = hoyCierreFecha.getTime() >= domingoDeEstaSemana.getTime();
 
     if (!todasCompletadas && !semanaTerminadaCronologicamente) {
       // La semana sigue en curso Y no esta completa — legitimamente no hay nada que cerrar todavia

@@ -3019,8 +3019,16 @@ IMPORTANTE sobre "dia": si el coach esta claramente adaptando la sesion de HOY (
       // Esto resuelve el hallazgo real de que no podiamos recuperar el contenido original tras
       // una modificacion incorrecta — ahora siempre queda un registro inmutable del "antes".
       const normalizarDiaLedger = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-      const { data: planOriginalLedger } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", weekStartDetector).single();
+      const { data: planOriginalLedger } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", weekStartDetector).maybeSingle();
       const sesionOriginal = planOriginalLedger?.sessions?.find((s: any) => normalizarDiaLedger(s.dia) === normalizarDiaLedger(diaRealDetectado));
+
+      // GUARD: si no existe una sesion real que modificar (ej: la semana nueva aun no se ha
+      // generado), no tiene sentido crear un pending_action — no hay nada que confirmar todavia.
+      // Correcto por diseño: evita banners de "cambio de sesion" sobre dias que no existen aun.
+      if (!sesionOriginal) {
+        console.log(`🛡️ SAFETY NET: no existe sesion real para ${diaRealDetectado} en week_start=${weekStartDetector} — no se crea pending_action`);
+        return NextResponse.json({ ok: true, detectado: false, motivo: "sesion_no_existe_aun" });
+      }
 
       // PASO 3 — generar la sesion nueva con un SESSION BUILDER real (misma calidad que el
       // Orchestrator), no un resumen extraido de la conversacion. Esto corrige el hallazgo de que

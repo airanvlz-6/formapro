@@ -1914,9 +1914,36 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
   if (action === "construir_sesion_dia") {
     // FORGE ORCHESTRATOR — Paso 3: Session Builder. Genera el contenido COMPLETO de UN solo dia.
     console.log(`CHECKPOINT construir_sesion_dia: ENTRA para dia=${datos?.dia}`);
-    const { dia, tipo, titulo_breve, analisis: analisisSesion, debilidad_relacionada, focus, volume, intensity, conditioning, diaAnterior, diaSiguiente, trabaja_debilidad } = datos;
+    const { dia, tipo, titulo_breve, analisis: analisisSesion, debilidad_relacionada, focus, volume, intensity, conditioning, diaAnterior: diaAnteriorRecibido, diaSiguiente, trabaja_debilidad } = datos;
     const { data: usuarioBuilder } = await supabase.from("usuarios").select("especialidad,categoria,perfil,marcas_especificas,athlete_development,datos_entrenamiento").eq("codigo", codigo).single();
     console.log(`CHECKPOINT construir_sesion_dia [${dia}]: usuarioBuilder obtenido`);
+
+    // FIX CRITICO: el frontend SIEMPRE envia diaAnterior=null para el lunes (primer dia de la
+    // semana que se esta generando), aunque el dato real existe en la semana PREVIA ya guardada.
+    // Bug real confirmado: el LLM, al recibir null, INVENTABA una referencia plausible al dia
+    // anterior ("sesion box previa" cuando en realidad fue carrera) en vez de omitir la mencion.
+    // Ahora: si es lunes y no llega diaAnterior, consultamos el domingo real de la semana anterior.
+    const normalizarDiaBuilder = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    let diaAnterior = diaAnteriorRecibido;
+    if (!diaAnterior && normalizarDiaBuilder(dia) === "lunes") {
+      try {
+        const hoyParaAnteriorBuilder = new Date();
+        const diaSemHoyBuilder = hoyParaAnteriorBuilder.getDay() || 7;
+        const lunesEstaSemanaBuilder = new Date(hoyParaAnteriorBuilder);
+        lunesEstaSemanaBuilder.setDate(hoyParaAnteriorBuilder.getDate() - diaSemHoyBuilder + 1);
+        const lunesSemanaAnteriorBuilder = new Date(lunesEstaSemanaBuilder);
+        lunesSemanaAnteriorBuilder.setDate(lunesEstaSemanaBuilder.getDate() - 7);
+        const weekStartAnteriorBuilder = lunesSemanaAnteriorBuilder.toISOString().split('T')[0];
+        const { data: planSemanaAnteriorBuilder } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", weekStartAnteriorBuilder).maybeSingle();
+        const domingoAnteriorReal = planSemanaAnteriorBuilder?.sessions?.find((s: any) => normalizarDiaBuilder(s.dia) === "domingo");
+        if (domingoAnteriorReal) {
+          diaAnterior = { dia: "domingo", titulo_breve: domingoAnteriorReal.titulo, focus: domingoAnteriorReal.tipo, intensity: null };
+          console.log(`CHECKPOINT construir_sesion_dia [lunes]: dia anterior real recuperado de semana previa — "${domingoAnteriorReal.titulo}"`);
+        }
+      } catch (errDiaAnteriorBuilder) {
+        console.error("Error recuperando dia anterior real para lunes:", errDiaAnteriorBuilder);
+      }
+    }
 
     const debilidadInfo = (usuarioBuilder?.athlete_development || []).find((d: any) => d.nombre_visible === debilidad_relacionada);
 
@@ -1978,7 +2005,7 @@ Volumen carrera ultimos 7 dias: ${snapshot.volumen_carrera_7dias} sesiones
 Volumen box ultimos 7 dias: ${snapshot.volumen_box_7dias} sesiones
 
 CONTEXTO DE DIAS ADYACENTES (evita repetir el mismo estimulo/intensidad en dias consecutivos):
-${diaAnterior ? `Dia anterior (${diaAnterior.dia}): ${diaAnterior.focus || diaAnterior.titulo_breve}, intensidad ${diaAnterior.intensity || "no especificada"}` : "Sin dato de dia anterior"}
+${diaAnterior ? `Dia anterior (${diaAnterior.dia}): ${diaAnterior.focus || diaAnterior.titulo_breve}, intensidad ${diaAnterior.intensity || "no especificada"}` : "Sin dato de dia anterior — NO menciones ni inventes referencia alguna a una sesion anterior en el campo por_que, simplemente omite esa mencion."}
 ${diaSiguiente ? `Dia siguiente (${diaSiguiente.dia}): ${diaSiguiente.focus || diaSiguiente.titulo_breve}, intensidad ${diaSiguiente.intensity || "no especificada"}` : "Sin dato de dia siguiente"}
 Si el dia anterior o siguiente tiene el mismo foco/intensidad que hoy, AJUSTA para dar variedad real
 (diferente ritmo, diferente distancia, diferente enfoque) — nunca generes dos dias casi identicos seguidos.

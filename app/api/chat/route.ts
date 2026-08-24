@@ -2005,7 +2005,11 @@ Volumen carrera ultimos 7 dias: ${snapshot.volumen_carrera_7dias} sesiones
 Volumen box ultimos 7 dias: ${snapshot.volumen_box_7dias} sesiones
 
 CONTEXTO DE DIAS ADYACENTES (evita repetir el mismo estimulo/intensidad en dias consecutivos):
-${diaAnterior ? `Dia anterior (${diaAnterior.dia}): ${diaAnterior.focus || diaAnterior.titulo_breve}, intensidad ${diaAnterior.intensity || "no especificada"}${diaAnterior.relacion_dia_anterior ? `. Relacion ya decidida por el planificador: ${diaAnterior.relacion_dia_anterior}` : ""}` : "Sin dato de dia anterior — NO menciones ni inventes referencia alguna a una sesion anterior en el campo por_que, simplemente omite esa mencion."}
+${diaAnterior ? `Dia anterior (${diaAnterior.dia}): ${diaAnterior.focus || diaAnterior.titulo_breve}, intensidad ${diaAnterior.intensity || "no especificada"}${diaAnterior.relacion_dia_anterior ? `
+
+RELACIÓN ENTRE DÍAS — DECISIÓN DEL WEEK PLANNER:
+${diaAnterior.relacion_dia_anterior}
+Esta relación es una decisión estructural YA TOMADA por el planificador. Debes ejecutarla al construir esta sesión — no la reinterpretes ni la sustituyas por otra relación, ni inventes una relación diferente basándote en el contenido que estés generando.` : ""}` : "Sin dato de dia anterior — NO menciones ni inventes referencia alguna a una sesion anterior en el campo por_que, simplemente omite esa mencion."}
 ${diaSiguiente ? `Dia siguiente (${diaSiguiente.dia}): ${diaSiguiente.focus || diaSiguiente.titulo_breve}, intensidad ${diaSiguiente.intensity || "no especificada"}` : "Sin dato de dia siguiente"}
 Si el dia anterior o siguiente tiene el mismo foco/intensidad que hoy, AJUSTA para dar variedad real
 (diferente ritmo, diferente distancia, diferente enfoque) — nunca generes dos dias casi identicos seguidos.

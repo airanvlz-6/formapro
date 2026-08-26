@@ -154,7 +154,7 @@ INTENCIONES POSIBLES Y SU FAMILIA:
 - REPORTE_ENTRENO (familia WRITE): reporta haber completado un entrenamiento
 - REPORTE_SUENO (familia WRITE): reporta métricas de sueño/recuperación nocturna
 - MODIFICAR_PLAN (familia PLAN): pide cambiar, mover, o ajustar UNA sesion especifica o su disponibilidad puntual
-- GENERAR_SEMANA_COMPLETA (familia PLAN): pide generar, crear, planificar o preparar la SEMANA COMPLETA (7 dias) de entrenamiento, ya sea la proxima semana o una nueva planificacion completa
+- GENERAR_SEMANA_COMPLETA (familia PLAN): pide generar, crear, planificar o preparar la SEMANA COMPLETA (7 dias) de entrenamiento, ya sea la proxima semana o una nueva planificacion completa. INCLUYE TAMBIEN confirmaciones cortas de arranque cuando el mensaje ANTERIOR del asistente proponia empezar la planificacion (ej: "confirmo esta estructura", "arrancamos", "adelante", "vale, empezamos", "si, dale") — estas frases equivalen a pedir que se genere la semana ahora.
 - COACHING (familia COACHING): pregunta abierta que requiere razonamiento (por qué, cómo mejorar, qué opinas, explicación técnica)
 - META (familia META): preguntas sobre la cuenta, premium, configuración de Forge, no sobre entrenamiento
 - OTRO (familia COACHING): cualquier cosa que no encaje claramente en las anteriores
@@ -840,6 +840,79 @@ export async function POST(req: NextRequest) {
       console.error("Error en completar_onboarding:", err);
       return NextResponse.json({ error: "Error: " + err.message }, { status: 500 });
     }
+  }
+
+  // FORGE ONBOARDING STATE MACHINE — define, por modo, los campos OBLIGATORIOS del nucleo comun
+// + especificos de cada modo. Es la unica fuente de verdad de "que hace falta" — nunca el LLM.
+const CAMPOS_REQUERIDOS_POR_MODO: Record<string, string[]> = {
+  supervision: ["categoria", "objetivo", "edad", "nivel"],
+  coach: ["categoria", "objetivo", "edad", "nivel", "disponibilidad", "duracion_sesion"],
+  focus: ["categoria", "objetivo", "edad", "nivel", "disponibilidad", "duracion_sesion", "disciplina_externa", "dias_externos", "fc_max_o_metodo"],
+};
+
+// FORGE ONBOARDING STATE MACHINE — calcula el estado REAL consultando las tablas canonicas
+// (usuarios, athlete_training_sources), nunca confiando en lo que el LLM "cree" completado.
+async function calcularEstadoOnboarding(supabase: any, codigo: string, mode: string) {
+  const { data: usuarioOnb } = await supabase.from("usuarios").select("perfil,categoria,objetivo_principal,distribucion_semanal").eq("codigo", codigo).maybeSingle();
+  const { data: fuentesOnb } = await supabase.from("athlete_training_sources").select("*").eq("user_codigo", codigo).eq("activo", true);
+
+  const perfilOnb = usuarioOnb?.perfil || {};
+  const completedFields: Record<string, boolean> = {};
+  completedFields.categoria = !!usuarioOnb?.categoria;
+  completedFields.objetivo = !!(usuarioOnb?.objetivo_principal?.descripcion || perfilOnb.objetivo_detalle);
+  completedFields.edad = !!perfilOnb.edad;
+  completedFields.nivel = !!perfilOnb.nivel;
+  completedFields.disponibilidad = !!usuarioOnb?.distribucion_semanal;
+  completedFields.duracion_sesion = !!perfilOnb.duracion;
+  completedFields.disciplina_externa = !!(fuentesOnb || []).find((f: any) => f.owner === "external");
+  completedFields.dias_externos = !!(fuentesOnb || []).find((f: any) => f.owner === "external" && f.dias?.length > 0);
+  completedFields.fc_max_o_metodo = !!perfilOnb.fc_max || perfilOnb.fc_max_metodo === "formula_edad";
+
+  const camposRequeridos = CAMPOS_REQUERIDOS_POR_MODO[mode] || CAMPOS_REQUERIDOS_POR_MODO.supervision;
+  const missingFields = camposRequeridos.filter(c => !completedFields[c]);
+
+  return { completedFields, missingFields, camposRequeridos };
+}
+
+if (action === "obtener_estado_onboarding") {
+    const { mode } = datos;
+    const { data: estadoExistente } = await supabase.from("onboarding_state").select("*").eq("user_codigo", codigo).maybeSingle();
+    const modoReal = estadoExistente?.mode || mode || "supervision";
+    const { completedFields, missingFields } = await calcularEstadoOnboarding(supabase, codigo, modoReal);
+
+    const statusReal = missingFields.length > 0 ? "in_progress" : (estadoExistente?.confirmed ? "completed" : "awaiting_confirmation");
+
+    await supabase.from("onboarding_state").upsert({
+      user_codigo: codigo,
+      mode: modoReal,
+      status: statusReal,
+      completed_fields: completedFields,
+      missing_fields: missingFields,
+      confirmed: estadoExistente?.confirmed || false,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_codigo" });
+
+    return NextResponse.json({ mode: modoReal, status: statusReal, completedFields, missingFields, confirmed: estadoExistente?.confirmed || false });
+  }
+
+  if (action === "confirmar_onboarding") {
+    // Confirmacion EXPLICITA del resumen final — solo aqui se marca completed. Guard determinista:
+    // si aun faltan campos requeridos, se rechaza sin importar que el frontend lo intente.
+    const { mode } = datos;
+    const { completedFields, missingFields } = await calcularEstadoOnboarding(supabase, codigo, mode);
+    if (missingFields.length > 0) {
+      return NextResponse.json({ ok: false, error: "Faltan campos obligatorios", missingFields }, { status: 400 });
+    }
+    await supabase.from("onboarding_state").upsert({
+      user_codigo: codigo,
+      mode,
+      status: "completed",
+      completed_fields: completedFields,
+      missing_fields: [],
+      confirmed: true,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_codigo" });
+    return NextResponse.json({ ok: true });
   }
 
   if (action === "guardar_training_sources") {

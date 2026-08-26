@@ -1321,9 +1321,7 @@ const elegirEspecialidad=(label:string)=>{
   const iniciarChat=async(perfil:Record<string,string|string[]>)=>{
     setPantalla("chat");setGenerando(true);
     const catObj=CATEGORIAS.find((c:Categoria)=>c.id===categoria)!;
-    // FIX: si venimos del onboarding de Focus, reutilizar el codigo YA RESERVADO (bajo el que
-    // guardamos athlete_training_sources), nunca generar uno nuevo distinto.
-    let codigo=codigoPersonal.trim().length>=5?codigoPersonal.trim():(codigoFocusReservado||generarCodigo());
+    let codigo=codigoPersonal.trim().length>=5?codigoPersonal.trim():generarCodigo();
     if(codigoPersonal.trim().length>=5){
       const dataVerify=await apiCall({action:"recuperar_usuario",codigo});
       if(!dataVerify.error){setErrorCodigoPersonal("Este código ya existe, elige otro.");setGenerando(false);setPantalla("final");return;}
@@ -1372,6 +1370,16 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
       // causando que guardar_plan_semana preguntara "no tengo tu disponibilidad" aunque ya existiera.
       if(distribucionAutoFocus) setDistribucionSemanal(distribucionAutoFocus);
       setCodigoUsuario(codigo);
+      // FIX ARQUITECTONICO DEFINITIVO: guardar athlete_training_sources AQUI, con el "codigo" real
+      // ya resuelto (personal o generado), nunca antes — este es el UNICO punto del flujo donde el
+      // codigo definitivo existe con certeza total. Resuelve de raiz el bug real (confirmado con
+      // varios perfiles de prueba) de disciplinas guardadas bajo codigos fantasma nunca usados.
+      if(modoEntrada==="focus"&&focusDisciplinaExterna){
+        await apiCall({action:"guardar_training_sources",codigo,datos:{disciplinas:[
+          {disciplina:focusDisciplinaExterna,owner:"external",dias:focusDiasExternos,duracion_habitual:focusDuracionExterna,intensidad_habitual:focusIntensidadExterna,tipo_trabajo:focusTipoTrabajoExterna,variable:focusVariable},
+          {disciplina:focusDisciplinaForge,owner:"forge",objetivo:focusObjetivoForge,prioridad:focusPrioridad}
+        ]}});
+      }
       // FORGE ONBOARDING STATE MACHINE — el formulario ya cubre todos los campos requeridos (incluida
       // FC condicional). Confirmamos el onboarding en SILENCIO, sin pantalla intermedia — si por algun
       // motivo faltara algo real, el usuario simplemente sigue en modo "in_progress" sin bloquear el
@@ -2362,17 +2370,13 @@ ${testStr}`}]});
               </div>
               <button onClick={async()=>{
                 setFocusGuardando(true);
-                // FIX CRITICO REAL (segundo intento): confirmado con evidencia — el fix anterior seguia
-                // ignorando codigoPersonal (el codigo que el usuario puede escribir manualmente en
-                // el formulario), generando siempre un codigo aleatorio nuevo con generarCodigo().
-                // Ahora se respeta codigoPersonal si el usuario lo definio, exactamente igual que
-                // hace iniciarChat — ambos puntos deben calcular el codigo con la MISMA logica.
-                const nuevoCodigo=codigoPersonal.trim().length>=5?codigoPersonal.trim():generarCodigo();
-                setCodigoFocusReservado(nuevoCodigo);
-                await apiCall({action:"guardar_training_sources",codigo:nuevoCodigo,datos:{disciplinas:[
-                  {disciplina:focusDisciplinaExterna,owner:"external",dias:focusDiasExternos,duracion_habitual:focusDuracionExterna,intensidad_habitual:focusIntensidadExterna,tipo_trabajo:focusTipoTrabajoExterna,variable:focusVariable},
-                  {disciplina:focusDisciplinaForge,owner:"forge",objetivo:focusObjetivoForge,prioridad:focusPrioridad}
-                ]}});
+                // FIX ARQUITECTONICO DEFINITIVO: confirmado con evidencia total — el codigo personal
+                // (codigoPersonal) se escribe en la ULTIMA pantalla del flujo completo (justo antes
+                // de iniciarChat), mucho DESPUES de este boton (paso 4 de 4 del onboarding de Focus).
+                // En este punto codigoPersonal SIEMPRE esta vacio, sin importar cuantas veces
+                // "arreglemos" la logica de fallback aqui. La solucion real: NO guardar nada todavia,
+                // solo dejar los datos en estado de React — el guardado real ocurre en iniciarChat,
+                // cuando el codigo definitivo ya existe con certeza.
                 setModoEntrada("focus");
                 // FIX: en vez de ir a "categoria" (que preguntaria de nuevo que tipo de atleta eres,
                 // sobrescribiendo lo ya configurado en Focus), mapeamos la disciplina que escribio el

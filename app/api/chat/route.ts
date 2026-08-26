@@ -1695,6 +1695,8 @@ async function buildAthleteSnapshot(supabase: any, codigo: string) {
 if (action === "analizar_bloque_semana") {
     // FORGE ORCHESTRATOR — Paso 1: Block Analyzer. Solo decide estructura, no genera entrenamientos.
     const estado = await generarEstadoCanonico(supabase, codigo);
+    // FORGE FOCUS — contrato determinista de disciplinas externas, consultado ANTES del prompt.
+    const focusContext = await buildFocusContext(supabase, codigo);
     const { data: usuarioAnalyzer } = await supabase.from("usuarios").select("ciclo_actual,athlete_development,distribucion_semanal,categoria,especialidad,objetivo_principal,perfil").eq("codigo", codigo).single();
 
     const debilidadesActivas = (usuarioAnalyzer?.athlete_development || []).filter((d: any) => d.estado !== "resuelta");
@@ -1780,6 +1782,13 @@ Disponibilidad: ${usuarioAnalyzer?.distribucion_semanal || "no especificada"}
 ${metodosYaProbadosTexto}
 ${restriccionesTexto}
 ${coachingNotesTexto}
+${focusContext.esModoFocus ? `
+🎯 FORGE FOCUS ACTIVO — REGLA OBLIGATORIA E INQUEBRANTABLE:
+Este atleta tiene entrenamiento EXTERNO gestionado por un tercero (entrenador/box). Tú SOLO gestionas: ${focusContext.disciplinasForge.map((d: any) => d.disciplina).join(", ")}.
+Disciplina(s) EXTERNA(S) — NUNCA prescribas ni modifiques contenido para estos días, trátalos como carga externa ya ocupada:
+${focusContext.disciplinasExternas.map((d: any) => `- ${d.disciplina}: días ${(d.dias || []).join(", ")}, intensidad habitual ${d.intensidad_habitual || "no especificada"}, duración ${d.duracion_habitual || "no especificada"}${d.variable ? " (puede variar bastante día a día)" : ""}`).join("\n")}
+${focusContext.cargaExternaReciente.length > 0 ? `\nCarga externa REAL reportada recientemente por el atleta (últimos 7 días):\n${focusContext.cargaExternaReciente.map((r: any) => `- ${r.fecha}: ${r.disciplina}, ${r.duracion || "?"}min, RPE ${r.intensidad_percibida || "?"}, tipo: ${r.tipo || "no especificado"}`).join("\n")}` : "\nSin reportes recientes de carga externa — asume incertidumbre y aplica margen de seguridad conservador en los días adyacentes a la disciplina externa."}
+Distribuye los días de "${focusContext.disciplinasForge.map((d: any) => d.disciplina).join(", ")}" en los días LIBRES, considerando la carga externa (conocida o incierta) para no acumular fatiga excesiva en días consecutivos.` : ""}
 ${estado.athlete_state?.estado && estado.athlete_state.estado !== "normal" ? `
 🔴 ESTADO DEL ATLETA — RESTRICCIÓN ACTIVA (${estado.athlete_state.estado.toUpperCase()}) desde ${estado.athlete_state.desde}, motivo: ${estado.athlete_state.motivo}. Esta semana debe planificarse como semana de gestión de restricción: prioriza mantenimiento/adaptación sobre progresión de carga, respeta estrictamente las restricciones duras listadas arriba, y considera reducir el volumen/intensidad global hasta que el atleta confirme resolución. NO trates esta semana como una semana normal del bloque.` : ""}
 

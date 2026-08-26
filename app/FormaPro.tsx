@@ -1327,7 +1327,17 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
       // mensaje visible del usuario en el historial — se sustituye por un texto neutro discreto.
       const hist=[{role:"user",content:"[Inicio de conversación]"},{role:"assistant",content:texto}];
       setMensajes([{role:"assistant",content:texto}]);setHistorial(hist);setMsgCount(1);setEmailGuardado(!!email);setFechaRegistro(new Date().toISOString());
-      await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:espKey||categoria,perfil,rutina:texto,historial:hist,marcas:[],email:email||null,admin:false,premium:false,modo_entrada:modoEntrada}});
+      // FIX FORGE FOCUS: si el atleta ya nos dio los dias de su disciplina externa (onboarding) y
+      // cuantos dias puede entrenar la disciplina Forge (formulario general), ya tenemos informacion
+      // suficiente para DEDUCIR sus dias libres reales — nunca dejar distribucion_semanal vacia
+      // cuando el dato es matematicamente derivable, evita que el Coach pregunte algo que ya sabemos.
+      let distribucionAutoFocus="";
+      if(modoEntrada==="focus"&&focusDiasExternos.length>0){
+        const TODOS_DIAS=["lunes","martes","miercoles","jueves","viernes","sabado","domingo"];
+        const diasLibres=TODOS_DIAS.filter(d=>!focusDiasExternos.includes(d));
+        distribucionAutoFocus=`${focusDisciplinaForge}: días libres sugeridos ${diasLibres.join(", ")} (el atleta entrena ${focusDisciplinaExterna} los días ${focusDiasExternos.join(", ")}) — observaciones: distribución sugerida automáticamente, confirmar con el atleta antes de generar la primera semana.`;
+      }
+      await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:espKey||categoria,perfil,rutina:texto,historial:hist,marcas:[],email:email||null,admin:false,premium:false,modo_entrada:modoEntrada,distribucion_semanal:distribucionAutoFocus||undefined}});
       setCodigoUsuario(codigo);
     }catch{setMensajes([{role:"assistant",content:"Error de conexion. Por favor recarga."}]);}
     finally{setGenerando(false);setTimeout(()=>inputRef.current?.focus(),300);}

@@ -3468,6 +3468,72 @@ Mensaje: "${mensaje}"
     return NextResponse.json({ ok: true, resuelto: true, nuevoEstado: "reassessment" });
   }
 
+  if (action === "verificar_carga_externa_deterministico") {
+    // FORGE FOCUS — SAFETY NET Nivel 1: detecta reportes de carga externa (disciplina que Forge
+    // NO gestiona) en el mensaje del usuario. Mismo patron ya usado para sueno/PRs/sesiones: el
+    // LLM nunca decide si se guarda, un parser dedicado analiza el mensaje real y lo persiste de
+    // forma determinista. Solo se dispara si el atleta esta en modo Focus (tiene disciplinas externas).
+    const { mensaje } = datos;
+    if (!mensaje || mensaje.trim().length < 10) return NextResponse.json({ ok: true, detectado: false });
+
+    const focusContextCarga = await buildFocusContext(supabase, codigo);
+    if (!focusContextCarga.esModoFocus) return NextResponse.json({ ok: true, detectado: false, motivo: "no_es_modo_focus" });
+
+    const nombresDisciplinasExternas = focusContextCarga.disciplinasExternas.map((d: any) => d.disciplina);
+    const cargaPrompt = `Analiza este mensaje de un atleta. Determina si esta reportando haber completado una sesion de alguna de estas disciplinas EXTERNAS (gestionadas por otro entrenador, no por ti): ${nombresDisciplinasExternas.join(", ")}.
+
+Responde SOLO con este JSON, sin texto adicional ni markdown:
+{"es_reporte_externo":true_o_false,"disciplina":"nombre exacto de la lista o null","duracion_minutos":numero_o_null,"intensidad_percibida":numero_1_a_10_o_null,"tipo":"breve descripcion del tipo de trabajo o null","fatiga_post":"baja|media|alta|null"}
+
+Mensaje: "${mensaje}"
+
+"es_reporte_externo" debe ser true SOLO si claramente reporta haber completado una sesion de esas disciplinas especificas. Extrae SOLO datos que el mensaje contenga explicitamente, nunca inventes valores.`;
+
+    try {
+      const cargaRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 300, messages: [{ role: "user", content: cargaPrompt }] }),
+      });
+      const cargaData = await cargaRes.json();
+      const cargaTexto = cargaData.content?.map((b: any) => b.text || "").join("") || "{}";
+      const cargaClean = cargaTexto.replace(/```json|```/g, "").trim();
+      const cargaMatch = cargaClean.match(/\{[\s\S]*\}/);
+      if (!cargaMatch) return NextResponse.json({ ok: true, detectado: false });
+
+      const extraidoCarga = JSON.parse(cargaMatch[0]);
+      if (!extraidoCarga.es_reporte_externo || !extraidoCarga.disciplina) {
+        return NextResponse.json({ ok: true, detectado: false });
+      }
+
+      const hoyCargaExterna = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+      // Calidad de dato: si tenemos duracion+intensidad es "estimated", si solo confirmo que entreno sin detalle es "unknown"
+      const loadQuality = (extraidoCarga.duracion_minutos && extraidoCarga.intensidad_percibida) ? "estimated" : "unknown";
+
+      const { error: errorCargaExterna } = await supabase.from("external_training_records").insert({
+        user_codigo: codigo,
+        fecha: hoyCargaExterna,
+        disciplina: extraidoCarga.disciplina,
+        duracion: extraidoCarga.duracion_minutos || null,
+        intensidad_percibida: extraidoCarga.intensidad_percibida || null,
+        tipo: extraidoCarga.tipo || null,
+        fatiga_post: extraidoCarga.fatiga_post || null,
+        source: "user_report",
+        load_quality: loadQuality,
+      });
+      if (errorCargaExterna) {
+        console.error("Error guardando carga externa:", errorCargaExterna);
+        return NextResponse.json({ ok: true, detectado: true, guardado: false });
+      }
+
+      console.log(`🛡️ FOCUS EXTERNAL LOAD: reporte de ${extraidoCarga.disciplina} detectado y guardado (calidad: ${loadQuality})`);
+      return NextResponse.json({ ok: true, detectado: true, guardado: true, disciplina: extraidoCarga.disciplina, fecha: hoyCargaExterna });
+    } catch (err: any) {
+      console.error("Error en verificar_carga_externa_deterministico:", err);
+      return NextResponse.json({ ok: true, detectado: false });
+    }
+  }
+
   if (action === "guardar_readiness_checkin") {
     // FORGE READINESS CHECKIN — V1: captura pura del estado percibido al despertar, un toque,
     // sin LLM ni interpretacion. La correlacion con datos objetivos (HRV, sueño, FC) vive en

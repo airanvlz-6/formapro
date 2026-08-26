@@ -1689,6 +1689,13 @@ const forgeValidator=(texto:string):string=>{
             console.log("🛡️ Session safety net: entreno detectado y registrado automaticamente");
           }
         });
+        // FORGE FOCUS — detecta reportes de carga externa (disciplina que Forge NO gestiona) y los
+        // guarda deterministicamente. Solo actua si el atleta esta en modo Focus.
+        apiCall({action:"verificar_carga_externa_deterministico",codigo:codigoUsuario,datos:{mensaje:texto}}).then((resCargaExt:any)=>{
+          if(resCargaExt?.detectado&&resCargaExt?.guardado){
+            console.log("🛡️ Focus external load: carga externa registrada -",resCargaExt.disciplina);
+          }
+        });
       }
 
       // FORGE PENDING ACTIONS — deteccion 100% deterministica de confirmacion (regex simple), nunca

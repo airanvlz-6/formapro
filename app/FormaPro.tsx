@@ -600,6 +600,7 @@ export default function Forge() {
   const [onboardingFcMin,setOnboardingFcMin]=useState("");
   const [onboardingFcConoce,setOnboardingFcConoce]=useState<boolean|null>(null);
   const [onboardingConfirmando,setOnboardingConfirmando]=useState(false);
+  const [codigoFocusReservado,setCodigoFocusReservado]=useState<string|null>(null);
   const [mensajes,setMensajes]=useState<{role:string;content:string}[]>([]);
   const [historial,setHistorial]=useState<{role:string;content:string}[]>([]);
   const [input,setInput]=useState("");
@@ -1309,7 +1310,9 @@ const elegirEspecialidad=(label:string)=>{
   const iniciarChat=async(perfil:Record<string,string|string[]>)=>{
     setPantalla("chat");setGenerando(true);
     const catObj=CATEGORIAS.find((c:Categoria)=>c.id===categoria)!;
-    let codigo=codigoPersonal.trim().length>=5?codigoPersonal.trim():generarCodigo();
+    // FIX: si venimos del onboarding de Focus, reutilizar el codigo YA RESERVADO (bajo el que
+    // guardamos athlete_training_sources), nunca generar uno nuevo distinto.
+    let codigo=codigoPersonal.trim().length>=5?codigoPersonal.trim():(codigoFocusReservado||generarCodigo());
     if(codigoPersonal.trim().length>=5){
       const dataVerify=await apiCall({action:"recuperar_usuario",codigo});
       if(!dataVerify.error){setErrorCodigoPersonal("Este código ya existe, elige otro.");setGenerando(false);setPantalla("final");return;}
@@ -2346,8 +2349,12 @@ ${testStr}`}]});
               </div>
               <button onClick={async()=>{
                 setFocusGuardando(true);
-                const nuevoCodigo=codigoUsuario||generarCodigo();
-                if(!codigoUsuario) setCodigoUsuario(nuevoCodigo);
+                // FIX CRITICO: bug real confirmado — antes se generaba un codigo aqui, y otro
+                // DISTINTO se generaba despues en iniciarChat (codigoUsuario aun no existia en este
+                // punto), guardando athlete_training_sources bajo un codigo que nunca se usaba
+                // realmente. Ahora se genera UNA sola vez, reservado en codigoFocusReservado.
+                const nuevoCodigo=generarCodigo();
+                setCodigoFocusReservado(nuevoCodigo);
                 await apiCall({action:"guardar_training_sources",codigo:nuevoCodigo,datos:{disciplinas:[
                   {disciplina:focusDisciplinaExterna,owner:"external",dias:focusDiasExternos,duracion_habitual:focusDuracionExterna,intensidad_habitual:focusIntensidadExterna,tipo_trabajo:focusTipoTrabajoExterna,variable:focusVariable},
                   {disciplina:focusDisciplinaForge,owner:"forge",objetivo:focusObjetivoForge,prioridad:focusPrioridad}

@@ -26,7 +26,7 @@ const FORMULARIOS: Record<string, Pregunta[]> = {
     { id: "nivel", label: "¿Cual es tu experiencia en carrera?", tipo: "opciones", opciones: ["Inicio ahora (0-3 meses)", "Principiante (3-12 meses)", "Intermedio (1-3 años)", "Avanzado (+3 años)"] },
     { id: "distancia_objetivo", label: "¿Cual es tu distancia objetivo?", tipo: "opciones", opciones: ["5K", "10K", "Media maratón (21K)", "Maratón (42K)", "Trail / Ultra", "Sin distancia fija"] },
     
-    { id: "dias", label: "¿Cuántos días por semana puedes entrenar?", tipo: "opciones", opciones: ["2 dias", "3 dias", "4 dias", "5 dias", "6 dias"] },
+    { id: "dias_disponibles", label: "¿Qué días de la semana puedes entrenar?", tipo: "dias_semana" },
     { id: "duracion", label: "¿Cuánto tiempo disponible por sesión?", tipo: "opciones", opciones: ["30 min", "45 min", "1 hora", "1h 30min", "Más de 1h 30min"] },
     { id: "superficie", label: "¿Donde sueles entrenar?", tipo: "multi", opciones: ["Asfalto / ciudad", "Pista de atletismo", "Trail / montaña", "Cinta de correr", "Campo de hierba"] },
     { id: "dispositivo", label: "¿Cuentas con reloj GPS o pulsómetro para tus sesiones?", tipo: "opciones", opciones: ["Sí, reloj GPS con pulsómetro", "Sí, solo pulsómetro (banda o reloj básico)", "No, entreno por sensación (RPE)"] },
@@ -1309,7 +1309,7 @@ const elegirEspecialidad=(label:string)=>{
   };
 
   const avanzar=()=>{
-    const val=pregActual.tipo==="multi"?selMulti:pregActual.tipo==="texto"?textoTemp:respuestas[pregActual.id];
+    const val=(pregActual.tipo==="multi"||pregActual.tipo==="dias_semana")?selMulti:pregActual.tipo==="texto"?textoTemp:respuestas[pregActual.id];
     if(!val||(Array.isArray(val)&&val.length===0)||(typeof val==="string"&&!val.trim())) return;
     const nuevas={...respuestas,[pregActual.id]:val};
     setRespuestas(nuevas);setSelMulti([]);setTextoTemp("");
@@ -1353,18 +1353,16 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
       // cuando el dato es matematicamente derivable, evita que el Coach pregunte algo que ya sabemos.
       let distribucionAutoFocus="";
       if(modoEntrada==="focus"&&focusDiasExternos.length>0){
-        const TODOS_DIAS=["lunes","martes","miercoles","jueves","viernes","sabado","domingo"];
-        const diasLibres=TODOS_DIAS.filter(d=>!focusDiasExternos.includes(d));
-        const numDiasDeseados=(perfil.dias as string)?.match(/\d+/)?.[0]||null;
-        // FIX CRITICO REAL (regresion encontrada con evidencia): el resto del sistema SIEMPRE espera
-        // distribucion_semanal como JSON valido (JSON.parse() se ejecuta en varios puntos: boton
-        // "Generar mi proxima semana" y el disparo automatico del Orchestrator). El texto libre en
-        // español que generabamos rompia silenciosamente ese parseo (catch vacio), haciendo que el
-        // Coach SIEMPRE viera "no tengo tu disponibilidad" aunque el dato existiera realmente.
+        // FIX ARQUITECTONICO: eliminada toda inferencia numerica ("3 dias" -> deducir cuales).
+        // dias_disponibles ahora es SELECCION EXPLICITA del usuario (array real de dias concretos,
+        // capturado en el formulario). Cruzamos directamente con los dias externos ya conocidos —
+        // sin interpretacion de texto, sin LLM, sin ambiguedad posible.
+        const diasDisponiblesReales=(perfil.dias_disponibles as string[])||[];
+        const diasForgeReales=diasDisponiblesReales.filter(d=>!focusDiasExternos.includes(d));
         const distribucionObj:Record<string,string>={
-          [focusDisciplinaForge]: `${diasLibres.slice(0,Number(numDiasDeseados)||diasLibres.length).join(", ")} (máx ${numDiasDeseados||diasLibres.length} días/semana)`,
-          [focusDisciplinaExterna]: focusDiasExternos.join(", ")+" (entrenador externo, Forge no lo gestiona)",
-          observaciones: `El atleta quiere entrenar EXACTAMENTE ${numDiasDeseados||"un número limitado de"} días de ${focusDisciplinaForge} — nunca más días que los indicados, aunque haya más días libres.`
+          [focusDisciplinaForge]: diasForgeReales.length>0?diasForgeReales.join(", "):"sin días asignados aún",
+          [focusDisciplinaExterna]: focusDiasExternos.join(", ")+" (entrenador externo, Forge NUNCA prescribe estos días)",
+          observaciones: `Días exactos seleccionados por el atleta para ${focusDisciplinaForge}: ${diasForgeReales.join(", ")||"ninguno"}. Estos son los ÚNICOS días donde Forge puede prescribir contenido — cualquier otro día (incluidos los de ${focusDisciplinaExterna}) debe quedar sin sesión de Forge.`
         };
         distribucionAutoFocus=JSON.stringify(distribucionObj);
       }
@@ -2704,9 +2702,16 @@ ${testStr}`}]});
               onFocus={e=>(e.target.style.borderColor=accentColor)} onBlur={e=>(e.target.style.borderColor=C.border)}
             />
           )}
+          {pregActual.tipo==="dias_semana"&&(
+            <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:28}}>
+              {["lunes","martes","miercoles","jueves","viernes","sabado","domingo"].map(d=>(
+                <button key={d} onClick={()=>setSelMulti(prev=>prev.includes(d)?prev.filter(x=>x!==d):[...prev,d])} style={{padding:"10px 16px",borderRadius:100,border:`2px solid ${selMulti.includes(d)?accentColor:C.border}`,background:selMulti.includes(d)?accentColor:"transparent",color:selMulti.includes(d)?"#fff":C.ink,fontSize:13,fontWeight:600,cursor:"pointer",textTransform:"capitalize"}}>{d}</button>
+              ))}
+            </div>
+          )}
           <button className="btn-main" onClick={avanzar}
-            disabled={(pregActual.tipo==="opciones"&&!respuestas[pregActual.id])||(pregActual.tipo==="multi"&&selMulti.length===0)||(pregActual.tipo==="texto"&&!textoTemp.trim())}
-            style={{width:"100%",background:accentColor,color:"#fff",border:"none",borderRadius:14,padding:"15px",fontSize:15,fontWeight:600,cursor:"pointer",opacity:((pregActual.tipo==="opciones"&&!respuestas[pregActual.id])||(pregActual.tipo==="multi"&&selMulti.length===0)||(pregActual.tipo==="texto"&&!textoTemp.trim()))?0.35:1}}>
+            disabled={(pregActual.tipo==="opciones"&&!respuestas[pregActual.id])||((pregActual.tipo==="multi"||pregActual.tipo==="dias_semana")&&selMulti.length===0)||(pregActual.tipo==="texto"&&!textoTemp.trim())}
+            style={{width:"100%",background:accentColor,color:"#fff",border:"none",borderRadius:14,padding:"15px",fontSize:15,fontWeight:600,cursor:"pointer",opacity:((pregActual.tipo==="opciones"&&!respuestas[pregActual.id])||((pregActual.tipo==="multi"||pregActual.tipo==="dias_semana")&&selMulti.length===0)||(pregActual.tipo==="texto"&&!textoTemp.trim()))?0.35:1}}>
            
 {pregIdx<preguntas.length-1?"Siguiente":"Generar mi programa"}
           </button>

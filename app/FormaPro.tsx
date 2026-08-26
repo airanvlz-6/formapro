@@ -1355,11 +1355,18 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
       if(modoEntrada==="focus"&&focusDiasExternos.length>0){
         const TODOS_DIAS=["lunes","martes","miercoles","jueves","viernes","sabado","domingo"];
         const diasLibres=TODOS_DIAS.filter(d=>!focusDiasExternos.includes(d));
-        // FIX: dejar EXPLICITO cuantos dias quiere entrenar el usuario (perfil.dias del formulario),
-        // no solo los huecos disponibles — bug real confirmado: el Coach interpreto "dias libres"
-        // como "usa todos estos dias", proponiendo 4 sesiones cuando el usuario pidio maximo 3.
         const numDiasDeseados=(perfil.dias as string)?.match(/\d+/)?.[0]||null;
-        distribucionAutoFocus=`${focusDisciplinaForge}: el atleta quiere entrenar ${numDiasDeseados?`EXACTAMENTE ${numDiasDeseados} días`:"un numero limitado de dias"} por semana (NO todos los días libres). Días CANDIDATOS entre los que elegir (huecos reales en su calendario, el atleta entrena ${focusDisciplinaExterna} los días ${focusDiasExternos.join(", ")}): ${diasLibres.join(", ")}. Elige el subconjunto de ${numDiasDeseados||"esos"} días que mejor distribuya la carga — NUNCA propongas más días de los que el atleta pidió.`;
+        // FIX CRITICO REAL (regresion encontrada con evidencia): el resto del sistema SIEMPRE espera
+        // distribucion_semanal como JSON valido (JSON.parse() se ejecuta en varios puntos: boton
+        // "Generar mi proxima semana" y el disparo automatico del Orchestrator). El texto libre en
+        // español que generabamos rompia silenciosamente ese parseo (catch vacio), haciendo que el
+        // Coach SIEMPRE viera "no tengo tu disponibilidad" aunque el dato existiera realmente.
+        const distribucionObj:Record<string,string>={
+          [focusDisciplinaForge]: `${diasLibres.slice(0,Number(numDiasDeseados)||diasLibres.length).join(", ")} (máx ${numDiasDeseados||diasLibres.length} días/semana)`,
+          [focusDisciplinaExterna]: focusDiasExternos.join(", ")+" (entrenador externo, Forge no lo gestiona)",
+          observaciones: `El atleta quiere entrenar EXACTAMENTE ${numDiasDeseados||"un número limitado de"} días de ${focusDisciplinaForge} — nunca más días que los indicados, aunque haya más días libres.`
+        };
+        distribucionAutoFocus=JSON.stringify(distribucionObj);
       }
       await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:espKey||categoria,perfil,rutina:texto,historial:hist,marcas:[],email:email||null,admin:false,premium:false,modo_entrada:modoEntrada,distribucion_semanal:distribucionAutoFocus||undefined}});
       // FIX: actualizar el estado de React inmediatamente tras guardar — antes se guardaba

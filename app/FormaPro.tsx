@@ -19,7 +19,7 @@ const CATEGORIAS = [
   { id: "hibrido", emoji: "🔄", titulo: "Híbrido", subtitulo: "Resistencia + Fuerza", desc: "Equilibra ambas capacidades sin interferencias, combinando sesiones para progresar en las dos disciplinas al mismo tiempo.", color: "#FF8C42", colorLight: "#FF8C4215", etiqueta: "Avanzado" },
 ];
 
-const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string; opciones?: string[]; placeholder?: string}>> = {
+const FORMULARIOS: Record<string, Pregunta[]> = {
   carrera: [
     { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Mas de 50"] },
     { id: "sexo", label: "¿Con que género te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
@@ -30,6 +30,8 @@ const FORMULARIOS: Record<string, Array<{id: string; label: string; tipo: string
     { id: "duracion", label: "¿Cuánto tiempo disponible por sesión?", tipo: "opciones", opciones: ["30 min", "45 min", "1 hora", "1h 30min", "Más de 1h 30min"] },
     { id: "superficie", label: "¿Donde sueles entrenar?", tipo: "multi", opciones: ["Asfalto / ciudad", "Pista de atletismo", "Trail / montaña", "Cinta de correr", "Campo de hierba"] },
     { id: "dispositivo", label: "¿Cuentas con reloj GPS o pulsómetro para tus sesiones?", tipo: "opciones", opciones: ["Sí, reloj GPS con pulsómetro", "Sí, solo pulsómetro (banda o reloj básico)", "No, entreno por sensación (RPE)"] },
+    { id: "fc_max", label: "¿Conoces tu frecuencia cardíaca máxima real? (de un test o competición)", tipo: "texto", placeholder: "Ej: 190 — déjalo en blanco si no la conoces", condicionDe: "dispositivo", condicionValor: /pulsómetro/i },
+    { id: "fc_reposo", label: "¿Conoces tu frecuencia cardíaca en reposo?", tipo: "texto", placeholder: "Ej: 55 — déjalo en blanco si no la conoces", condicionDe: "dispositivo", condicionValor: /pulsómetro/i },
     { id: "lesiones", label: "¿Tienes lesiones o molestias?", tipo: "texto", placeholder: "Ej: periostitis, fascitis, rodilla... o ninguna" },
     { id: "objetivo_detalle", label: "¿Qué quieres conseguir exactamente?", tipo: "texto", placeholder: "Ej: completar mi primer 10K en junio, bajar de 45 min..." },
   ],
@@ -548,7 +550,7 @@ const FREE_LIMIT = 8;
 const generarCodigo = () => { const c = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let r = "FP-"; for(let i=0;i<5;i++) r+=c[Math.floor(Math.random()*c.length)]; return r; };
 
 type Categoria = typeof CATEGORIAS[0];
-type Pregunta = {id: string; label: string; tipo: string; opciones?: string[]; placeholder?: string};
+type Pregunta = {id: string; label: string; tipo: string; opciones?: string[]; placeholder?: string; condicionDe?: string; condicionValor?: RegExp};
 type Marca = {fecha: string; valor: string};
 type UsuarioData = {codigo: string; categoria: string; especialidad: string; perfil: Record<string, string | string[]>; rutina: string; historial: {role: string; content: string}[]; marcas: Marca[]; email?: string; [key: string]: unknown};
 
@@ -1182,7 +1184,16 @@ const [equipoSeleccionado,setEquipoSeleccionado]=useState<any>(null);
   useEffect(()=>{bottomRef.current?.scrollIntoView({behavior:"smooth"});},[mensajes,cargando,generando,pantalla]);
 
   const cat=categoria?CATEGORIAS.find((c:Categoria)=>c.id===categoria):null;
-  const preguntas:Pregunta[]=(espKey?FORMULARIOS[espKey]:null)||(categoria?FORMULARIOS[categoria]:[])||[];
+  const preguntasBase:Pregunta[]=(espKey?FORMULARIOS[espKey]:null)||(categoria?FORMULARIOS[categoria]:[])||[];
+  // FIX: preguntas condicionales (ej: FC max/reposo, solo si el usuario indico que tiene
+  // pulsometro) se filtran dinamicamente segun la respuesta REAL ya dada a la pregunta de la
+  // que dependen — nunca se muestran si la condicion no se cumple, evitando preguntas irrelevantes.
+  const preguntas:Pregunta[]=preguntasBase.filter(p=>{
+    if(!p.condicionDe) return true;
+    const valorCondicion=respuestas[p.condicionDe];
+    if(typeof valorCondicion!=="string") return false;
+    return p.condicionValor?p.condicionValor.test(valorCondicion):true;
+  });
   const pregActual=preguntas[pregIdx];
   const diasPrueba=10;
   const diasUsados=fechaRegistro?Math.floor((new Date().getTime()-new Date(fechaRegistro).getTime())/(1000*60*60*24)):0;

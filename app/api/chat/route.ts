@@ -866,7 +866,12 @@ async function calcularEstadoOnboarding(supabase: any, codigo: string, mode: str
   completedFields.duracion_sesion = !!perfilOnb.duracion;
   completedFields.disciplina_externa = !!(fuentesOnb || []).find((f: any) => f.owner === "external");
   completedFields.dias_externos = !!(fuentesOnb || []).find((f: any) => f.owner === "external" && f.dias?.length > 0);
-  completedFields.fc_max_o_metodo = !!perfilOnb.fc_max || perfilOnb.fc_max_metodo === "formula_edad";
+  // FIX: fc_max ahora se captura DIRECTAMENTE en el formulario (pregunta condicional, solo si
+  // tiene pulsometro/reloj), no en una pantalla separada tras la bienvenida. Si el usuario no
+  // tiene dispositivo, la pregunta ni siquiera se muestra — se usara formula por edad siempre,
+  // asi que el campo se considera "completado" en cuanto el formulario general esta terminado
+  // (perfil.edad existe), sin exigir un dato que puede legitimamente no aplicar.
+  completedFields.fc_max_o_metodo = !!perfilOnb.edad;
 
   const camposRequeridos = CAMPOS_REQUERIDOS_POR_MODO[mode] || CAMPOS_REQUERIDOS_POR_MODO.supervision;
   const missingFields = camposRequeridos.filter(c => !completedFields[c]);

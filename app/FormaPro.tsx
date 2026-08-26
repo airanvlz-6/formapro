@@ -1342,6 +1342,10 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
         distribucionAutoFocus=`${focusDisciplinaForge}: el atleta quiere entrenar ${numDiasDeseados?`EXACTAMENTE ${numDiasDeseados} días`:"un numero limitado de dias"} por semana (NO todos los días libres). Días CANDIDATOS entre los que elegir (huecos reales en su calendario, el atleta entrena ${focusDisciplinaExterna} los días ${focusDiasExternos.join(", ")}): ${diasLibres.join(", ")}. Elige el subconjunto de ${numDiasDeseados||"esos"} días que mejor distribuya la carga — NUNCA propongas más días de los que el atleta pidió.`;
       }
       await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:espKey||categoria,perfil,rutina:texto,historial:hist,marcas:[],email:email||null,admin:false,premium:false,modo_entrada:modoEntrada,distribucion_semanal:distribucionAutoFocus||undefined}});
+      // FIX: actualizar el estado de React inmediatamente tras guardar — antes se guardaba
+      // correctamente en Supabase pero el frontend seguia con el valor vacio original en memoria,
+      // causando que guardar_plan_semana preguntara "no tengo tu disponibilidad" aunque ya existiera.
+      if(distribucionAutoFocus) setDistribucionSemanal(distribucionAutoFocus);
       setCodigoUsuario(codigo);
     }catch{setMensajes([{role:"assistant",content:"Error de conexion. Por favor recarga."}]);}
     finally{setGenerando(false);setTimeout(()=>inputRef.current?.focus(),300);}

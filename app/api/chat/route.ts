@@ -4225,6 +4225,31 @@ if (action === "obtener_daily_briefing") {
     // Block Analyzer ya recibe las restricciones, pero eso es interpretacion, no garantia. Este
     // validator comprueba el plan REALMENTE GENERADO contra las hard constraints activas — si el
     // LLM ignoro la instruccion, el codigo lo detecta y corrige/bloquea, nunca confia ciegamente.
+    // FORGE FOCUS — GUARD DETERMINISTA: ultima linea de defensa, independiente de si el prompt del
+// Block Analyzer se respeto. Verifica que ningun dia marcado como disciplina EXTERNA tenga una
+// sesion real prescrita por Forge en el plan a punto de guardarse. El codigo decide, no el LLM.
+const focusContextValidator = await buildFocusContext(supabase, codigo);
+    if (focusContextValidator.esModoFocus && Array.isArray(plan.sessions)) {
+      const normalizarDiaFocusValidator = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      const diasExternosValidator = new Set<string>();
+      focusContextValidator.disciplinasExternas.forEach((d: any) => {
+        (d.dias || []).forEach((dia: string) => diasExternosValidator.add(normalizarDiaFocusValidator(dia)));
+      });
+      const violacionesFocusValidator = plan.sessions.filter((s: any) =>
+        diasExternosValidator.has(normalizarDiaFocusValidator(s.dia)) && s.tipo !== "descanso" && s.tipo !== "external_blocked"
+      );
+      if (violacionesFocusValidator.length > 0) {
+        console.error(`🚨 FOCUS GUARD: ${violacionesFocusValidator.length} dia(s) de disciplina externa con sesion prescrita por Forge:`, JSON.stringify(violacionesFocusValidator.map((s: any) => ({ dia: s.dia, titulo: s.titulo }))));
+        return NextResponse.json({
+          error: "El plan generado prescribe contenido en dias de disciplina externa (Focus)",
+          blocked: true,
+          reason: "FOCUS_EXTERNAL_DAY_VIOLATION",
+          violaciones: violacionesFocusValidator.map((s: any) => ({ dia: s.dia, titulo: s.titulo }))
+        }, { status: 422 });
+      }
+      console.log(`✅ FOCUS GUARD: plan verificado, dias externos [${Array.from(diasExternosValidator).join(", ")}] respetados`);
+    }
+
     const { data: hardConstraintsValidator } = await supabase.from("athlete_coaching_notes")
       .select("movement,issue,prohibits_impact,prohibits_jump,prohibits_axial_load,prohibits_deep_flexion,prohibits_overhead_load")
       .eq("user_codigo", codigo)

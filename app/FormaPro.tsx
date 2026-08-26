@@ -1367,14 +1367,11 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
       // causando que guardar_plan_semana preguntara "no tengo tu disponibilidad" aunque ya existiera.
       if(distribucionAutoFocus) setDistribucionSemanal(distribucionAutoFocus);
       setCodigoUsuario(codigo);
-      // FORGE ONBOARDING STATE MACHINE — tras el formulario tradicional, verificamos DETERMINISTICAMENTE
-      // si falta algun campo obligatorio (nunca confiamos en que el LLM lo haya cubierto en la
-      // conversacion). Si falta algo, mostramos la pantalla de gaps ANTES de dar acceso al chat libre.
-      const resEstadoOnb=await apiCall({action:"obtener_estado_onboarding",codigo,datos:{mode:modoEntrada}});
-      if(resEstadoOnb?.missingFields?.length>0){
-        setOnboardingMissing(resEstadoOnb.missingFields);
-        setPantalla("onboarding_gaps");
-      }
+      // FORGE ONBOARDING STATE MACHINE — el formulario ya cubre todos los campos requeridos (incluida
+      // FC condicional). Confirmamos el onboarding en SILENCIO, sin pantalla intermedia — si por algun
+      // motivo faltara algo real, el usuario simplemente sigue en modo "in_progress" sin bloquear el
+      // chat, y puede completarse mas adelante desde Mi Atleta.
+      apiCall({action:"confirmar_onboarding",codigo,datos:{mode:modoEntrada}});
     }catch{setMensajes([{role:"assistant",content:"Error de conexion. Por favor recarga."}]);}
     finally{setGenerando(false);setTimeout(()=>inputRef.current?.focus(),300);}
   };

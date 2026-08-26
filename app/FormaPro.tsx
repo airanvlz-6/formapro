@@ -594,6 +594,12 @@ export default function Forge() {
   const [focusObjetivoForge,setFocusObjetivoForge]=useState("");
   const [focusPrioridad,setFocusPrioridad]=useState("importante");
   const [focusGuardando,setFocusGuardando]=useState(false);
+  // FORGE ONBOARDING STATE MACHINE
+  const [onboardingMissing,setOnboardingMissing]=useState<string[]>([]);
+  const [onboardingFcMax,setOnboardingFcMax]=useState("");
+  const [onboardingFcMin,setOnboardingFcMin]=useState("");
+  const [onboardingFcConoce,setOnboardingFcConoce]=useState<boolean|null>(null);
+  const [onboardingConfirmando,setOnboardingConfirmando]=useState(false);
   const [mensajes,setMensajes]=useState<{role:string;content:string}[]>([]);
   const [historial,setHistorial]=useState<{role:string;content:string}[]>([]);
   const [input,setInput]=useState("");
@@ -1347,6 +1353,14 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
       // causando que guardar_plan_semana preguntara "no tengo tu disponibilidad" aunque ya existiera.
       if(distribucionAutoFocus) setDistribucionSemanal(distribucionAutoFocus);
       setCodigoUsuario(codigo);
+      // FORGE ONBOARDING STATE MACHINE — tras el formulario tradicional, verificamos DETERMINISTICAMENTE
+      // si falta algun campo obligatorio (nunca confiamos en que el LLM lo haya cubierto en la
+      // conversacion). Si falta algo, mostramos la pantalla de gaps ANTES de dar acceso al chat libre.
+      const resEstadoOnb=await apiCall({action:"obtener_estado_onboarding",codigo,datos:{mode:modoEntrada}});
+      if(resEstadoOnb?.missingFields?.length>0){
+        setOnboardingMissing(resEstadoOnb.missingFields);
+        setPantalla("onboarding_gaps");
+      }
     }catch{setMensajes([{role:"assistant",content:"Error de conexion. Por favor recarga."}]);}
     finally{setGenerando(false);setTimeout(()=>inputRef.current?.focus(),300);}
   };
@@ -2358,6 +2372,48 @@ ${testStr}`}]});
               }} disabled={focusGuardando} style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:12,padding:14,fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",opacity:focusGuardando?0.6:1}}>{focusGuardando?"Guardando...":"Continuar con mi perfil"}</button>
             </>
           )}
+        </div>
+      )}
+
+      {pantalla==="onboarding_gaps"&&(
+        <div className="fade-up" style={{maxWidth:560,width:"100%"}}>
+          <h2 style={{fontSize:"clamp(22px,5vw,28px)",color:C.ink,marginBottom:8,fontFamily:"'Playfair Display',serif",fontWeight:700}}>Últimos datos</h2>
+          <p style={{color:C.muted,fontSize:14,marginBottom:28}}>Antes de empezar, necesito confirmar esto para que tu plan sea preciso desde el primer día.</p>
+
+          {onboardingMissing.includes("fc_max_o_metodo")&&(
+            <div style={{marginBottom:28}}>
+              <p style={{color:C.ink,fontSize:14,fontWeight:600,marginBottom:12}}>¿Conoces tu frecuencia cardíaca máxima y mínima real?</p>
+              <div style={{display:"flex",gap:10,marginBottom:16}}>
+                <button onClick={()=>setOnboardingFcConoce(true)} style={{flex:1,padding:"12px",borderRadius:12,border:`2px solid ${onboardingFcConoce===true?C.accent:C.border}`,background:onboardingFcConoce===true?C.accent:"transparent",color:onboardingFcConoce===true?"#fff":C.ink,fontSize:13,fontWeight:600,cursor:"pointer"}}>Sí, las conozco</button>
+                <button onClick={()=>setOnboardingFcConoce(false)} style={{flex:1,padding:"12px",borderRadius:12,border:`2px solid ${onboardingFcConoce===false?C.accent:C.border}`,background:onboardingFcConoce===false?C.accent:"transparent",color:onboardingFcConoce===false?"#fff":C.ink,fontSize:13,fontWeight:600,cursor:"pointer"}}>No, calcúlalas</button>
+              </div>
+              {onboardingFcConoce===true&&(
+                <div style={{display:"flex",gap:10}}>
+                  <input value={onboardingFcMax} onChange={e=>setOnboardingFcMax(e.target.value.replace(/\D/g,""))} placeholder="FC máxima" style={{flex:1,border:`2px solid ${C.border}`,borderRadius:12,padding:"12px 14px",fontSize:15,color:C.ink,background:C.card,fontFamily:"inherit"}}/>
+                  <input value={onboardingFcMin} onChange={e=>setOnboardingFcMin(e.target.value.replace(/\D/g,""))} placeholder="FC reposo" style={{flex:1,border:`2px solid ${C.border}`,borderRadius:12,padding:"12px 14px",fontSize:15,color:C.ink,background:C.card,fontFamily:"inherit"}}/>
+                </div>
+              )}
+              {onboardingFcConoce===false&&(
+                <p style={{color:C.muted,fontSize:12.5,fontStyle:"italic"}}>Sin problema — usaremos la fórmula estándar (220 - edad) para calcular tus zonas.</p>
+              )}
+            </div>
+          )}
+
+          <button
+            disabled={onboardingConfirmando||onboardingFcConoce===null||(onboardingFcConoce===true&&(!onboardingFcMax.trim()||!onboardingFcMin.trim()))}
+            onClick={async()=>{
+              setOnboardingConfirmando(true);
+              const perfilActualizado={...respuestas,fc_max:onboardingFcConoce?onboardingFcMax:null,fc_max_metodo:onboardingFcConoce?"real":"formula_edad"};
+              await apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{perfil:perfilActualizado}});
+              const resConfirmar=await apiCall({action:"confirmar_onboarding",codigo:codigoUsuario,datos:{mode:modoEntrada}});
+              setOnboardingConfirmando(false);
+              if(resConfirmar?.ok){
+                setPantalla("chat");
+              }
+            }}
+            style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:12,padding:14,fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",opacity:(onboardingConfirmando||onboardingFcConoce===null||(onboardingFcConoce===true&&(!onboardingFcMax.trim()||!onboardingFcMin.trim())))?0.4:1}}>
+            {onboardingConfirmando?"Guardando...":"Confirmar y empezar"}
+          </button>
         </div>
       )}
 

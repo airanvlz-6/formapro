@@ -842,6 +842,43 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  if (action === "guardar_training_sources") {
+    // FORGE FOCUS ONBOARDING — guarda las disciplinas del atleta (Forge-controlled y externas)
+    // durante el onboarding de Focus. Backend-first: recibe datos estructurados, nunca interpreta
+    // texto libre para decidir owner/dias — eso lo decide el frontend del onboarding por diseño,
+    // guiando al usuario con opciones claras, no conversacion libre.
+    const { disciplinas } = datos;
+    if (!Array.isArray(disciplinas) || disciplinas.length === 0) {
+      return NextResponse.json({ error: "Falta la lista de disciplinas" }, { status: 400 });
+    }
+
+    const filasParaGuardar = disciplinas.map((d: any) => ({
+      user_codigo: codigo,
+      disciplina: d.disciplina,
+      owner: d.owner,
+      dias: d.dias || null,
+      duracion_habitual: d.duracion_habitual || null,
+      intensidad_habitual: d.intensidad_habitual || null,
+      tipo_trabajo: d.tipo_trabajo || null,
+      variable: d.variable || false,
+      objetivo: d.objetivo || null,
+      prioridad: d.prioridad || null,
+      activo: true,
+    }));
+
+    const { error: errorGuardarFuentes } = await supabase.from("athlete_training_sources")
+      .upsert(filasParaGuardar, { onConflict: "user_codigo,disciplina" });
+    if (errorGuardarFuentes) return NextResponse.json({ error: errorGuardarFuentes.message }, { status: 500 });
+
+    return NextResponse.json({ ok: true, guardadas: filasParaGuardar.length });
+  }
+
+  if (action === "obtener_training_sources") {
+    // Solo lectura — para que el frontend sepa si el atleta ya tiene Focus configurado y con que datos.
+    const { data: fuentesObtenidas } = await supabase.from("athlete_training_sources").select("*").eq("user_codigo", codigo).eq("activo", true);
+    return NextResponse.json({ fuentes: fuentesObtenidas || [] });
+  }
+
   if (action === "diagnostico_athlete_context") {
     try {
       const { getAthleteContext } = await import("@/lib/mobile/getAthleteContext");

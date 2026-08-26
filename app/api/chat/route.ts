@@ -900,6 +900,7 @@ if (action === "obtener_estado_onboarding") {
     // si aun faltan campos requeridos, se rechaza sin importar que el frontend lo intente.
     const { mode } = datos;
     const { completedFields, missingFields } = await calcularEstadoOnboarding(supabase, codigo, mode);
+    console.log("🔍 DEBUG confirmar_onboarding — codigo:", codigo, "mode:", mode, "completedFields:", JSON.stringify(completedFields), "missingFields:", JSON.stringify(missingFields));
     if (missingFields.length > 0) {
       return NextResponse.json({ ok: false, error: "Faltan campos obligatorios", missingFields }, { status: 400 });
     }

@@ -582,6 +582,18 @@ export default function Forge() {
   const [respuestas,setRespuestas]=useState<Record<string,string|string[]>>({});
   const [selMulti,setSelMulti]=useState<string[]>([]);
   const [textoTemp,setTextoTemp]=useState("");
+  // FORGE FOCUS ONBOARDING
+  const [focusPaso,setFocusPaso]=useState(1);
+  const [focusDisciplinaExterna,setFocusDisciplinaExterna]=useState("");
+  const [focusDiasExternos,setFocusDiasExternos]=useState<string[]>([]);
+  const [focusDuracionExterna,setFocusDuracionExterna]=useState("");
+  const [focusIntensidadExterna,setFocusIntensidadExterna]=useState("");
+  const [focusTipoTrabajoExterna,setFocusTipoTrabajoExterna]=useState<string[]>([]);
+  const [focusVariable,setFocusVariable]=useState(false);
+  const [focusDisciplinaForge,setFocusDisciplinaForge]=useState("");
+  const [focusObjetivoForge,setFocusObjetivoForge]=useState("");
+  const [focusPrioridad,setFocusPrioridad]=useState("importante");
+  const [focusGuardando,setFocusGuardando]=useState(false);
   const [mensajes,setMensajes]=useState<{role:string;content:string}[]>([]);
   const [historial,setHistorial]=useState<{role:string;content:string}[]>([]);
   const [input,setInput]=useState("");
@@ -2215,6 +2227,98 @@ ${testStr}`}]});
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {pantalla==="focus_onboarding"&&(
+        <div className="fade-up" style={{maxWidth:560,width:"100%"}}>
+          <button onClick={()=>focusPaso>1?setFocusPaso(focusPaso-1):setPantalla("bifurcacion")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14,marginBottom:20}}>Atrás</button>
+          <div style={{width:"100%",height:3,background:C.border,borderRadius:10,marginBottom:24}}>
+            <div style={{height:3,borderRadius:10,background:C.accent,width:`${(focusPaso/4)*100}%`,transition:"width 0.4s ease"}}/>
+          </div>
+
+          {focusPaso===1&&(
+            <>
+              <h2 style={{fontSize:"clamp(22px,5vw,28px)",color:C.ink,marginBottom:8,fontFamily:"'Playfair Display',serif",fontWeight:700}}>¿Qué entrenamiento haces con otro entrenador?</h2>
+              <p style={{color:C.muted,fontSize:14,marginBottom:24}}>No necesitas contarnos el detalle de cada sesión — solo lo básico para que Forge coordine alrededor.</p>
+              <input value={focusDisciplinaExterna} onChange={e=>setFocusDisciplinaExterna(e.target.value)} placeholder="Ej: CrossFit, Fuerza, Fútbol, Natación..." style={{width:"100%",border:`2px solid ${C.border}`,borderRadius:12,padding:"14px 16px",fontSize:15,color:C.ink,background:C.card,marginBottom:20,fontFamily:"inherit"}}/>
+              <p style={{color:C.ink,fontSize:13,fontWeight:600,marginBottom:10}}>¿Qué días entrenas eso normalmente?</p>
+              <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:24}}>
+                {["lunes","martes","miercoles","jueves","viernes","sabado","domingo"].map(d=>(
+                  <button key={d} onClick={()=>setFocusDiasExternos(prev=>prev.includes(d)?prev.filter(x=>x!==d):[...prev,d])} style={{padding:"8px 14px",borderRadius:100,border:`2px solid ${focusDiasExternos.includes(d)?C.accent:C.border}`,background:focusDiasExternos.includes(d)?C.accent:"transparent",color:focusDiasExternos.includes(d)?"#fff":C.ink,fontSize:12.5,fontWeight:600,cursor:"pointer",textTransform:"capitalize"}}>{d}</button>
+                ))}
+              </div>
+              <button onClick={()=>focusDisciplinaExterna.trim()&&focusDiasExternos.length>0&&setFocusPaso(2)} disabled={!focusDisciplinaExterna.trim()||focusDiasExternos.length===0} style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:12,padding:14,fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",opacity:(!focusDisciplinaExterna.trim()||focusDiasExternos.length===0)?0.4:1}}>Continuar</button>
+            </>
+          )}
+
+          {focusPaso===2&&(
+            <>
+              <h2 style={{fontSize:"clamp(22px,5vw,28px)",color:C.ink,marginBottom:8,fontFamily:"'Playfair Display',serif",fontWeight:700}}>Cuéntanos un poco más</h2>
+              <p style={{color:C.muted,fontSize:14,marginBottom:24}}>Esto ayuda a Forge a estimar el impacto en tu recuperación, sin necesitar el detalle de cada sesión.</p>
+              <p style={{color:C.ink,fontSize:13,fontWeight:600,marginBottom:8}}>Duración habitual</p>
+              <div style={{display:"flex",gap:8,marginBottom:20}}>
+                {["<45 min","45-60","60-90","90+"].map(d=>(
+                  <button key={d} onClick={()=>setFocusDuracionExterna(d)} style={{flex:1,padding:"10px 8px",borderRadius:10,border:`2px solid ${focusDuracionExterna===d?C.accent:C.border}`,background:focusDuracionExterna===d?C.accent:"transparent",color:focusDuracionExterna===d?"#fff":C.ink,fontSize:12,fontWeight:600,cursor:"pointer"}}>{d}</button>
+                ))}
+              </div>
+              <p style={{color:C.ink,fontSize:13,fontWeight:600,marginBottom:8}}>Intensidad habitual</p>
+              <div style={{display:"flex",gap:8,marginBottom:20}}>
+                {["Baja","Moderada","Alta","Muy variable"].map(d=>(
+                  <button key={d} onClick={()=>setFocusIntensidadExterna(d)} style={{flex:1,padding:"10px 6px",borderRadius:10,border:`2px solid ${focusIntensidadExterna===d?C.accent:C.border}`,background:focusIntensidadExterna===d?C.accent:"transparent",color:focusIntensidadExterna===d?"#fff":C.ink,fontSize:11.5,fontWeight:600,cursor:"pointer"}}>{d}</button>
+                ))}
+              </div>
+              <p style={{color:C.ink,fontSize:13,fontWeight:600,marginBottom:8}}>Tipo de trabajo (puedes elegir varios)</p>
+              <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:20}}>
+                {["Fuerza","Técnica","Metcon","Intervalos","Competición","Mixto"].map(d=>(
+                  <button key={d} onClick={()=>setFocusTipoTrabajoExterna(prev=>prev.includes(d)?prev.filter(x=>x!==d):[...prev,d])} style={{padding:"8px 14px",borderRadius:100,border:`2px solid ${focusTipoTrabajoExterna.includes(d)?C.accent:C.border}`,background:focusTipoTrabajoExterna.includes(d)?C.accent:"transparent",color:focusTipoTrabajoExterna.includes(d)?"#fff":C.ink,fontSize:12.5,fontWeight:600,cursor:"pointer"}}>{d}</button>
+                ))}
+              </div>
+              <label style={{display:"flex",alignItems:"center",gap:10,marginBottom:24,cursor:"pointer"}}>
+                <input type="checkbox" checked={focusVariable} onChange={e=>setFocusVariable(e.target.checked)} style={{width:18,height:18}}/>
+                <span style={{color:C.ink,fontSize:13}}>Puede cambiar bastante de un día para otro</span>
+              </label>
+              <button onClick={()=>setFocusPaso(3)} style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:12,padding:14,fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Continuar</button>
+            </>
+          )}
+
+          {focusPaso===3&&(
+            <>
+              <h2 style={{fontSize:"clamp(22px,5vw,28px)",color:C.ink,marginBottom:8,fontFamily:"'Playfair Display',serif",fontWeight:700}}>¿Qué quieres que gestione Forge?</h2>
+              <p style={{color:C.muted,fontSize:14,marginBottom:24}}>La disciplina que Forge va a planificar y supervisar por ti.</p>
+              <input value={focusDisciplinaForge} onChange={e=>setFocusDisciplinaForge(e.target.value)} placeholder="Ej: Running, Ciclismo, Natación..." style={{width:"100%",border:`2px solid ${C.border}`,borderRadius:12,padding:"14px 16px",fontSize:15,color:C.ink,background:C.card,marginBottom:16,fontFamily:"inherit"}}/>
+              <p style={{color:C.ink,fontSize:13,fontWeight:600,marginBottom:8}}>¿Cuál es tu objetivo?</p>
+              <input value={focusObjetivoForge} onChange={e=>setFocusObjetivoForge(e.target.value)} placeholder="Ej: Media maratón &lt;1h40, mejorar mi 5K..." style={{width:"100%",border:`2px solid ${C.border}`,borderRadius:12,padding:"14px 16px",fontSize:15,color:C.ink,background:C.card,marginBottom:24,fontFamily:"inherit"}}/>
+              <button onClick={()=>focusDisciplinaForge.trim()&&setFocusPaso(4)} disabled={!focusDisciplinaForge.trim()} style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:12,padding:14,fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",opacity:!focusDisciplinaForge.trim()?0.4:1}}>Continuar</button>
+            </>
+          )}
+
+          {focusPaso===4&&(
+            <>
+              <h2 style={{fontSize:"clamp(22px,5vw,28px)",color:C.ink,marginBottom:8,fontFamily:"'Playfair Display',serif",fontWeight:700}}>Última pregunta</h2>
+              <p style={{color:C.muted,fontSize:14,marginBottom:24}}>¿Qué importancia tiene este objetivo respecto a tu entrenamiento con {focusDisciplinaExterna || "tu otro entrenador"}?</p>
+              <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:28}}>
+                {[{v:"complementario",l:"Complementario",d:"Es un extra, no quiero que reste recuperación a lo principal"},{v:"importante",l:"Importante",d:"Me importa progresar, pero sin comprometer lo demás"},{v:"prioridad_alta",l:"Prioridad alta",d:"Es mi objetivo principal ahora mismo"}].map(op=>(
+                  <div key={op.v} onClick={()=>setFocusPrioridad(op.v)} style={{padding:"14px 16px",borderRadius:12,border:`2px solid ${focusPrioridad===op.v?C.accent:C.border}`,background:focusPrioridad===op.v?`${C.accent}10`:"transparent",cursor:"pointer"}}>
+                    <p style={{color:C.ink,fontSize:14,fontWeight:700,marginBottom:2}}>{op.l}</p>
+                    <p style={{color:C.muted,fontSize:12}}>{op.d}</p>
+                  </div>
+                ))}
+              </div>
+              <button onClick={async()=>{
+                setFocusGuardando(true);
+                const nuevoCodigo=codigoUsuario||generarCodigo();
+                if(!codigoUsuario) setCodigoUsuario(nuevoCodigo);
+                await apiCall({action:"guardar_training_sources",codigo:nuevoCodigo,datos:{disciplinas:[
+                  {disciplina:focusDisciplinaExterna,owner:"external",dias:focusDiasExternos,duracion_habitual:focusDuracionExterna,intensidad_habitual:focusIntensidadExterna,tipo_trabajo:focusTipoTrabajoExterna,variable:focusVariable},
+                  {disciplina:focusDisciplinaForge,owner:"forge",objetivo:focusObjetivoForge,prioridad:focusPrioridad}
+                ]}});
+                setModoEntrada("focus");
+                setFocusGuardando(false);
+                setPantalla("categoria");
+              }} disabled={focusGuardando} style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:12,padding:14,fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",opacity:focusGuardando?0.6:1}}>{focusGuardando?"Guardando...":"Finalizar configuración"}</button>
+            </>
+          )}
         </div>
       )}
 

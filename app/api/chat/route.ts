@@ -1602,7 +1602,37 @@ ${ultimos}`;
     return NextResponse.json({ sesion: sesionDia || null });
   }
 
-  // FORGE ATHLETE SNAPSHOT — construye el estado real y auditable del atleta que TODOS los componentes
+  // FORGE FOCUS — CONTRATO DETERMINISTA. Construye la interpretacion estructurada de las fuentes de
+// entrenamiento del atleta (Forge-controlled vs external) ANTES de que ningun LLM las use. El Week
+// Planner de Focus consume esto directamente — nunca interpreta las tablas crudas por su cuenta.
+// Un reporte externo NUNCA modifica la planificacion directamente aqui, solo se registra como dato;
+// la decision de si afecta a la proxima sesion vive en el Week Planner, no en este contrato.
+async function buildFocusContext(supabase: any, codigo: string) {
+  const { data: fuentes } = await supabase.from("athlete_training_sources").select("*").eq("user_codigo", codigo).eq("activo", true);
+  if (!fuentes || fuentes.length === 0) {
+    return { esModoFocus: false, disciplinasForge: [], disciplinasExternas: [], cargaExternaReciente: [] };
+  }
+
+  const disciplinasForge = fuentes.filter((f: any) => f.owner === "forge");
+  const disciplinasExternas = fuentes.filter((f: any) => f.owner === "external");
+
+  // Carga externa real reportada en los ultimos 7 dias — solo lo que el usuario compartio, nunca inventado
+  const hace7diasFocus = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const { data: registrosExternos } = await supabase.from("external_training_records")
+    .select("fecha,disciplina,duracion,intensidad_percibida,tipo,fatiga_post,load_quality")
+    .eq("user_codigo", codigo)
+    .gte("fecha", hace7diasFocus)
+    .order("fecha", { ascending: false });
+
+  return {
+    esModoFocus: disciplinasExternas.length > 0,
+    disciplinasForge,
+    disciplinasExternas,
+    cargaExternaReciente: registrosExternos || [],
+  };
+}
+
+// FORGE ATHLETE SNAPSHOT — construye el estado real y auditable del atleta que TODOS los componentes
 // del Orchestrator deben recibir. Elimina la pregunta "¿esta usando mis datos?" haciendola verificable
 // en los logs. Incluye ultimas sesiones reales, volumen reciente por disciplina, y marcas.
 async function buildAthleteSnapshot(supabase: any, codigo: string) {

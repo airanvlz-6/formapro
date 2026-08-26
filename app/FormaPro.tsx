@@ -2314,9 +2314,23 @@ ${testStr}`}]});
                   {disciplina:focusDisciplinaForge,owner:"forge",objetivo:focusObjetivoForge,prioridad:focusPrioridad}
                 ]}});
                 setModoEntrada("focus");
+                // FIX: en vez de ir a "categoria" (que preguntaria de nuevo que tipo de atleta eres,
+                // sobrescribiendo lo ya configurado en Focus), mapeamos la disciplina que escribio el
+                // usuario a una categoria real y vamos DIRECTO al formulario general (edad, disponibilidad,
+                // duracion por sesion) — ese cuestionario SI es necesario, nunca redundante con Focus.
+                const disciplinaLower=focusDisciplinaForge.toLowerCase();
+                const categoriaInferida=
+                  /correr|running|carrera|maraton|trail/.test(disciplinaLower)?"carrera":
+                  /fuerza|powerlifting|halterofilia|strongman/.test(disciplinaLower)?"fuerza":
+                  /hibrido|hyrox|triatlon|ocr/.test(disciplinaLower)?"hibrido":
+                  "funcional";
+                setCategoria(categoriaInferida);
+                setEspLabel(focusDisciplinaForge);
+                setRespuestas({especialidad:focusDisciplinaForge});
+                setPregIdx(0);
                 setFocusGuardando(false);
-                setPantalla("categoria");
-              }} disabled={focusGuardando} style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:12,padding:14,fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",opacity:focusGuardando?0.6:1}}>{focusGuardando?"Guardando...":"Finalizar configuración"}</button>
+                setPantalla("formulario");
+              }} disabled={focusGuardando} style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:12,padding:14,fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit",opacity:focusGuardando?0.6:1}}>{focusGuardando?"Guardando...":"Continuar con mi perfil"}</button>
             </>
           )}
         </div>

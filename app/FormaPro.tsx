@@ -603,6 +603,8 @@ export default function Forge() {
   const [onboardingFcConoce,setOnboardingFcConoce]=useState<boolean|null>(null);
   const [onboardingConfirmando,setOnboardingConfirmando]=useState(false);
   const [codigoFocusReservado,setCodigoFocusReservado]=useState<string|null>(null);
+  // FORGE: pregunta explicita y determinista de si empezar hoy o desde el proximo dia disponible
+  const [esperandoConfirmacionEmpezarHoy,setEsperandoConfirmacionEmpezarHoy]=useState(false);
   const [mensajes,setMensajes]=useState<{role:string;content:string}[]>([]);
   const [historial,setHistorial]=useState<{role:string;content:string}[]>([]);
   const [input,setInput]=useState("");
@@ -845,7 +847,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
   };
 
   // FORGE ORCHESTRATOR — genera la semana completa en 3 pasos pequeños en vez de una llamada gigante
-  const orquestarGeneracionSemana=async():Promise<any>=>{
+  const orquestarGeneracionSemana=async(empezarHoy:boolean=true):Promise<any>=>{
     if(!codigoUsuario) return null;
     console.log("=== FORGE ORCHESTRATOR: INICIO ===");
 
@@ -934,7 +936,10 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     // la semana ACTUAL (weekStartOrchestrator === weekStartSemanaActual). Si es una semana FUTURA
     // (porque la actual ya se cerro), NINGUN dia es "pasado" — todos son dias nuevos por construir.
     const esSemanaActualReal=weekStartOrchestrator===weekStartSemanaActual;
-    const hoyOrchIdx=esSemanaActualReal?((new Date()).getDay()||7)-1:-1; // -1 = ningun dia se considera pasado
+    // FIX: si el atleta eligio NO empezar hoy (pregunta explicita, nunca inferida), el indice de
+    // corte avanza 1 dia, excluyendo "hoy" del rango de dias a construir — sin depender de la hora
+    // ni de que el LLM decida esto, es una decision determinista basada en la respuesta real del usuario.
+    const hoyOrchIdx=esSemanaActualReal?((new Date()).getDay()||7)-1+(empezarHoy?0:1):-1;
     const diasPasadosSinReportar=esSemanaActualReal?(estructura.sessions||[]).filter((d:any)=>{
       const idxDia=ORDEN_DIAS.indexOf(normalizarDiaOrch(d.dia));
       return idxDia<hoyOrchIdx && !diasYaCompletados.some((dc:any)=>normalizarDiaOrch(dc.dia)===normalizarDiaOrch(d.dia));
@@ -1770,15 +1775,23 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
       // DESPUES generamos con los datos ya actualizados.
       if(esperandoConfirmacionDisponibilidad && codigoUsuario){
         setEsperandoConfirmacionDisponibilidad(false);
-        // FIX CRITICO: el mensaje del usuario ya se mostro al inicio de enviar(), pero faltaba
-        // detener el flujo normal del Coach conversacional (procesar_mensaje_contexto seguia
-        // ejecutandose EN PARALELO, generando una respuesta generica confusa mientras el Orchestrator
-        // trabajaba en segundo plano). Ahora se registra el mensaje en historial y se corta el flujo.
+        // FIX: pregunta EXPLICITA y determinista (nunca inferida por hora ni decidida por el LLM)
+        // de si el atleta quiere empezar hoy mismo o desde el proximo dia disponible — evita
+        // prescribir una sesion de hoy cuando genera la semana ya entrada la noche.
+        const hoyEmpezarStr=new Date().toLocaleDateString("es-ES",{weekday:"long",timeZone:"Europe/Madrid"});
+        setMensajes(prev=>[...prev,{role:"assistant",content:`Perfecto. Una última cosa: hoy es ${hoyEmpezarStr} — ¿quieres empezar tu planificación hoy mismo, o prefieres arrancar desde el próximo día disponible?`}]);
+        setEsperandoConfirmacionEmpezarHoy(true);
+        setCargando(false);
+        return;
+      }
+      if(esperandoConfirmacionEmpezarHoy && codigoUsuario){
+        setEsperandoConfirmacionEmpezarHoy(false);
         const mensajeDisplayConfirmacion=texto.trim();
+        const empezarHoyReal=/^(s[ií]|hoy|empezamos hoy|claro|vale|de acuerdo)/i.test(mensajeDisplayConfirmacion);
         const dispararGeneracion=async()=>{
           setGenerandoSemana(true);
           setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu próxima semana paso a paso — analizando bloque, distribuyendo días y diseñando cada sesión..."}]);
-          const plan=await orquestarGeneracionSemana();
+          const plan=await orquestarGeneracionSemana(empezarHoyReal);
           const respuestaFinalGen=plan
             ? `✅ **Semana generada y guardada.**\n\nBloque: ${plan.block_name} — ${plan.week_objective}\n\nRevisa el detalle completo en **Mi Plan**. ¿Alguna duda?`
             : "⚠️ Hubo un problema generando la semana. Inténtalo de nuevo o dímelo directamente en el chat.";

@@ -1647,7 +1647,7 @@ ${ultimos}`;
 async function buildFocusContext(supabase: any, codigo: string) {
   const { data: fuentes } = await supabase.from("athlete_training_sources").select("*").eq("user_codigo", codigo).eq("activo", true);
   if (!fuentes || fuentes.length === 0) {
-    return { esModoFocus: false, disciplinasForge: [], disciplinasExternas: [], cargaExternaReciente: [] };
+    return { esModoFocus: false, disciplinasForge: [], disciplinasExternas: [], cargaExternaReciente: [], patronesDetectados: [], totalRegistrosHistoricos: 0 };
   }
 
   const disciplinasForge = fuentes.filter((f: any) => f.owner === "forge");
@@ -1661,11 +1661,45 @@ async function buildFocusContext(supabase: any, codigo: string) {
     .gte("fecha", hace7diasFocus)
     .order("fecha", { ascending: false });
 
+  // FORGE FOCUS — APRENDIZAJE DE PATRONES. Consulta el historico REAL acumulado (no simulado) y
+  // calcula, de forma determinista (promedios simples, sin LLM), si hay suficiente evidencia para
+  // detectar un patron de carga por dia de la semana. Con poco historico, honestamente no hay
+  // patron que reportar — el sistema mejora progresivamente segun se acumulan reportes reales,
+  // mismo principio ya aplicado con Readiness V1.
+  const { data: historicoCompleto } = await supabase.from("external_training_records")
+    .select("fecha,disciplina,intensidad_percibida,fatiga_post")
+    .eq("user_codigo", codigo)
+    .order("fecha", { ascending: false })
+    .limit(90);
+
+  const patronesPorDiaSemana: Record<string, { intensidades: number[]; count: number }> = {};
+  const DIAS_SEMANA_PATRON = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
+  (historicoCompleto || []).forEach((r: any) => {
+    if (r.intensidad_percibida == null) return;
+    const diaSemanaRegistro = DIAS_SEMANA_PATRON[new Date(r.fecha + 'T12:00:00').getDay()];
+    if (!patronesPorDiaSemana[diaSemanaRegistro]) patronesPorDiaSemana[diaSemanaRegistro] = { intensidades: [], count: 0 };
+    patronesPorDiaSemana[diaSemanaRegistro].intensidades.push(r.intensidad_percibida);
+    patronesPorDiaSemana[diaSemanaRegistro].count++;
+  });
+
+  // Solo reportamos un patron para un dia si hay AL MENOS 3 registros reales de ese dia — evidencia
+  // minima antes de considerarlo un patron, nunca extrapolamos de 1 solo dato.
+  const MINIMO_REGISTROS_PARA_PATRON = 3;
+  const patronesDetectados = Object.entries(patronesPorDiaSemana)
+    .filter(([, v]) => v.count >= MINIMO_REGISTROS_PARA_PATRON)
+    .map(([dia, v]) => ({
+      dia,
+      intensidad_media: Math.round((v.intensidades.reduce((a, b) => a + b, 0) / v.intensidades.length) * 10) / 10,
+      veces_reportado: v.count,
+    }));
+
   return {
     esModoFocus: disciplinasExternas.length > 0,
     disciplinasForge,
     disciplinasExternas,
     cargaExternaReciente: registrosExternos || [],
+    patronesDetectados,
+    totalRegistrosHistoricos: (historicoCompleto || []).length,
   };
 }
 
@@ -1788,7 +1822,8 @@ Este atleta tiene entrenamiento EXTERNO gestionado por un tercero (entrenador/bo
 Disciplina(s) EXTERNA(S) — NUNCA prescribas ni modifiques contenido para estos días, trátalos como carga externa ya ocupada:
 ${focusContext.disciplinasExternas.map((d: any) => `- ${d.disciplina}: días ${(d.dias || []).join(", ")}, intensidad habitual ${d.intensidad_habitual || "no especificada"}, duración ${d.duracion_habitual || "no especificada"}${d.variable ? " (puede variar bastante día a día)" : ""}`).join("\n")}
 ${focusContext.cargaExternaReciente.length > 0 ? `\nCarga externa REAL reportada recientemente por el atleta (últimos 7 días):\n${focusContext.cargaExternaReciente.map((r: any) => `- ${r.fecha}: ${r.disciplina}, ${r.duracion || "?"}min, RPE ${r.intensidad_percibida || "?"}, tipo: ${r.tipo || "no especificado"}`).join("\n")}` : "\nSin reportes recientes de carga externa — asume incertidumbre y aplica margen de seguridad conservador en los días adyacentes a la disciplina externa."}
-Distribuye los días de "${focusContext.disciplinasForge.map((d: any) => d.disciplina).join(", ")}" en los días LIBRES, considerando la carga externa (conocida o incierta) para no acumular fatiga excesiva en días consecutivos.` : ""}
+Distribuye los días de "${focusContext.disciplinasForge.map((d: any) => d.disciplina).join(", ")}" en los días LIBRES, considerando la carga externa (conocida o incierta) para no acumular fatiga excesiva en días consecutivos.
+${focusContext.patronesDetectados.length > 0 ? `\n📊 PATRÓN APRENDIDO (basado en ${focusContext.totalRegistrosHistoricos} reportes reales de este atleta): ${focusContext.patronesDetectados.map((p: any) => `${p.dia} suele tener intensidad media ${p.intensidad_media}/10 (${p.veces_reportado} reportes)`).join(", ")}. Usa esto para anticipar mejor la fatiga residual de esos días.` : ""}` : ""}
 ${estado.athlete_state?.estado && estado.athlete_state.estado !== "normal" ? `
 🔴 ESTADO DEL ATLETA — RESTRICCIÓN ACTIVA (${estado.athlete_state.estado.toUpperCase()}) desde ${estado.athlete_state.desde}, motivo: ${estado.athlete_state.motivo}. Esta semana debe planificarse como semana de gestión de restricción: prioriza mantenimiento/adaptación sobre progresión de carga, respeta estrictamente las restricciones duras listadas arriba, y considera reducir el volumen/intensidad global hasta que el atleta confirme resolución. NO trates esta semana como una semana normal del bloque.` : ""}
 

@@ -2200,11 +2200,10 @@ ${testStr}`}]});
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
             {[
               {modo:"supervision",emoji:"👥",titulo:"Tengo entrenador o ya tengo un plan",desc:"Forge complementa tu planificación y te ayuda a decidir cómo entrenar hoy.",recomendado:true},
-              {modo:"planificacion",emoji:"📅",titulo:"Quiero que Forge planifique mi entrenamiento",desc:"Forge diseña y adapta tu planificación según tus objetivos y evolución."},
-              {modo:"consulta",emoji:"💬",titulo:"Solo quiero consultar",desc:"Resuelve dudas de entrenamiento y recibe orientación contextual."},
-              {modo:"empezando",emoji:"🌱",titulo:"Estoy empezando",desc:"Forge te guía desde cero."},
+              {modo:"focus",emoji:"🎯",titulo:"Tengo entrenador para una parte, quiero que Forge gestione otra",desc:"Forge planifica una disciplina (ej: running) y respeta tu entrenamiento externo (ej: CrossFit) sin interferir."},
+              {modo:"planificacion",emoji:"📅",titulo:"Quiero que Forge planifique mi entrenamiento",desc:"Forge diseña y adapta tu planificación completa según tus objetivos y evolución."},
             ].map(op=>(
-              <div key={op.modo} onClick={()=>{setModoEntrada(op.modo);setPantalla("categoria");}} className="cat-card" style={{background:C.card,border:op.recomendado?`2px solid ${C.accent}`:`2px solid ${C.border}`,borderRadius:16,padding:"18px 20px",cursor:"pointer",display:"flex",alignItems:"center",gap:16,position:"relative"}}>
+              <div key={op.modo} onClick={()=>{if(op.modo==="focus"){setPantalla("focus_onboarding");}else{setModoEntrada(op.modo);setPantalla("categoria");}}} className="cat-card" style={{background:C.card,border:op.recomendado?`2px solid ${C.accent}`:`2px solid ${C.border}`,borderRadius:16,padding:"18px 20px",cursor:"pointer",display:"flex",alignItems:"center",gap:16,position:"relative"}}>
                 {op.recomendado&&(
                   <span style={{position:"absolute",top:-10,left:16,background:C.accent,color:"#fff",fontSize:10,fontWeight:700,padding:"2px 10px",borderRadius:100,letterSpacing:0.5,textTransform:"uppercase"}}>Recomendado si ya tienes plan</span>
                 )}

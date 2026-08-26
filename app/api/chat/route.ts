@@ -4405,10 +4405,35 @@ if (action === "obtener_daily_briefing") {
     // Block Analyzer ya recibe las restricciones, pero eso es interpretacion, no garantia. Este
     // validator comprueba el plan REALMENTE GENERADO contra las hard constraints activas — si el
     // LLM ignoro la instruccion, el codigo lo detecta y corrige/bloquea, nunca confia ciegamente.
-    // FORGE FOCUS — GUARD DETERMINISTA: ultima linea de defensa, independiente de si el prompt del
-// Block Analyzer se respeto. Verifica que ningun dia marcado como disciplina EXTERNA tenga una
-// sesion real prescrita por Forge en el plan a punto de guardarse. El codigo decide, no el LLM.
+    // FORGE FOCUS — COMPLETADO DETERMINISTA (no guard reactivo, sino AUTORIDAD activa). El codigo
+// SOBRESCRIBE cualquier dia marcado como disciplina externa con external_blocked, sin importar
+// que genero el LLM para ese dia. El LLM no decide si respeta el dia externo — el codigo se lo
+// impone despues, siempre. Esto sustituye cualquier contenido que el Session Builder haya podido
+// generar incorrectamente para esos dias.
 const focusContextValidator = await buildFocusContext(supabase, codigo);
+    if (focusContextValidator.esModoFocus && Array.isArray(plan.sessions)) {
+      const normalizarDiaFocusCompletado = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      const mapaDiasExternos: Record<string, string> = {};
+      focusContextValidator.disciplinasExternas.forEach((d: any) => {
+        (d.dias || []).forEach((dia: string) => { mapaDiasExternos[normalizarDiaFocusCompletado(dia)] = d.disciplina; });
+      });
+      plan.sessions = plan.sessions.map((s: any) => {
+        const diaNorm = normalizarDiaFocusCompletado(s.dia);
+        if (mapaDiasExternos[diaNorm]) {
+          return {
+            dia: s.dia,
+            tipo: "external_blocked",
+            titulo: `${mapaDiasExternos[diaNorm]} · Entrenamiento externo`,
+            por_que: "Gestionado por tu entrenador externo — Forge no prescribe ni modifica esta sesión.",
+            descripcion: `Este día entrenas ${mapaDiasExternos[diaNorm]} con tu entrenador. Si quieres, cuéntame cómo fue (duración, intensidad, sensaciones) para que pueda ajustar mejor tus sesiones de running.`,
+            disciplina: mapaDiasExternos[diaNorm],
+            gestionado_por: "external",
+          };
+        }
+        return s;
+      });
+      console.log(`✅ FOCUS: días externos [${Object.keys(mapaDiasExternos).join(", ")}] completados deterministicamente con external_blocked`);
+    }
     if (focusContextValidator.esModoFocus && Array.isArray(plan.sessions)) {
       const normalizarDiaFocusValidator = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
       const diasExternosValidator = new Set<string>();

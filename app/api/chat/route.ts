@@ -879,7 +879,49 @@ async function calcularEstadoOnboarding(supabase: any, codigo: string, mode: str
   return { completedFields, missingFields, camposRequeridos };
 }
 
-if (action === "obtener_estado_onboarding") {
+if (action === "eliminar_cuenta") {
+    // FORGE — eliminacion de cuenta con confirmacion ya realizada en el frontend (doble paso).
+    // El email queda registrado como bloqueado para evitar reabrir cuenta nueva y reiniciar el
+    // periodo de prueba gratuita. Elimina datos reales de todas las tablas relacionadas.
+    const { data: usuarioEliminar } = await supabase.from("usuarios").select("email").eq("codigo", codigo).maybeSingle();
+    if (!usuarioEliminar) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+
+    if (usuarioEliminar.email) {
+      await supabase.from("emails_eliminados").insert({ email: usuarioEliminar.email.toLowerCase().trim(), codigo_original: codigo, motivo: "eliminacion_solicitada_por_usuario" });
+    }
+
+    // Eliminar datos relacionados en orden (tablas con foreign key logica al codigo)
+    await Promise.all([
+      supabase.from("weekly_plan").delete().eq("user_codigo", codigo),
+      supabase.from("weekly_plan_generation_log").delete().eq("user_codigo", codigo),
+      supabase.from("weekly_plan_events").delete().eq("user_codigo", codigo),
+      supabase.from("pending_actions").delete().eq("user_codigo", codigo),
+      supabase.from("athlete_coaching_notes").delete().eq("user_codigo", codigo),
+      supabase.from("athlete_state_events").delete().eq("user_codigo", codigo),
+      supabase.from("athlete_training_sources").delete().eq("user_codigo", codigo),
+      supabase.from("external_training_records").delete().eq("user_codigo", codigo),
+      supabase.from("physiology_records").delete().eq("user_codigo", codigo),
+      supabase.from("readiness_checkins").delete().eq("user_codigo", codigo),
+      supabase.from("session_modification_events").delete().eq("user_codigo", codigo),
+      supabase.from("onboarding_state").delete().eq("user_codigo", codigo),
+      supabase.from("block_outcomes").delete().eq("user_codigo", codigo),
+    ]);
+
+    const { error: errorEliminarUsuario } = await supabase.from("usuarios").delete().eq("codigo", codigo);
+    if (errorEliminarUsuario) return NextResponse.json({ error: errorEliminarUsuario.message }, { status: 500 });
+
+    console.log(`🗑️ CUENTA ELIMINADA: ${codigo}, email bloqueado: ${usuarioEliminar.email || "sin email"}`);
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === "verificar_email_bloqueado") {
+    const { email } = datos || {};
+    if (!email) return NextResponse.json({ error: "Falta email" }, { status: 400 });
+    const { data: emailBloqueado } = await supabase.from("emails_eliminados").select("id").eq("email", email.toLowerCase().trim()).maybeSingle();
+    return NextResponse.json({ bloqueado: !!emailBloqueado });
+  }
+
+  if (action === "obtener_estado_onboarding") {
     const { mode } = datos;
     const { data: estadoExistente } = await supabase.from("onboarding_state").select("*").eq("user_codigo", codigo).maybeSingle();
     const modoReal = estadoExistente?.mode || mode || "supervision";

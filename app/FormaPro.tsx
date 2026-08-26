@@ -2349,11 +2349,12 @@ ${testStr}`}]});
               </div>
               <button onClick={async()=>{
                 setFocusGuardando(true);
-                // FIX CRITICO: bug real confirmado — antes se generaba un codigo aqui, y otro
-                // DISTINTO se generaba despues en iniciarChat (codigoUsuario aun no existia en este
-                // punto), guardando athlete_training_sources bajo un codigo que nunca se usaba
-                // realmente. Ahora se genera UNA sola vez, reservado en codigoFocusReservado.
-                const nuevoCodigo=generarCodigo();
+                // FIX CRITICO REAL (segundo intento): confirmado con evidencia — el fix anterior seguia
+                // ignorando codigoPersonal (el codigo que el usuario puede escribir manualmente en
+                // el formulario), generando siempre un codigo aleatorio nuevo con generarCodigo().
+                // Ahora se respeta codigoPersonal si el usuario lo definio, exactamente igual que
+                // hace iniciarChat — ambos puntos deben calcular el codigo con la MISMA logica.
+                const nuevoCodigo=codigoPersonal.trim().length>=5?codigoPersonal.trim():generarCodigo();
                 setCodigoFocusReservado(nuevoCodigo);
                 await apiCall({action:"guardar_training_sources",codigo:nuevoCodigo,datos:{disciplinas:[
                   {disciplina:focusDisciplinaExterna,owner:"external",dias:focusDiasExternos,duracion_habitual:focusDuracionExterna,intensidad_habitual:focusIntensidadExterna,tipo_trabajo:focusTipoTrabajoExterna,variable:focusVariable},

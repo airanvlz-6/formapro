@@ -605,6 +605,8 @@ export default function Forge() {
   const [codigoFocusReservado,setCodigoFocusReservado]=useState<string|null>(null);
   // FORGE: pregunta explicita y determinista de si empezar hoy o desde el proximo dia disponible
   const [esperandoConfirmacionEmpezarHoy,setEsperandoConfirmacionEmpezarHoy]=useState(false);
+  const [confirmandoEliminarCuenta,setConfirmandoEliminarCuenta]=useState(false);
+  const [eliminandoCuenta,setEliminandoCuenta]=useState(false);
   const [mensajes,setMensajes]=useState<{role:string;content:string}[]>([]);
   const [historial,setHistorial]=useState<{role:string;content:string}[]>([]);
   const [input,setInput]=useState("");
@@ -3041,6 +3043,36 @@ ${testStr}`}]});
             <button onClick={actualizarPerfil} style={{background:accentColor,color:"#fff",border:"none",borderRadius:10,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
               Guardar código y email
             </button>
+
+            <div style={{borderTop:`1px solid ${C.border}`,paddingTop:14,marginTop:4}}>
+              {!confirmandoEliminarCuenta?(
+                <button onClick={()=>setConfirmandoEliminarCuenta(true)} style={{width:"100%",background:"none",border:"1px solid #ff444460",borderRadius:10,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer",color:"#ff4444",fontFamily:"inherit"}}>
+                  Eliminar cuenta
+                </button>
+              ):(
+                <div style={{background:"#ff444410",border:"1px solid #ff444440",borderRadius:12,padding:"14px"}}>
+                  <p style={{color:"#ff4444",fontSize:13,fontWeight:700,marginBottom:6}}>¿Seguro que quieres eliminar tu cuenta?</p>
+                  <p style={{color:C.muted,fontSize:12,marginBottom:12,lineHeight:1.5}}>Se eliminará toda tu planificación, historial y datos. Esta acción no se puede deshacer.</p>
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={async()=>{
+                      setEliminandoCuenta(true);
+                      const res=await apiCall({action:"eliminar_cuenta",codigo:codigoUsuario});
+                      if(res?.ok){
+                        window.location.href="/";
+                      }else{
+                        setEliminandoCuenta(false);
+                        setConfirmandoEliminarCuenta(false);
+                      }
+                    }} disabled={eliminandoCuenta} style={{flex:1,background:"#ff4444",color:"#fff",border:"none",borderRadius:10,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",opacity:eliminandoCuenta?0.6:1}}>
+                      {eliminandoCuenta?"Eliminando...":"Sí, eliminar"}
+                    </button>
+                    <button onClick={()=>setConfirmandoEliminarCuenta(false)} disabled={eliminandoCuenta} style={{flex:1,background:"none",border:`1px solid ${C.border}`,borderRadius:10,padding:"10px",fontSize:13,fontWeight:600,cursor:"pointer",color:C.ink,fontFamily:"inherit"}}>
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -2422,6 +2422,7 @@ ${testStr}`}]});
             disabled={onboardingConfirmando||onboardingFcConoce===null||(onboardingFcConoce===true&&(!onboardingFcMax.trim()||!onboardingFcMin.trim()))}
             onClick={async()=>{
               setOnboardingConfirmando(true);
+              console.log("🔍 DEBUG onboarding_gaps — codigoUsuario:",codigoUsuario,"onboardingMissing:",JSON.stringify(onboardingMissing));
               const perfilActualizado={...respuestas,fc_max:onboardingFcConoce?onboardingFcMax:null,fc_max_metodo:onboardingFcConoce?"real":"formula_edad"};
               await apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{perfil:perfilActualizado}});
               const resConfirmar=await apiCall({action:"confirmar_onboarding",codigo:codigoUsuario,datos:{mode:modoEntrada}});

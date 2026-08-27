@@ -719,7 +719,17 @@ export default function Forge() {
           setModeChangeEnCurso(modeChangeTarget);
           setTimeout(async()=>{
             setCargando(true);
-            const promptCambioModo=`El atleta quiere cambiar su modo de Forge a "${modeChangeTarget}". Para completar el cambio, faltan estos datos en su perfil: ${modeChangeMissing}. Pregúntale por ellos de forma natural y conversacional, uno o dos a la vez, empezando ahora mismo — no esperes a que él inicie la conversación.`;
+            const preguntasCambioModo:Record<string,string>=modeChangeTarget==="focus"?{
+      disponibilidad:"¿qué días de la semana puedes entrenar en total (sumando todo, incluida la disciplina externa)?",
+      disciplina_externa:"¿qué disciplina entrenas con OTRO entrenador o por tu cuenta, que Forge NO debe tocar ni modificar (ej: CrossFit, running, natación)?",
+      dias_externos:"¿qué días concretos entrenas esa disciplina externa?",
+      duracion_sesion:"¿cuánto tiempo tienes disponible para la disciplina que gestionará Forge?",
+    }:{
+      disponibilidad:"¿qué días de la semana puedes entrenar?",
+      duracion_sesion:"¿cuánto tiempo tienes disponible por sesión?",
+    };
+    const preguntasPendientesTexto=modeChangeMissing?.split(',').filter((f:string)=>preguntasCambioModo[f]).map((f:string)=>preguntasCambioModo[f]).join(" ")||"";
+    const promptCambioModo=`El atleta quiere cambiar su modo de Forge a "${modeChangeTarget}". IMPORTANTE — modo Focus significa: Forge gestiona SOLO UNA disciplina, y el atleta tiene OTRA disciplina completamente distinta gestionada por un entrenador externo que Forge nunca debe tocar. Son dos cosas DIFERENTES, no la misma actividad en distintos sitios. Para completar el cambio necesitas preguntar esto de forma clara y explícita, EN ESTE PRIMER MENSAJE (no esperes a que el atleta escriba primero): ${preguntasPendientesTexto} Sé directo y estructurado, no ambiguo — deja claro que la disciplina externa es una actividad DISTINTA a la que gestionará Forge.`;
             const dataCambioModo=await apiCall({model:"claude-sonnet-4-5",max_tokens:1000,system:buildPrompt(CATEGORIAS.find((c:Categoria)=>c.id===u.categoria)!,u.perfil,(u.historial||[]).slice(-6),""),messages:[{role:"user",content:promptCambioModo}]});
             const textoCambioModoCrudo=(dataCambioModo.content?.map((b:{text?:string})=>b.text||"").join("")||"").trim();
             // FIX: limpiar el tag [STATE_UPDATE] antes de mostrar, mismo tratamiento que el resto

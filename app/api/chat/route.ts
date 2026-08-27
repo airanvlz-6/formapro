@@ -2254,6 +2254,43 @@ Si un dia es descanso, usa tipo "descanso" (los demas campos pueden quedar vacio
       const plannerMatch = plannerClean.match(/\{[\s\S]*\}/);
       if (!plannerMatch) throw new Error("Week Planner no devolvio JSON valido");
       const estructuraSemana = JSON.parse(plannerMatch[0]);
+
+      // FORGE FOCUS — CORRECCION DETERMINISTA DE DIAS: el prompt del Week Planner puede ignorar la
+      // instruccion y asignar la disciplina Forge a un dia de la disciplina externa (bug real
+      // confirmado con evidencia: asigno carrera al sabado, dia de CrossFit). En vez de confiar en
+      // que el LLM respete la regla, el codigo la GARANTIZA aqui: reasigna deterministamente
+      // cualquier sesion Forge mal ubicada al primer dia permitido real, sin perder el contenido.
+      const focusContextPlanner = await buildFocusContext(supabase, codigo);
+      if (focusContextPlanner.esModoFocus && Array.isArray(estructuraSemana.sessions)) {
+        const normalizarDiaPlanner = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        const diasExternosSet = new Set<string>();
+        focusContextPlanner.disciplinasExternas.forEach((d: any) => (d.dias || []).forEach((dia: string) => diasExternosSet.add(normalizarDiaPlanner(dia))));
+        const diasForgePermitidos = (focusContextPlanner.disciplinasForge[0]?.dias || []).map(normalizarDiaPlanner);
+
+        if (diasForgePermitidos.length > 0) {
+          const diasYaUsados = new Set(estructuraSemana.sessions.filter((s: any) => diasExternosSet.has(normalizarDiaPlanner(s.dia))).map(() => null));
+          let indiceDiaLibre = 0;
+          estructuraSemana.sessions = estructuraSemana.sessions.map((s: any) => {
+            const diaNorm = normalizarDiaPlanner(s.dia);
+            const esExterno = diasExternosSet.has(diaNorm);
+            const esDiaForgeValido = diasForgePermitidos.includes(diaNorm);
+            if (!esExterno && !esDiaForgeValido && s.tipo !== "descanso") {
+              // Sesion Forge mal ubicada (ni externo ni dia permitido) — reasignar al primer dia permitido libre
+              while (indiceDiaLibre < diasForgePermitidos.length) {
+                const diaCandidato = diasForgePermitidos[indiceDiaLibre];
+                const yaOcupado = estructuraSemana.sessions.some((otra: any) => normalizarDiaPlanner(otra.dia) === diaCandidato && otra !== s);
+                indiceDiaLibre++;
+                if (!yaOcupado) {
+                  console.log(`🔧 CORRECCION DETERMINISTA: sesion Forge reasignada de "${s.dia}" a "${diaCandidato}"`);
+                  return { ...s, dia: diaCandidato };
+                }
+              }
+            }
+            return s;
+          });
+        }
+      }
+
       return NextResponse.json({ ok: true, estructura: estructuraSemana });
     } catch (err: any) {
       return NextResponse.json({ error: "Error en Week Planner: " + err.message }, { status: 500 });

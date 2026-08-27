@@ -405,7 +405,7 @@ export default function MiPerfil() {
                 <div>
                   <p style={{ color: "#4CAF50", fontSize: 15, fontWeight: 700, marginBottom: 8 }}>✅ Modo {MODOS_INFO[modoDestino!]?.titulo} activado</p>
                   <p style={{ color: C.muted, fontSize: 13, marginBottom: 18, lineHeight: 1.5 }}>Tu perfil ya está listo. El siguiente paso es hablar con el Coach para generar tu primera semana de entrenamiento.</p>
-                  <a href={`/app?codigo=${codigo}`} style={{ display: "block", textAlign: "center", width: "100%", background: C.accent, color: "#fff", border: "none", borderRadius: 10, padding: 12, fontSize: 14, fontWeight: 600, textDecoration: "none" }}>
+                  <a href={`/app?codigo=${codigo}&generar_semana_focus=1`} style={{ display: "block", textAlign: "center", width: "100%", background: C.accent, color: "#fff", border: "none", borderRadius: 10, padding: 12, fontSize: 14, fontWeight: 600, textDecoration: "none" }}>
                     Ir al Coach y generar mi semana →
                   </a>
                 </div>

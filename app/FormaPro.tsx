@@ -1447,7 +1447,15 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
       // cuantos dias puede entrenar la disciplina Forge (formulario general), ya tenemos informacion
       // suficiente para DEDUCIR sus dias libres reales — nunca dejar distribucion_semanal vacia
       // cuando el dato es matematicamente derivable, evita que el Coach pregunte algo que ya sabemos.
+      // FIX ARQUITECTONICO: ahora que TODOS los modos pasan por el mismo cuestionario (que incluye
+      // dias_disponibles), construimos distribucion_semanal para CUALQUIER modo, no solo Focus.
+      // Mismo bug de siempre: el dato existia en Supabase pero el estado de React nunca se
+      // sincronizaba, causando que el Coach dijera "no tengo tu disponibilidad" falsamente.
       let distribucionAutoFocus="";
+      const diasDisponiblesGenerales=(perfil.dias_disponibles as string[])||[];
+      if(modoEntrada!=="focus"&&diasDisponiblesGenerales.length>0){
+        distribucionAutoFocus=JSON.stringify({ disponibilidad: diasDisponiblesGenerales.join(", ") });
+      }
       if(modoEntrada==="focus"&&focusDiasExternos.length>0){
         // FIX ARQUITECTONICO: eliminada toda inferencia numerica ("3 dias" -> deducir cuales).
         // dias_disponibles ahora es SELECCION EXPLICITA del usuario (array real de dias concretos,

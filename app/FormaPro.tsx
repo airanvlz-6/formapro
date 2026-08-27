@@ -1199,15 +1199,16 @@ const [equipoSeleccionado,setEquipoSeleccionado]=useState<any>(null);
   // saltar directamente a "final" sin ningun dato — necesario para que calcularEstadoOnboarding
   // pueda evaluar correctamente un futuro cambio de modo hacia Focus/Coach sin preguntar de nuevo
   // datos que el atleta ya deberia tener guardados desde el principio, sin importar su modo.
-  const CAMPOS_BASE_MINIMOS=["edad","nivel","objetivo_detalle"];
+  // FIX ARQUITECTONICO: un unico cuestionario base para TODOS los modos, sin bifurcacion por
+  // modoEntrada. Todos los usuarios completan el mismo onboarding — el modo determina el
+  // comportamiento posterior de Forge, no que datos basicos se recogen. Esto elimina la necesidad
+  // de gestionar 3 variantes de onboarding y sus transiciones futuras entre modos.
   const preguntas:Pregunta[]=preguntasBase.filter(p=>{
-    if((modoEntrada==="supervision"||modoEntrada==="consulta")&&!CAMPOS_BASE_MINIMOS.includes(p.id)) return false;
     if(!p.condicionDe) return true;
     const valorCondicion=respuestas[p.condicionDe];
     if(typeof valorCondicion!=="string") return false;
     return p.condicionValor?p.condicionValor.test(valorCondicion):true;
   });
-  if(typeof window!=="undefined") console.log("🔍 DEBUG preguntas:",modoEntrada,preguntasBase.length,"->",preguntas.length,JSON.stringify(preguntas.map(p=>p.id)));
   const pregActual=preguntas[pregIdx];
   const diasPrueba=10;
   const diasUsados=fechaRegistro?Math.floor((new Date().getTime()-new Date(fechaRegistro).getTime())/(1000*60*60*24)):0;

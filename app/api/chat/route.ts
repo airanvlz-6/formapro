@@ -2140,7 +2140,7 @@ Categoría/especialidad del atleta: ${usuarioAnalyzer?.especialidad || usuarioAn
 Objetivo principal: ${JSON.stringify(usuarioAnalyzer?.objetivo_principal) || "no especificado"}
 Ciclo actual: ${JSON.stringify(estado.ciclo)}
 Debilidad prioritaria activa: ${debilidadPrioritaria ? debilidadPrioritaria.nombre_visible : "ninguna"}
-Disponibilidad: ${usuarioAnalyzer?.distribucion_semanal || "no especificada"}
+Disponibilidad: ${focusContext.esModoFocus && focusContext.disciplinasForge[0]?.dias?.length > 0 ? `${focusContext.disciplinasForge[0].disciplina}: ${focusContext.disciplinasForge[0].dias.join(", ")}` : usuarioAnalyzer?.distribucion_semanal || "no especificada"}
 ${metodosYaProbadosTexto}
 ${restriccionesTexto}
 ${coachingNotesTexto}

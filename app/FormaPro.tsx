@@ -54,7 +54,7 @@ const FORMULARIOS: Record<string, Pregunta[]> = {
     { id: "sexo", label: "¿Con qué género te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
     { id: "nivel", label: "¿Cuál es tu nivel de experiencia?", tipo: "opciones", opciones: ["Sedentario / Empiezo de cero", "Algo activo (ejercicio ocasional)", "Moderado (1-2 años)", "Avanzado (+2 años)"] },
     { id: "objetivo_principal", label: "¿Cuál es tu objetivo principal?", tipo: "opciones", opciones: ["Perder peso / reducir grasa", "Tonificar y definir", "Ganar energía y bienestar", "Mejorar movilidad", "Mantenerme en forma"] },
-    { id: "dias", label: "¿Cuántos días por semana puedes entrenar?", tipo: "opciones", opciones: ["2 días", "3 días", "4 días", "5 días"] },
+    { id: "dias_disponibles", label: "¿Qué días de la semana puedes entrenar?", tipo: "dias_semana" },
     { id: "duracion", label: "¿Cuánto tiempo por sesión?", tipo: "opciones", opciones: ["Hasta 30 min", "Hasta 45 min", "Hasta 1 hora", "Más de 1 hora"] },
     { id: "material", label: "¿Con qué equipamiento cuentas?", tipo: "multi", opciones: ["Solo mi cuerpo (casa / parque)", "Mancuernas", "Bandas elásticas", "Kettlebells", "Máquinas de gimnasio", "Barra de dominadas"] },
     { id: "lesiones", label: "¿Tienes alguna limitación física o lesión?", tipo: "texto", placeholder: "Ej: dolor lumbar, rodilla operada... o ninguna" },
@@ -65,7 +65,7 @@ const FORMULARIOS: Record<string, Pregunta[]> = {
     { id: "sexo", label: "¿Con qué género te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
     { id: "nivel_cf", label: "¿Cuál es tu nivel en CrossFit?", tipo: "opciones", opciones: ["Principiante (0-1 año)", "Intermedio (1-3 años)", "Avanzado (+3 años)", "Competidor"] },
     
-    { id: "dias", label: "¿Cuántos días por semana puedes entrenar?", tipo: "opciones", opciones: ["3 días", "4 días", "5 días", "6 días"] },
+    { id: "dias_disponibles", label: "¿Qué días de la semana puedes entrenar?", tipo: "dias_semana" },
     { id: "duracion", label: "¿Cuánto tiempo por sesión?", tipo: "opciones", opciones: ["Hasta 45 min", "Hasta 1 hora", "Hasta 1h 30min", "Más de 1h 30min"] },
     { id: "lugar_entreno", label: "¿Dónde entrenas habitualmente?", tipo: "opciones", opciones: ["Box CrossFit (equipamiento completo)", "Gimnasio convencional adaptado", "En casa con equipamiento básico", "Mixto (box + casa)"] },
     { id: "punto_debil", label: "¿Cuál es tu mayor punto débil?", tipo: "opciones", opciones: ["Cardio / resistencia metabólica", "Fuerza máxima", "Técnica olímpica", "Movimientos gimnásticos", "Todos por igual"] },
@@ -81,7 +81,7 @@ const FORMULARIOS: Record<string, Pregunta[]> = {
     { id: "nivel", label: "¿Cuál es tu nivel en calistenia?", tipo: "opciones", opciones: ["Principiante (0-1 año)", "Intermedio (1-3 años)", "Avanzado (+3 años)"] },
     
     { id: "objetivo_skill", label: "¿Qué habilidad quieres conseguir o mejorar?", tipo: "texto", placeholder: "Ej: front lever, planche, muscle-up en anillas, handstand push-up..." },
-    { id: "dias", label: "¿Cuántos días por semana puedes entrenar?", tipo: "opciones", opciones: ["2 días", "3 días", "4 días", "5 días"] },
+    { id: "dias_disponibles", label: "¿Qué días de la semana puedes entrenar?", tipo: "dias_semana" },
     { id: "duracion", label: "¿Cuánto tiempo por sesión?", tipo: "opciones", opciones: ["Hasta 30 min", "Hasta 45 min", "Hasta 1 hora", "Más de 1 hora"] },
     { id: "material", label: "¿Con qué equipamiento cuentas?", tipo: "multi", opciones: ["Barra de dominadas", "Paralelas / dips", "Anillas", "Parque de calistenia", "Solo suelo"] },
     { id: "objetivo_fisico", label: "¿Tienes también un objetivo físico?", tipo: "opciones", opciones: ["Solo skills y fuerza relativa", "Ganar algo de músculo", "Perder grasa mientras gano fuerza", "Solo mantenimiento y skills"] },
@@ -93,7 +93,7 @@ const FORMULARIOS: Record<string, Pregunta[]> = {
     { id: "sexo", label: "¿Con qué género te identificas?", tipo: "opciones", opciones: ["Hombre", "Mujer", "Prefiero no decirlo"] },
     { id: "nivel_hyrox", label: "¿Cuál es tu experiencia en Hyrox?", tipo: "opciones", opciones: ["Nunca he competido", "1 carrera completada", "2-4 carreras", "Competidor habitual"] },
     
-    { id: "dias", label: "¿Cuántos días por semana puedes entrenar?", tipo: "opciones", opciones: ["3 días", "4 días", "5 días", "6 días"] },
+    { id: "dias_disponibles", label: "¿Qué días de la semana puedes entrenar?", tipo: "dias_semana" },
     { id: "duracion", label: "¿Cuánto tiempo por sesión?", tipo: "opciones", opciones: ["Hasta 45 min", "Hasta 1 hora", "Hasta 1h 30min", "Más de 1h 30min"] },
     { id: "material", label: "¿Tienes acceso al material de Hyrox?", tipo: "multi", opciones: ["SkiErg", "Sled / trineo", "Remo / RowErg", "Kettlebells", "Wall balls", "Sandbag", "Solo equipamiento básico"] },
     { id: "proxima_carrera", label: "¿Tienes carrera próxima?", tipo: "opciones", opciones: ["Sí, en menos de 6 semanas", "Sí, en 6-12 semanas", "Sí, en más de 3 meses", "No tengo fecha aún"] },
@@ -110,7 +110,7 @@ const FORMULARIOS: Record<string, Pregunta[]> = {
     { id: "experiencia_cardio", label: "Y en resistencia / cardio?", tipo: "opciones", opciones: ["Poca o ninguna", "1-2 anos", "2-4 anos", "Mas de 4 anos"] },
     { id: "prioridad", label: "Que quieres priorizar?", tipo: "opciones", opciones: ["50/50 equilibrado", "Mas fuerza que resistencia", "Mas resistencia que fuerza", "Potencia explosiva"] },
     
-    { id: "dias", label: "Cuantos dias por semana puedes entrenar?", tipo: "opciones", opciones: ["3 dias", "4 dias", "5 dias", "6 dias"] },
+    { id: "dias_disponibles", label: "¿Qué días de la semana puedes entrenar?", tipo: "dias_semana" },
     { id: "duracion", label: "Cuanto tiempo por sesion?", tipo: "opciones", opciones: ["Hasta 45 min", "Hasta 1 hora", "Hasta 1h 30min", "Mas de 1h 30min"] },
     { id: "material", label: "Con que equipamiento cuentas?", tipo: "multi", opciones: ["Gimnasio completo", "Barras y discos", "Mancuernas", "Kettlebells", "Cinta / Pista", "Bicicleta / Cicloergometro"] },
     { id: "dispositivo", label: "¿Cuentas con reloj GPS o pulsómetro para tus sesiones?", tipo: "opciones", opciones: ["Sí, reloj GPS con pulsómetro", "Sí, solo pulsómetro (banda o reloj básico)", "No, entreno por sensación (RPE)"] },
@@ -127,7 +127,7 @@ const FORMULARIOS: Record<string, Pregunta[]> = {
     { id: "nivel_carrera", label: "¿Cómo es tu nivel de carrera?", tipo: "opciones", opciones: ["Principiante (nunca corro)", "Básico (corro ocasionalmente)", "Intermedio (corro regularmente)", "Avanzado (corro con frecuencia)"] },
     { id: "obstaculos_debiles", label: "¿Cuáles son tus obstáculos más débiles?", tipo: "multi", opciones: ["Escalada de cuerda", "Barras y monkey bars", "Arrastre y empuje de peso", "Natación / agua", "Lanzamiento (jabalina, saco)", "Muros altos", "Todos por igual"] },
     { id: "fuerza_agarre", label: "¿Cómo valoras tu fuerza de agarre y tracción?", tipo: "opciones", opciones: ["Muy débil (no puedo hacer dominadas)", "Básica (1-5 dominadas)", "Intermedia (5-15 dominadas)", "Fuerte (+15 dominadas)"] },
-    { id: "dias", label: "¿Cuántos días por semana puedes entrenar?", tipo: "opciones", opciones: ["3 días", "4 días", "5 días", "6 días"] },
+    { id: "dias_disponibles", label: "¿Qué días de la semana puedes entrenar?", tipo: "dias_semana" },
     { id: "duracion", label: "¿Cuánto tiempo por sesión?", tipo: "opciones", opciones: ["Hasta 45 min", "Hasta 1 hora", "Hasta 1h 30min", "Más de 1h 30min"] },
     { id: "material", label: "¿Con qué equipamiento cuentas?", tipo: "multi", opciones: ["Barra de dominadas", "Anillas / TRX", "Kettlebells / sacos", "Cuerda de escalada", "Acceso a terreno trail", "Gimnasio completo", "Solo cuerpo y parque"] },
     { id: "proxima_carrera", label: "¿Tienes carrera próxima?", tipo: "opciones", opciones: ["Sí, en menos de 6 semanas", "Sí, en 6-12 semanas", "Sí, en más de 3 meses", "No tengo fecha aún"] },
@@ -140,7 +140,7 @@ const FORMULARIOS: Record<string, Pregunta[]> = {
     { id: "modalidad_tri", label: "¿Qué distancia te interesa?", tipo: "opciones", opciones: ["Sprint (750m/20K/5K)", "Olímpico (1.5K/40K/10K)", "Half (1.9K/90K/21K)", "Ironman (3.8K/180K/42K)", "Duatlón (carrera+bici)"] },
     
     { id: "punto_debil", label: "¿Cuál es tu disciplina más débil?", tipo: "opciones", opciones: ["Natación", "Ciclismo", "Carrera a pie", "Las tres por igual"] },
-    { id: "dias", label: "¿Cuántos días por semana puedes entrenar?", tipo: "opciones", opciones: ["3 días", "4 días", "5 días", "6 días", "7 días"] },
+    { id: "dias_disponibles", label: "¿Qué días de la semana puedes entrenar?", tipo: "dias_semana" },
     { id: "duracion", label: "¿Cuánto tiempo por sesión?", tipo: "opciones", opciones: ["Hasta 45 min", "Hasta 1 hora", "Hasta 1h 30min", "Más de 1h 30min"] },
     { id: "material", label: "¿Con qué equipamiento cuentas?", tipo: "multi", opciones: ["Bicicleta de ruta / triatlón", "Bicicleta de montaña", "Rodillo / bici estática", "Acceso a piscina", "Material de natación (gafas, paletas)", "Zapatillas de running"] },
     { id: "proxima_carrera", label: "¿Tienes competición próxima?", tipo: "opciones", opciones: ["Sí, en menos de 8 semanas", "Sí, en 2-4 meses", "Sí, en más de 4 meses", "No tengo fecha aún"] },
@@ -157,7 +157,7 @@ const FORMULARIOS: Record<string, Pregunta[]> = {
     { id: "nivel", label: "¿Cuántos anos llevas entrenando fuerza?", tipo: "opciones", opciones: ["Menos de 1 ano", "1-2 anos", "2-4 anos", "Mas de 4 anos"] },
     
     { id: "competicion", label: "¿Tienes competición o fecha objetivo?", tipo: "opciones", opciones: ["Si, en menos de 3 meses", "Si, en 3-6 meses", "Si, en mas de 6 meses", "No compito"] },
-    { id: "dias", label: "¿Cuántos días puedes entrenar fuerza?", tipo: "opciones", opciones: ["3 dias", "4 dias", "5 dias", "6 dias"] },
+    { id: "dias_disponibles", label: "¿Qué días de la semana puedes entrenar?", tipo: "dias_semana" },
     { id: "duracion", label: "¿Cuánto tiempo por sesión?", tipo: "opciones", opciones: ["Hasta 1 hora", "Hasta 1h 30min", "Hasta 2 horas", "Mas de 2 horas"] },
     { id: "puntos_debiles", label: "¿Cuál es tu eslabón más débil?", tipo: "texto", placeholder: "Ej: cajon bajo en sentadilla, lockout en press banca..." },
     { id: "lesiones", label: "¿Lesiones o limitaciones?", tipo: "texto", placeholder: "Ej: muñecas limitadas, lumbar sensible, o ninguna" },

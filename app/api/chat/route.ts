@@ -949,7 +949,20 @@ Extrae SOLO datos que el mensaje contenga explicitamente, nunca inventes valores
     }
   }
 
-  if (action === "verificar_cambio_modo") {
+  // FORGE MODE TRANSITION FLOW — definicion declarativa de COMO preguntar y DONDE guardar cada
+// campo. Vive en el backend (no duplicada en cada pagina frontend) para que /perfil y cualquier
+// otro consumidor futuro obtengan la misma fuente unica de verdad sobre la representacion de UI.
+const DEFINICION_CAMPOS_MODE_CHANGE: Record<string, any> = {
+  edad: { label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Mas de 50"], storageKey: "edad", storageTarget: "perfil" },
+  nivel: { label: "¿Cuál es tu nivel de experiencia?", tipo: "opciones", opciones: ["Principiante", "Intermedio", "Avanzado"], storageKey: "nivel", storageTarget: "perfil" },
+  objetivo: { label: "¿Qué quieres conseguir exactamente?", tipo: "texto", storageKey: "objetivo_detalle", storageTarget: "perfil" },
+  duracion_sesion: { label: "¿Cuánto tiempo disponible por sesión?", tipo: "opciones", opciones: ["Hasta 30 min", "Hasta 45 min", "Hasta 1 hora", "Hasta 1h 30min", "Más de 1h 30min"], storageKey: "duracion", storageTarget: "perfil" },
+  disponibilidad: { label: "¿Qué días de la semana puedes entrenar la disciplina que gestionará Forge?", tipo: "dias_semana", storageKey: "dias_disponibles_forge", storageTarget: "distribucion" },
+  disciplina_externa: { label: "¿Qué disciplina entrenas con OTRO entrenador (que Forge no debe tocar)?", tipo: "texto", storageKey: "disciplina", storageTarget: "training_source_external" },
+  dias_externos: { label: "¿Qué días entrenas esa disciplina externa?", tipo: "dias_semana", storageKey: "dias", storageTarget: "training_source_external" },
+};
+
+if (action === "verificar_cambio_modo") {
     // FORGE MODE CHANGE — solo lectura, sin efectos secundarios. Reutiliza EXACTAMENTE el mismo
     // motor que el onboarding original (calcularEstadoOnboarding + CAMPOS_REQUERIDOS_POR_MODO):
     // los requisitos pertenecen al modo DESTINO, no importa como llego el atleta hasta ahi. No se
@@ -959,7 +972,37 @@ Extrae SOLO datos que el mensaje contenga explicitamente, nunca inventes valores
       return NextResponse.json({ error: "Modo destino invalido" }, { status: 400 });
     }
     const { completedFields, missingFields } = await calcularEstadoOnboarding(supabase, codigo, targetMode);
-    return NextResponse.json({ targetMode, completedFields, missingFields, completo: missingFields.length === 0 });
+    // getRequiredFocusFields(): mapea CADA missingField a su definicion de UI — nunca vuelve a
+    // decidir si es obligatorio, solo traduce el ID ya calculado a como preguntarlo y donde guardarlo.
+    const missingFieldsConDefinicion = missingFields.map(f => ({ id: f, ...(DEFINICION_CAMPOS_MODE_CHANGE[f] || { label: f, tipo: "texto", storageKey: f, storageTarget: "perfil" }) }));
+    return NextResponse.json({ targetMode, completedFields, missingFields, missingFieldsConDefinicion, completo: missingFields.length === 0 });
+  }
+
+  if (action === "guardar_campo_mode_change") {
+    // FORGE MODE TRANSITION FLOW — guarda UN campo estructurado validado por la UI (nunca texto
+    // libre interpretado), en el destino correcto segun su storageTarget. Determinista: mismo
+    // patron de guardado que ya usamos en el resto de Forge, sin ningun LLM en el camino.
+    const { fieldId, value } = datos;
+    const definicionCampo = DEFINICION_CAMPOS_MODE_CHANGE[fieldId];
+    if (!definicionCampo) return NextResponse.json({ error: "Campo desconocido: " + fieldId }, { status: 400 });
+
+    if (definicionCampo.storageTarget === "perfil") {
+      const { data: usuarioParaCampo } = await supabase.from("usuarios").select("perfil").eq("codigo", codigo).single();
+      const perfilActualizado = { ...(usuarioParaCampo?.perfil || {}), [definicionCampo.storageKey]: value };
+      await supabase.from("usuarios").update({ perfil: perfilActualizado }).eq("codigo", codigo);
+    } else if (definicionCampo.storageTarget === "distribucion") {
+      const diasTexto = Array.isArray(value) ? value.join(", ") : value;
+      await supabase.from("usuarios").update({ distribucion_semanal: JSON.stringify({ disponibilidad: diasTexto }) }).eq("codigo", codigo);
+    } else if (definicionCampo.storageTarget === "training_source_external") {
+      // disciplina_externa y dias_externos se acumulan en la MISMA fila (upsert incremental)
+      const { data: fuenteExistente } = await supabase.from("athlete_training_sources").select("*").eq("user_codigo", codigo).eq("owner", "external").order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const filaActualizada: any = { user_codigo: codigo, owner: "external", activo: true, disciplina: fuenteExistente?.disciplina || "externo", dias: fuenteExistente?.dias || null };
+      if (definicionCampo.storageKey === "disciplina") filaActualizada.disciplina = value;
+      if (definicionCampo.storageKey === "dias") filaActualizada.dias = value;
+      await supabase.from("athlete_training_sources").upsert(filaActualizada, { onConflict: "user_codigo,disciplina" });
+    }
+
+    return NextResponse.json({ ok: true });
   }
 
   if (action === "cambiar_modo_atleta") {

@@ -19,6 +19,20 @@ const CATEGORIAS = [
   { id: "hibrido", emoji: "🔄", titulo: "Híbrido", subtitulo: "Resistencia + Fuerza", desc: "Equilibra ambas capacidades sin interferencias, combinando sesiones para progresar en las dos disciplinas al mismo tiempo.", color: "#FF8C42", colorLight: "#FF8C4215", etiqueta: "Avanzado" },
 ];
 
+// FORGE MODE TRANSITION FLOW — definicion declarativa de COMO preguntar y DONDE guardar cada
+// campo posible de missingFields. NUNCA decide si un campo es obligatorio (eso lo determina
+// exclusivamente calcularEstadoOnboarding/CAMPOS_REQUERIDOS_POR_MODO en el backend) — solo mapea
+// el ID del campo a su representacion de UI determinista, sin interpretacion del LLM.
+const DEFINICION_CAMPOS_MODE_CHANGE: Record<string, {label:string; tipo:string; opciones?:string[]; storageKey:string; storageTarget:'perfil'|'distribucion'|'training_source_forge'|'training_source_external'}> = {
+  edad: { label:"¿Cuántos años tienes?", tipo:"opciones", opciones:["Menos de 20","20-30","31-40","41-50","Mas de 50"], storageKey:"edad", storageTarget:"perfil" },
+  nivel: { label:"¿Cuál es tu nivel de experiencia?", tipo:"opciones", opciones:["Principiante","Intermedio","Avanzado"], storageKey:"nivel", storageTarget:"perfil" },
+  objetivo: { label:"¿Qué quieres conseguir exactamente?", tipo:"texto", storageKey:"objetivo_detalle", storageTarget:"perfil" },
+  duracion_sesion: { label:"¿Cuánto tiempo disponible por sesión?", tipo:"opciones", opciones:["Hasta 30 min","Hasta 45 min","Hasta 1 hora","Hasta 1h 30min","Más de 1h 30min"], storageKey:"duracion", storageTarget:"perfil" },
+  disponibilidad: { label:"¿Qué días de la semana puedes entrenar la disciplina que gestionará Forge?", tipo:"dias_semana", storageKey:"dias_disponibles_forge", storageTarget:"distribucion" },
+  disciplina_externa: { label:"¿Qué disciplina entrenas con OTRO entrenador (que Forge no debe tocar)?", tipo:"texto", storageKey:"disciplina", storageTarget:"training_source_external" },
+  dias_externos: { label:"¿Qué días entrenas esa disciplina externa?", tipo:"dias_semana", storageKey:"dias", storageTarget:"training_source_external" },
+};
+
 const FORMULARIOS: Record<string, Pregunta[]> = {
   carrera: [
     { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Mas de 50"] },

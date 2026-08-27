@@ -847,7 +847,7 @@ export async function POST(req: NextRequest) {
 const CAMPOS_REQUERIDOS_POR_MODO: Record<string, string[]> = {
   supervision: ["categoria", "objetivo", "edad", "nivel"],
   coach: ["categoria", "objetivo", "edad", "nivel", "disponibilidad", "duracion_sesion"],
-  focus: ["categoria", "objetivo", "edad", "nivel", "disponibilidad", "duracion_sesion", "disciplina_forge", "disciplina_externa", "dias_externos", "fc_max_o_metodo"],
+  focus: ["categoria", "objetivo", "edad", "nivel", "duracion_sesion", "disciplina_forge", "dias_forge", "disciplina_externa", "dias_externos", "fc_max_o_metodo"],
 };
 
 // FORGE ONBOARDING STATE MACHINE — calcula el estado REAL consultando las tablas canonicas
@@ -868,6 +868,7 @@ async function calcularEstadoOnboarding(supabase: any, codigo: string, mode: str
   completedFields.disponibilidad = !!usuarioOnb?.distribucion_semanal;
   completedFields.duracion_sesion = !!perfilOnb.duracion;
   completedFields.disciplina_forge = !!(fuentesOnb || []).find((f: any) => f.owner === "forge");
+  completedFields.dias_forge = !!(fuentesOnb || []).find((f: any) => f.owner === "forge" && f.dias?.length > 0);
   completedFields.disciplina_externa = !!(fuentesOnb || []).find((f: any) => f.owner === "external");
   completedFields.dias_externos = !!(fuentesOnb || []).find((f: any) => f.owner === "external" && f.dias?.length > 0);
   // FIX: fc_max ahora se captura DIRECTAMENTE en el formulario (pregunta condicional, solo si
@@ -960,6 +961,7 @@ const DEFINICION_CAMPOS_MODE_CHANGE: Record<string, any> = {
   duracion_sesion: { label: "¿Cuánto tiempo disponible por sesión?", tipo: "opciones", opciones: ["Hasta 30 min", "Hasta 45 min", "Hasta 1 hora", "Hasta 1h 30min", "Más de 1h 30min"], storageKey: "duracion", storageTarget: "perfil" },
   disponibilidad: { label: "¿Qué días de la semana puedes entrenar la disciplina que gestionará Forge?", tipo: "dias_semana", storageKey: "dias_disponibles_forge", storageTarget: "distribucion" },
   disciplina_forge: { label: "¿Qué disciplina quieres que gestione Forge a partir de ahora?", tipo: "texto", storageKey: "disciplina", storageTarget: "training_source_forge" },
+  dias_forge: { label: "¿Qué días de la semana entrenarás esa disciplina?", tipo: "dias_semana", storageKey: "dias", storageTarget: "training_source_forge" },
   disciplina_externa: { label: "¿Qué disciplina entrenas con OTRO entrenador (que Forge no debe tocar)?", tipo: "texto", storageKey: "disciplina", storageTarget: "training_source_external" },
   dias_externos: { label: "¿Qué días entrenas esa disciplina externa?", tipo: "dias_semana", storageKey: "dias", storageTarget: "training_source_external" },
 };
@@ -996,11 +998,12 @@ if (action === "verificar_cambio_modo") {
       const diasTexto = Array.isArray(value) ? value.join(", ") : value;
       await supabase.from("usuarios").update({ distribucion_semanal: JSON.stringify({ disponibilidad: diasTexto }) }).eq("codigo", codigo);
     } else if (definicionCampo.storageTarget === "training_source_forge") {
-      const { data: fuenteForgeExistente } = await supabase.from("athlete_training_sources").select("*").eq("user_codigo", codigo).eq("owner", "forge").limit(1).maybeSingle();
-      await supabase.from("athlete_training_sources").upsert({
-        user_codigo: codigo, owner: "forge", activo: true,
-        disciplina: value, prioridad: fuenteForgeExistente?.prioridad || "importante"
-      }, { onConflict: "user_codigo,disciplina" });
+      // disciplina_forge y dias_forge se acumulan en la MISMA fila (upsert incremental)
+      const { data: fuenteForgeExistente } = await supabase.from("athlete_training_sources").select("*").eq("user_codigo", codigo).eq("owner", "forge").order("created_at", { ascending: false }).limit(1).maybeSingle();
+      const filaForgeActualizada: any = { user_codigo: codigo, owner: "forge", activo: true, disciplina: fuenteForgeExistente?.disciplina || "forge", dias: fuenteForgeExistente?.dias || null, prioridad: fuenteForgeExistente?.prioridad || "importante" };
+      if (definicionCampo.storageKey === "disciplina") filaForgeActualizada.disciplina = value;
+      if (definicionCampo.storageKey === "dias") filaForgeActualizada.dias = value;
+      await supabase.from("athlete_training_sources").upsert(filaForgeActualizada, { onConflict: "user_codigo,disciplina" });
     } else if (definicionCampo.storageTarget === "training_source_external") {
       // disciplina_externa y dias_externos se acumulan en la MISMA fila (upsert incremental)
       const { data: fuenteExistente } = await supabase.from("athlete_training_sources").select("*").eq("user_codigo", codigo).eq("owner", "external").order("created_at", { ascending: false }).limit(1).maybeSingle();

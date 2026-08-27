@@ -2300,22 +2300,22 @@ ${testStr}`}]});
       {pantalla==="bifurcacion"&&(
         <div className="fade-up" style={{maxWidth:560,width:"100%"}}>
           <button onClick={()=>setPantalla("inicio")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14,marginBottom:28}}>Volver</button>
-          <h2 style={{fontSize:"clamp(24px,5vw,32px)",color:C.ink,marginBottom:10,fontFamily:"'Playfair Display',serif",fontWeight:700}}>¿Cómo quieres usar Forge?</h2>
-          <p style={{color:C.muted,fontSize:14,marginBottom:28}}>Elige cómo quieres empezar. Puedes cambiarlo más adelante.</p>
+          <h2 style={{fontSize:"clamp(24px,5vw,32px)",color:C.ink,marginBottom:10,fontFamily:"'Playfair Display',serif",fontWeight:700}}>¿Qué papel quieres que tenga Forge en tu entrenamiento?</h2>
+          <p style={{color:C.muted,fontSize:14,marginBottom:6}}>Elige cómo quieres empezar. Forge se adaptará a tu forma de entrenar — puedes cambiarlo más adelante.</p>
+          <p style={{color:C.muted,fontSize:13,marginBottom:28,lineHeight:1.5}}>Forge puede tener distintos papeles en tu entrenamiento. Para darte recomendaciones coherentes, primero necesitamos saber cuánto quieres que intervenga en tu planificación.</p>
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
             {[
-              {modo:"supervision",emoji:"👥",titulo:"Tengo entrenador o ya tengo un plan",desc:"Forge complementa tu planificación y te ayuda a decidir cómo entrenar hoy.",recomendado:true},
-              {modo:"focus",emoji:"🎯",titulo:"Tengo entrenador para una parte, quiero que Forge gestione otra",desc:"Forge planifica una disciplina (ej: running) y respeta tu entrenamiento externo (ej: CrossFit) sin interferir."},
-              {modo:"planificacion",emoji:"📅",titulo:"Quiero que Forge planifique mi entrenamiento",desc:"Forge diseña y adapta tu planificación completa según tus objetivos y evolución."},
+              {modo:"supervision",etiqueta:"SUPERVISIÓN",emoji:"👥",titulo:"Ya tengo mi entrenamiento",desc:"Tú decides el entrenamiento. Forge analiza tu estado y contexto para ayudarte a decidir cómo afrontar la sesión de hoy.",recomendado:"Recomendado si ya tienes entrenador o planificación"},
+              {modo:"focus",etiqueta:"COORDINACIÓN",emoji:"🎯",titulo:"Tengo entrenador para una parte",desc:"Combina tu planificación externa con Forge. Tú mantienes tu entrenamiento principal y Forge planifica y adapta la disciplina que le delegues."},
+              {modo:"planificacion",etiqueta:"PLANIFICACIÓN",emoji:"📅",titulo:"Quiero que Forge planifique mi entrenamiento",desc:"Forge diseña tu planificación, la adapta a tus objetivos y evolución, y te acompaña en las decisiones del día a día."},
             ].map(op=>(
-              <div key={op.modo} onClick={()=>{if(op.modo==="focus"){setPantalla("focus_onboarding");}else{setModoEntrada(op.modo);setPantalla("categoria");}}} className="cat-card" style={{background:C.card,border:op.recomendado?`2px solid ${C.accent}`:`2px solid ${C.border}`,borderRadius:16,padding:"18px 20px",cursor:"pointer",display:"flex",alignItems:"center",gap:16,position:"relative"}}>
-                {op.recomendado&&(
-                  <span style={{position:"absolute",top:-10,left:16,background:C.accent,color:"#fff",fontSize:10,fontWeight:700,padding:"2px 10px",borderRadius:100,letterSpacing:0.5,textTransform:"uppercase"}}>Recomendado si ya tienes plan</span>
-                )}
+              <div key={op.modo} onClick={()=>{if(op.modo==="focus"){setPantalla("focus_onboarding");}else{setModoEntrada(op.modo);setPantalla("categoria");}}} className="cat-card" style={{background:C.card,border:op.recomendado?`2px solid ${C.accent}`:`2px solid ${C.border}`,borderRadius:16,padding:"18px 20px",cursor:"pointer",display:"flex",alignItems:"flex-start",gap:16}}>
                 <span style={{fontSize:28}}>{op.emoji}</span>
                 <div style={{textAlign:"left"}}>
-                  <p style={{color:C.ink,fontSize:15,fontWeight:700,marginBottom:3}}>{op.titulo}</p>
-                  <p style={{color:C.muted,fontSize:12.5,lineHeight:1.4}}>{op.desc}</p>
+                  <p style={{color:C.accent,fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:4}}>{op.etiqueta}</p>
+                  <p style={{color:C.ink,fontSize:15,fontWeight:700,marginBottom:4}}>{op.titulo}</p>
+                  <p style={{color:C.muted,fontSize:12.5,lineHeight:1.5,marginBottom:op.recomendado?6:0}}>{op.desc}</p>
+                  {op.recomendado&&<p style={{color:C.accent,fontSize:11,fontWeight:600}}>{op.recomendado}</p>}
                 </div>
               </div>
             ))}

@@ -717,7 +717,11 @@ export default function Forge() {
             setCargando(true);
             const promptCambioModo=`El atleta quiere cambiar su modo de Forge a "${modeChangeTarget}". Para completar el cambio, faltan estos datos en su perfil: ${modeChangeMissing}. Pregúntale por ellos de forma natural y conversacional, uno o dos a la vez, empezando ahora mismo — no esperes a que él inicie la conversación.`;
             const dataCambioModo=await apiCall({model:"claude-sonnet-4-5",max_tokens:1000,system:buildPrompt(CATEGORIAS.find((c:Categoria)=>c.id===u.categoria)!,u.perfil,(u.historial||[]).slice(-6),""),messages:[{role:"user",content:promptCambioModo}]});
-            const textoCambioModo=(dataCambioModo.content?.map((b:{text?:string})=>b.text||"").join("")||"").trim();
+            const textoCambioModoCrudo=(dataCambioModo.content?.map((b:{text?:string})=>b.text||"").join("")||"").trim();
+            // FIX: limpiar el tag [STATE_UPDATE] antes de mostrar, mismo tratamiento que el resto
+            // de respuestas del Coach que pasan por procesarTags — este mensaje se genera fuera
+            // de ese flujo normal, asi que necesita la misma limpieza aplicada manualmente aqui.
+            const textoCambioModo=textoCambioModoCrudo.replace(/\[STATE_UPDATE\][\s\S]*?\[\/STATE_UPDATE\]/g,"").trim();
             if(textoCambioModo){
               setMensajes(prev=>[...prev,{role:"assistant",content:textoCambioModo}]);
             }

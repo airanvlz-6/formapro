@@ -631,6 +631,7 @@ export default function Forge() {
   // FORGE MODE CHANGE — recuerda si estamos en medio de un flujo de cambio de modo iniciado
   // desde Mi Perfil, para que el Safety Net sepa que debe intentar capturar/ejecutar el cambio.
   const [modeChangeEnCurso,setModeChangeEnCurso]=useState<string|null>(null);
+  const [dispararGeneracionSemanaFocus,setDispararGeneracionSemanaFocus]=useState(false);
   const [mensajes,setMensajes]=useState<{role:string;content:string}[]>([]);
   const [historial,setHistorial]=useState<{role:string;content:string}[]>([]);
   const [input,setInput]=useState("");
@@ -638,6 +639,25 @@ export default function Forge() {
   const [generando,setGenerando]=useState(false);
   const [msgCount,setMsgCount]=useState(0);
   const [codigoUsuario,setCodigoUsuario]=useState("");
+
+  // FIX REAL: useEffect dedicado que solo dispara cuando codigoUsuario YA tiene valor real,
+  // evitando por completo el problema de closure de setTimeout con el estado desactualizado.
+  useEffect(()=>{
+    if(dispararGeneracionSemanaFocus&&codigoUsuario){
+      setDispararGeneracionSemanaFocus(false);
+      (async()=>{
+        setMensajes([{role:"assistant",content:"¡Bienvenido a tu nuevo modo! Ya tengo todos tus datos — voy a construir tu primera semana ahora mismo."}]);
+        setGenerandoSemana(true);
+        setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu primera semana paso a paso — analizando bloque, distribuyendo días y diseñando cada sesión..."}]);
+        const planFocusInicial=await orquestarGeneracionSemana(true);
+        const respuestaFocusInicial=planFocusInicial
+          ? `✅ **Semana generada y guardada.**\n\nBloque: ${planFocusInicial.block_name} — ${planFocusInicial.week_objective}\n\nRevisa el detalle completo en **Mi Plan**. ¿Alguna duda?`
+          : "⚠️ Hubo un problema generando la semana. Puedes pedírmelo directamente en el chat: \"genera mi semana\".";
+        setMensajes(prev=>[...prev,{role:"assistant",content:respuestaFocusInicial}]);
+        setGenerandoSemana(false);
+      })();
+    }
+  },[dispararGeneracionSemanaFocus,codigoUsuario]);
   const [codigoInput,setCodigoInput]=useState("");
   const [pestanaBloqueada,setPestanaBloqueada]=useState(false);
   const [mostrarConflictoSesion,setMostrarConflictoSesion]=useState(false);
@@ -733,19 +753,7 @@ export default function Forge() {
         // preguntar disponibilidad porque ya se capturo explicitamente en el flujo de Mi Perfil.
         if(params.get("generar_semana_focus")==="1"){
           setCodigoUsuario(u.codigo);
-          setTimeout(async()=>{
-            console.log("🔍 DEBUG generar_semana_focus — codigoUsuario:",u.codigo);
-            setMensajes([{role:"assistant",content:`¡Bienvenido a tu nuevo modo ${u.modo_entrada==="focus"?"Focus":"Coach"}! Ya tengo todos tus datos — voy a construir tu primera semana ahora mismo.`}]);
-            setGenerandoSemana(true);
-            setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu primera semana paso a paso — analizando bloque, distribuyendo días y diseñando cada sesión..."}]);
-            const planFocusInicial=await orquestarGeneracionSemana(true);
-            console.log("🔍 DEBUG resultado orquestarGeneracionSemana:",planFocusInicial);
-            const respuestaFocusInicial=planFocusInicial
-              ? `✅ **Semana generada y guardada.**\n\nBloque: ${planFocusInicial.block_name} — ${planFocusInicial.week_objective}\n\nRevisa el detalle completo en **Mi Plan**. ¿Alguna duda?`
-              : "⚠️ Hubo un problema generando la semana. Puedes pedírmelo directamente en el chat: \"genera mi semana\".";
-            setMensajes(prev=>[...prev,{role:"assistant",content:respuestaFocusInicial}]);
-            setGenerandoSemana(false);
-          },500);
+          setDispararGeneracionSemanaFocus(true);
         }
         const modeChangeTarget=params.get("mode_change_target");
         const modeChangeMissing=params.get("mode_change_missing");

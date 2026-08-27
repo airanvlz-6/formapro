@@ -203,7 +203,7 @@ export default function MiPerfil() {
                 <>
                   <p style={{ color: C.muted, fontSize: 13, marginTop: 12, marginBottom: 16, lineHeight:1.5 }}>Este modo necesita algunos datos adicionales. Habla con el Coach para completarlos antes de cambiar — te preguntará solo lo que falta.</p>
                   <p style={{ color: C.accent, fontSize: 12, marginBottom: 16 }}>Faltan: {missingFieldsModo.join(", ")}</p>
-                  <button onClick={()=>{setMostrarCambioModo(false);window.location.href=`/app?codigo=${codigo}`;}} style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:10,padding:12,fontSize:14,fontWeight:600,cursor:"pointer"}}>
+                  <button onClick={()=>{setMostrarCambioModo(false);window.location.href=`/app?codigo=${codigo}&mode_change_target=${modoDestino}&mode_change_missing=${missingFieldsModo.join(',')}`;}} style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:10,padding:12,fontSize:14,fontWeight:600,cursor:"pointer"}}>
                     Ir al Coach
                   </button>
                 </>

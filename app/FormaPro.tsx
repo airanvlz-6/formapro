@@ -706,6 +706,24 @@ export default function Forge() {
           window.location.href=`/perfil?codigo=${u.codigo}`;
           return;
         }
+        // FORGE MODE CHANGE — si venimos de "Mi Perfil" con datos faltantes para cambiar de modo,
+        // el Coach inicia la conversacion pidiendolos, en vez de esperar a que el usuario escriba
+        // algo primero. La peticion la origina el sistema (parametro URL), nunca el LLM decide
+        // por su cuenta iniciar este flujo.
+        const modeChangeTarget=params.get("mode_change_target");
+        const modeChangeMissing=params.get("mode_change_missing");
+        if(modeChangeTarget){
+          setTimeout(async()=>{
+            setCargando(true);
+            const promptCambioModo=`El atleta quiere cambiar su modo de Forge a "${modeChangeTarget}". Para completar el cambio, faltan estos datos en su perfil: ${modeChangeMissing}. Pregúntale por ellos de forma natural y conversacional, uno o dos a la vez, empezando ahora mismo — no esperes a que él inicie la conversación.`;
+            const dataCambioModo=await apiCall({model:"claude-sonnet-4-5",max_tokens:1000,system:buildPrompt(CATEGORIAS.find((c:Categoria)=>c.id===u.categoria)!,u.perfil,(u.historial||[]).slice(-6),""),messages:[{role:"user",content:promptCambioModo}]});
+            const textoCambioModo=(dataCambioModo.content?.map((b:{text?:string})=>b.text||"").join("")||"").trim();
+            if(textoCambioModo){
+              setMensajes(prev=>[...prev,{role:"assistant",content:textoCambioModo}]);
+            }
+            setCargando(false);
+          },300);
+        }
         setEmailGuardado(!!u.email);
         setEsPremium(!!(u as any).premium);
         setEsAdmin(!!(u as any).admin);

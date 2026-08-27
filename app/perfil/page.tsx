@@ -19,6 +19,17 @@ export default function MiPerfil() {
   const [cambiandoModo, setCambiandoModo] = useState(false);
   const [mensajeCambioModo, setMensajeCambioModo] = useState("");
 
+  // Migrado del panel antiguo: codigo/email/editar perfil/eliminar cuenta
+  const [mostrarCodigoReal, setMostrarCodigoReal] = useState(false);
+  const [nuevoCodigo, setNuevoCodigo] = useState("");
+  const [nuevoEmail, setNuevoEmail] = useState("");
+  const [errorPerfil, setErrorPerfil] = useState("");
+  const [mensajePerfil, setMensajePerfil] = useState("");
+  const [editandoPerfil, setEditandoPerfil] = useState(false);
+  const [perfilEdit, setPerfilEdit] = useState<Record<string,string>>({});
+  const [confirmandoEliminarCuenta, setConfirmandoEliminarCuenta] = useState(false);
+  const [eliminandoCuenta, setEliminandoCuenta] = useState(false);
+
   const C = {
     bg:"#0D0D0D", card:"#1A1A1A", ink:"#F0EDE8", muted:"#9A9590",
     border:"#2A2A2A", accent:"#FF6B00"
@@ -59,14 +70,40 @@ export default function MiPerfil() {
     finally{ setCargando(false); setIniciado(true); }
   };
 
+  const [missingFieldsDef, setMissingFieldsDef] = useState<any[]>([]);
+  const [pasoActualModo, setPasoActualModo] = useState(0);
+  const [respuestaTemp, setRespuestaTemp] = useState<any>(null);
+  const [guardandoCampo, setGuardandoCampo] = useState(false);
+
   const iniciarCambioModo = async(destino:string)=>{
     setModoDestino(destino);
     setVerificandoModo(true);
     setMostrarCambioModo(true);
+    setPasoActualModo(0);
+    setRespuestaTemp(null);
     const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"verificar_cambio_modo",codigo,datos:{targetMode:destino}})});
     const data = await res.json();
     setMissingFieldsModo(data?.missingFields || []);
+    setMissingFieldsDef(data?.missingFieldsConDefinicion || []);
     setVerificandoModo(false);
+  };
+
+  const guardarCampoActual = async()=>{
+    const campo = missingFieldsDef[pasoActualModo];
+    if(!campo || respuestaTemp===null || (Array.isArray(respuestaTemp)&&respuestaTemp.length===0)) return;
+    setGuardandoCampo(true);
+    await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"guardar_campo_mode_change",codigo,datos:{fieldId:campo.id,value:respuestaTemp}})});
+    setGuardandoCampo(false);
+    setRespuestaTemp(null);
+    if(pasoActualModo<missingFieldsDef.length-1){
+      setPasoActualModo(pasoActualModo+1);
+    }else{
+      // Todos los campos guardados — reverificar por si acaso y pasar a confirmacion
+      const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"verificar_cambio_modo",codigo,datos:{targetMode:modoDestino}})});
+      const data = await res.json();
+      setMissingFieldsModo(data?.missingFields || []);
+      setMissingFieldsDef(data?.missingFieldsConDefinicion || []);
+    }
   };
 
   const confirmarCambioModo = async()=>{
@@ -79,6 +116,51 @@ export default function MiPerfil() {
       setTimeout(()=>window.location.reload(),1500);
     }else{
       setMensajeCambioModo(data?.error || "Error al cambiar de modo");
+    }
+  };
+
+  const actualizarPerfil = async()=>{
+    setErrorPerfil("");setMensajePerfil("");
+    let codigoDestino = codigo;
+    if(nuevoCodigo.trim().length>0){
+      if(nuevoCodigo.trim().length<5){ setErrorPerfil("El código debe tener al menos 5 caracteres."); return; }
+      const resCambio = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"cambiar_codigo_usuario",codigo,datos:{nuevoCodigo:nuevoCodigo.trim().toUpperCase()}})});
+      const dataCambio = await resCambio.json();
+      if(dataCambio?.error){ setErrorPerfil(dataCambio.error); return; }
+      codigoDestino = nuevoCodigo.trim().toUpperCase();
+    }
+    if(nuevoEmail.trim().length>0){
+      const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"actualizar_usuario",codigo:codigoDestino,datos:{email:nuevoEmail.trim().toLowerCase()}})});
+      const data = await res.json();
+      if(data?.error){ setErrorPerfil(data.error); return; }
+    }
+    if(nuevoCodigo.trim().length===0 && nuevoEmail.trim().length===0){ setErrorPerfil("No hay cambios que guardar."); return; }
+    setMensajePerfil("Guardado correctamente.");
+    if(codigoDestino!==codigo){
+      setTimeout(()=>{ window.location.href=`/perfil?codigo=${codigoDestino}`; },1200);
+    } else {
+      setTimeout(()=>setMensajePerfil(""),3000);
+    }
+  };
+
+  const guardarEdicionPerfil = async()=>{
+    const nuevosPerfil = {...datos.perfil, ...perfilEdit};
+    await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"actualizar_usuario",codigo,datos:{perfil:nuevosPerfil}})});
+    setDatos((d:any)=>({...d, perfil:nuevosPerfil}));
+    setEditandoPerfil(false);
+    setMensajePerfil("Perfil actualizado. El coach tendrá en cuenta los cambios.");
+    setTimeout(()=>setMensajePerfil(""),3000);
+  };
+
+  const ejecutarEliminarCuenta = async()=>{
+    setEliminandoCuenta(true);
+    const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"eliminar_cuenta",codigo})});
+    const data = await res.json();
+    if(data?.ok){
+      window.location.href="/";
+    }else{
+      setEliminandoCuenta(false);
+      setConfirmandoEliminarCuenta(false);
     }
   };
 
@@ -137,6 +219,74 @@ export default function MiPerfil() {
           </div>
         </div>
 
+        {/* Código de acceso */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <div>
+              <p style={{ color: C.muted, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Código de acceso</p>
+              <p style={{ color: C.accent, fontSize: 15, fontWeight: 700, letterSpacing: 2 }}>{mostrarCodigoReal ? codigo : "••••••"}</p>
+            </div>
+            <button onClick={()=>setMostrarCodigoReal(!mostrarCodigoReal)} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, padding: "5px 10px", fontSize: 11, color: C.muted, cursor: "pointer" }}>
+              {mostrarCodigoReal ? "Ocultar" : "Ver"}
+            </button>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <p style={{ color: C.ink, fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Cambiar código</p>
+            <input value={nuevoCodigo} onChange={e=>setNuevoCodigo(e.target.value.toUpperCase().replace(/\s/g,""))}
+              placeholder="Nuevo código (mínimo 5 caracteres)"
+              style={{ width: "100%", border: `2px solid ${C.border}`, borderRadius: 10, padding: "9px 12px", fontSize: 13, color: C.ink, background: C.bg, fontFamily: "inherit", letterSpacing: 1 }}/>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <p style={{ color: C.ink, fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Actualizar email</p>
+            <input value={nuevoEmail} onChange={e=>setNuevoEmail(e.target.value)}
+              placeholder={datos?.email || "tu@email.com"}
+              style={{ width: "100%", border: `2px solid ${C.border}`, borderRadius: 10, padding: "9px 12px", fontSize: 13, color: C.ink, background: C.bg, fontFamily: "inherit" }}/>
+          </div>
+          {errorPerfil && <p style={{ color: "#ff4444", fontSize: 12, marginBottom: 10 }}>{errorPerfil}</p>}
+          {mensajePerfil && <p style={{ color: "#4CAF50", fontSize: 12, fontWeight: 600, marginBottom: 10 }}>{mensajePerfil}</p>}
+          <button onClick={actualizarPerfil} style={{ width: "100%", background: C.accent, color: "#fff", border: "none", borderRadius: 10, padding: 10, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+            Guardar código y email
+          </button>
+        </div>
+
+        {/* Editar datos del perfil */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <p style={{ color: C.ink, fontSize: 14, fontWeight: 700 }}>✏️ Editar datos del perfil</p>
+            <button onClick={()=>{ setEditandoPerfil(!editandoPerfil); setPerfilEdit(datos?.perfil||{}); }} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, padding: "4px 10px", fontSize: 12, color: C.muted, cursor: "pointer" }}>
+              {editandoPerfil ? "Cancelar" : "Editar"}
+            </button>
+          </div>
+          {!editandoPerfil ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {[["Días disponibles", datos?.perfil?.dias_disponibles ? (Array.isArray(datos.perfil.dias_disponibles) ? datos.perfil.dias_disponibles.join(", ") : datos.perfil.dias_disponibles) : datos?.perfil?.dias], ["Duración sesión", datos?.perfil?.duracion], ["Lesiones", datos?.perfil?.lesiones]].map(([label, val]) => val ? (
+                <div key={label as string} style={{ display: "flex", gap: 8, fontSize: 13 }}>
+                  <span style={{ color: C.muted, minWidth: 130 }}>{label as string}:</span>
+                  <span style={{ color: C.ink, fontWeight: 500 }}>{val as string}</span>
+                </div>
+              ) : null)}
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div>
+                <p style={{ color: C.muted, fontSize: 12, marginBottom: 6 }}>Lesiones / limitaciones actuales</p>
+                <textarea value={perfilEdit.lesiones || ""} onChange={e=>setPerfilEdit(p=>({...p, lesiones: e.target.value}))} rows={2}
+                  placeholder="Ej: rodilla derecha, lumbar... o ninguna"
+                  style={{ width: "100%", border: `2px solid ${C.border}`, borderRadius: 10, padding: "8px 12px", fontSize: 13, color: C.ink, background: C.bg, fontFamily: "inherit", resize: "none" }}/>
+              </div>
+              <div>
+                <p style={{ color: C.muted, fontSize: 12, marginBottom: 6 }}>Objetivo actual</p>
+                <textarea value={perfilEdit.objetivo_detalle || ""} onChange={e=>setPerfilEdit(p=>({...p, objetivo_detalle: e.target.value}))} rows={2}
+                  placeholder="Ej: correr 10K en menos de 50 min..."
+                  style={{ width: "100%", border: `2px solid ${C.border}`, borderRadius: 10, padding: "8px 12px", fontSize: 13, color: C.ink, background: C.bg, fontFamily: "inherit", resize: "none" }}/>
+              </div>
+              <button onClick={guardarEdicionPerfil} style={{ background: C.accent, color: "#fff", border: "none", borderRadius: 10, padding: 10, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                Guardar cambios del perfil
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Mi entrenamiento */}
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
           <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 14 }}>🏋️ Mi entrenamiento</p>
@@ -192,6 +342,29 @@ export default function MiPerfil() {
           </div>
         </div>
 
+        {/* Cuenta */}
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
+          <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 14 }}>🔒 Cuenta</p>
+          {!confirmandoEliminarCuenta ? (
+            <button onClick={()=>setConfirmandoEliminarCuenta(true)} style={{ width: "100%", background: "none", border: "1px solid #ff444460", borderRadius: 10, padding: 10, fontSize: 13, fontWeight: 600, cursor: "pointer", color: "#ff4444", fontFamily: "inherit" }}>
+              Eliminar cuenta
+            </button>
+          ) : (
+            <div style={{ background: "#ff444410", border: "1px solid #ff444440", borderRadius: 12, padding: 14 }}>
+              <p style={{ color: "#ff4444", fontSize: 13, fontWeight: 700, marginBottom: 6 }}>¿Seguro que quieres eliminar tu cuenta?</p>
+              <p style={{ color: C.muted, fontSize: 12, marginBottom: 12, lineHeight: 1.5 }}>Se eliminará toda tu planificación, historial y datos. Esta acción no se puede deshacer.</p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={ejecutarEliminarCuenta} disabled={eliminandoCuenta} style={{ flex: 1, background: "#ff4444", color: "#fff", border: "none", borderRadius: 10, padding: 10, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: eliminandoCuenta ? 0.6 : 1 }}>
+                  {eliminandoCuenta ? "Eliminando..." : "Sí, eliminar"}
+                </button>
+                <button onClick={()=>setConfirmandoEliminarCuenta(false)} disabled={eliminandoCuenta} style={{ flex: 1, background: "none", border: `1px solid ${C.border}`, borderRadius: 10, padding: 10, fontSize: 13, fontWeight: 600, cursor: "pointer", color: C.ink, fontFamily: "inherit" }}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Modal de cambio de modo */}
         {mostrarCambioModo&&(
           <div onClick={()=>{if(!cambiandoModo){setMostrarCambioModo(false);setMensajeCambioModo("");}}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,padding:20}}>
@@ -199,14 +372,36 @@ export default function MiPerfil() {
               <p style={{ color: C.ink, fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Cambiar a {modoDestino && MODOS_INFO[modoDestino]?.titulo}</p>
               {verificandoModo?(
                 <p style={{ color: C.muted, fontSize: 13, marginTop: 12 }}>Comprobando qué datos necesitamos...</p>
-              ):missingFieldsModo.length>0?(
-                <>
-                  <p style={{ color: C.muted, fontSize: 13, marginTop: 12, marginBottom: 16, lineHeight:1.5 }}>Este modo necesita algunos datos adicionales. Habla con el Coach para completarlos antes de cambiar — te preguntará solo lo que falta.</p>
-                  <p style={{ color: C.accent, fontSize: 12, marginBottom: 16 }}>Faltan: {missingFieldsModo.join(", ")}</p>
-                  <button onClick={()=>{setMostrarCambioModo(false);window.location.href=`/app?codigo=${codigo}&mode_change_target=${modoDestino}&mode_change_missing=${missingFieldsModo.join(',')}`;}} style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:10,padding:12,fontSize:14,fontWeight:600,cursor:"pointer"}}>
-                    Ir al Coach
+              ):missingFieldsDef.length>0?(
+                <div style={{marginTop:12}}>
+                  <div style={{width:"100%",height:3,background:C.border,borderRadius:10,marginBottom:16}}>
+                    <div style={{height:3,borderRadius:10,background:C.accent,width:`${((pasoActualModo+1)/missingFieldsDef.length)*100}%`,transition:"width 0.3s ease"}}/>
+                  </div>
+                  <p style={{ color: C.ink, fontSize: 14, fontWeight: 600, marginBottom: 14 }}>{missingFieldsDef[pasoActualModo]?.label}</p>
+                  {missingFieldsDef[pasoActualModo]?.tipo==="opciones"&&(
+                    <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:16}}>
+                      {missingFieldsDef[pasoActualModo]?.opciones?.map((op:string)=>(
+                        <button key={op} onClick={()=>setRespuestaTemp(op)} style={{padding:"8px 14px",borderRadius:100,border:`2px solid ${respuestaTemp===op?C.accent:C.border}`,background:respuestaTemp===op?C.accent:"transparent",color:respuestaTemp===op?"#fff":C.ink,fontSize:12.5,fontWeight:600,cursor:"pointer"}}>{op}</button>
+                      ))}
+                    </div>
+                  )}
+                  {missingFieldsDef[pasoActualModo]?.tipo==="dias_semana"&&(
+                    <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:16}}>
+                      {["lunes","martes","miercoles","jueves","viernes","sabado","domingo"].map(d=>{
+                        const sel=Array.isArray(respuestaTemp)?respuestaTemp:[];
+                        return (
+                          <button key={d} onClick={()=>setRespuestaTemp(sel.includes(d)?sel.filter((x:string)=>x!==d):[...sel,d])} style={{padding:"8px 14px",borderRadius:100,border:`2px solid ${sel.includes(d)?C.accent:C.border}`,background:sel.includes(d)?C.accent:"transparent",color:sel.includes(d)?"#fff":C.ink,fontSize:12.5,fontWeight:600,cursor:"pointer",textTransform:"capitalize"}}>{d}</button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {missingFieldsDef[pasoActualModo]?.tipo==="texto"&&(
+                    <input value={respuestaTemp||""} onChange={e=>setRespuestaTemp(e.target.value)} placeholder="Escribe tu respuesta" style={{width:"100%",border:`2px solid ${C.border}`,borderRadius:10,padding:"9px 12px",fontSize:13,color:C.ink,background:C.bg,fontFamily:"inherit",marginBottom:16}}/>
+                  )}
+                  <button onClick={guardarCampoActual} disabled={guardandoCampo||respuestaTemp===null||(Array.isArray(respuestaTemp)&&respuestaTemp.length===0)} style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:10,padding:12,fontSize:14,fontWeight:600,cursor:"pointer",opacity:(guardandoCampo||respuestaTemp===null||(Array.isArray(respuestaTemp)&&respuestaTemp.length===0))?0.4:1}}>
+                    {guardandoCampo?"Guardando...":pasoActualModo<missingFieldsDef.length-1?"Siguiente":"Continuar"}
                   </button>
-                </>
+                </div>
               ):mensajeCambioModo?(
                 <p style={{ color: mensajeCambioModo.includes("Error")||mensajeCambioModo.includes("error")?"#ff4444":"#4CAF50", fontSize: 13, marginTop: 12 }}>{mensajeCambioModo}</p>
               ):(

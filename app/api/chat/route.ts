@@ -861,7 +861,10 @@ async function calcularEstadoOnboarding(supabase: any, codigo: string, mode: str
   completedFields.categoria = !!usuarioOnb?.categoria;
   completedFields.objetivo = !!(usuarioOnb?.objetivo_principal?.descripcion || perfilOnb.objetivo_detalle);
   completedFields.edad = !!perfilOnb.edad;
-  completedFields.nivel = !!perfilOnb.nivel;
+  // FIX: distintas categorias usan IDs de campo distintos para "nivel" (nivel, nivel_cf,
+  // nivel_hyrox, nivel_ocr, nivel_carrera, experiencia_fuerza, etc) — reconocer cualquier
+  // variante real, no solo el ID literal "nivel".
+  completedFields.nivel = !!(perfilOnb.nivel || perfilOnb.nivel_cf || perfilOnb.nivel_hyrox || perfilOnb.nivel_ocr || perfilOnb.nivel_carrera || perfilOnb.experiencia_fuerza);
   completedFields.disponibilidad = !!usuarioOnb?.distribucion_semanal;
   completedFields.duracion_sesion = !!perfilOnb.duracion;
   completedFields.disciplina_externa = !!(fuentesOnb || []).find((f: any) => f.owner === "external");

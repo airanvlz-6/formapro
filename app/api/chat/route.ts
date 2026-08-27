@@ -879,7 +879,61 @@ async function calcularEstadoOnboarding(supabase: any, codigo: string, mode: str
   return { completedFields, missingFields, camposRequeridos };
 }
 
-if (action === "eliminar_cuenta") {
+if (action === "verificar_cambio_modo") {
+    // FORGE MODE CHANGE — solo lectura, sin efectos secundarios. Reutiliza EXACTAMENTE el mismo
+    // motor que el onboarding original (calcularEstadoOnboarding + CAMPOS_REQUERIDOS_POR_MODO):
+    // los requisitos pertenecen al modo DESTINO, no importa como llego el atleta hasta ahi. No se
+    // borra ningun dato del modo anterior — solo cambia que campos son obligatorios ahora.
+    const { targetMode } = datos;
+    if (!['supervision', 'focus', 'coach'].includes(targetMode)) {
+      return NextResponse.json({ error: "Modo destino invalido" }, { status: 400 });
+    }
+    const { completedFields, missingFields } = await calcularEstadoOnboarding(supabase, codigo, targetMode);
+    return NextResponse.json({ targetMode, completedFields, missingFields, completo: missingFields.length === 0 });
+  }
+
+  if (action === "cambiar_modo_atleta") {
+    // FORGE MODE CHANGE — ejecucion real. Guard determinista final: nunca confia en que el frontend
+    // ya verifico missingFields, lo recalcula aqui mismo antes de construir el nuevo ciclo y llamar
+    // a la RPC transaccional change_athlete_mode (atomica: todo o nada, nunca estado intermedio).
+    const { targetMode, reason } = datos;
+    if (!['supervision', 'focus', 'coach'].includes(targetMode)) {
+      return NextResponse.json({ error: "Modo destino invalido" }, { status: 400 });
+    }
+    const { missingFields } = await calcularEstadoOnboarding(supabase, codigo, targetMode);
+    if (missingFields.length > 0) {
+      return NextResponse.json({ error: "Faltan campos obligatorios para este modo", missingFields }, { status: 400 });
+    }
+
+    // Construir el nuevo ciclo — logica de planificacion, vive en TypeScript, nunca en la RPC
+    let nuevoCiclo = null;
+    if (targetMode === 'focus' || targetMode === 'coach') {
+      const { data: usuarioParaCiclo } = await supabase.from("usuarios").select("objetivo_principal,perfil").eq("codigo", codigo).single();
+      nuevoCiclo = {
+        bloque: "acumulacion",
+        semana: 1,
+        totalSemanas: 4,
+        objetivo: usuarioParaCiclo?.objetivo_principal?.descripcion || usuarioParaCiclo?.perfil?.objetivo_detalle || "Nueva planificacion"
+      };
+    }
+
+    const { data: resultadoCambio, error: errorCambio } = await supabase.rpc('change_athlete_mode', {
+      p_codigo: codigo,
+      p_target_mode: targetMode,
+      p_reason: reason || 'user_requested',
+      p_new_cycle: nuevoCiclo
+    });
+
+    if (errorCambio) {
+      console.error("Error en cambiar_modo_atleta (RPC):", errorCambio);
+      return NextResponse.json({ error: errorCambio.message }, { status: 500 });
+    }
+
+    console.log(`🔄 MODE CHANGE: ${codigo} — ${JSON.stringify(resultadoCambio)}`);
+    return NextResponse.json(resultadoCambio);
+  }
+
+  if (action === "eliminar_cuenta") {
     // FORGE — eliminacion de cuenta con confirmacion ya realizada en el frontend (doble paso).
     // El email queda registrado como bloqueado para evitar reabrir cuenta nueva y reiniciar el
     // periodo de prueba gratuita. Elimina datos reales de todas las tablas relacionadas.

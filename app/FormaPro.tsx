@@ -614,6 +614,9 @@ export default function Forge() {
   const [esperandoConfirmacionEmpezarHoy,setEsperandoConfirmacionEmpezarHoy]=useState(false);
   const [confirmandoEliminarCuenta,setConfirmandoEliminarCuenta]=useState(false);
   const [eliminandoCuenta,setEliminandoCuenta]=useState(false);
+  // FORGE MODE CHANGE — recuerda si estamos en medio de un flujo de cambio de modo iniciado
+  // desde Mi Perfil, para que el Safety Net sepa que debe intentar capturar/ejecutar el cambio.
+  const [modeChangeEnCurso,setModeChangeEnCurso]=useState<string|null>(null);
   const [mensajes,setMensajes]=useState<{role:string;content:string}[]>([]);
   const [historial,setHistorial]=useState<{role:string;content:string}[]>([]);
   const [input,setInput]=useState("");
@@ -713,6 +716,7 @@ export default function Forge() {
         const modeChangeTarget=params.get("mode_change_target");
         const modeChangeMissing=params.get("mode_change_missing");
         if(modeChangeTarget){
+          setModeChangeEnCurso(modeChangeTarget);
           setTimeout(async()=>{
             setCargando(true);
             const promptCambioModo=`El atleta quiere cambiar su modo de Forge a "${modeChangeTarget}". Para completar el cambio, faltan estos datos en su perfil: ${modeChangeMissing}. Pregúntale por ellos de forma natural y conversacional, uno o dos a la vez, empezando ahora mismo — no esperes a que él inicie la conversación.`;
@@ -1794,6 +1798,17 @@ const forgeValidator=(texto:string):string=>{
             console.log("🛡️ Focus external load: carga externa registrada -",resCargaExt.disciplina);
           }
         });
+        // FORGE MODE CHANGE — si estamos en medio de un flujo de cambio de modo, intenta capturar
+        // los datos que el usuario acaba de dar y ejecutar el cambio real si ya esta todo completo.
+        if(modeChangeEnCurso){
+          apiCall({action:"verificar_datos_cambio_modo_deterministico",codigo:codigoUsuario,datos:{targetMode:modeChangeEnCurso,mensajeUsuario:texto,respuestaCoach:""}}).then((resModeChange:any)=>{
+            if(resModeChange?.cambioEjecutado){
+              console.log("🔄 Mode change ejecutado automaticamente");
+              setModeChangeEnCurso(null);
+              setMensajes(prev=>[...prev,{role:"assistant",content:`✅ Listo — tu perfil ya está configurado en modo ${modeChangeEnCurso}. Puedes ver los detalles en Mi Perfil.`}]);
+            }
+          });
+        }
       }
 
       // FORGE PENDING ACTIONS — deteccion 100% deterministica de confirmacion (regex simple), nunca

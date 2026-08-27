@@ -882,7 +882,74 @@ async function calcularEstadoOnboarding(supabase: any, codigo: string, mode: str
   return { completedFields, missingFields, camposRequeridos };
 }
 
-if (action === "verificar_cambio_modo") {
+if (action === "verificar_datos_cambio_modo_deterministico") {
+    // FORGE MODE CHANGE — Safety Net que captura los datos que el atleta va dando en conversacion
+    // (dias disponibles, disciplina externa) mientras esta en medio de un flujo de cambio de modo,
+    // y ejecuta el cambio real en cuanto missingFields llega a []. El LLM conversa/pregunta, pero
+    // NUNCA decide guardar los datos ni ejecutar la transicion — eso lo hace este parser + la RPC.
+    const { targetMode, mensajeUsuario, respuestaCoach } = datos;
+    if (!targetMode || !mensajeUsuario) return NextResponse.json({ ok: true, detectado: false });
+
+    const capturaPrompt = `Analiza este intercambio entre un atleta y su Coach de fitness. El atleta esta configurando el modo "${targetMode}" de Forge, que requiere conocer su disponibilidad y, si aplica, su disciplina externa (gestionada por otro entrenador).
+
+Mensaje del atleta: "${mensajeUsuario}"
+Respuesta del coach: "${respuestaCoach || ''}"
+
+Responde SOLO con este JSON, sin texto adicional ni markdown:
+{"dias_disponibles":["lista de dias en minusculas sin tildes que el atleta puede entrenar en general, o array vacio si no los menciono"],"disciplina_externa":"nombre de la disciplina externa mencionada o null","dias_externos":["dias de esa disciplina externa, o array vacio"],"duracion_externa":"duracion mencionada o null","intensidad_externa":"baja|moderada|alta|muy variable, o null"}
+
+Extrae SOLO datos que el mensaje contenga explicitamente, nunca inventes valores.`;
+
+    try {
+      const capturaRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 300, messages: [{ role: "user", content: capturaPrompt }] }),
+      });
+      const capturaData = await capturaRes.json();
+      const capturaTexto = capturaData.content?.map((b: any) => b.text || "").join("") || "{}";
+      const capturaClean = capturaTexto.replace(/```json|```/g, "").trim();
+      const capturaMatch = capturaClean.match(/\{[\s\S]*\}/);
+      if (!capturaMatch) return NextResponse.json({ ok: true, detectado: false });
+      const extraido = JSON.parse(capturaMatch[0]);
+
+      // Guardar lo que se haya capturado, de forma incremental (nunca sobrescribe con vacio lo que ya existia)
+      if (extraido.dias_disponibles?.length > 0) {
+        await supabase.from("usuarios").update({ distribucion_semanal: JSON.stringify({ disponibilidad: extraido.dias_disponibles.join(", ") }) }).eq("codigo", codigo);
+      }
+      if (extraido.disciplina_externa && extraido.dias_externos?.length > 0) {
+        await supabase.from("athlete_training_sources").upsert({
+          user_codigo: codigo, disciplina: extraido.disciplina_externa, owner: "external",
+          dias: extraido.dias_externos, duracion_habitual: extraido.duracion_externa || null,
+          intensidad_habitual: extraido.intensidad_externa || null, activo: true
+        }, { onConflict: "user_codigo,disciplina" });
+      }
+
+      // Verificar si ya esta completo para ejecutar el cambio real
+      const { missingFields } = await calcularEstadoOnboarding(supabase, codigo, targetMode);
+      if (missingFields.length === 0) {
+        let nuevoCicloCaptura = null;
+        if (targetMode === 'focus' || targetMode === 'coach') {
+          const { data: usuarioParaCicloCaptura } = await supabase.from("usuarios").select("objetivo_principal,perfil").eq("codigo", codigo).single();
+          nuevoCicloCaptura = { bloque: "acumulacion", semana: 1, totalSemanas: 4, objetivo: usuarioParaCicloCaptura?.objetivo_principal?.descripcion || usuarioParaCicloCaptura?.perfil?.objetivo_detalle || "Nueva planificacion" };
+        }
+        const { data: resultadoCapturaCambio, error: errorCapturaCambio } = await supabase.rpc('change_athlete_mode', {
+          p_codigo: codigo, p_target_mode: targetMode, p_reason: 'user_requested_conversation', p_new_cycle: nuevoCicloCaptura
+        });
+        if (!errorCapturaCambio) {
+          console.log(`🔄 MODE CHANGE (via conversacion): ${codigo} — ${JSON.stringify(resultadoCapturaCambio)}`);
+          return NextResponse.json({ ok: true, detectado: true, cambioEjecutado: true, resultado: resultadoCapturaCambio });
+        }
+      }
+
+      return NextResponse.json({ ok: true, detectado: true, cambioEjecutado: false });
+    } catch (err: any) {
+      console.error("Error en verificar_datos_cambio_modo_deterministico:", err);
+      return NextResponse.json({ ok: true, detectado: false });
+    }
+  }
+
+  if (action === "verificar_cambio_modo") {
     // FORGE MODE CHANGE — solo lectura, sin efectos secundarios. Reutiliza EXACTAMENTE el mismo
     // motor que el onboarding original (calcularEstadoOnboarding + CAMPOS_REQUERIDOS_POR_MODO):
     // los requisitos pertenecen al modo DESTINO, no importa como llego el atleta hasta ahi. No se
@@ -934,6 +1001,35 @@ if (action === "verificar_cambio_modo") {
 
     console.log(`🔄 MODE CHANGE: ${codigo} — ${JSON.stringify(resultadoCambio)}`);
     return NextResponse.json(resultadoCambio);
+  }
+
+  if (action === "cambiar_codigo_usuario") {
+    // FORGE — cambio de codigo de acceso. Migra el codigo en TODAS las tablas relacionadas,
+    // mismo patron que eliminar_cuenta pero con UPDATE en vez de DELETE.
+    const { nuevoCodigo } = datos;
+    if (!nuevoCodigo || nuevoCodigo.trim().length < 5) {
+      return NextResponse.json({ error: "El código debe tener al menos 5 caracteres" }, { status: 400 });
+    }
+    const nuevoCodigoLimpio = nuevoCodigo.trim().toUpperCase();
+
+    const { data: usuarioExistenteCheck } = await supabase.from("usuarios").select("codigo").eq("codigo", nuevoCodigoLimpio).maybeSingle();
+    if (usuarioExistenteCheck) {
+      return NextResponse.json({ error: "Este código ya existe, elige otro" }, { status: 400 });
+    }
+
+    const tablasConUserCodigo = [
+      "weekly_plan", "weekly_plan_generation_log", "weekly_plan_events", "pending_actions",
+      "athlete_coaching_notes", "athlete_state_events", "athlete_training_sources",
+      "external_training_records", "physiology_records", "readiness_checkins",
+      "session_modification_events", "onboarding_state", "block_outcomes", "athlete_mode_events"
+    ];
+    await Promise.all(tablasConUserCodigo.map(tabla => supabase.from(tabla).update({ user_codigo: nuevoCodigoLimpio }).eq("user_codigo", codigo)));
+
+    const { error: errorCambioCodigo } = await supabase.from("usuarios").update({ codigo: nuevoCodigoLimpio }).eq("codigo", codigo);
+    if (errorCambioCodigo) return NextResponse.json({ error: errorCambioCodigo.message }, { status: 500 });
+
+    console.log(`🔄 CODIGO CAMBIADO: ${codigo} -> ${nuevoCodigoLimpio}`);
+    return NextResponse.json({ ok: true, nuevoCodigo: nuevoCodigoLimpio });
   }
 
   if (action === "eliminar_cuenta") {

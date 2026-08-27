@@ -732,11 +732,14 @@ export default function Forge() {
         // de la primera semana via el Orchestrator — sin conversacion previa, ya no hace falta
         // preguntar disponibilidad porque ya se capturo explicitamente en el flujo de Mi Perfil.
         if(params.get("generar_semana_focus")==="1"){
+          setCodigoUsuario(u.codigo);
           setTimeout(async()=>{
+            console.log("🔍 DEBUG generar_semana_focus — codigoUsuario:",u.codigo);
             setMensajes([{role:"assistant",content:`¡Bienvenido a tu nuevo modo ${u.modo_entrada==="focus"?"Focus":"Coach"}! Ya tengo todos tus datos — voy a construir tu primera semana ahora mismo.`}]);
             setGenerandoSemana(true);
             setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu primera semana paso a paso — analizando bloque, distribuyendo días y diseñando cada sesión..."}]);
             const planFocusInicial=await orquestarGeneracionSemana(true);
+            console.log("🔍 DEBUG resultado orquestarGeneracionSemana:",planFocusInicial);
             const respuestaFocusInicial=planFocusInicial
               ? `✅ **Semana generada y guardada.**\n\nBloque: ${planFocusInicial.block_name} — ${planFocusInicial.week_objective}\n\nRevisa el detalle completo en **Mi Plan**. ¿Alguna duda?`
               : "⚠️ Hubo un problema generando la semana. Puedes pedírmelo directamente en el chat: \"genera mi semana\".";

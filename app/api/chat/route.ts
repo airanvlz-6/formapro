@@ -2274,7 +2274,14 @@ Si un dia es descanso, usa tipo "descanso" (los demas campos pueden quedar vacio
             const diaNorm = normalizarDiaPlanner(s.dia);
             const esExterno = diasExternosSet.has(diaNorm);
             const esDiaForgeValido = diasForgePermitidos.includes(diaNorm);
-            if (!esExterno && !esDiaForgeValido && s.tipo !== "descanso") {
+            // FIX REAL: la condicion original solo cubria "ni externo ni valido", pero el caso
+            // real confirmado con evidencia era que el Week Planner ponia la sesion Forge
+            // DIRECTAMENTE en un dia externo (tipo!=="descanso" Y tipo!=="external_blocked" pero
+            // dia SI esta en diasExternosSet) — la sesion generada por el Session Builder
+            // despues simplemente sustituye el contenido de ese dia sin pasar por aqui de nuevo,
+            // asi que la correccion debe actuar sobre CUALQUIER sesion Forge (no descanso, no ya
+            // marcada externa) que caiga en un dia externo O en un dia no permitido.
+            if (esExterno === false ? !esDiaForgeValido && s.tipo !== "descanso" : s.tipo !== "descanso" && s.tipo !== "external_blocked") {
               // Sesion Forge mal ubicada (ni externo ni dia permitido) — reasignar al primer dia permitido libre
               while (indiceDiaLibre < diasForgePermitidos.length) {
                 const diaCandidato = diasForgePermitidos[indiceDiaLibre];

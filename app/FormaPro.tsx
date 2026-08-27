@@ -695,9 +695,9 @@ export default function Forge() {
         const irATest=params.get("test")==="1";
         setPantalla(irATest?"test":"chat");
         if(params.get("ajustes")==="1"){
-          setMostrarPerfil(true);
-          const resFounder=await apiCall({action:"obtener_estado_founder",codigo:u.codigo});
-          if(resFounder) setEstadoFounder(resFounder);
+          // FIX: redirigir a la nueva pagina /perfil en vez de abrir el panel antiguo superpuesto
+          window.location.href=`/perfil?codigo=${u.codigo}`;
+          return;
         }
         setEmailGuardado(!!u.email);
         setEsPremium(!!(u as any).premium);

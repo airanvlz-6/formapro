@@ -727,6 +727,23 @@ export default function Forge() {
         // el Coach inicia la conversacion pidiendolos, en vez de esperar a que el usuario escriba
         // algo primero. La peticion la origina el sistema (parametro URL), nunca el LLM decide
         // por su cuenta iniciar este flujo.
+        // FORGE MODE TRANSITION FLOW — tras completar el cambio de modo en Mi Perfil (todos los
+        // datos ya confirmados de forma determinista), disparamos directamente la generacion real
+        // de la primera semana via el Orchestrator — sin conversacion previa, ya no hace falta
+        // preguntar disponibilidad porque ya se capturo explicitamente en el flujo de Mi Perfil.
+        if(params.get("generar_semana_focus")==="1"){
+          setTimeout(async()=>{
+            setMensajes([{role:"assistant",content:`¡Bienvenido a tu nuevo modo ${u.modo_entrada==="focus"?"Focus":"Coach"}! Ya tengo todos tus datos — voy a construir tu primera semana ahora mismo.`}]);
+            setGenerandoSemana(true);
+            setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu primera semana paso a paso — analizando bloque, distribuyendo días y diseñando cada sesión..."}]);
+            const planFocusInicial=await orquestarGeneracionSemana(true);
+            const respuestaFocusInicial=planFocusInicial
+              ? `✅ **Semana generada y guardada.**\n\nBloque: ${planFocusInicial.block_name} — ${planFocusInicial.week_objective}\n\nRevisa el detalle completo en **Mi Plan**. ¿Alguna duda?`
+              : "⚠️ Hubo un problema generando la semana. Puedes pedírmelo directamente en el chat: \"genera mi semana\".";
+            setMensajes(prev=>[...prev,{role:"assistant",content:respuestaFocusInicial}]);
+            setGenerandoSemana(false);
+          },500);
+        }
         const modeChangeTarget=params.get("mode_change_target");
         const modeChangeMissing=params.get("mode_change_missing");
         if(modeChangeTarget){

@@ -1195,7 +1195,13 @@ const [equipoSeleccionado,setEquipoSeleccionado]=useState<any>(null);
   // FIX: preguntas condicionales (ej: FC max/reposo, solo si el usuario indico que tiene
   // pulsometro) se filtran dinamicamente segun la respuesta REAL ya dada a la pregunta de la
   // que dependen — nunca se muestran si la condicion no se cumple, evitando preguntas irrelevantes.
+  // FIX: Supervision/Consulta capturan un perfil BASE minimo (edad, nivel, objetivo) en vez de
+  // saltar directamente a "final" sin ningun dato — necesario para que calcularEstadoOnboarding
+  // pueda evaluar correctamente un futuro cambio de modo hacia Focus/Coach sin preguntar de nuevo
+  // datos que el atleta ya deberia tener guardados desde el principio, sin importar su modo.
+  const CAMPOS_BASE_MINIMOS=["edad","nivel","objetivo_detalle"];
   const preguntas:Pregunta[]=preguntasBase.filter(p=>{
+    if((modoEntrada==="supervision"||modoEntrada==="consulta")&&!CAMPOS_BASE_MINIMOS.includes(p.id)) return false;
     if(!p.condicionDe) return true;
     const valorCondicion=respuestas[p.condicionDe];
     if(typeof valorCondicion!=="string") return false;

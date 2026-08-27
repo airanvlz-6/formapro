@@ -3681,18 +3681,10 @@ const esCarrera=/carrera|running|correr|fartlek|intervalos|series|rodaje|tempo|u
                   <span style={{fontSize:18}}>🧪</span>
                   <span style={{fontSize:14,fontWeight:600,color:C.ink}}>Forge Labs</span>
                 </a>
-                <button onClick={async()=>{
-                  setMostrarMasChat(false);
-                  const nuevoEstado=!mostrarPerfil;
-                  setMostrarPerfil(nuevoEstado);setMostrarMarcas(false);
-                  if(nuevoEstado&&codigoUsuario){
-                    const res=await apiCall({action:"obtener_estado_founder",codigo:codigoUsuario});
-                    if(res) setEstadoFounder(res);
-                  }
-                }} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:"none",border:"none",cursor:"pointer",borderRadius:10,textAlign:"left"}}>
+                <a href={`/perfil?codigo=${codigoUsuario}`} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"12px 14px",background:"none",border:"none",cursor:"pointer",borderRadius:10,textAlign:"left",textDecoration:"none"}}>
                   <span style={{fontSize:18}}>⚙️</span>
-                  <span style={{fontSize:14,fontWeight:600,color:C.ink}}>Ajustes</span>
-                </button>
+                  <span style={{fontSize:14,fontWeight:600,color:C.ink}}>Mi Perfil</span>
+                </a>
               </div>
             </div>
           )}

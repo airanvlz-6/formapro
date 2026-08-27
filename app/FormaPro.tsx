@@ -1207,6 +1207,7 @@ const [equipoSeleccionado,setEquipoSeleccionado]=useState<any>(null);
     if(typeof valorCondicion!=="string") return false;
     return p.condicionValor?p.condicionValor.test(valorCondicion):true;
   });
+  if(typeof window!=="undefined") console.log("🔍 DEBUG preguntas:",modoEntrada,preguntasBase.length,"->",preguntas.length,JSON.stringify(preguntas.map(p=>p.id)));
   const pregActual=preguntas[pregIdx];
   const diasPrueba=10;
   const diasUsados=fechaRegistro?Math.floor((new Date().getTime()-new Date(fechaRegistro).getTime())/(1000*60*60*24)):0;
@@ -1314,11 +1315,9 @@ const elegirEspecialidad=(label:string)=>{
     // ONBOARDING DIFERENCIADO: los modos "supervision" y "consulta" saltan el cuestionario largo
     // de objetivos/disponibilidad (que asume que Forge va a generar el plan) — solo necesitan
     // el minimo para identificar al atleta, el resto lo descubre Forge conversando.
-    if(modoEntrada==="supervision"||modoEntrada==="consulta"){
-      setPantalla("final");
-    } else {
-      setPantalla("formulario");
-    }
+    // FIX: Supervision/Consulta ya no saltan directo a "final" sin ningun dato — pasan por el
+    // formulario (ahora filtrado a solo 3 preguntas base: edad, nivel, objetivo) antes de continuar.
+    setPantalla("formulario");
   };
 
   const avanzar=()=>{

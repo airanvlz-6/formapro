@@ -112,8 +112,7 @@ export default function MiPerfil() {
     const data = await res.json();
     setCambiandoModo(false);
     if(data?.ok){
-      setMensajeCambioModo(`Modo cambiado a ${MODOS_INFO[modoDestino!]?.titulo}. Recargando...`);
-      setTimeout(()=>window.location.reload(),1500);
+      setMensajeCambioModo("listo");
     }else{
       setMensajeCambioModo(data?.error || "Error al cambiar de modo");
     }
@@ -402,8 +401,16 @@ export default function MiPerfil() {
                     {guardandoCampo?"Guardando...":pasoActualModo<missingFieldsDef.length-1?"Siguiente":"Continuar"}
                   </button>
                 </div>
+              ):mensajeCambioModo==="listo"?(
+                <div>
+                  <p style={{ color: "#4CAF50", fontSize: 15, fontWeight: 700, marginBottom: 8 }}>✅ Modo {MODOS_INFO[modoDestino!]?.titulo} activado</p>
+                  <p style={{ color: C.muted, fontSize: 13, marginBottom: 18, lineHeight: 1.5 }}>Tu perfil ya está listo. El siguiente paso es hablar con el Coach para generar tu primera semana de entrenamiento.</p>
+                  <a href={`/app?codigo=${codigo}`} style={{ display: "block", textAlign: "center", width: "100%", background: C.accent, color: "#fff", border: "none", borderRadius: 10, padding: 12, fontSize: 14, fontWeight: 600, textDecoration: "none" }}>
+                    Ir al Coach y generar mi semana →
+                  </a>
+                </div>
               ):mensajeCambioModo?(
-                <p style={{ color: mensajeCambioModo.includes("Error")||mensajeCambioModo.includes("error")?"#ff4444":"#4CAF50", fontSize: 13, marginTop: 12 }}>{mensajeCambioModo}</p>
+                <p style={{ color: "#ff4444", fontSize: 13, marginTop: 12 }}>{mensajeCambioModo}</p>
               ):(
                 <>
                   <p style={{ color: C.muted, fontSize: 13, marginTop: 12, marginBottom: 16, lineHeight:1.5 }}>Tienes todos los datos necesarios. ¿Confirmas el cambio de modo?</p>

@@ -2261,6 +2261,8 @@ Si un dia es descanso, usa tipo "descanso" (los demas campos pueden quedar vacio
       // que el LLM respete la regla, el codigo la GARANTIZA aqui: reasigna deterministamente
       // cualquier sesion Forge mal ubicada al primer dia permitido real, sin perder el contenido.
       const focusContextPlanner = await buildFocusContext(supabase, codigo);
+      console.log("🔍 DEBUG focusContextPlanner:", JSON.stringify(focusContextPlanner));
+      console.log("🔍 DEBUG estructuraSemana.sessions ANTES de correccion:", JSON.stringify(estructuraSemana.sessions?.map((s: any) => ({ dia: s.dia, tipo: s.tipo }))));
       if (focusContextPlanner.esModoFocus && Array.isArray(estructuraSemana.sessions)) {
         const normalizarDiaPlanner = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
         const diasExternosSet = new Set<string>();
@@ -2298,6 +2300,7 @@ Si un dia es descanso, usa tipo "descanso" (los demas campos pueden quedar vacio
         }
       }
 
+      console.log("🔍 DEBUG estructuraSemana.sessions DESPUES de correccion:", JSON.stringify(estructuraSemana.sessions?.map((s: any) => ({ dia: s.dia, tipo: s.tipo }))));
       return NextResponse.json({ ok: true, estructura: estructuraSemana });
     } catch (err: any) {
       return NextResponse.json({ error: "Error en Week Planner: " + err.message }, { status: 500 });

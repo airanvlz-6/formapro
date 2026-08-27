@@ -2255,49 +2255,25 @@ Si un dia es descanso, usa tipo "descanso" (los demas campos pueden quedar vacio
       if (!plannerMatch) throw new Error("Week Planner no devolvio JSON valido");
       const estructuraSemana = JSON.parse(plannerMatch[0]);
 
-      // FORGE FOCUS — CORRECCION DETERMINISTA DE DIAS: el prompt del Week Planner puede ignorar la
-      // instruccion y asignar la disciplina Forge a un dia de la disciplina externa (bug real
-      // confirmado con evidencia: asigno carrera al sabado, dia de CrossFit). En vez de confiar en
-      // que el LLM respete la regla, el codigo la GARANTIZA aqui: reasigna deterministamente
-      // cualquier sesion Forge mal ubicada al primer dia permitido real, sin perder el contenido.
+      // FORGE FOCUS — CORRECCION DETERMINISTA REAL (causa raiz confirmada con evidencia de logs):
+      // el Week Planner directamente NUNCA generaba tipo="carrera" (o el tipo de la disciplina
+      // Forge) para ningun dia — dejaba los dias de Forge como "descanso" sin mas. El problema
+      // nunca fue el DIA asignado, fue que el TIPO correcto nunca se generaba en absoluto.
       const focusContextPlanner = await buildFocusContext(supabase, codigo);
-      console.log("🔍 DEBUG focusContextPlanner:", JSON.stringify(focusContextPlanner));
-      console.log("🔍 DEBUG estructuraSemana.sessions ANTES de correccion:", JSON.stringify(estructuraSemana.sessions?.map((s: any) => ({ dia: s.dia, tipo: s.tipo }))));
       if (focusContextPlanner.esModoFocus && Array.isArray(estructuraSemana.sessions)) {
         const normalizarDiaPlanner = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-        const diasExternosSet = new Set<string>();
-        focusContextPlanner.disciplinasExternas.forEach((d: any) => (d.dias || []).forEach((dia: string) => diasExternosSet.add(normalizarDiaPlanner(dia))));
-        const diasForgePermitidos = (focusContextPlanner.disciplinasForge[0]?.dias || []).map(normalizarDiaPlanner);
+        const disciplinaForgeReal = focusContextPlanner.disciplinasForge[0];
+        const diasForgePermitidos = (disciplinaForgeReal?.dias || []).map(normalizarDiaPlanner);
+        const tipoForgeReal = normalizarDiaPlanner(disciplinaForgeReal?.disciplina || "").includes("carr") ? "carrera" : normalizarDiaPlanner(disciplinaForgeReal?.disciplina || "");
 
-        if (diasForgePermitidos.length > 0) {
-          const diasYaUsados = new Set(estructuraSemana.sessions.filter((s: any) => diasExternosSet.has(normalizarDiaPlanner(s.dia))).map(() => null));
-          let indiceDiaLibre = 0;
-          estructuraSemana.sessions = estructuraSemana.sessions.map((s: any) => {
-            const diaNorm = normalizarDiaPlanner(s.dia);
-            const esExterno = diasExternosSet.has(diaNorm);
-            const esDiaForgeValido = diasForgePermitidos.includes(diaNorm);
-            // FIX REAL: la condicion original solo cubria "ni externo ni valido", pero el caso
-            // real confirmado con evidencia era que el Week Planner ponia la sesion Forge
-            // DIRECTAMENTE en un dia externo (tipo!=="descanso" Y tipo!=="external_blocked" pero
-            // dia SI esta en diasExternosSet) — la sesion generada por el Session Builder
-            // despues simplemente sustituye el contenido de ese dia sin pasar por aqui de nuevo,
-            // asi que la correccion debe actuar sobre CUALQUIER sesion Forge (no descanso, no ya
-            // marcada externa) que caiga en un dia externo O en un dia no permitido.
-            if (esExterno === false ? !esDiaForgeValido && s.tipo !== "descanso" : s.tipo !== "descanso" && s.tipo !== "external_blocked") {
-              // Sesion Forge mal ubicada (ni externo ni dia permitido) — reasignar al primer dia permitido libre
-              while (indiceDiaLibre < diasForgePermitidos.length) {
-                const diaCandidato = diasForgePermitidos[indiceDiaLibre];
-                const yaOcupado = estructuraSemana.sessions.some((otra: any) => normalizarDiaPlanner(otra.dia) === diaCandidato && otra !== s);
-                indiceDiaLibre++;
-                if (!yaOcupado) {
-                  console.log(`🔧 CORRECCION DETERMINISTA: sesion Forge reasignada de "${s.dia}" a "${diaCandidato}"`);
-                  return { ...s, dia: diaCandidato };
-                }
-              }
-            }
-            return s;
-          });
-        }
+        estructuraSemana.sessions = estructuraSemana.sessions.map((s: any) => {
+          const diaNorm = normalizarDiaPlanner(s.dia);
+          if (diasForgePermitidos.includes(diaNorm) && s.tipo !== tipoForgeReal && s.tipo !== "external_blocked") {
+            console.log(`🔧 CORRECCION DETERMINISTA: dia "${s.dia}" forzado de tipo "${s.tipo}" a tipo "${tipoForgeReal}" (disciplina Forge)`);
+            return { ...s, tipo: tipoForgeReal, titulo_breve: s.titulo_breve || disciplinaForgeReal?.disciplina };
+          }
+          return s;
+        });
       }
 
       console.log("🔍 DEBUG estructuraSemana.sessions DESPUES de correccion:", JSON.stringify(estructuraSemana.sessions?.map((s: any) => ({ dia: s.dia, tipo: s.tipo }))));

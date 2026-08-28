@@ -195,3 +195,64 @@ export function sugerirMovimientoNoRepetido(estimuloId: string, disciplina: stri
 export function getEstimulosDeDisciplina(disciplina: string): Estimulo[] {
   return Object.values(STIMULUS_LIBRARY).filter(e => e.discipline === disciplina);
 }
+
+// ============================================================
+// FASE 4 — RANKING DE CANDIDATOS: el Session Builder recibe candidatos YA priorizados,
+// no elige libremente sobre toda la libreria. El ranking combina exposicion reciente
+// (menos expuesto = mas prioritario) y restricciones activas, de forma determinista.
+// ============================================================
+export interface CandidatoMovimiento extends Movimiento {
+  vecesExpuestoReciente: number;
+  prioridadRanking: number; // menor = mas prioritario
+}
+
+export function rankearCandidatos(
+  estimuloId: string,
+  disciplina: string,
+  zonasRestringidas: string[],
+  exposicionesRecientes: { movementId: string; vecesUltimas4Semanas: number }[]
+): CandidatoMovimiento[] {
+  const candidatosValidos = getMovimientosCompatiblesConRestriccion(estimuloId, disciplina, zonasRestringidas);
+  const mapaExposicion = new Map(exposicionesRecientes.map(e => [e.movementId, e.vecesUltimas4Semanas]));
+
+  return candidatosValidos
+    .map(m => ({
+      ...m,
+      vecesExpuestoReciente: mapaExposicion.get(m.id) || 0,
+      prioridadRanking: mapaExposicion.get(m.id) || 0, // 0 exposiciones = prioridad maxima (rankea primero)
+    }))
+    .sort((a, b) => a.prioridadRanking - b.prioridadRanking);
+}
+
+// ============================================================
+// FASE 5 — VALIDADOR DE COHERENCIA ESTIMULO-SESION: verifica que la sesion generada
+// realmente sirva al estimulo que el Week Planner decidio, no solo que "pertenezca" a
+// la disciplina correcta. Deterministico — nunca confia en que el LLM se haya autoevaluado.
+// ============================================================
+export interface ValidacionEstimulo {
+  valido: boolean;
+  motivo: string;
+}
+
+export function validarCoherenciaEstimulo(
+  estimuloObjetivo: string,
+  disciplina: string,
+  descripcionSesion: string
+): ValidacionEstimulo {
+  const movimientosDelEstimulo = getMovimientosPorEstimulo(estimuloObjetivo, disciplina);
+  if (movimientosDelEstimulo.length === 0) {
+    return { valido: true, motivo: "Estimulo sin movimientos catalogados aun, no se puede validar por biblioteca — se acepta por defecto." };
+  }
+  const textoNormalizado = descripcionSesion.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const algunoAparece = movimientosDelEstimulo.some(m => {
+    const terminos = [m.id.replace(/_/g, " "), m.id.replace(/_/g, "-")];
+    return terminos.some(t => textoNormalizado.includes(t));
+  });
+  if (!algunoAparece) {
+    return {
+      valido: false,
+      motivo: `La sesion no contiene ningun movimiento asociado al estimulo "${estimuloObjetivo}" (candidatos esperados: ${movimientosDelEstimulo.map(m => m.id).join(", ")}). Puede que el Session Builder haya generado el estimulo equivocado.`
+    };
+  }
+  return { valido: true, motivo: "Movimiento coherente con el estimulo objetivo." };
+}

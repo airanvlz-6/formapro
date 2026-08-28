@@ -4,6 +4,7 @@ import { render } from "@react-email/render";
 import { validateExtraction } from "@/lib/validators/extractionRules";
 import { buildCatalogoPrompt, validarCatalogoDisciplina } from "@/lib/sports/disciplineCatalog";
 import { buildExposureReport, exposureReportToPromptText } from "@/lib/sports/exposureEngine";
+import { rankearCandidatos, validarCoherenciaEstimulo, STIMULUS_LIBRARY } from "@/lib/sports/movementLibrary";
 import { parseStrengthRecord } from "@/lib/sports/strengthRecordParser";
 import { parseSleepMetrics } from "@/lib/sports/sleepMetricsParser";
 import { parseSessionProposal } from "@/lib/sports/proposalParser";
@@ -2479,6 +2480,36 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
     }
     console.log(`CHECKPOINT construir_sesion_dia [${dia}]: snapshot listo`);
 
+    // FASE 4 — CANDIDATOS RANKEADOS: el Session Builder recibe movimientos YA priorizados por
+    // el motor (menos expuestos recientemente = mas prioritarios), no elige libremente sobre
+    // toda la libreria. Estimulo objetivo inferido del "focus"/"tipo" que decidio el Week Planner.
+    let candidatosTexto = "";
+    let estimuloObjetivoReal = "";
+    try {
+      const disciplinaSesion = (tipo || "").toLowerCase().includes("carr") ? "carrera" : "box";
+      const estimulosDisciplina = Object.values(STIMULUS_LIBRARY).filter((e: any) => e.discipline === disciplinaSesion);
+      const focusNormalizado = (focus || titulo_breve || "").toLowerCase();
+      const estimuloMatch = estimulosDisciplina.find((e: any) => focusNormalizado.includes(e.id.replace(/_/g, " ")) || focusNormalizado.includes(e.descripcion.toLowerCase().split(" ")[0]));
+      estimuloObjetivoReal = estimuloMatch?.id || "";
+      if (estimuloObjetivoReal) {
+        const { data: planesParaCandidatos } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(4);
+        const exposicionesCandidatos: any[] = [];
+        (planesParaCandidatos || []).forEach((p: any) => {
+          (p.sessions || []).filter((s: any) => s.completada && s.descripcion_real).forEach((s: any) => exposicionesCandidatos.push({ dia: s.dia, tipo: s.tipo, titulo: s.titulo || "", descripcionReal: s.descripcion_real }));
+        });
+        const { buildExposureReport: buildExpReportLocal } = await import("@/lib/sports/exposureEngine");
+        const reportLocal = buildExpReportLocal(exposicionesCandidatos.map((e: any) => ({ fecha: e.dia, tipo: e.tipo, titulo: e.titulo, descripcionReal: e.descripcionReal })), disciplinaSesion);
+        const { data: athleteStateBuilder } = await supabase.from("athlete_state_events").select("body_area").eq("user_codigo", codigo).eq("estado", "restricted").order("created_at", { ascending: false }).limit(3);
+        const zonasRestringidasBuilder = (athleteStateBuilder || []).map((r: any) => r.body_area).filter(Boolean);
+        const candidatosRankeados = rankearCandidatos(estimuloObjetivoReal, disciplinaSesion, zonasRestringidasBuilder, reportLocal.exposiciones);
+        if (candidatosRankeados.length > 0) {
+          candidatosTexto = `\n🎯 MOVIMIENTOS CANDIDATOS PARA EL ESTÍMULO "${estimuloObjetivoReal}" (ya priorizados por exposición reciente, los primeros son los MENOS usados recientemente — prioriza estos para dar variedad real): ${candidatosRankeados.slice(0, 5).map((c: any) => `${c.id}${c.vecesExpuestoReciente > 0 ? ` (usado ${c.vecesExpuestoReciente}x recientemente)` : " (sin exposición reciente)"}`).join(", ")}`;
+        }
+      }
+    } catch (errCandidatos) {
+      console.error(`CHECKPOINT construir_sesion_dia [${dia}]: error calculando candidatos rankeados:`, errCandidatos);
+    }
+
     // FORGE SESSION ENGINE (v1): el Session Builder ya no inventa la estructura desde cero.
     // Recibe la INTENCION exacta que ya decidio el Week Planner y solo la desarrolla en detalle.
     const builderPrompt = `Eres un constructor de sesiones de entrenamiento. Tu ÚNICA tarea es DESARROLLAR EN DETALLE
@@ -2488,6 +2519,7 @@ especifico (ejercicios, series, reps, cargas) que cumpla exactamente esta intenc
 DÍA: ${dia}
 TIPO DE SESIÓN: ${tipo}
 IDEA GENERAL: ${titulo_breve}
+${candidatosTexto}
 INTENCION YA DECIDIDA (respeta esto, no la cambies):
 - Foco/movimiento principal: ${focus || "no especificado"}
 - Volumen: ${volume || "medio"}

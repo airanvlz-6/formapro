@@ -2059,6 +2059,10 @@ if (action === "analizar_bloque_semana") {
     const estado = await generarEstadoCanonico(supabase, codigo);
     // FORGE FOCUS — contrato determinista de disciplinas externas, consultado ANTES del prompt.
     const focusContext = await buildFocusContext(supabase, codigo);
+    // FIX CRITICO: coherencia longitudinal real entre bloques — ahora que block_outcomes se guarda
+    // deterministamente (ver guardar_plan_semana), el Block Analyzer consulta el bloque ANTERIOR
+    // real para no repetir ciegamente la misma estructura sin importar como fue el bloque previo.
+    const { data: bloqueAnteriorReal } = await supabase.from("block_outcomes").select("*").eq("user_codigo", codigo).order("fecha_fin", { ascending: false }).limit(1).maybeSingle();
     const { data: usuarioAnalyzer } = await supabase.from("usuarios").select("ciclo_actual,athlete_development,distribucion_semanal,categoria,especialidad,objetivo_principal,perfil").eq("codigo", codigo).single();
 
     const debilidadesActivas = (usuarioAnalyzer?.athlete_development || []).filter((d: any) => d.estado !== "resuelta");
@@ -2140,6 +2144,7 @@ Categoría/especialidad del atleta: ${usuarioAnalyzer?.especialidad || usuarioAn
 Objetivo principal: ${JSON.stringify(usuarioAnalyzer?.objetivo_principal) || "no especificado"}
 Ciclo actual: ${JSON.stringify(estado.ciclo)}
 Debilidad prioritaria activa: ${debilidadPrioritaria ? debilidadPrioritaria.nombre_visible : "ninguna"}
+${bloqueAnteriorReal ? `📊 BLOQUE ANTERIOR REAL (usa esto para dar coherencia longitudinal, no repitas ciegamente la misma estructura): tipo "${bloqueAnteriorReal.tipo_bloque}", adherencia ${bloqueAnteriorReal.adherencia}%, resultado "${bloqueAnteriorReal.resultado_global}", ${bloqueAnteriorReal.sesiones_completadas} sesiones completadas, ${bloqueAnteriorReal.lesiones ? "CON incidencia de restriccion/lesion" : "sin incidencias"}. Si el resultado fue "deficiente" o la adherencia fue baja, considera un bloque mas conservador. Si fue "excelente"/"bueno" con alta adherencia, puedes progresar la carga con mas confianza.` : "Sin bloque anterior registrado — es el primer bloque de este atleta o no hay historico suficiente."}
 Disponibilidad: ${focusContext.esModoFocus && focusContext.disciplinasForge[0]?.dias?.length > 0 ? `${focusContext.disciplinasForge[0].disciplina}: ${focusContext.disciplinasForge[0].dias.join(", ")}` : usuarioAnalyzer?.distribucion_semanal || "no especificada"}
 ${metodosYaProbadosTexto}
 ${restriccionesTexto}
@@ -4662,6 +4667,51 @@ if (action === "obtener_daily_briefing") {
           // (viene del Block Analyzer/Coach, ya reflejado en el plan que se esta guardando).
           const totalSemanasCiclo = cicloIncr.totalSemanas || 4;
           const superariaLimite = (cicloIncr.semana + 1) > totalSemanasCiclo;
+
+          // FIX CRITICO CONFIRMADO CON EVIDENCIA REAL: block_outcomes existia en el modelo de datos
+          // pero dependia de que el LLM generara el tag [BLOCK_OUTCOME:] en el momento exacto del
+          // cierre — nunca se disparaba en la practica (0 registros reales tras multiples bloques
+          // completados). Ahora: SIEMPRE que se detecta transicion de bloque, el codigo calcula y
+          // guarda el outcome deterministamente, con datos reales de las tablas existentes, sin
+          // depender de que el LLM recuerde generar ningun tag.
+          if (superariaLimite) {
+            try {
+              const { data: usuarioParaOutcome } = await supabase.from("usuarios").select("workout_history").eq("codigo", codigo).single();
+              const workoutHistoryOutcome = usuarioParaOutcome?.workout_history || [];
+              const hoyOutcome = new Date().toISOString().split('T')[0];
+              const fechaInicioBloqueEstimada = (() => {
+                const d = new Date();
+                d.setDate(d.getDate() - (totalSemanasCiclo * 7));
+                return d.toISOString().split('T')[0];
+              })();
+              const sesionesDelBloque = workoutHistoryOutcome.filter((w: any) => w.fecha >= fechaInicioBloqueEstimada);
+              const diasEsperadosBloque = totalSemanasCiclo * 3; // estimacion conservadora, 3 sesiones/semana minimo
+              const adherenciaCalculada = Math.min(100, Math.round((sesionesDelBloque.length / Math.max(diasEsperadosBloque, 1)) * 100));
+
+              const { count: prsDelBloque } = await supabase.from("session_modification_events").select("*", { count: "exact", head: true }).eq("user_codigo", codigo).gte("created_at", fechaInicioBloqueEstimada);
+              const { count: lesionesDelBloque } = await supabase.from("athlete_state_events").select("*", { count: "exact", head: true }).eq("user_codigo", codigo).eq("estado", "restricted").gte("created_at", fechaInicioBloqueEstimada);
+
+              await supabase.from("block_outcomes").insert({
+                user_codigo: codigo,
+                tipo_bloque: cicloIncr.bloque || "desconocido",
+                duracion_semanas: totalSemanasCiclo,
+                objetivo: cicloIncr.objetivo || null,
+                adherencia: adherenciaCalculada,
+                fatiga_media: null,
+                sesiones_completadas: sesionesDelBloque.length,
+                pr_obtenidos: prsDelBloque || 0,
+                debilidades_resueltas: null,
+                lesiones: (lesionesDelBloque || 0) > 0,
+                resultado_global: adherenciaCalculada >= 80 ? "bueno" : adherenciaCalculada >= 50 ? "regular" : "deficiente",
+                fecha_inicio: fechaInicioBloqueEstimada,
+                fecha_fin: hoyOutcome
+              });
+              console.log(`✅ BLOCK OUTCOME guardado deterministamente: bloque "${cicloIncr.bloque}", adherencia ${adherenciaCalculada}%, ${sesionesDelBloque.length} sesiones`);
+            } catch (errBlockOutcome) {
+              console.error("Error guardando block_outcome deterministico:", errBlockOutcome);
+            }
+          }
+
           const nuevoCiclo = superariaLimite
             ? { ...cicloIncr, bloque: plan.block_name || cicloIncr.bloque, semana: 1, totalSemanas: plan.total_weeks_block || totalSemanasCiclo }
             : { ...cicloIncr, semana: cicloIncr.semana + 1 };

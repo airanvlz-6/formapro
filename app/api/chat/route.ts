@@ -2613,6 +2613,19 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
         }
       }
 
+      // FASE 5 — VALIDADOR DE COHERENCIA ESTIMULO-SESION: no basta con "pertenece a la disciplina
+      // correcta", debe servir realmente al estimulo que el Week Planner decidio. Solo verifica
+      // (no bloquea el guardado) por ahora — registra el hallazgo para poder auditar el sistema
+      // sin arriesgar romper el flujo mientras se valida en produccion.
+      if (estimuloObjetivoReal) {
+        const validacionEstimuloFinal = validarCoherenciaEstimulo(estimuloObjetivoReal, (tipo || "").toLowerCase().includes("carr") ? "carrera" : "box", descripcionEnsamblada);
+        if (!validacionEstimuloFinal.valido) {
+          console.error(`⚠️ COHERENCIA ESTIMULO [${dia}]: ${validacionEstimuloFinal.motivo}`);
+        } else {
+          console.log(`✅ COHERENCIA ESTIMULO [${dia}]: sesion coherente con estimulo "${estimuloObjetivoReal}"`);
+        }
+      }
+
       return NextResponse.json({ ok: true, sesion: { dia, tipo, titulo: sesionCompleta.titulo, por_que: sesionCompleta.por_que, descripcion: descripcionEnsamblada, debilidad_relacionada: debilidadFinal } });
     } catch (err: any) {
       return NextResponse.json({ error: "Error en Session Builder: " + err.message }, { status: 500 });

@@ -124,13 +124,24 @@ export default function ComoFunciona() {
           transition={{ duration: 0.8 }}
           className="mt-32 text-center"
         >
-          <p className="text-2xl font-bold text-white md:text-3xl">¿Ya tienes entrenador o plan?</p>
+          <p className="text-2xl font-bold text-white md:text-3xl">¿Ya tienes entrenador o parte de tu entrenamiento planificado?</p>
           <p className="mx-auto mt-6 max-w-xl text-lg leading-8 text-zinc-400">
-            Perfecto. Forge no compite con él. Tu entrenador establece la dirección. Forge te ayuda a interpretar qué está pasando entre sesión y sesión, y a tomar mejores decisiones en el día a día.
+            Perfecto. Forge puede adaptarse a cómo entrenas.
           </p>
-          <p className="mx-auto mt-16 max-w-2xl text-2xl font-semibold leading-relaxed text-white md:text-3xl">
-            Y cuando quieras más, Forge también puede diseñar y gestionar tu planificación completa.
-          </p>
+          <div className="mx-auto mt-12 grid max-w-4xl gap-6 text-left md:grid-cols-3">
+            <div className="rounded-2xl border border-zinc-800 bg-black/30 p-6">
+              <p className="text-sm font-semibold uppercase tracking-wide text-orange-400">Supervisión</p>
+              <p className="mt-3 text-sm leading-7 text-zinc-400">Mantienes tu planificación y Forge te ayuda a decidir cómo ejecutarla hoy.</p>
+            </div>
+            <div className="rounded-2xl border border-orange-500/30 bg-orange-500/5 p-6">
+              <p className="text-sm font-semibold uppercase tracking-wide text-orange-400">Focus</p>
+              <p className="mt-3 text-sm leading-7 text-zinc-400">Si quieres delegar una disciplina —por ejemplo, running— Forge la planifica y gestiona mientras respeta tu entrenamiento externo.</p>
+            </div>
+            <div className="rounded-2xl border border-zinc-800 bg-black/30 p-6">
+              <p className="text-sm font-semibold uppercase tracking-wide text-orange-400">Coach</p>
+              <p className="mt-3 text-sm leading-7 text-zinc-400">Si quieres delegar toda la planificación, Forge diseña y adapta tu entrenamiento completo.</p>
+            </div>
+          </div>
           <a href="/app" className="mt-10 inline-block rounded-full bg-orange-500 px-8 py-4 font-semibold text-white transition hover:scale-105 hover:bg-orange-400">
             Probar Forge
           </a>

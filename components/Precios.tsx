@@ -12,6 +12,14 @@ const advisorIncluye = [
   "Equipos (Forge Duo)",
 ];
 
+const focusIncluye = [
+  "Todo lo de Advisor",
+  "Planificación de una disciplina",
+  "Integración con entrenamiento externo",
+  "Respeto automático de días y sesiones externas",
+  "Adaptación de la disciplina gestionada por Forge",
+];
+
 const coachIncluye = [
   "Todo lo de Advisor",
   "Diseño de planificación completa",
@@ -39,7 +47,7 @@ export default function Precios() {
           </p>
         </div>
 
-        <div className="mt-20 grid gap-8 md:grid-cols-2">
+        <div className="mt-20 grid gap-8 md:grid-cols-3">
 
           {/* Advisor */}
           <motion.div
@@ -65,6 +73,32 @@ export default function Precios() {
               Probar Forge gratis
             </a>
             <p className="mt-4 text-center text-xs text-zinc-500">Sin tarjeta · Configuración en menos de 3 minutos</p>
+          </motion.div>
+
+          {/* Focus */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5, delay: 0.05 }}
+            className="rounded-3xl border border-zinc-800 bg-white/[0.02] p-8"
+          >
+            <span className="text-2xl">🎯</span>
+            <h3 className="mt-3 text-2xl font-bold text-white">Focus</h3>
+            <p className="mt-1 text-sm text-zinc-400">Planificación híbrida — Forge gestiona una disciplina y respeta el resto de tu entrenamiento.</p>
+            <p className="mt-3 text-xs text-zinc-500">Ideal si, por ejemplo, haces CrossFit con tu box y quieres que Forge planifique tu running.</p>
+            <p className="mt-6 text-2xl font-semibold text-zinc-500">Precio de lanzamiento próximamente</p>
+            <div className="mt-8 space-y-3">
+              {focusIncluye.map((item) => (
+                <div key={item} className="flex items-center gap-2 text-sm text-zinc-300">
+                  <span className="text-orange-500">✓</span>
+                  {item}
+                </div>
+              ))}
+            </div>
+            <a href="/app" className="mt-8 block rounded-full border border-zinc-700 py-4 text-center font-semibold text-white transition hover:border-orange-400">
+              Probar Forge gratis
+            </a>
           </motion.div>
 
           {/* Coach */}

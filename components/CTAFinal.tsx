@@ -22,7 +22,7 @@ export default function CTAFinal() {
         >
           <h3 className="text-lg font-semibold text-white">¿Para quién es Forge?</h3>
           <p className="mx-auto mt-3 max-w-md text-zinc-400">
-            Para atletas que ya tienen un plan —propio o de un entrenador— y quieren saber cómo adaptarlo a cómo están hoy.
+            Para atletas que quieren entrenar con criterio — ya tengas plan propio, un entrenador, o quieras que Forge diseñe parte o toda tu planificación.
           </p>
           <div className="mt-5 flex flex-wrap justify-center gap-3">
             {disciplinas.map((d) => (

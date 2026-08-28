@@ -4,7 +4,8 @@ import { render } from "@react-email/render";
 import { validateExtraction } from "@/lib/validators/extractionRules";
 import { buildCatalogoPrompt, validarCatalogoDisciplina } from "@/lib/sports/disciplineCatalog";
 import { buildExposureReport, exposureReportToPromptText } from "@/lib/sports/exposureEngine";
-import { rankearCandidatos, validarCoherenciaEstimulo, STIMULUS_LIBRARY } from "@/lib/sports/movementLibrary";
+import { rankearCandidatos, validarCoherenciaEstimulo, STIMULUS_LIBRARY, getMovimientosPorEstimulo } from "@/lib/sports/movementLibrary";
+import { evaluarSustitucion } from "@/lib/sports/substitutionEngine";
 import { parseStrengthRecord } from "@/lib/sports/strengthRecordParser";
 import { parseSleepMetrics } from "@/lib/sports/sleepMetricsParser";
 import { parseSessionProposal } from "@/lib/sports/proposalParser";
@@ -2618,11 +2619,25 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
       // (no bloquea el guardado) por ahora — registra el hallazgo para poder auditar el sistema
       // sin arriesgar romper el flujo mientras se valida en produccion.
       if (estimuloObjetivoReal) {
-        const validacionEstimuloFinal = validarCoherenciaEstimulo(estimuloObjetivoReal, (tipo || "").toLowerCase().includes("carr") ? "carrera" : "box", descripcionEnsamblada);
-        if (!validacionEstimuloFinal.valido) {
-          console.error(`⚠️ COHERENCIA ESTIMULO [${dia}]: ${validacionEstimuloFinal.motivo}`);
-        } else {
+        const disciplinaValidacionFinal = (tipo || "").toLowerCase().includes("carr") ? "carrera" : "box";
+        const validacionEstimuloFinal = validarCoherenciaEstimulo(estimuloObjetivoReal, disciplinaValidacionFinal, descripcionEnsamblada);
+        if (validacionEstimuloFinal.valido) {
           console.log(`✅ COHERENCIA ESTIMULO [${dia}]: sesion coherente con estimulo "${estimuloObjetivoReal}"`);
+        } else {
+          // FORGE SUBSTITUTION ENGINE — antes de marcar como incoherente, verificar si el
+          // contenido corresponde a una SUSTITUCION VALIDA (ej: bici por rodaje_largo cuando
+          // hay restriccion de rodilla activa), en vez de una incoherencia real.
+          const movimientoPrimarioEsperado = getMovimientosPorEstimulo(estimuloObjetivoReal, disciplinaValidacionFinal)[0]?.id || "";
+          const { data: athleteStateValidacion } = await supabase.from("athlete_state_events").select("body_area").eq("user_codigo", codigo).eq("estado", "restricted").order("created_at", { ascending: false }).limit(3);
+          const zonasRestringidasValidacion = (athleteStateValidacion || []).map((r: any) => r.body_area).filter(Boolean);
+          const evaluacionSust = movimientoPrimarioEsperado ? evaluarSustitucion(movimientoPrimarioEsperado, descripcionEnsamblada, zonasRestringidasValidacion) : null;
+          if (evaluacionSust?.resultado === "sustitucion_valida") {
+            console.log(`✅ SUSTITUCION VALIDA [${dia}]: ${evaluacionSust.explicacion}`);
+          } else if (evaluacionSust?.resultado === "sustitucion_no_registrada") {
+            console.log(`ℹ️ SUSTITUCION NO REGISTRADA [${dia}]: ${evaluacionSust.explicacion} — revisar manualmente si es un caso nuevo a añadir a SUBSTITUTION_MAP.`);
+          } else {
+            console.error(`⚠️ COHERENCIA ESTIMULO [${dia}]: ${validacionEstimuloFinal.motivo}${evaluacionSust ? ` | Sustitucion: ${evaluacionSust.explicacion}` : ""}`);
+          }
         }
       }
 

@@ -6,6 +6,7 @@ import { buildCatalogoPrompt, validarCatalogoDisciplina } from "@/lib/sports/dis
 import { buildExposureReport, exposureReportToPromptText } from "@/lib/sports/exposureEngine";
 import { rankearCandidatos, validarCoherenciaEstimulo, STIMULUS_LIBRARY, getMovimientosPorEstimulo } from "@/lib/sports/movementLibrary";
 import { evaluarSustitucion } from "@/lib/sports/substitutionEngine";
+import { agregarExposicionPorPatron, agregarExposicionPorModalidad } from "@/lib/sports/workoutStructureLibrary";
 import { parseStrengthRecord } from "@/lib/sports/strengthRecordParser";
 import { parseSleepMetrics } from "@/lib/sports/sleepMetricsParser";
 import { parseSessionProposal } from "@/lib/sports/proposalParser";
@@ -2102,6 +2103,16 @@ if (action === "analizar_bloque_semana") {
       const disciplinaNormalizada = (disciplinaParaExposure || "").toLowerCase().includes("carr") ? "carrera" : "box";
       const exposureReport = buildExposureReport(sesionesParaExposure, disciplinaNormalizada);
       exposureTexto = exposureReportToPromptText(exposureReport);
+      // FORGE EXPOSURE — agregacion por PATRON y MODALIDAD, no solo por movimiento exacto.
+      // Responde "cuanto tiron/empuje/squat he hecho" en vez de solo "cuantos pull-ups exactos",
+      // que es la pregunta relevante para variedad real de estimulo, no solo variedad de nombre.
+      const { MOVEMENT_LIBRARY: movLibParaPatron } = await import("@/lib/sports/movementLibrary");
+      const exposicionPorPatron = agregarExposicionPorPatron(exposureReport.exposiciones, movLibParaPatron);
+      const exposicionPorModalidad = agregarExposicionPorModalidad(exposureReport.exposiciones);
+      const patronesTop = Object.entries(exposicionPorPatron).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([p, n]) => `${p}: ${n}x`).join(", ");
+      const modalidadesTop = Object.entries(exposicionPorModalidad).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([m, n]) => `${m}: ${n}x`).join(", ");
+      if (patronesTop) exposureTexto += ` Exposición por PATRÓN de movimiento (últimas 4 semanas): ${patronesTop}.`;
+      if (modalidadesTop) exposureTexto += ` Exposición por MODALIDAD: ${modalidadesTop}.`;
     } catch (errExposure) {
       console.error("Error calculando Exposure Report:", errExposure);
     }

@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { render } from "@react-email/render";
 import { validateExtraction } from "@/lib/validators/extractionRules";
 import { buildCatalogoPrompt, validarCatalogoDisciplina } from "@/lib/sports/disciplineCatalog";
+import { buildExposureReport, exposureReportToPromptText } from "@/lib/sports/exposureEngine";
 import { parseStrengthRecord } from "@/lib/sports/strengthRecordParser";
 import { parseSleepMetrics } from "@/lib/sports/sleepMetricsParser";
 import { parseSessionProposal } from "@/lib/sports/proposalParser";
@@ -2084,6 +2085,25 @@ if (action === "analizar_bloque_semana") {
     const { data: bloqueAnteriorReal } = await supabase.from("block_outcomes").select("*").eq("user_codigo", codigo).order("fecha_fin", { ascending: false }).limit(1).maybeSingle();
     const { data: usuarioAnalyzer } = await supabase.from("usuarios").select("ciclo_actual,athlete_development,distribucion_semanal,categoria,especialidad,objetivo_principal,perfil").eq("codigo", codigo).single();
 
+    // FORGE EXPOSURE ENGINE — exposicion real del atleta a movimientos/estimulos, calculada
+    // deterministamente desde sesiones completadas reales, nunca inferida por el LLM.
+    let exposureTexto = "";
+    try {
+      const { data: planesParaExposure } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(4);
+      const sesionesParaExposure: any[] = [];
+      (planesParaExposure || []).forEach((p: any) => {
+        (p.sessions || []).filter((s: any) => s.completada && s.descripcion_real).forEach((s: any) => {
+          sesionesParaExposure.push({ fecha: s.dia, tipo: s.tipo, titulo: s.titulo || "", descripcionReal: s.descripcion_real });
+        });
+      });
+      const disciplinaParaExposure = focusContext.esModoFocus ? focusContext.disciplinasForge[0]?.disciplina : (usuarioAnalyzer?.categoria === "carrera" ? "carrera" : "box");
+      const disciplinaNormalizada = (disciplinaParaExposure || "").toLowerCase().includes("carr") ? "carrera" : "box";
+      const exposureReport = buildExposureReport(sesionesParaExposure, disciplinaNormalizada);
+      exposureTexto = exposureReportToPromptText(exposureReport);
+    } catch (errExposure) {
+      console.error("Error calculando Exposure Report:", errExposure);
+    }
+
     const debilidadesActivas = (usuarioAnalyzer?.athlete_development || []).filter((d: any) => d.estado !== "resuelta");
 
     // FIX ARQUITECTONICO: score deterministico que penaliza exposicion reciente, no solo prioridad
@@ -2165,6 +2185,7 @@ Ciclo actual: ${JSON.stringify(estado.ciclo)}
 Debilidad prioritaria activa: ${debilidadPrioritaria ? debilidadPrioritaria.nombre_visible : "ninguna"}
 ${bloqueAnteriorReal ? `📊 BLOQUE ANTERIOR REAL (usa esto para dar coherencia longitudinal, no repitas ciegamente la misma estructura): tipo "${bloqueAnteriorReal.tipo_bloque}", adherencia ${bloqueAnteriorReal.adherencia}%, resultado "${bloqueAnteriorReal.resultado_global}", ${bloqueAnteriorReal.sesiones_completadas} sesiones completadas, ${bloqueAnteriorReal.lesiones ? "CON incidencia de restriccion/lesion" : "sin incidencias"}. Si el resultado fue "deficiente" o la adherencia fue baja, considera un bloque mas conservador. Si fue "excelente"/"bueno" con alta adherencia, puedes progresar la carga con mas confianza.` : "Sin bloque anterior registrado — es el primer bloque de este atleta o no hay historico suficiente."}
 Disponibilidad: ${focusContext.esModoFocus && focusContext.disciplinasForge[0]?.dias?.length > 0 ? `${focusContext.disciplinasForge[0].disciplina}: ${focusContext.disciplinasForge[0].dias.join(", ")}` : usuarioAnalyzer?.distribucion_semanal || "no especificada"}
+📈 EXPOSICIÓN REAL RECIENTE (últimas 4 semanas, calculada deterministamente desde sesiones completadas — usa esto para dar variedad real, no aparente): ${exposureTexto}
 ${metodosYaProbadosTexto}
 ${restriccionesTexto}
 ${coachingNotesTexto}

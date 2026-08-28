@@ -2037,7 +2037,26 @@ async function buildFocusContext(supabase: any, codigo: string) {
 async function buildAthleteSnapshot(supabase: any, codigo: string) {
   const { data: usuario } = await supabase.from("usuarios").select("workout_history,marcas_especificas,estado_fisiologico").eq("codigo", codigo).single();
   const workoutHistory = usuario?.workout_history || [];
-  const ultimas5Sesiones = workoutHistory.slice(-5).map((w: any) => ({ tipo: w.tipo, fecha: w.fecha, sensacion: w.sensacion }));
+
+  // FIX CRITICO CONFIRMADO CON EVIDENCIA REAL: el snapshot usaba workout_history (tipo+sensacion
+  // generico), cuando existe una fuente MUCHO mas rica en weekly_plan.sessions[].descripcion_real
+  // (cargas especificas, diagnostico tecnico, sensaciones detalladas — ej: "@85kg inestable,
+  // recepcion adelantada persistente"). El Session Builder necesita este detalle real para poder
+  // progresar cargas y no repetir ciegamente el mismo estimulo semana tras semana.
+  let ultimas5SesionesDetalladas: any[] = [];
+  try {
+    const { data: planesRecientes } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(2);
+    const todasSesionesCompletadas: any[] = [];
+    (planesRecientes || []).forEach((p: any) => {
+      (p.sessions || []).filter((s: any) => s.completada && s.descripcion_real).forEach((s: any) => {
+        todasSesionesCompletadas.push({ dia: s.dia, titulo: s.titulo, detalle_real: s.descripcion_real });
+      });
+    });
+    ultimas5SesionesDetalladas = todasSesionesCompletadas.slice(-5);
+  } catch (errSnapshotDetallado) {
+    console.error("Error obteniendo detalle real de sesiones para snapshot:", errSnapshotDetallado);
+  }
+  const ultimas5Sesiones = ultimas5SesionesDetalladas.length > 0 ? ultimas5SesionesDetalladas : workoutHistory.slice(-5).map((w: any) => ({ tipo: w.tipo, fecha: w.fecha, sensacion: w.sensacion }));
 
   const hace7dias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const sesionesUltimos7dias = workoutHistory.filter((w: any) => new Date(w.fecha) >= hace7dias);

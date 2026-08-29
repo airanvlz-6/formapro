@@ -65,7 +65,7 @@ export const MODALIDAD_POR_MOVIMIENTO: Record<string, ModalidadEjercicio> = {
  */
 export function agregarExposicionPorPatron(
   exposiciones: { movementId: string; vecesUltimas4Semanas: number }[],
-  movementLibrary: Record<string, { movement_pattern: string; discipline: string }>
+  movementLibrary: Record<string, { movement_pattern: string; discipline: string[] }>
 ): Record<string, number> {
   const porPatron: Record<string, number> = {};
   exposiciones.forEach(e => {

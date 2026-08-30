@@ -5081,6 +5081,28 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
     return NextResponse.json({ ok: true, nuevoAprendizaje, porcentajeTotal: Math.min(totalPuntos, 100) });
   }
 
+  if (action === "recalcular_seguimiento_debilidades") {
+    // FORGE WEAKNESS FOLLOW-UP ENGINE — version standalone para verificacion manual/diagnostico,
+    // sin necesidad de generar una semana nueva completa. Misma logica exacta que la version
+    // integrada en analizar_bloque_semana — determinista e idempotente.
+    const { data: usuarioRecalculo } = await supabase.from("usuarios").select("athlete_development").eq("codigo", codigo).single();
+    const { data: exposicionesRecalculo } = await supabase.from("weakness_exposure").select("weakness_id,last_exposure_date").eq("user_codigo", codigo);
+    const hoyRecalculo = new Date();
+    const desarrolloRecalculado = (usuarioRecalculo?.athlete_development || []).map((d: any) => {
+      if (d.estado !== "activa") return d;
+      const exposicionReciente = (exposicionesRecalculo || []).find((e: any) => e.weakness_id === d.nombre_visible);
+      const fechaReferencia = exposicionReciente?.last_exposure_date || d.ultima_revision || d.detectado;
+      const diasSinSeguimiento = fechaReferencia ? Math.floor((hoyRecalculo.getTime() - new Date(fechaReferencia).getTime()) / (1000 * 60 * 60 * 24)) : 999;
+      if (diasSinSeguimiento >= 28) {
+        return { ...d, estado: "sin_seguimiento" };
+      }
+      return d;
+    });
+    await supabase.from("usuarios").update({ athlete_development: desarrolloRecalculado }).eq("codigo", codigo);
+    const cambios = desarrolloRecalculado.filter((d: any, i: number) => d.estado !== (usuarioRecalculo?.athlete_development || [])[i]?.estado);
+    return NextResponse.json({ ok: true, totalDebilidades: desarrolloRecalculado.length, marcadasSinSeguimiento: cambios.map((c: any) => c.nombre_visible) });
+  }
+
   if (action === "registrar_debilidad_dev") {
     const { area, indicador, nombre_visible, diagnostico, estado, progreso, confianza, prioridad, evidencias, plan_accion, beneficio_esperado } = datos;
     const { data: usuarioActual } = await supabase.from("usuarios").select("athlete_development").eq("codigo", codigo).single();

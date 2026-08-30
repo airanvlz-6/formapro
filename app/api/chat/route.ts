@@ -4,6 +4,7 @@ import { render } from "@react-email/render";
 import { validateExtraction } from "@/lib/validators/extractionRules";
 import { buildCatalogoPrompt, validarCatalogoDisciplina } from "@/lib/sports/disciplineCatalog";
 import { buildExposureReport, exposureReportToPromptText } from "@/lib/sports/exposureEngine";
+import { detectarDebilidadDuplicada } from "@/lib/validators/weaknessDeduplicationValidator";
 import { rankearCandidatos, validarCoherenciaEstimulo, STIMULUS_LIBRARY, getMovimientosPorEstimulo } from "@/lib/sports/movementLibrary";
 import { evaluarSustitucion } from "@/lib/sports/substitutionEngine";
 import { agregarExposicionPorPatron, agregarExposicionPorModalidad } from "@/lib/sports/workoutStructureLibrary";
@@ -2117,7 +2118,30 @@ if (action === "analizar_bloque_semana") {
       console.error("Error calculando Exposure Report:", errExposure);
     }
 
-    const debilidadesActivas = (usuarioAnalyzer?.athlete_development || []).filter((d: any) => d.estado !== "resuelta");
+    // FORGE WEAKNESS FOLLOW-UP ENGINE — determinista, idempotente: recalcula si cada debilidad
+// "activa" sigue teniendolo realmente en base a evidencia/exposicion RECIENTE (no si el Coach
+// recordo llamar a actualizar_debilidad_dev, que es precisamente el mecanismo fragil que
+// causaba que el registro creciera indefinidamente). >=28 dias sin evidencia ni exposicion
+// relacionada -> "sin_seguimiento" (nunca se borra, solo se excluye de las activas consumidas).
+const { data: exposicionesParaSeguimiento } = await supabase.from("weakness_exposure").select("weakness_id,last_exposure_date").eq("user_codigo", codigo);
+    const hoySeguimiento = new Date();
+    const desarrolloConSeguimientoRecalculado = (usuarioAnalyzer?.athlete_development || []).map((d: any) => {
+      if (d.estado !== "activa") return d;
+      const exposicionReciente = (exposicionesParaSeguimiento || []).find((e: any) => e.weakness_id === d.nombre_visible);
+      const fechaReferencia = exposicionReciente?.last_exposure_date || d.ultima_revision || d.detectado;
+      const diasSinSeguimiento = fechaReferencia ? Math.floor((hoySeguimiento.getTime() - new Date(fechaReferencia).getTime()) / (1000 * 60 * 60 * 24)) : 999;
+      if (diasSinSeguimiento >= 28) {
+        return { ...d, estado: "sin_seguimiento" };
+      }
+      return d;
+    });
+    // Persistir el recalculo solo si algo cambio realmente (evita escrituras innecesarias)
+    const huboRecalculo = JSON.stringify(desarrolloConSeguimientoRecalculado) !== JSON.stringify(usuarioAnalyzer?.athlete_development || []);
+    if (huboRecalculo) {
+      await supabase.from("usuarios").update({ athlete_development: desarrolloConSeguimientoRecalculado }).eq("codigo", codigo);
+      console.log(`🔄 WEAKNESS FOLLOW-UP: recalculado estado de debilidades por antiguedad para ${codigo}`);
+    }
+    const debilidadesActivas = desarrolloConSeguimientoRecalculado.filter((d: any) => d.estado === "activa");
 
     // FIX ARQUITECTONICO: score deterministico que penaliza exposicion reciente, no solo prioridad
     // declarada. Cuenta cuantas sesiones de los ultimos 7 dias mencionan cada debilidad (por nombre
@@ -5061,21 +5085,36 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
     const { area, indicador, nombre_visible, diagnostico, estado, progreso, confianza, prioridad, evidencias, plan_accion, beneficio_esperado } = datos;
     const { data: usuarioActual } = await supabase.from("usuarios").select("athlete_development").eq("codigo", codigo).single();
     const devActual = usuarioActual?.athlete_development || [];
-    const yaExiste = devActual.findIndex((d: any) => d.indicador?.toLowerCase() === indicador?.toLowerCase());
     const hoy = new Date().toISOString().split('T')[0];
+
+    // FORGE WEAKNESS DEDUPLICATION VALIDATOR — bug real confirmado con evidencia: el Coach
+    // registraba el mismo problema real con nombres/indicadores distintos cada vez (ej: 3 registros
+    // separados para la misma extension de cadera adelantada en snatch), nunca fusionados porque
+    // la deduplicacion anterior solo comparaba "indicador" con igualdad exacta de texto. Ahora se
+    // compara semanticamente (misma area + solapamiento real de diagnostico/nombre_visible).
+    const resultadoDedup = detectarDebilidadDuplicada(
+      { area, indicador, nombre_visible: nombre_visible || indicador, diagnostico: diagnostico || "" },
+      devActual.map((d: any) => ({ area: d.area, indicador: d.indicador, nombre_visible: d.nombre_visible, diagnostico: d.diagnostico }))
+    );
+    if (resultadoDedup.esDuplicadoSemantico) {
+      console.log(`🔗 WEAKNESS DEDUP: "${indicador}" fusionado con registro existente — ${resultadoDedup.motivo}`);
+    }
+    const yaExiste = resultadoDedup.esDuplicadoSemantico ? resultadoDedup.indiceExistente : -1;
+
     const nuevaEntrada = {
       area, indicador,
       nombre_visible: nombre_visible || indicador,
       diagnostico: diagnostico || "",
       estado: estado || "activa",
-      progreso: progreso || 0,
+      progreso: progreso || (yaExiste >= 0 ? devActual[yaExiste].progreso || 0 : 0),
       confianza: confianza || 60,
       prioridad: prioridad || "media",
       detectado: yaExiste >= 0 ? devActual[yaExiste].detectado : hoy,
       ultima_revision: hoy,
-      evidencias: evidencias || [],
-      plan_accion: plan_accion || [],
-      beneficio_esperado: beneficio_esperado || []
+      // Al fusionar, conserva evidencias previas + añade las nuevas (no las pierde por tener otro nombre)
+      evidencias: yaExiste >= 0 ? [...(devActual[yaExiste].evidencias || []), ...(evidencias || [])] : (evidencias || []),
+      plan_accion: plan_accion || (yaExiste >= 0 ? devActual[yaExiste].plan_accion : []) || [],
+      beneficio_esperado: beneficio_esperado || (yaExiste >= 0 ? devActual[yaExiste].beneficio_esperado : []) || []
     };
     let devActualizado;
     if (yaExiste >= 0) {
@@ -5085,7 +5124,7 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
       devActualizado = [...devActual, nuevaEntrada];
     }
     await supabase.from("usuarios").update({ athlete_development: devActualizado }).eq("codigo", codigo);
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, fusionado: yaExiste >= 0, motivoFusion: resultadoDedup.motivo });
   }
 
   if (action === "actualizar_debilidad_dev") {

@@ -5160,6 +5160,20 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
     return NextResponse.json({ ok: true, nuevoEstado, progresoNuevo });
   }
 
+  if (action === "establecer_password_auth_admin") {
+    // FORGE MOBILE — accion administrativa temporal para establecer password directamente via
+    // Service Role Key, sin depender del flujo de correo de recovery (que redirige a la landing
+    // web en vez de gestionar el token, problema de configuracion de Site URL/Redirect URLs).
+    const { authUserId, nuevaPassword } = datos;
+    if (!authUserId || !nuevaPassword || nuevaPassword.length < 6) {
+      return NextResponse.json({ error: "authUserId y nuevaPassword (min 6 caracteres) requeridos" }, { status: 400 });
+    }
+    const { data: resultadoAdmin, error: errorAdmin } = await supabase.auth.admin.updateUserById(authUserId, { password: nuevaPassword });
+    if (errorAdmin) return NextResponse.json({ error: errorAdmin.message }, { status: 500 });
+    console.log(`🔑 PASSWORD ESTABLECIDA (admin): usuario ${authUserId}`);
+    return NextResponse.json({ ok: true });
+  }
+
   if (action === "registrar_debilidad_dev") {
     const { area, indicador, nombre_visible, diagnostico, estado, progreso, confianza, prioridad, evidencias, plan_accion, beneficio_esperado } = datos;
     const { data: usuarioActual } = await supabase.from("usuarios").select("athlete_development").eq("codigo", codigo).single();

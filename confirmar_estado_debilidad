@@ -1,0 +1,47 @@
+# FORGE — Disparo contextual de confirmación de debilidades (próxima sesión)
+
+## Contexto
+Backend ya construido: `confirmar_estado_debilidad` acepta `estadoConfirmado`
+(resuelto/mejorando/igual_o_peor) y actualiza `athlete_development` correctamente,
+distinguiendo "se trabajó la zona" (weakness_exposure) de "sigue presente la molestia"
+(confirmación explícita del atleta).
+
+Falta: CUÁNDO y CÓMO se le pregunta al atleta, sin convertir Forge en un cuestionario
+interminable.
+
+## Diseño a cerrar mañana
+
+### Punto de disparo propuesto
+Contextual, no periódico ni constante. Candidatos a evaluar:
+1. Cuando el atleta reporta completar una sesión que trabajaba explícitamente el
+   `plan_accion` de una debilidad activa, y NO menciona ninguna molestia relacionada
+   — silencio como señal débil, no pregunta automática todavía
+2. Cuando una debilidad de tipo "Salud articular" / lesión lleva N días activa sin
+   mención espontánea de empeoramiento — aquí sí preguntar directamente, con más
+   prioridad que las técnicas puras (snatch timing, etc. no necesitan esta pregunta,
+   son técnicas no dolencias)
+3. Posible distinción: solo aplicar este mecanismo a debilidades de `area: "Salud
+   articular"` o con palabras clave de dolor/molestia en el diagnóstico — las
+   debilidades técnicas (timing, patrón de movimiento) se resuelven de forma distinta
+   (mejora medible, no "ya no me duele")
+
+### Formato de la pregunta (ya esbozado ayer)
+```
+¿Cómo está esta molestia actualmente?
+🟢 Ya no la tengo
+🟡 Ha mejorado, pero sigue presente
+🔴 Sigue igual / ha empeorado
+```
+Interacción mínima — un tap, no conversación abierta.
+
+### Decisión pendiente
+- ¿Vive como banner/tarjeta en Mi Atleta (similar al banner de restricción del
+  Athlete State Engine), o como pregunta del Coach en el chat?
+- ¿Con qué frecuencia máxima se repite si el atleta ignora la pregunta una vez?
+- ¿Solo debilidades tipo "molestia/dolor", o también aplica a debilidades técnicas
+  con una pregunta distinta ("¿sigues notando este patrón?")?
+
+## Regla a mantener
+El mecanismo de 28 días (`sin_seguimiento`) es el fallback determinista — nunca
+intenta adivinar si está resuelta, solo la saca de circulación por inactividad.
+La confirmación explícita es la única vía real hacia `resuelta`.

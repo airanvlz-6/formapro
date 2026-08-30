@@ -5,7 +5,7 @@ import { validateExtraction } from "@/lib/validators/extractionRules";
 import { buildCatalogoPrompt, validarCatalogoDisciplina } from "@/lib/sports/disciplineCatalog";
 import { buildExposureReport, exposureReportToPromptText } from "@/lib/sports/exposureEngine";
 import { detectarDebilidadDuplicada } from "@/lib/validators/weaknessDeduplicationValidator";
-import { rankearCandidatos, validarCoherenciaEstimulo, STIMULUS_LIBRARY, getMovimientosPorEstimulo } from "@/lib/sports/movementLibrary";
+import { rankearCandidatos, validarCoherenciaEstimulo, STIMULUS_LIBRARY, getMovimientosPorEstimulo, MOVEMENT_LIBRARY } from "@/lib/sports/movementLibrary";
 import { evaluarSustitucion } from "@/lib/sports/substitutionEngine";
 import { agregarExposicionPorPatron, agregarExposicionPorModalidad } from "@/lib/sports/workoutStructureLibrary";
 import { parseStrengthRecord } from "@/lib/sports/strengthRecordParser";
@@ -2497,14 +2497,20 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
     // debe recibirlas directamente — no confiamos en que la intencion heredada sea suficiente.
     const hoyConstraintBuilder = new Date().toISOString().split('T')[0];
     const { data: hardConstraintsBuilder } = await supabase.from("athlete_coaching_notes")
-      .select("movement,issue")
+      .select("movement,issue,constraint_level,prohibits_impact,prohibits_jump,prohibits_axial_load,prohibits_deep_flexion,prohibits_overhead_load")
       .eq("user_codigo", codigo)
-      .eq("constraint_level", "hard")
+      .in("constraint_level", ["hard", "reassessment"])
       .in("status", ["pending", "considerada"])
       .or(`valid_until.is.null,valid_until.gte.${hoyConstraintBuilder}`);
-    const restriccionesBuilderTexto = (hardConstraintsBuilder && hardConstraintsBuilder.length > 0)
-      ? `\n🚫 RESTRICCIONES ACTIVAS DEL ATLETA — OBLIGATORIO RESPETAR, NO SON SUGERENCIAS:\n${hardConstraintsBuilder.map((c: any) => `- Evitar "${c.movement}": ${c.issue}`).join("\n")}\nEstas restricciones vienen de una molestia/lesion real confirmada. La sesion que generes NO puede incluir estos movimientos ni cargas que los agraven, sin excepcion.`
-      : "";
+    const restriccionesHardBuilder = (hardConstraintsBuilder || []).filter((c: any) => c.constraint_level === "hard");
+    const restriccionesReassessmentBuilder = (hardConstraintsBuilder || []).filter((c: any) => c.constraint_level === "reassessment");
+    const restriccionesBuilderTexto =
+      (restriccionesHardBuilder.length > 0
+        ? `\n🚫 RESTRICCIONES ACTIVAS DEL ATLETA — OBLIGATORIO RESPETAR, NO SON SUGERENCIAS:\n${restriccionesHardBuilder.map((c: any) => `- Evitar "${c.movement}": ${c.issue}`).join("\n")}\nEstas restricciones vienen de una molestia/lesion real confirmada. La sesion que generes NO puede incluir estos movimientos ni cargas que los agraven, sin excepcion.`
+        : "") +
+      (restriccionesReassessmentBuilder.length > 0
+        ? `\n🟡 ZONA EN REEVALUACION — PROGRESION CONTROLADA, NUNCA VUELTA COMPLETA A LA CARGA HABITUAL:\n${restriccionesReassessmentBuilder.map((c: any) => `- "${c.movement}": ${c.issue}`).join("\n")}\nEl atleta confirmo que la molestia se resolvio, pero esto significa "en reevaluacion", NUNCA "sin restriccion". Para estas zonas: usa SOLO intensidad baja-moderada, evita impacto alto o volumen alto en el primer contacto, introduce el estimulo de forma progresiva y conservadora. NO generes series de alta intensidad, sprints, ni cargas maximas en esta zona todavia — eso requiere varias sesiones de tolerancia confirmada primero.`
+        : "");
 
     // FORGE ATHLETE SNAPSHOT — contexto real y auditable del atleta, elimina la duda de "¿usa mis datos?"
     // COLD-START SAFE: envuelto en try/catch propio, un usuario nuevo sin historial no debe bloquear el flujo.
@@ -2673,6 +2679,21 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
           } else {
             console.error(`⚠️ COHERENCIA ESTIMULO [${dia}]: ${validacionEstimuloFinal.motivo}${evaluacionSust ? ` | Sustitucion: ${evaluacionSust.explicacion}` : ""}`);
           }
+        }
+      }
+
+      // FORGE REASSESSMENT SAFETY CHECK — determinista, no depende de que el LLM respete la instruccion.
+      // Bug real confirmado con evidencia: una zona en reevaluacion de rodilla (prohibits_impact=true)
+      // recibio una sesion de 400m Z3 (alto impacto) el mismo dia que empezo la reevaluacion.
+      const restriccionesReassessmentCheck = (hardConstraintsBuilder || []).filter((c: any) => c.constraint_level === "reassessment");
+      if (restriccionesReassessmentCheck.length > 0) {
+        const requierePrudenciaImpacto = restriccionesReassessmentCheck.some((c: any) => c.prohibits_impact || c.prohibits_jump);
+        const movimientosAltoImpactoEnSesion = Object.values(MOVEMENT_LIBRARY).filter((m: any) => m.impact === "alto").some((m: any) => {
+          const textoNorm = descripcionEnsamblada.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+          return textoNorm.includes(m.id.replace(/_/g, " "));
+        });
+        if (requierePrudenciaImpacto && movimientosAltoImpactoEnSesion) {
+          console.error(`⚠️ REASSESSMENT SAFETY: sesion [${dia}] contiene movimiento de ALTO IMPACTO mientras hay zona en reevaluacion con prohibits_impact/jump activo — revisar manualmente. Restricciones: ${restriccionesReassessmentCheck.map((c: any) => c.movement).join(", ")}`);
         }
       }
 
@@ -3986,9 +4007,15 @@ Mensaje: "${mensaje}"
       activo: true
     });
 
-    // Marcar tambien la(s) hard constraint(s) relacionadas como resueltas, para que el Constraint
-    // Engine deje de bloquearlas en la siguiente planificacion.
-    await supabase.from("athlete_coaching_notes").update({ status: "resuelta" }).eq("user_codigo", codigo).eq("constraint_level", "hard").in("status", ["pending", "considerada"]);
+    // FIX CRITICO DE SEGURIDAD CONFIRMADO CON EVIDENCIA REAL (30/08): marcar la constraint como
+    // "resuelta" eliminaba TODA proteccion inmediatamente al confirmar resolucion — el Session
+    // Builder dejaba de consultarla (status filtra por pending/considerada) y genero contenido de
+    // alto impacto (400m Z3) el mismo dia que empezo la reevaluacion de una restriccion de rodilla.
+    // REASSESSMENT significa "la restriccion esta siendo reevaluada", NUNCA "ha desaparecido".
+    // Ahora: la constraint se mantiene activa (status sigue en pending/considerada) pero cambia a
+    // constraint_level="reassessment" — el Session Builder la sigue recibiendo, con instruccion de
+    // progresion controlada en vez de bloqueo total.
+    await supabase.from("athlete_coaching_notes").update({ constraint_level: "reassessment" }).eq("user_codigo", codigo).eq("constraint_level", "hard").in("status", ["pending", "considerada"]);
 
     console.log("🟡 ATHLETE STATE ENGINE:", codigo, "transiciona de", estadoParaResolver.estado, "a REASSESSMENT");
     return NextResponse.json({ ok: true, resuelto: true, nuevoEstado: "reassessment" });

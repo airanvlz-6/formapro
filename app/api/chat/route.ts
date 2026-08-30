@@ -5204,7 +5204,7 @@ Responde SOLO el JSON, sin texto adicional.`;
       const extraido = JSON.parse(correccionMatch[0]);
 
       if (extraido.hayCambio && extraido.nuevaDescripcion) {
-        await supabase.from("usuarios").update({ distribucion_semanal: JSON.stringify({ descripcion: extraido.nuevaDescripcion, cambio_permanente: true }) }).eq("codigo", codigo);
+        await supabase.from("usuarios").update({ distribucion_semanal: JSON.stringify({ descripcion: extraido.nuevaDescripcion }) }).eq("codigo", codigo);
         console.log(`🛡️ SAFETY NET DISPONIBILIDAD: ${codigo} — "${extraido.nuevaDescripcion}"`);
         return NextResponse.json({ ok: true, detectado: true, actualizado: true, nuevaDescripcion: extraido.nuevaDescripcion });
       }
@@ -5223,7 +5223,11 @@ Responde SOLO el JSON, sin texto adicional.`;
     // asi que la semana generada seguia ignorando el cambio pedido.
     const { descripcion } = datos;
     if (!descripcion) return NextResponse.json({ error: "Falta descripcion" }, { status: 400 });
-    await supabase.from("usuarios").update({ distribucion_semanal: JSON.stringify({ descripcion, cambio_permanente: true }) }).eq("codigo", codigo);
+    // FIX: cambio_permanente:true por defecto era enganoso — una peticion puntual ("no generes
+    // el jueves ESTA semana") no deberia asumirse como permanente para siempre. Se elimina el
+    // campo, dejando que la propia pregunta de "¿sigue igual tu disponibilidad?" de cada semana
+    // sea el punto real de confirmacion/correccion, sin arrastrar un cambio antiguo indefinidamente.
+    await supabase.from("usuarios").update({ distribucion_semanal: JSON.stringify({ descripcion }) }).eq("codigo", codigo);
     console.log(`🛡️ DISPONIBILIDAD ACTUALIZADA (via tag del Coach): ${codigo} — "${descripcion}"`);
     return NextResponse.json({ ok: true });
   }

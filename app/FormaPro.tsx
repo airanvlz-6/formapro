@@ -1586,7 +1586,7 @@ const forgeValidator=(texto:string):string=>{
     await procesarTag("[DISPONIBILIDAD_ACTUALIZADA:",29,async(data)=>{
       const res=await apiCall({action:"guardar_disponibilidad_actualizada",codigo:codigoUsuario,datos:data});
       if(res?.ok&&data.descripcion){
-        setDistribucionSemanal(JSON.stringify({descripcion:data.descripcion,cambio_permanente:true}));
+        setDistribucionSemanal(JSON.stringify({descripcion:data.descripcion}));
       }
     });
     await procesarTag("[INTERVENTION:",14,async(data)=>{
@@ -1899,7 +1899,7 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
         apiCall({action:"verificar_correccion_disponibilidad_deterministico",codigo:codigoUsuario,datos:{mensajeUsuario:texto,distribucionActual:distribucionSemanal}}).then((resCorreccion:any)=>{
           if(resCorreccion?.actualizado){
             console.log("🛡️ Safety Net disponibilidad: corregida a -",resCorreccion.nuevaDescripcion);
-            setDistribucionSemanal(JSON.stringify({descripcion:resCorreccion.nuevaDescripcion,cambio_permanente:true}));
+            setDistribucionSemanal(JSON.stringify({descripcion:resCorreccion.nuevaDescripcion}));
           }
         });
         // FIX: pregunta EXPLICITA y determinista (nunca inferida por hora ni decidida por el LLM)

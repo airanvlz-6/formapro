@@ -5103,6 +5103,36 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
     return NextResponse.json({ ok: true, totalDebilidades: desarrolloRecalculado.length, marcadasSinSeguimiento: cambios.map((c: any) => c.nombre_visible) });
   }
 
+  if (action === "confirmar_estado_debilidad") {
+    // FORGE ATHLETE CONFIRMATION — tercera señal, distinta de weakness_exposure ("¿se trabajó?").
+    // Esta responde "¿sigue presente la molestia real?" segun confirmacion EXPLICITA del atleta,
+    // nunca inferida de que siga entrenando la zona preventivamente. resuelta = "sin sintoma actual
+    // reportado", no "nunca volvera" — el atleta puede seguir haciendo trabajo preventivo despues.
+    const { nombreVisible, estadoConfirmado } = datos; // estadoConfirmado: "resuelto" | "mejorando" | "igual_o_peor"
+    if (!["resuelto", "mejorando", "igual_o_peor"].includes(estadoConfirmado)) {
+      return NextResponse.json({ error: "estadoConfirmado invalido" }, { status: 400 });
+    }
+    const { data: usuarioConfirmacion } = await supabase.from("usuarios").select("athlete_development").eq("codigo", codigo).single();
+    const devConfirmacion = usuarioConfirmacion?.athlete_development || [];
+    const idxConfirmacion = devConfirmacion.findIndex((d: any) => d.nombre_visible === nombreVisible);
+    if (idxConfirmacion < 0) return NextResponse.json({ ok: true, mensaje: "No encontrado" });
+
+    const devActualizadoConfirmacion = [...devConfirmacion];
+    const nuevoEstado = estadoConfirmado === "resuelto" ? "resuelta" : "activa";
+    const progresoNuevo = estadoConfirmado === "resuelto" ? 100 : estadoConfirmado === "mejorando" ? Math.min((devConfirmacion[idxConfirmacion].progreso || 0) + 25, 90) : devConfirmacion[idxConfirmacion].progreso || 0;
+    devActualizadoConfirmacion[idxConfirmacion] = {
+      ...devActualizadoConfirmacion[idxConfirmacion],
+      estado: nuevoEstado,
+      progreso: progresoNuevo,
+      ultima_revision: new Date().toISOString().split('T')[0],
+      confirmacion_atleta: estadoConfirmado,
+      fecha_confirmacion_atleta: new Date().toISOString().split('T')[0],
+    };
+    await supabase.from("usuarios").update({ athlete_development: devActualizadoConfirmacion }).eq("codigo", codigo);
+    console.log(`✅ ATHLETE CONFIRMATION: "${nombreVisible}" confirmado como "${estadoConfirmado}" por el atleta`);
+    return NextResponse.json({ ok: true, nuevoEstado, progresoNuevo });
+  }
+
   if (action === "registrar_debilidad_dev") {
     const { area, indicador, nombre_visible, diagnostico, estado, progreso, confianza, prioridad, evidencias, plan_accion, beneficio_esperado } = datos;
     const { data: usuarioActual } = await supabase.from("usuarios").select("athlete_development").eq("codigo", codigo).single();

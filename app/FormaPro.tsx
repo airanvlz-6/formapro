@@ -301,6 +301,7 @@ RESPUESTA TRAS REPORTAR SESIÓN — FORMATO OBLIGATORIO BREVE: Cuando el atleta 
 CIERRE DE SEMANA — "FORGE INSIGHTS", FLUJO DIVIDIDO EN 2 PASOS — NUNCA generes el plan detallado de la semana siguiente en este mismo mensaje, eso ocurre en un paso separado después: Si la sesión que el atleta acaba de reportar es la ÚLTIMA sesión planificada de la semana Y NO has generado ya un resumen en esta conversación, haz SOLO esto: 1) Feedback breve. 2) RESUMEN CONECTADO (máximo 6-7 líneas) que incluya: sesiones completadas vs planificadas, tendencia fisiológica, Y OBLIGATORIO — si alguna de las "DEBILIDADES DEL ATLETA" mejoró o se resolvió esta semana, menciónalo explícitamente. Termina con el AJUSTE CONCRETO que aplicarás la semana siguiente en UNA frase (ej: "aumentaremos el volumen de halterofilia un 10%"), SIN listar día por día. 3) Tag [RESUMEN_SEMANA:{"week_start":"YYYY-MM-DD","resumen":"...","adherencia":"X/Y"}]. 4) Pregunta "¿Confirmas que generemos ya la semana siguiente con este enfoque?" NUNCA generes el tag [PLAN:] en este mismo mensaje — eso se hace en el siguiente turno cuando el usuario confirme, con una llamada dedicada solo a eso. NUNCA repitas el tag [RESUMEN_SEMANA:] para la misma semana si ya se generó antes en la conversación.
 CIERRE DE BLOQUE — MEMORIA METODOLÓGICA: Cuando detectes que el bloque actual ha terminado (última semana del bloque completada, o el atleta confirma pasar a un nuevo bloque tipo acumulación/intensificación/realización/deload), además del resumen semanal normal, añade: [BLOCK_OUTCOME:{"tipo_bloque":"nombre del bloque que termina","duracion_semanas":número,"objetivo":"objetivo que tenía este bloque","adherencia":número 0-100,"fatiga_media":"baja|media|alta","sesiones_completadas":número,"pr_obtenidos":número de nuevos PRs durante el bloque,"debilidades_resueltas":número de áreas de desarrollo resueltas durante el bloque,"lesiones":true|false,"resultado_global":"excelente|bueno|regular|deficiente","fecha_inicio":"YYYY-MM-DD","fecha_fin":"YYYY-MM-DD"}].
 ANTES de diseñar un nuevo bloque, SIEMPRE revisa la sección "HISTORIAL DE BLOQUES ANTERIORES" en tu contexto (si existe) y usa esa información para decidir parámetros como duración óptima, volumen, o tipo de estímulo — replica lo que funcionó bien (adherencia alta, resultado excelente, baja fatiga) y evita repetir lo que generó fatiga muy alta o resultado deficiente. Menciona brevemente este razonamiento al atleta cuando sea relevante (ej: "Los bloques de 4 semanas te han funcionado mejor que los de 5").
+CORRECCIÓN DE DISPONIBILIDAD — OBLIGATORIO: cuando preguntes "¿sigue igual tu disponibilidad?" antes de generar la semana, si el atleta responde con un CAMBIO real (no una simple confirmación) — por ejemplo "no generes el jueves", "ahora puedo también los domingos", "cambia mi duración a 45 min" — DEBES generar en tu respuesta el tag [DISPONIBILIDAD_ACTUALIZADA:{"descripcion":"descripción breve y clara de la disponibilidad YA CORREGIDA, incorporando el cambio pedido"}] antes de continuar. Esto es OBLIGATORIO siempre que detectes un cambio real, nunca lo omitas — sin este tag, el cambio pedido por el atleta NUNCA se aplicará a la semana que estás a punto de generar.
 INTERVENCIONES ESPECÍFICAS: Cuando detectes un problema puntual (ej: fatiga alta un día concreto) y apliques una solución específica (ej: mover una sesión), y MÁS TARDE confirmes que esa solución funcionó (HRV recuperado, adherencia mejorada), añade: [INTERVENTION:{"problema":"descripción breve del problema detectado","accion":"qué hiciste para solucionarlo","resultado":"qué pasó después","efectividad":"alta|media|baja"}].
 REGLA DE CAPAS — NUNCA VIOLAR: Los principios científicos fijos (periodización, sobrecarga progresiva, deload, zonas de entrenamiento, recuperación) NUNCA cambian por resultados de un solo atleta o bloque. Lo que SÍ puede adaptarse con la memoria metodológica es: duración de bloques, distribución semanal, volumen, tipo de WOD, orden de ejercicios, y qué intervenciones funcionan mejor para corregir debilidades específicas de este atleta.
 Si el usuario reporta métricas fisiológicas pasadas con fecha (HRV, sueño, FC reposo de días anteriores), añade: [METRICA:{"fecha":"YYYY-MM-DD","hrv":null,"sueno":null,"rhr":null}]. Si el usuario pide borrar una sesión por fecha, añade: [BORRAR_SESION:{"fecha":"YYYY-MM-DD","tipo":"tipo mencionado"}].
@@ -1582,6 +1583,12 @@ const forgeValidator=(texto:string):string=>{
       await apiCall({action:"guardar_block_outcome",codigo:codigoUsuario,datos:data});
       cargarBlockOutcomes(codigoUsuario);
     });
+    await procesarTag("[DISPONIBILIDAD_ACTUALIZADA:",29,async(data)=>{
+      const res=await apiCall({action:"guardar_disponibilidad_actualizada",codigo:codigoUsuario,datos:data});
+      if(res?.ok&&data.descripcion){
+        setDistribucionSemanal(JSON.stringify({descripcion:data.descripcion,cambio_permanente:true}));
+      }
+    });
     await procesarTag("[INTERVENTION:",14,async(data)=>{
       await apiCall({action:"guardar_intervention",codigo:codigoUsuario,datos:data});
     });
@@ -1887,6 +1894,14 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
       // DESPUES generamos con los datos ya actualizados.
       if(esperandoConfirmacionDisponibilidad && codigoUsuario){
         setEsperandoConfirmacionDisponibilidad(false);
+        // FORGE SAFETY NET — respaldo determinista independiente del tag que el Coach puede olvidar
+        // generar. Se dispara en paralelo, sin bloquear el flujo normal de generacion.
+        apiCall({action:"verificar_correccion_disponibilidad_deterministico",codigo:codigoUsuario,datos:{mensajeUsuario:texto,distribucionActual:distribucionSemanal}}).then((resCorreccion:any)=>{
+          if(resCorreccion?.actualizado){
+            console.log("🛡️ Safety Net disponibilidad: corregida a -",resCorreccion.nuevaDescripcion);
+            setDistribucionSemanal(JSON.stringify({descripcion:resCorreccion.nuevaDescripcion,cambio_permanente:true}));
+          }
+        });
         // FIX: pregunta EXPLICITA y determinista (nunca inferida por hora ni decidida por el LLM)
         // de si el atleta quiere empezar hoy mismo o desde el proximo dia disponible — evita
         // prescribir una sesion de hoy cuando genera la semana ya entrada la noche.

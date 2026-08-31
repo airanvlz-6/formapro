@@ -8,6 +8,7 @@ import { detectarDebilidadDuplicada } from "@/lib/validators/weaknessDeduplicati
 import { rankearCandidatos, validarCoherenciaEstimulo, STIMULUS_LIBRARY, getMovimientosPorEstimulo, MOVEMENT_LIBRARY } from "@/lib/sports/movementLibrary";
 import { evaluarSustitucion } from "@/lib/sports/substitutionEngine";
 import { calcularReadiness, scoreAForgeState, combinarConCheckinSubjetivo } from "@/lib/readiness/readinessEngine";
+import { evaluarRelevanciaContextual } from "@/lib/readiness/decisionLayer";
 import { agregarExposicionPorPatron, agregarExposicionPorModalidad } from "@/lib/sports/workoutStructureLibrary";
 import { parseStrengthRecord } from "@/lib/sports/strengthRecordParser";
 import { parseSleepMetrics } from "@/lib/sports/sleepMetricsParser";
@@ -4121,7 +4122,18 @@ Mensaje: "${mensaje}"
     const { data: checkinHoyData } = await supabase.from("readiness_checkins").select("readiness_score").eq("user_codigo", codigo).eq("fecha", hoyCheckinReadiness).maybeSingle();
     const contextoCompleto = combinarConCheckinSubjetivo(resultadoReadiness, checkinHoyData?.readiness_score ?? null);
 
-    return NextResponse.json({ ...resultadoReadiness, forgeState, checkinSubjetivo: contextoCompleto.fatigaPercibida, hayDiscrepancia: contextoCompleto.hayDiscrepancia, mensajeDiscrepancia: contextoCompleto.mensajeDiscrepancia });
+    // FORGE DECISION LAYER — determina si vale la pena mostrar un insight/sugerencia hoy,
+    // basado en la sesion REAL prevista para hoy (nunca modifica nada, solo evalua relevancia)
+    const hoyDecisionStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+    const diaSemanaDecision = new Date().toLocaleDateString("es-ES", { weekday: "long", timeZone: "Europe/Madrid" }).toLowerCase();
+    const { data: planParaDecision } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(1).maybeSingle();
+    const sesionHoyDecision = (planParaDecision?.sessions || []).find((s: any) => (s.dia || "").toLowerCase().includes(diaSemanaDecision.split(" ")[0]));
+    const intensidadHoyDecision: 'baja' | 'moderada' | 'alta' | null = sesionHoyDecision
+      ? (/alta|maxima|max|intenso/i.test(sesionHoyDecision.descripcion || "") ? 'alta' : sesionHoyDecision.tipo === "descanso" ? 'baja' : 'moderada')
+      : null;
+    const decisionContextual = evaluarRelevanciaContextual(resultadoReadiness, intensidadHoyDecision);
+
+    return NextResponse.json({ ...resultadoReadiness, forgeState, checkinSubjetivo: contextoCompleto.fatigaPercibida, hayDiscrepancia: contextoCompleto.hayDiscrepancia, mensajeDiscrepancia: contextoCompleto.mensajeDiscrepancia, decision: decisionContextual });
   }
 
   if (action === "obtener_readiness_hoy") {

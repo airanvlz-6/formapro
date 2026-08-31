@@ -4156,7 +4156,10 @@ Mensaje: "${mensaje}"
       todaySession: sesionHoyTodayState ? {
         titulo: sesionHoyTodayState.titulo, tipo: sesionHoyTodayState.tipo,
         completada: !!sesionHoyTodayState.completada,
-        duracionMin: (sesionHoyTodayState.descripcion || "").match(/(\d+)\s*min/)?.[1] || null,
+        // FIX: extraer del TITULO (ej: "...60min"), no de la descripcion completa que
+        // contiene multiples menciones de minutos (calentamiento, bloque, vuelta a la calma)
+        // y capturaba incorrectamente la primera (ej: "10 min" del calentamiento)
+        duracionMin: (sesionHoyTodayState.titulo || "").match(/(\d+)\s*min/)?.[1] || null,
       } : null,
       recentActivity: ultimaActividadReal ? {
         titulo: ultimaActividadReal.titulo, tipo: ultimaActividadReal.tipo, dia: ultimaActividadReal.dia,

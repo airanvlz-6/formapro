@@ -119,3 +119,55 @@ export function calcularReadiness(
     resumenTexto,
   };
 }
+
+// ============================================================
+// FORGE STATE — traduce el score numerico a un estado comprensible. El NUMERO no es el
+// producto, el ESTADO es el producto (coherente con el diseño: "87 - READY", no solo "87").
+// ============================================================
+export type ForgeStateLabel = 'READY' | 'MODERATE' | 'RECOVER' | 'RESET';
+
+export function scoreAForgeState(score: number | null): ForgeStateLabel | null {
+  if (score === null) return null;
+  if (score >= 80) return 'READY';
+  if (score >= 60) return 'MODERATE';
+  if (score >= 40) return 'RECOVER';
+  return 'RESET';
+}
+
+// ============================================================
+// SUBJECTIVE CHECK-IN COMO SEÑAL — nunca modifica el score de Readiness. Se combina con el
+// resultado como CONTEXTO adicional, para que Forge pueda detectar discrepancias reales
+// (ej: datos fisiologicos buenos + atleta reporta fatiga alta = señal a revisar, no promedio).
+// ============================================================
+export type NivelFatigaPercibida = 1 | 2 | 3 | 4 | 5; // 1=muy mal, 5=con energia
+
+export interface ContextoConCheckin {
+  readiness: ReadinessResultado;
+  fatigaPercibida: NivelFatigaPercibida | null;
+  hayDiscrepancia: boolean; // true si datos fisiologicos buenos pero percepcion mala, o viceversa
+  mensajeDiscrepancia: string | null;
+}
+
+export function combinarConCheckinSubjetivo(readiness: ReadinessResultado, fatigaPercibida: NivelFatigaPercibida | null): ContextoConCheckin {
+  if (fatigaPercibida === null || readiness.score === null) {
+    return { readiness, fatigaPercibida, hayDiscrepancia: false, mensajeDiscrepancia: null };
+  }
+
+  const fisiologiaFavorable = readiness.score >= 70;
+  const percepcionMala = fatigaPercibida <= 2;
+  const fisiologiaDesfavorable = readiness.score < 50;
+  const percepcionBuena = fatigaPercibida >= 4;
+
+  let hayDiscrepancia = false;
+  let mensajeDiscrepancia: string | null = null;
+
+  if (fisiologiaFavorable && percepcionMala) {
+    hayDiscrepancia = true;
+    mensajeDiscrepancia = `Tus datos fisiológicos son favorables, pero hoy reportas fatiga alta. Forge no ha modificado tu sesión automáticamente.`;
+  } else if (fisiologiaDesfavorable && percepcionBuena) {
+    hayDiscrepancia = true;
+    mensajeDiscrepancia = `Tu percepción es buena, aunque tus datos fisiológicos están algo por debajo de tu normal.`;
+  }
+
+  return { readiness, fatigaPercibida, hayDiscrepancia, mensajeDiscrepancia };
+}

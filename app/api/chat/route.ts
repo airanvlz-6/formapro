@@ -7,7 +7,7 @@ import { buildExposureReport, exposureReportToPromptText } from "@/lib/sports/ex
 import { detectarDebilidadDuplicada } from "@/lib/validators/weaknessDeduplicationValidator";
 import { rankearCandidatos, validarCoherenciaEstimulo, STIMULUS_LIBRARY, getMovimientosPorEstimulo, MOVEMENT_LIBRARY } from "@/lib/sports/movementLibrary";
 import { evaluarSustitucion } from "@/lib/sports/substitutionEngine";
-import { calcularReadiness } from "@/lib/readiness/readinessEngine";
+import { calcularReadiness, scoreAForgeState, combinarConCheckinSubjetivo } from "@/lib/readiness/readinessEngine";
 import { agregarExposicionPorPatron, agregarExposicionPorModalidad } from "@/lib/sports/workoutStructureLibrary";
 import { parseStrengthRecord } from "@/lib/sports/strengthRecordParser";
 import { parseSleepMetrics } from "@/lib/sports/sleepMetricsParser";
@@ -4115,7 +4115,13 @@ Mensaje: "${mensaje}"
     // Estimacion simple de carga reciente: volumen_relativo del ciclo actual si existe, si no 0.5 (neutral)
     const cargaRelativaEstim = 0.5; // V1: placeholder neutral, V1.1 calculara esto real desde weekly_plan reciente
     const resultadoReadiness = calcularReadiness((historicoParaReadiness || []).map((r: any) => ({ fecha: r.fecha, hrv: r.hrv, rhr: r.rhr, sueno: r.sueno })), cargaRelativaEstim);
-    return NextResponse.json(resultadoReadiness);
+    const forgeState = scoreAForgeState(resultadoReadiness.score);
+
+    const hoyCheckinReadiness = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+    const { data: checkinHoyData } = await supabase.from("readiness_checkins").select("readiness_score").eq("user_codigo", codigo).eq("fecha", hoyCheckinReadiness).maybeSingle();
+    const contextoCompleto = combinarConCheckinSubjetivo(resultadoReadiness, checkinHoyData?.readiness_score ?? null);
+
+    return NextResponse.json({ ...resultadoReadiness, forgeState, checkinSubjetivo: contextoCompleto.fatigaPercibida, hayDiscrepancia: contextoCompleto.hayDiscrepancia, mensajeDiscrepancia: contextoCompleto.mensajeDiscrepancia });
   }
 
   if (action === "obtener_readiness_hoy") {

@@ -4131,9 +4131,23 @@ Mensaje: "${mensaje}"
 
     // Actividad reciente: ultimo entreno completado real (fuente de verdad: weekly_plan con completada=true)
     const ayerFecha = new Date(); ayerFecha.setDate(ayerFecha.getDate() - 1);
-    const { data: planesRecientesActividad } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(2);
+    // FIX: la actividad reciente debe ser la sesion completada REALMENTE mas reciente por fecha,
+    // no la primera que aparezca en el array — antes mezclaba semanas sin ordenar por fecha real,
+    // mostrando una sesion antigua en vez de la genuinamente mas reciente.
+    const { data: planesRecientesActividad } = await supabase.from("weekly_plan").select("sessions,week_start").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(2);
+    const ORDEN_DIAS_ACTIVIDAD = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"];
+    const normalizarDiaActividad = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
     const todasLasSesionesActividad: any[] = [];
-    (planesRecientesActividad || []).forEach((p: any) => (p.sessions || []).filter((s: any) => s.completada).forEach((s: any) => todasLasSesionesActividad.push(s)));
+    (planesRecientesActividad || []).forEach((p: any) => {
+      const weekStartDate = new Date(p.week_start);
+      (p.sessions || []).filter((s: any) => s.completada).forEach((s: any) => {
+        const idxDia = ORDEN_DIAS_ACTIVIDAD.indexOf(normalizarDiaActividad(s.dia));
+        const fechaRealSesion = new Date(weekStartDate);
+        fechaRealSesion.setDate(fechaRealSesion.getDate() + (idxDia >= 0 ? idxDia : 0));
+        todasLasSesionesActividad.push({ ...s, _fechaRealCalculada: fechaRealSesion.getTime() });
+      });
+    });
+    todasLasSesionesActividad.sort((a, b) => b._fechaRealCalculada - a._fechaRealCalculada);
     const ultimaActividadReal = todasLasSesionesActividad[0] || null;
 
     const todayState = {

@@ -4108,6 +4108,65 @@ Mensaje: "${mensaje}"
     return NextResponse.json({ ok: true, fecha: fechaCheckin, readinessScore });
   }
 
+  if (action === "obtener_today_state") {
+    // FORGE TODAY STATE — contrato consolidado para la pantalla TODAY. HomeScreen.tsx debe ser
+    // pura presentacion, nunca calcular nada — toda la logica de Readiness/Discrepancy/Decision
+    // Layer vive aqui, en el backend, ya resuelta. 3 dimensiones independientes, nunca combinadas
+    // en estados artificiales (BUILDING_BASELINE_WITH_CRITICAL_INSIGHT no existe).
+    const { data: historicoTodayState } = await supabase.from("physiology_records").select("fecha,hrv,rhr,sueno").eq("user_codigo", codigo).order("fecha", { ascending: false }).limit(29);
+    const resultadoReadinessToday = calcularReadiness((historicoTodayState || []).map((r: any) => ({ fecha: r.fecha, hrv: r.hrv, rhr: r.rhr, sueno: r.sueno })), 0.5);
+    const forgeStateToday = scoreAForgeState(resultadoReadinessToday.score);
+
+    const hoyTodayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+    const { data: checkinTodayData } = await supabase.from("readiness_checkins").select("readiness_score").eq("user_codigo", codigo).eq("fecha", hoyTodayStr).maybeSingle();
+    const contextoTodayCompleto = combinarConCheckinSubjetivo(resultadoReadinessToday, checkinTodayData?.readiness_score ?? null);
+
+    const diaSemanaToday = new Date().toLocaleDateString("es-ES", { weekday: "long", timeZone: "Europe/Madrid" }).toLowerCase();
+    const { data: planTodayState } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(1).maybeSingle();
+    const sesionHoyTodayState = (planTodayState?.sessions || []).find((s: any) => (s.dia || "").toLowerCase().includes(diaSemanaToday.split(" ")[0]));
+    const intensidadTodayState: 'baja' | 'moderada' | 'alta' | null = sesionHoyTodayState
+      ? (/alta|maxima|max|intenso/i.test(sesionHoyTodayState.descripcion || "") ? 'alta' : sesionHoyTodayState.tipo === "descanso" ? 'baja' : 'moderada')
+      : null;
+    const decisionTodayState = evaluarRelevanciaContextual(resultadoReadinessToday, intensidadTodayState);
+
+    // Actividad reciente: ultimo entreno completado real (fuente de verdad: weekly_plan con completada=true)
+    const ayerFecha = new Date(); ayerFecha.setDate(ayerFecha.getDate() - 1);
+    const { data: planesRecientesActividad } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(2);
+    const todasLasSesionesActividad: any[] = [];
+    (planesRecientesActividad || []).forEach((p: any) => (p.sessions || []).filter((s: any) => s.completada).forEach((s: any) => todasLasSesionesActividad.push(s)));
+    const ultimaActividadReal = todasLasSesionesActividad[0] || null;
+
+    const todayState = {
+      readiness: {
+        phase: resultadoReadinessToday.estado, // 'BUILDING_BASELINE' | 'EARLY_READINESS' | 'READY'
+        score: resultadoReadinessToday.score,
+        label: forgeStateToday, // 'READY' | 'MODERATE' | 'RECOVER' | 'RESET'
+        message: resultadoReadinessToday.resumenTexto,
+        contributors: resultadoReadinessToday.contribuyentes,
+      },
+      discrepancy: {
+        detected: contextoTodayCompleto.hayDiscrepancia,
+        message: contextoTodayCompleto.mensajeDiscrepancia,
+      },
+      insight: {
+        level: decisionTodayState.nivel === 'critico' ? 'CRITICAL' : decisionTodayState.nivel === 'relevante' ? 'RELEVANT' : 'NONE',
+        message: decisionTodayState.mensaje,
+        canReview: decisionTodayState.ofrecerRevision,
+      },
+      todaySession: sesionHoyTodayState ? {
+        titulo: sesionHoyTodayState.titulo, tipo: sesionHoyTodayState.tipo,
+        completada: !!sesionHoyTodayState.completada,
+        duracionMin: (sesionHoyTodayState.descripcion || "").match(/(\d+)\s*min/)?.[1] || null,
+      } : null,
+      recentActivity: ultimaActividadReal ? {
+        titulo: ultimaActividadReal.titulo, tipo: ultimaActividadReal.tipo, dia: ultimaActividadReal.dia,
+      } : null,
+      checkinDisponible: checkinTodayData?.readiness_score === undefined || checkinTodayData?.readiness_score === null,
+    };
+
+    return NextResponse.json(todayState);
+  }
+
   if (action === "obtener_readiness_calculado") {
     // FORGE READINESS ENGINE V1 — score real 0-100 calculado a partir del baseline personal
     // del atleta (HRV/RHR/sueño de los ultimos 28 dias reales), nunca valores absolutos genericos.

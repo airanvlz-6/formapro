@@ -7,6 +7,7 @@ import { buildExposureReport, exposureReportToPromptText } from "@/lib/sports/ex
 import { detectarDebilidadDuplicada } from "@/lib/validators/weaknessDeduplicationValidator";
 import { rankearCandidatos, validarCoherenciaEstimulo, STIMULUS_LIBRARY, getMovimientosPorEstimulo, MOVEMENT_LIBRARY } from "@/lib/sports/movementLibrary";
 import { evaluarSustitucion } from "@/lib/sports/substitutionEngine";
+import { calcularReadiness } from "@/lib/readiness/readinessEngine";
 import { agregarExposicionPorPatron, agregarExposicionPorModalidad } from "@/lib/sports/workoutStructureLibrary";
 import { parseStrengthRecord } from "@/lib/sports/strengthRecordParser";
 import { parseSleepMetrics } from "@/lib/sports/sleepMetricsParser";
@@ -4104,6 +4105,17 @@ Mensaje: "${mensaje}"
     }, { onConflict: "user_codigo,fecha" });
     if (errorReadiness) return NextResponse.json({ error: errorReadiness.message }, { status: 500 });
     return NextResponse.json({ ok: true, fecha: fechaCheckin, readinessScore });
+  }
+
+  if (action === "obtener_readiness_calculado") {
+    // FORGE READINESS ENGINE V1 — score real 0-100 calculado a partir del baseline personal
+    // del atleta (HRV/RHR/sueño de los ultimos 28 dias reales), nunca valores absolutos genericos.
+    const { data: historicoParaReadiness } = await supabase.from("physiology_records").select("fecha,hrv,rhr,sueno").eq("user_codigo", codigo).order("fecha", { ascending: false }).limit(29);
+    const { data: usuarioParaCarga } = await supabase.from("usuarios").select("ciclo_actual").eq("codigo", codigo).single();
+    // Estimacion simple de carga reciente: volumen_relativo del ciclo actual si existe, si no 0.5 (neutral)
+    const cargaRelativaEstim = 0.5; // V1: placeholder neutral, V1.1 calculara esto real desde weekly_plan reciente
+    const resultadoReadiness = calcularReadiness((historicoParaReadiness || []).map((r: any) => ({ fecha: r.fecha, hrv: r.hrv, rhr: r.rhr, sueno: r.sueno })), cargaRelativaEstim);
+    return NextResponse.json(resultadoReadiness);
   }
 
   if (action === "obtener_readiness_hoy") {

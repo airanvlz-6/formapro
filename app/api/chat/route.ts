@@ -5214,6 +5214,29 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
     return NextResponse.json({ ok: true, nuevoAprendizaje, porcentajeTotal: Math.min(totalPuntos, 100) });
   }
 
+  if (action === "obtener_plan_semana_v2") {
+    // FORGE PLAN SCREEN — contrato forge_context HONESTO. decision:null por defecto siempre,
+    // NUNCA inferido de debilidad_relacionada ni de palabras en la descripcion. Solo se rellenaria
+    // cuando exista un evento real y estructurado de decision explicita de Forge (pendiente de
+    // conectar con session_modification_events/pending_actions en el futuro).
+    const { data: planV2 } = await supabase.from("weekly_plan").select("sessions,week_start").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(1).maybeSingle();
+    if (!planV2) return NextResponse.json({ ok: true, weekStart: null, sessions: [] });
+
+    const sessionsConContexto = (planV2.sessions || []).map((s: any) => ({
+      dia: s.dia,
+      titulo: s.titulo,
+      tipo: s.tipo,
+      descripcion: s.descripcion,
+      por_que: s.por_que,
+      forge_context: {
+        execution: s.completada ? 'completed' : 'planned',
+        decision: null, // honesto: no tenemos aun un evento estructurado real de decision explicita
+      },
+    }));
+
+    return NextResponse.json({ ok: true, weekStart: planV2.week_start, sessions: sessionsConContexto });
+  }
+
   if (action === "obtener_perfil_atleta") {
     // FORGE PERFIL — datos fisicos del atleta como CONTEXTO ESTRUCTURADO, nunca reglas directas
     // que el LLM use para inventar cargas ("como pesas 82kg, haz 100kg"). Cada motor decide si

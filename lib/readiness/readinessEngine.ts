@@ -103,7 +103,15 @@ export function calcularReadiness(
   const masDesfavorable = comparacionesValidas.filter(c => c.direccion === 'desfavorable').sort((a, b) => a.desviacionZ - b.desviacionZ)[0];
   const masFavorable = comparacionesValidas.filter(c => c.direccion === 'favorable').sort((a, b) => b.desviacionZ - a.desviacionZ)[0];
 
-  let resumenTexto = 'Tus indicadores están dentro de tu rango habitual.';
+  // FIX: mensaje SIEMPRE derivado del estado real (READY/MODERATE/RECOVER/RESET), nunca la
+  // misma frase generica por defecto — coherente con que el usuario debe poder leer "por que"
+  // en la misma frase que ve el numero, sin necesitar interpretarlo el mismo.
+  const estadoParaMensaje = score >= 80 ? 'READY' : score >= 60 ? 'MODERATE' : score >= 40 ? 'RECOVER' : 'RESET';
+  let resumenTexto =
+    estadoParaMensaje === 'READY' ? 'Tu recuperación está por encima de tu normal.' :
+    estadoParaMensaje === 'MODERATE' ? 'Tu recuperación está dentro de tu rango habitual.' :
+    estadoParaMensaje === 'RECOVER' ? 'Tu recuperación está por debajo de tu normal.' :
+    'Tus señales indican que necesitas recuperar.';
   if (score >= 80 && masFavorable) resumenTexto = `Tu recuperación está por encima de tu normal. Hoy tienes margen para una sesión exigente.`;
   else if (score < 50 && masDesfavorable) resumenTexto = `Tu ${masDesfavorable.metrica === 'hrv' ? 'HRV' : masDesfavorable.metrica === 'rhr' ? 'FC en reposo' : 'sueño'} está por debajo de tu normal.`;
   else if (nivelCarga === 'alta') resumenTexto = 'Vienes acumulando carga elevada en los últimos días.';

@@ -5237,6 +5237,38 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
     return NextResponse.json({ ok: true, weekStart: planV2.week_start, sessions: sessionsConContexto });
   }
 
+  if (action === "sincronizar_healthkit_real") {
+    // FORGE HEALTHKIT SYNC — conecta los datos REALES de HealthKit (leidos automaticamente por
+    // el hook useForgeHealthKit) con physiology_records, la tabla que alimenta el Readiness Engine.
+    // Antes estaban desconectados: HealthKit mostraba datos reales en pantalla, pero
+    // physiology_records solo se llenaba si el usuario lo mencionaba manualmente en el chat.
+    const { hrv, rhr, suenoHoras } = datos;
+    const hoySync = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+
+    // Convertir sueño de horas reales a score 0-100 (coherente con la escala ya usada en
+    // physiology_records) — 8h se considera referencia de score 100, escala lineal simple V1
+    const suenoScore = suenoHoras !== null && suenoHoras !== undefined ? Math.round(Math.min(100, (suenoHoras / 8) * 100)) : null;
+
+    const { data: registroExistente } = await supabase.from("physiology_records").select("id,hrv,rhr,sueno").eq("user_codigo", codigo).eq("fecha", hoySync).maybeSingle();
+
+    const actualizacionSync: any = {};
+    // Solo actualiza los campos que HealthKit realmente trae — nunca sobreescribe con null
+    // un valor que ya existiera (ej: si el usuario ya lo conto manualmente antes)
+    if (hrv !== null && hrv !== undefined) actualizacionSync.hrv = Math.round(hrv);
+    if (rhr !== null && rhr !== undefined) actualizacionSync.rhr = Math.round(rhr);
+    if (suenoScore !== null) actualizacionSync.sueno = suenoScore;
+
+    if (Object.keys(actualizacionSync).length === 0) return NextResponse.json({ ok: true, sincronizado: false });
+
+    if (registroExistente) {
+      await supabase.from("physiology_records").update(actualizacionSync).eq("id", registroExistente.id);
+    } else {
+      await supabase.from("physiology_records").insert({ user_codigo: codigo, fecha: hoySync, ...actualizacionSync });
+    }
+    console.log(`🍎 HEALTHKIT SYNC: ${codigo} — ${JSON.stringify(actualizacionSync)}`);
+    return NextResponse.json({ ok: true, sincronizado: true });
+  }
+
   if (action === "guardar_feedback_app") {
     // FORGE FEEDBACK CHANNEL — canal real de reporte de problemas/ayuda, con contexto automatico
     // (version, plataforma, pantalla) capturado por el frontend, nunca pedido manualmente al usuario.

@@ -5237,6 +5237,14 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
     return NextResponse.json({ ok: true, weekStart: planV2.week_start, sessions: sessionsConContexto });
   }
 
+  if (action === "obtener_physiology_records_recientes") {
+    // FORGE — fuente REAL y actualizada (physiology_records, alimentada por HealthKit sync)
+    // en vez del campo antiguo estado_fisiologico que quedaba desactualizado. Devuelve los
+    // ultimos 7 dias reales para permitir tanto el dato de hoy como el futuro grafico de tendencia.
+    const { data: recordsRecientes } = await supabase.from("physiology_records").select("fecha,hrv,rhr,sueno").eq("user_codigo", codigo).order("fecha", { ascending: false }).limit(7);
+    return NextResponse.json({ ok: true, records: recordsRecientes || [] });
+  }
+
   if (action === "sincronizar_healthkit_real") {
     // FORGE HEALTHKIT SYNC — conecta los datos REALES de HealthKit (leidos automaticamente por
     // el hook useForgeHealthKit) con physiology_records, la tabla que alimenta el Readiness Engine.

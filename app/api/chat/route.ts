@@ -5214,6 +5214,30 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
     return NextResponse.json({ ok: true, nuevoAprendizaje, porcentajeTotal: Math.min(totalPuntos, 100) });
   }
 
+  if (action === "obtener_perfil_atleta") {
+    // FORGE PERFIL — datos fisicos del atleta como CONTEXTO ESTRUCTURADO, nunca reglas directas
+    // que el LLM use para inventar cargas ("como pesas 82kg, haz 100kg"). Cada motor decide si
+    // el dato es relevante, el peso/altura solo viven como contexto disponible.
+    const { data: usuarioPerfil } = await supabase.from("usuarios").select("nombre_mostrar,email,altura_cm,peso_kg,peso_actualizado_at,avatar_url,categoria,especialidad,objetivo_principal").eq("codigo", codigo).single();
+    return NextResponse.json({ ok: true, perfil: usuarioPerfil || null });
+  }
+
+  if (action === "actualizar_perfil_atleta") {
+    const { nombre_mostrar, altura_cm, peso_kg, avatar_url } = datos;
+    const actualizacion: any = {};
+    if (nombre_mostrar !== undefined) actualizacion.nombre_mostrar = nombre_mostrar;
+    if (altura_cm !== undefined) actualizacion.altura_cm = altura_cm;
+    if (avatar_url !== undefined) actualizacion.avatar_url = avatar_url;
+    if (peso_kg !== undefined) {
+      actualizacion.peso_kg = peso_kg;
+      actualizacion.peso_actualizado_at = new Date().toISOString().split('T')[0];
+    }
+    if (Object.keys(actualizacion).length === 0) return NextResponse.json({ error: "Nada que actualizar" }, { status: 400 });
+    const { error: errorActualizarPerfil } = await supabase.from("usuarios").update(actualizacion).eq("codigo", codigo);
+    if (errorActualizarPerfil) return NextResponse.json({ error: errorActualizarPerfil.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
   if (action === "recalcular_seguimiento_debilidades") {
     // FORGE WEAKNESS FOLLOW-UP ENGINE — version standalone para verificacion manual/diagnostico,
     // sin necesidad de generar una semana nueva completa. Misma logica exacta que la version

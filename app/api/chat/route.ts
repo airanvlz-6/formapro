@@ -5237,6 +5237,20 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
     return NextResponse.json({ ok: true, weekStart: planV2.week_start, sessions: sessionsConContexto });
   }
 
+  if (action === "guardar_feedback_app") {
+    // FORGE FEEDBACK CHANNEL — canal real de reporte de problemas/ayuda, con contexto automatico
+    // (version, plataforma, pantalla) capturado por el frontend, nunca pedido manualmente al usuario.
+    const { tipo, descripcion, version_app, plataforma, pantalla_contexto } = datos;
+    if (!tipo || !descripcion) return NextResponse.json({ error: "tipo y descripcion requeridos" }, { status: 400 });
+    if (!["problema", "ayuda"].includes(tipo)) return NextResponse.json({ error: "tipo invalido" }, { status: 400 });
+    const { error: errorFeedback } = await supabase.from("app_feedback").insert({
+      user_codigo: codigo, tipo, descripcion, version_app, plataforma, pantalla_contexto,
+    });
+    if (errorFeedback) return NextResponse.json({ error: errorFeedback.message }, { status: 500 });
+    console.log(`📩 FEEDBACK recibido de ${codigo}: [${tipo}] ${descripcion.substring(0, 100)}`);
+    return NextResponse.json({ ok: true });
+  }
+
   if (action === "obtener_perfil_atleta") {
     // FORGE PERFIL — datos fisicos del atleta como CONTEXTO ESTRUCTURADO, nunca reglas directas
     // que el LLM use para inventar cargas ("como pesas 82kg, haz 100kg"). Cada motor decide si

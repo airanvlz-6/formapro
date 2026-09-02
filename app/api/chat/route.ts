@@ -4121,9 +4121,14 @@ Mensaje: "${mensaje}"
     const { data: checkinTodayData } = await supabase.from("readiness_checkins").select("readiness_score").eq("user_codigo", codigo).eq("fecha", hoyTodayStr).maybeSingle();
     const contextoTodayCompleto = combinarConCheckinSubjetivo(resultadoReadinessToday, checkinTodayData?.readiness_score ?? null);
 
-    const diaSemanaToday = new Date().toLocaleDateString("es-ES", { weekday: "long", timeZone: "Europe/Madrid" }).toLowerCase();
+    // FIX CRITICO CONFIRMADO CON EVIDENCIA REAL: la comparacion nunca normalizaba acentos —
+    // "miercoles" (toLocaleDateString, CON tilde) nunca coincidia con "miercoles" (guardado sin
+    // tilde en weekly_plan, coherente con el resto del sistema), asi que .find() siempre devolvia
+    // undefined y TODAY mostraba "sin sesion programada" aunque si existiera una sesion real.
+    const normalizarDiaTodayState = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const diaSemanaToday = normalizarDiaTodayState(new Date().toLocaleDateString("es-ES", { weekday: "long", timeZone: "Europe/Madrid" }));
     const { data: planTodayState } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(1).maybeSingle();
-    const sesionHoyTodayState = (planTodayState?.sessions || []).find((s: any) => (s.dia || "").toLowerCase().includes(diaSemanaToday.split(" ")[0]));
+    const sesionHoyTodayState = (planTodayState?.sessions || []).find((s: any) => normalizarDiaTodayState(s.dia).includes(diaSemanaToday));
     const intensidadTodayState: 'baja' | 'moderada' | 'alta' | null = sesionHoyTodayState
       ? (/alta|maxima|max|intenso/i.test(sesionHoyTodayState.descripcion || "") ? 'alta' : sesionHoyTodayState.tipo === "descanso" ? 'baja' : 'moderada')
       : null;
@@ -4201,9 +4206,10 @@ Mensaje: "${mensaje}"
     // FORGE DECISION LAYER — determina si vale la pena mostrar un insight/sugerencia hoy,
     // basado en la sesion REAL prevista para hoy (nunca modifica nada, solo evalua relevancia)
     const hoyDecisionStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
-    const diaSemanaDecision = new Date().toLocaleDateString("es-ES", { weekday: "long", timeZone: "Europe/Madrid" }).toLowerCase();
+    const normalizarDiaDecision = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const diaSemanaDecision = normalizarDiaDecision(new Date().toLocaleDateString("es-ES", { weekday: "long", timeZone: "Europe/Madrid" }));
     const { data: planParaDecision } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(1).maybeSingle();
-    const sesionHoyDecision = (planParaDecision?.sessions || []).find((s: any) => (s.dia || "").toLowerCase().includes(diaSemanaDecision.split(" ")[0]));
+    const sesionHoyDecision = (planParaDecision?.sessions || []).find((s: any) => normalizarDiaDecision(s.dia).includes(diaSemanaDecision));
     const intensidadHoyDecision: 'baja' | 'moderada' | 'alta' | null = sesionHoyDecision
       ? (/alta|maxima|max|intenso/i.test(sesionHoyDecision.descripcion || "") ? 'alta' : sesionHoyDecision.tipo === "descanso" ? 'baja' : 'moderada')
       : null;

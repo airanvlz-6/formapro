@@ -25,12 +25,16 @@ export interface ReadinessResultado {
     hrv: ComparacionHoy | null;
     rhr: ComparacionHoy | null;
     duracionSueno: ComparacionHoy | null;
-    carga: { valor: 'baja' | 'normal' | 'alta'; descripcion: string } | null;
+    // FIX SEMANTICO: renombrado de 'carga' a 'frecuencia' — la señal real que alimenta este pilar
+    // (calcularFrecuenciaRealRelativa) mide UTILIZACION de disponibilidad (sesiones completadas /
+    // dias declarados), nunca carga fisiologica real (volumen x intensidad). Llamarlo "carga"
+    // habria sido una falsa precision fisiologica que Forge todavia no puede sostener con datos.
+    frecuencia: { valor: 'baja' | 'normal' | 'alta'; descripcion: string } | null;
   };
   resumenTexto: string; // frase corta explicando el porque, para mostrar en UI
 }
 
-const PESOS = { hrv: 0.30, rhr: 0.25, duracionSueno: 0.25, carga: 0.20 };
+const PESOS = { hrv: 0.30, rhr: 0.25, duracionSueno: 0.25, frecuencia: 0.20 };
 
 // Convierte una comparacion (desviacion Z) a una puntuacion parcial 0-100 para ese pilar.
 // Z=0 (exactamente en el baseline) = 70 puntos (neutral-bueno, no "malo por defecto").
@@ -41,9 +45,9 @@ function comparacionAPuntuacion(comparacion: ComparacionHoy): number {
   return Math.max(0, Math.min(100, Math.round(puntuacion)));
 }
 
-function cargaAPuntuacion(nivelCarga: 'baja' | 'normal' | 'alta'): number {
-  if (nivelCarga === 'baja') return 85; // carga baja = mas margen para entrenar fuerte
-  if (nivelCarga === 'alta') return 45; // carga alta reciente = menos margen
+function frecuenciaAPuntuacion(nivelFrecuencia: 'baja' | 'normal' | 'alta'): number {
+  if (nivelFrecuencia === 'baja') return 85; // frecuencia baja = mas margen para entrenar fuerte
+  if (nivelFrecuencia === 'alta') return 45; // frecuencia alta reciente = menos margen
   return 70; // normal
 }
 
@@ -63,7 +67,7 @@ export function calcularReadiness(
     return {
       score: null, estado: 'BUILDING_BASELINE', nivelConfianza: 'insuficiente',
       dataCompleteness: 0, missingSignals: ['hrv', 'rhr', 'duracionSueno'],
-      contribuyentes: { hrv: null, rhr: null, duracionSueno: null, carga: null },
+      contribuyentes: { hrv: null, rhr: null, duracionSueno: null, frecuencia: null },
       resumenTexto: 'Necesitamos algunos días de datos para conocer tu normal.',
     };
   }
@@ -83,7 +87,7 @@ export function calcularReadiness(
     return {
       score: null, estado: 'BUILDING_BASELINE', nivelConfianza: 'insuficiente',
       dataCompleteness: 0, missingSignals: ['hrv', 'rhr', 'duracionSueno'],
-      contribuyentes: { hrv: null, rhr: null, duracionSueno: null, carga: null },
+      contribuyentes: { hrv: null, rhr: null, duracionSueno: null, frecuencia: null },
       resumenTexto: 'Necesitamos algunos días de datos para conocer tu normal.',
     };
   }
@@ -99,8 +103,8 @@ export function calcularReadiness(
   if (compHrv) { puntuaciones.push(comparacionAPuntuacion(compHrv) * PESOS.hrv); pesosUsados.push(PESOS.hrv); }
   if (compRhr) { puntuaciones.push(comparacionAPuntuacion(compRhr) * PESOS.rhr); pesosUsados.push(PESOS.rhr); }
   if (compSueno) { puntuaciones.push(comparacionAPuntuacion(compSueno) * PESOS.duracionSueno); pesosUsados.push(PESOS.duracionSueno); }
-  puntuaciones.push(cargaAPuntuacion(nivelCarga) * PESOS.carga);
-  pesosUsados.push(PESOS.carga);
+  puntuaciones.push(frecuenciaAPuntuacion(nivelCarga) * PESOS.frecuencia);
+  pesosUsados.push(PESOS.frecuencia);
 
   const sumaPesos = pesosUsados.reduce((a, b) => a + b, 0);
   const score = Math.round(puntuaciones.reduce((a, b) => a + b, 0) / sumaPesos);
@@ -146,7 +150,7 @@ export function calcularReadiness(
     missingSignals,
     contribuyentes: {
       hrv: compHrv, rhr: compRhr, duracionSueno: compSueno,
-      carga: { valor: nivelCarga, descripcion: nivelCarga === 'alta' ? 'Carga elevada reciente' : nivelCarga === 'baja' ? 'Carga baja, buen margen' : 'Carga dentro de lo habitual' },
+      frecuencia: { valor: nivelCarga, descripcion: nivelCarga === 'alta' ? 'Frecuencia elevada reciente' : nivelCarga === 'baja' ? 'Frecuencia baja, buen margen' : 'Frecuencia dentro de lo habitual' },
     },
     resumenTexto,
   };

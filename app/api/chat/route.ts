@@ -740,8 +740,19 @@ export async function POST(req: NextRequest) {
     try {
       const { email } = datos || {};
       if (!email) return NextResponse.json({ error: "Falta email" }, { status: 400 });
-      const { data: usuarioExistente } = await supabase.from("usuarios").select("codigo").eq("email", email.toLowerCase().trim()).maybeSingle();
-      return NextResponse.json({ yaExiste: !!usuarioExistente });
+      // FIX CRITICO CONFIRMADO CON EVIDENCIA REAL: consultar "usuarios" (tabla de Forge) en vez
+      // de la fuente real de verdad (Supabase Auth) causaba falsos negativos — un usuario podia
+      // tener auth.users real pero NUNCA tener fila en "usuarios" (ej: bug de registro corregido
+      // hoy), asi que la verificacion decia "no existe" incorrectamente y dejaba pasar un segundo
+      // intento de registro contra un email que Auth SI reconocia como ya existente.
+      const { data: listaUsuariosAuth, error: errorListaAuth } = await supabase.auth.admin.listUsers();
+      if (errorListaAuth) {
+        console.error("Error listando usuarios de Auth:", errorListaAuth);
+        return NextResponse.json({ yaExiste: false });
+      }
+      const emailNormalizado = email.toLowerCase().trim();
+      const yaExisteEnAuth = listaUsuariosAuth.users.some((u: any) => u.email?.toLowerCase() === emailNormalizado);
+      return NextResponse.json({ yaExiste: yaExisteEnAuth });
     } catch (err: any) {
       console.error("Error en verificar_email_registrado:", err);
       return NextResponse.json({ yaExiste: false });

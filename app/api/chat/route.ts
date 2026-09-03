@@ -7,6 +7,7 @@ import { buildExposureReport, exposureReportToPromptText } from "@/lib/sports/ex
 import { detectarDebilidadDuplicada } from "@/lib/validators/weaknessDeduplicationValidator";
 import { rankearCandidatos, validarCoherenciaEstimulo, STIMULUS_LIBRARY, getMovimientosPorEstimulo, MOVEMENT_LIBRARY } from "@/lib/sports/movementLibrary";
 import { evaluarSustitucion } from "@/lib/sports/substitutionEngine";
+import { aplicarTrainingFrequencySafetyNet } from "@/lib/sports/trainingFrequencySafetyNet";
 import { calcularReadiness, scoreAForgeState, combinarConCheckinSubjetivo } from "@/lib/readiness/readinessEngine";
 import { evaluarRelevanciaContextual } from "@/lib/readiness/decisionLayer";
 import { agregarExposicionPorPatron, agregarExposicionPorModalidad } from "@/lib/sports/workoutStructureLibrary";
@@ -2298,6 +2299,16 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
       const analyzerMatch = analyzerClean.match(/\{[\s\S]*\}/);
       if (!analyzerMatch) throw new Error("Block Analyzer no devolvio JSON valido");
       const analisisBloque = JSON.parse(analyzerMatch[0]);
+
+      // FORGE TRAINING FREQUENCY SAFETY NET — barrera determinista, NUNCA deja al LLM decidir si
+      // aplicar descanso: dias_entreno_sugeridos nunca puede ser 7, sin excepcion, independiente
+      // de fase del bloque, objetivo o disponibilidad declarada. Con trazabilidad real cuando corrige.
+      const resultadoSafetyNetFrecuencia = aplicarTrainingFrequencySafetyNet(analisisBloque.dias_entreno_sugeridos);
+      if (resultadoSafetyNetFrecuencia.corregido) {
+        console.log(`🛡️ TRAINING FREQUENCY SAFETY NET: ${codigo} — corregido de ${resultadoSafetyNetFrecuencia.original} a ${resultadoSafetyNetFrecuencia.diasEntrenoSugeridos} dias (${resultadoSafetyNetFrecuencia.motivo})`);
+      }
+      analisisBloque.dias_entreno_sugeridos = resultadoSafetyNetFrecuencia.diasEntrenoSugeridos;
+      analisisBloque.training_frequency_safety_net = { applied: resultadoSafetyNetFrecuencia.corregido, original: resultadoSafetyNetFrecuencia.original, corrected: resultadoSafetyNetFrecuencia.diasEntrenoSugeridos, reason: resultadoSafetyNetFrecuencia.motivo };
 
       // Marcar como "considerada" las notas que el Block Analyzer decidio incorporar al analisis
       // de esta semana — avanza su ciclo de vida sin borrarlas, siguen visibles para Weekly Strategy.

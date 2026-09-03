@@ -7,7 +7,7 @@ import { buildExposureReport, exposureReportToPromptText } from "@/lib/sports/ex
 import { detectarDebilidadDuplicada } from "@/lib/validators/weaknessDeduplicationValidator";
 import { rankearCandidatos, validarCoherenciaEstimulo, STIMULUS_LIBRARY, getMovimientosPorEstimulo, MOVEMENT_LIBRARY } from "@/lib/sports/movementLibrary";
 import { evaluarSustitucion } from "@/lib/sports/substitutionEngine";
-import { aplicarTrainingFrequencySafetyNet } from "@/lib/sports/trainingFrequencySafetyNet";
+import { aplicarTrainingFrequencySafetyNet, calcularFrecuenciaRealRelativa } from "@/lib/sports/trainingFrequencySafetyNet";
 import { calcularReadiness, scoreAForgeState, combinarConCheckinSubjetivo } from "@/lib/readiness/readinessEngine";
 import { evaluarRelevanciaContextual } from "@/lib/readiness/decisionLayer";
 import { agregarExposicionPorPatron, agregarExposicionPorModalidad } from "@/lib/sports/workoutStructureLibrary";
@@ -2303,7 +2303,13 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
       // FORGE TRAINING FREQUENCY SAFETY NET — barrera determinista, NUNCA deja al LLM decidir si
       // aplicar descanso: dias_entreno_sugeridos nunca puede ser 7, sin excepcion, independiente
       // de fase del bloque, objetivo o disponibilidad declarada. Con trazabilidad real cuando corrige.
-      const resultadoSafetyNetFrecuencia = aplicarTrainingFrequencySafetyNet(analisisBloque.dias_entreno_sugeridos);
+      // frecuenciaRealRelativa se calcula desde datos OBJETIVOS reales (perfil.dias + workout_history),
+      // NUNCA desde volumen_relativo del Block Analyzer (esa cifra es una estimacion del LLM, no
+      // debe alimentar una regla de seguridad determinista).
+      const { data: usuarioParaFrecuencia } = await supabase.from("usuarios").select("perfil,workout_history").eq("codigo", codigo).single();
+      const diasDeclaradosReales = parseInt(usuarioParaFrecuencia?.perfil?.dias || "0") || 0;
+      const frecuenciaRealRelativaCalculada = calcularFrecuenciaRealRelativa(usuarioParaFrecuencia?.workout_history || [], diasDeclaradosReales);
+      const resultadoSafetyNetFrecuencia = aplicarTrainingFrequencySafetyNet(analisisBloque.dias_entreno_sugeridos, frecuenciaRealRelativaCalculada);
       if (resultadoSafetyNetFrecuencia.corregido) {
         console.log(`🛡️ TRAINING FREQUENCY SAFETY NET: ${codigo} — corregido de ${resultadoSafetyNetFrecuencia.original} a ${resultadoSafetyNetFrecuencia.diasEntrenoSugeridos} dias (${resultadoSafetyNetFrecuencia.motivo})`);
       }

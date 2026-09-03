@@ -32,7 +32,7 @@ export function evaluarRelevanciaContextual(
   const scoreBajo = readiness.score < 50;
   const scoreMuyBajo = readiness.score < 35;
   const sesionExigente = intensidadSesionHoy === 'alta';
-  const hayCargaAlta = readiness.contribuyentes.carga?.valor === 'alta';
+  const hayCargaAlta = readiness.contribuyentes.frecuencia?.valor === 'alta';
 
   // CRITICO: score muy bajo + sesion exigente prevista → vale la pena ofrecer revisar
   if (scoreMuyBajo && sesionExigente) {

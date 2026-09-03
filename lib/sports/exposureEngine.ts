@@ -43,7 +43,7 @@ export function buildExposureReport(
   sesionesCompletadas: { fecha: string; tipo: string; titulo: string; descripcionReal: string }[],
   disciplina: string
 ): ExposureReport {
-  const movimientosDisciplina = Object.values(MOVEMENT_LIBRARY).filter(m => m.discipline === disciplina);
+  const movimientosDisciplina = Object.values(MOVEMENT_LIBRARY).filter(m => m.discipline.some(d => d === disciplina));
   const exposiciones: ExposicionMovimiento[] = [];
 
   movimientosDisciplina.forEach(mov => {

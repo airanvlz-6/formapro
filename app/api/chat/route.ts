@@ -4220,6 +4220,8 @@ Mensaje: "${mensaje}"
         score: resultadoReadinessToday.score,
         label: forgeStateToday, // 'READY' | 'MODERATE' | 'RECOVER' | 'RESET'
         message: resultadoReadinessToday.resumenTexto,
+        dataCompleteness: resultadoReadinessToday.dataCompleteness,
+        missingSignals: resultadoReadinessToday.missingSignals,
         contributors: resultadoReadinessToday.contribuyentes,
       },
       discrepancy: {

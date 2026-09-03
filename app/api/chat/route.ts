@@ -748,6 +748,37 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  if (action === "crear_usuario_desde_registro_movil") {
+    // FORGE MOBILE REGISTRO — FIX CRITICO CONFIRMADO CON EVIDENCIA REAL: el registro movil
+    // (RegistroScreen.tsx) solo creaba la cuenta de Supabase Auth con el codigo deseado guardado
+    // COMO METADATO, nunca creaba el registro real en la tabla usuarios vinculado a auth_user_id.
+    // Resultado: cualquier usuario nuevo registrado desde movil quedaba con auth funcionando pero
+    // SIN perfil de Forge real - obtener_codigo_por_auth_user_id siempre devolvia 404.
+    // Seguridad: Supabase Auth (email+password) es el UNICO mecanismo de autenticacion real, para
+    // web y movil por igual. El "codigo" es solo un identificador de negocio elegido por el
+    // usuario, nunca un mecanismo de acceso — coherente con el diseño ya existente de la web.
+    const { authUserId, codigoDeseado, email } = datos;
+    if (!authUserId || !codigoDeseado) return NextResponse.json({ error: "Faltan datos requeridos" }, { status: 400 });
+
+    const codigoLimpio = codigoDeseado.trim().toUpperCase();
+    const { data: yaExisteCodigo } = await supabase.from("usuarios").select("codigo").eq("codigo", codigoLimpio).maybeSingle();
+    if (yaExisteCodigo) return NextResponse.json({ error: "Ese código ya está en uso, elige otro." }, { status: 409 });
+
+    const { data: yaExisteAuthUser } = await supabase.from("usuarios").select("codigo").eq("auth_user_id", authUserId).maybeSingle();
+    if (yaExisteAuthUser) return NextResponse.json({ ok: true, codigo: yaExisteAuthUser.codigo }); // idempotente, ya existe
+
+    const { error: errorCrearUsuario } = await supabase.from("usuarios").insert({
+      codigo: codigoLimpio,
+      auth_user_id: authUserId,
+      email: email || null,
+      created_at: new Date().toISOString(),
+    });
+    if (errorCrearUsuario) return NextResponse.json({ error: errorCrearUsuario.message }, { status: 500 });
+
+    console.log(`✅ USUARIO CREADO DESDE REGISTRO MOVIL: ${codigoLimpio} (auth_user_id: ${authUserId})`);
+    return NextResponse.json({ ok: true, codigo: codigoLimpio });
+  }
+
   if (action === "obtener_codigo_por_auth_user_id") {
     try {
       const { authUserId } = datos || {};

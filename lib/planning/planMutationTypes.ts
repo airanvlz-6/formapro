@@ -6,7 +6,7 @@ export type OperationType =
   | 'record_completion' | 'complete_past_rest_days' | 'set_week_summary';
 
 export type MutationSource =
-  | 'weekly_orchestrator' | 'legacy_plan_tag_frontend' | 'legacy_plan_tag_backend'
+  | 'weekly_orchestrator' | 'legacy_plan_tag_frontend' | 'legacy_plan_tag_backend' | 'legacy_week_save'
   | 'direct_session_update' | 'pending_confirmation' | 'explicit_completion'
   | 'deterministic_completion' | 'coach_completion' | 'week_close' | 'week_summary';
 

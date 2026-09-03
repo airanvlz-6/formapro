@@ -1161,7 +1161,11 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
 
     // Guardar el plan completo
     console.log("ORCHESTRATOR: guardando plan completo:", JSON.stringify(planCompleto));
-    await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planCompleto}});
+    const resultadoGuardado=await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planCompleto}});
+    if(resultadoGuardado?.ok!==true){
+      cargarPlanSemanal(codigoUsuario);
+      return null;
+    }
 
     // FORGE PERSISTENCE VALIDATOR — verificar que realmente se guardo correctamente antes de confirmar exito
     console.log("ORCHESTRATOR: verificando persistencia para week_start:", planCompleto.week_start);
@@ -1169,7 +1173,11 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     console.log("ORCHESTRATOR: resultado verificacion persistencia:", JSON.stringify(validacion));
     if(!validacion?.valido){
       console.log("ORCHESTRATOR: validacion fallo, motivo:", validacion?.motivo, "— reintentando guardado...");
-      await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planCompleto}});
+      const resultadoReintento=await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planCompleto}});
+      if(resultadoReintento?.ok!==true){
+        cargarPlanSemanal(codigoUsuario);
+        return null;
+      }
       const segundaValidacion=await apiCall({action:"verificar_persistencia_plan",codigo:codigoUsuario,datos:{weekStart:planCompleto.week_start}});
       console.log("ORCHESTRATOR: resultado segunda verificacion:", JSON.stringify(segundaValidacion));
       if(!segundaValidacion?.valido){

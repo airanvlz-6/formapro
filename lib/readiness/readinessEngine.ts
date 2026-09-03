@@ -13,7 +13,14 @@ import { PuntoFisiologico, calcularBaselinePersonal, compararConBaseline, Compar
 export interface ReadinessResultado {
   score: number | null; // 0-100, o null si confianza es "insuficiente"
   estado: 'BUILDING_BASELINE' | 'EARLY_READINESS' | 'READY';
-  nivelConfianza: 'insuficiente' | 'aprendiendo' | 'estable';
+  nivelConfianza: 'insuficiente' | 'aprendiendo' | 'estable'; // basado en dias de historico (baseline)
+  // FIX: separado de nivelConfianza — dataCompleteness mide cuantas señales del DIA DE HOY estan
+  // realmente disponibles (0-100), independiente de cuantos dias de historico tenga el baseline.
+  // Un atleta con baseline "estable" (28+ dias) puede tener dataCompleteness bajo HOY si HealthKit
+  // aun no midio HRV/RHR esta mañana — son preguntas distintas: "¿confio en mi baseline?" vs
+  // "¿tengo los datos de hoy?"
+  dataCompleteness: number;
+  missingSignals: string[];
   contribuyentes: {
     hrv: ComparacionHoy | null;
     rhr: ComparacionHoy | null;
@@ -55,6 +62,7 @@ export function calcularReadiness(
   if (!hoy) {
     return {
       score: null, estado: 'BUILDING_BASELINE', nivelConfianza: 'insuficiente',
+      dataCompleteness: 0, missingSignals: ['hrv', 'rhr', 'sueno'],
       contribuyentes: { hrv: null, rhr: null, sueno: null, carga: null },
       resumenTexto: 'Necesitamos algunos días de datos para conocer tu normal.',
     };
@@ -74,6 +82,7 @@ export function calcularReadiness(
   if (confianzaMinima === 'insuficiente') {
     return {
       score: null, estado: 'BUILDING_BASELINE', nivelConfianza: 'insuficiente',
+      dataCompleteness: 0, missingSignals: ['hrv', 'rhr', 'sueno'],
       contribuyentes: { hrv: null, rhr: null, sueno: null, carga: null },
       resumenTexto: 'Necesitamos algunos días de datos para conocer tu normal.',
     };
@@ -116,10 +125,25 @@ export function calcularReadiness(
   else if (score < 50 && masDesfavorable) resumenTexto = `Tu ${masDesfavorable.metrica === 'hrv' ? 'HRV' : masDesfavorable.metrica === 'rhr' ? 'FC en reposo' : 'sueño'} está por debajo de tu normal.`;
   else if (nivelCarga === 'alta') resumenTexto = 'Vienes acumulando carga elevada en los últimos días.';
 
+  // FIX: dataCompleteness/missingSignals separado de nivelConfianza (baseline historico).
+  // Mide especificamente cuantas de las 3 señales fisiologicas del DIA DE HOY estan disponibles
+  // (peso real usado / peso total posible de esos 3 pilares), para comunicar honestamente cuando
+  // el score se calculo con datos parciales (ej: HRV/RHR ausentes hoy), sin deformar el score en
+  // si — Score y Confidence quedan como dos preguntas separadas, coherente con la arquitectura.
+  const pesoMaximoTresSeniales = PESOS.hrv + PESOS.rhr + PESOS.sueno;
+  const pesoRealUsadoTresSeniales = (compHrv ? PESOS.hrv : 0) + (compRhr ? PESOS.rhr : 0) + (compSueno ? PESOS.sueno : 0);
+  const dataCompleteness = Math.round((pesoRealUsadoTresSeniales / pesoMaximoTresSeniales) * 100);
+  const missingSignals: string[] = [];
+  if (!compHrv) missingSignals.push('hrv');
+  if (!compRhr) missingSignals.push('rhr');
+  if (!compSueno) missingSignals.push('sueno');
+
   return {
     score,
     estado,
     nivelConfianza: confianzaMinima,
+    dataCompleteness,
+    missingSignals,
     contribuyentes: {
       hrv: compHrv, rhr: compRhr, sueno: compSueno,
       carga: { valor: nivelCarga, descripcion: nivelCarga === 'alta' ? 'Carga elevada reciente' : nivelCarga === 'baja' ? 'Carga baja, buen margen' : 'Carga dentro de lo habitual' },

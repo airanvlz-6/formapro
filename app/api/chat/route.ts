@@ -4173,7 +4173,7 @@ Mensaje: "${mensaje}"
     // Layer vive aqui, en el backend, ya resuelta. 3 dimensiones independientes, nunca combinadas
     // en estados artificiales (BUILDING_BASELINE_WITH_CRITICAL_INSIGHT no existe).
     const { data: historicoTodayState } = await supabase.from("physiology_records").select("fecha,hrv,rhr,sueno").eq("user_codigo", codigo).order("fecha", { ascending: false }).limit(29);
-    const resultadoReadinessToday = calcularReadiness((historicoTodayState || []).map((r: any) => ({ fecha: r.fecha, hrv: r.hrv, rhr: r.rhr, sueno: r.sueno })), 0.5);
+    const resultadoReadinessToday = calcularReadiness((historicoTodayState || []).map((r: any) => ({ fecha: r.fecha, hrv: r.hrv, rhr: r.rhr, duracionSueno: r.sueno })), 0.5);
     const forgeStateToday = scoreAForgeState(resultadoReadinessToday.score);
 
     const hoyTodayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
@@ -4257,7 +4257,7 @@ Mensaje: "${mensaje}"
     const { data: usuarioParaCarga } = await supabase.from("usuarios").select("ciclo_actual").eq("codigo", codigo).single();
     // Estimacion simple de carga reciente: volumen_relativo del ciclo actual si existe, si no 0.5 (neutral)
     const cargaRelativaEstim = 0.5; // V1: placeholder neutral, V1.1 calculara esto real desde weekly_plan reciente
-    const resultadoReadiness = calcularReadiness((historicoParaReadiness || []).map((r: any) => ({ fecha: r.fecha, hrv: r.hrv, rhr: r.rhr, sueno: r.sueno })), cargaRelativaEstim);
+    const resultadoReadiness = calcularReadiness((historicoParaReadiness || []).map((r: any) => ({ fecha: r.fecha, hrv: r.hrv, rhr: r.rhr, duracionSueno: r.sueno })), cargaRelativaEstim);
     const forgeState = scoreAForgeState(resultadoReadiness.score);
 
     const hoyCheckinReadiness = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });

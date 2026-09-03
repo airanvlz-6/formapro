@@ -24,13 +24,13 @@ export interface ReadinessResultado {
   contribuyentes: {
     hrv: ComparacionHoy | null;
     rhr: ComparacionHoy | null;
-    sueno: ComparacionHoy | null;
+    duracionSueno: ComparacionHoy | null;
     carga: { valor: 'baja' | 'normal' | 'alta'; descripcion: string } | null;
   };
   resumenTexto: string; // frase corta explicando el porque, para mostrar en UI
 }
 
-const PESOS = { hrv: 0.30, rhr: 0.25, sueno: 0.25, carga: 0.20 };
+const PESOS = { hrv: 0.30, rhr: 0.25, duracionSueno: 0.25, carga: 0.20 };
 
 // Convierte una comparacion (desviacion Z) a una puntuacion parcial 0-100 para ese pilar.
 // Z=0 (exactamente en el baseline) = 70 puntos (neutral-bueno, no "malo por defecto").
@@ -62,15 +62,15 @@ export function calcularReadiness(
   if (!hoy) {
     return {
       score: null, estado: 'BUILDING_BASELINE', nivelConfianza: 'insuficiente',
-      dataCompleteness: 0, missingSignals: ['hrv', 'rhr', 'sueno'],
-      contribuyentes: { hrv: null, rhr: null, sueno: null, carga: null },
+      dataCompleteness: 0, missingSignals: ['hrv', 'rhr', 'duracionSueno'],
+      contribuyentes: { hrv: null, rhr: null, duracionSueno: null, carga: null },
       resumenTexto: 'Necesitamos algunos días de datos para conocer tu normal.',
     };
   }
 
   const baselineHrv = calcularBaselinePersonal(historicoSinHoy, 'hrv');
   const baselineRhr = calcularBaselinePersonal(historicoSinHoy, 'rhr');
-  const baselineSueno = calcularBaselinePersonal(historicoSinHoy, 'sueno');
+  const baselineSueno = calcularBaselinePersonal(historicoSinHoy, 'duracionSueno');
 
   const confianzaMinima = [baselineHrv, baselineRhr, baselineSueno]
     .map(b => b.confianza)
@@ -82,15 +82,15 @@ export function calcularReadiness(
   if (confianzaMinima === 'insuficiente') {
     return {
       score: null, estado: 'BUILDING_BASELINE', nivelConfianza: 'insuficiente',
-      dataCompleteness: 0, missingSignals: ['hrv', 'rhr', 'sueno'],
-      contribuyentes: { hrv: null, rhr: null, sueno: null, carga: null },
+      dataCompleteness: 0, missingSignals: ['hrv', 'rhr', 'duracionSueno'],
+      contribuyentes: { hrv: null, rhr: null, duracionSueno: null, carga: null },
       resumenTexto: 'Necesitamos algunos días de datos para conocer tu normal.',
     };
   }
 
   const compHrv = hoy.hrv !== null ? compararConBaseline(hoy.hrv, baselineHrv) : null;
   const compRhr = hoy.rhr !== null ? compararConBaseline(hoy.rhr, baselineRhr) : null;
-  const compSueno = hoy.sueno !== null ? compararConBaseline(hoy.sueno, baselineSueno) : null;
+  const compSueno = hoy.duracionSueno !== null ? compararConBaseline(hoy.duracionSueno, baselineSueno) : null;
 
   const nivelCarga: 'baja' | 'normal' | 'alta' = cargaRecienteRelativa < 0.4 ? 'baja' : cargaRecienteRelativa > 0.75 ? 'alta' : 'normal';
 
@@ -98,7 +98,7 @@ export function calcularReadiness(
   const pesosUsados: number[] = [];
   if (compHrv) { puntuaciones.push(comparacionAPuntuacion(compHrv) * PESOS.hrv); pesosUsados.push(PESOS.hrv); }
   if (compRhr) { puntuaciones.push(comparacionAPuntuacion(compRhr) * PESOS.rhr); pesosUsados.push(PESOS.rhr); }
-  if (compSueno) { puntuaciones.push(comparacionAPuntuacion(compSueno) * PESOS.sueno); pesosUsados.push(PESOS.sueno); }
+  if (compSueno) { puntuaciones.push(comparacionAPuntuacion(compSueno) * PESOS.duracionSueno); pesosUsados.push(PESOS.duracionSueno); }
   puntuaciones.push(cargaAPuntuacion(nivelCarga) * PESOS.carga);
   pesosUsados.push(PESOS.carga);
 
@@ -130,13 +130,13 @@ export function calcularReadiness(
   // (peso real usado / peso total posible de esos 3 pilares), para comunicar honestamente cuando
   // el score se calculo con datos parciales (ej: HRV/RHR ausentes hoy), sin deformar el score en
   // si — Score y Confidence quedan como dos preguntas separadas, coherente con la arquitectura.
-  const pesoMaximoTresSeniales = PESOS.hrv + PESOS.rhr + PESOS.sueno;
-  const pesoRealUsadoTresSeniales = (compHrv ? PESOS.hrv : 0) + (compRhr ? PESOS.rhr : 0) + (compSueno ? PESOS.sueno : 0);
+  const pesoMaximoTresSeniales = PESOS.hrv + PESOS.rhr + PESOS.duracionSueno;
+  const pesoRealUsadoTresSeniales = (compHrv ? PESOS.hrv : 0) + (compRhr ? PESOS.rhr : 0) + (compSueno ? PESOS.duracionSueno : 0);
   const dataCompleteness = Math.round((pesoRealUsadoTresSeniales / pesoMaximoTresSeniales) * 100);
   const missingSignals: string[] = [];
   if (!compHrv) missingSignals.push('hrv');
   if (!compRhr) missingSignals.push('rhr');
-  if (!compSueno) missingSignals.push('sueno');
+  if (!compSueno) missingSignals.push('duracionSueno');
 
   return {
     score,
@@ -145,7 +145,7 @@ export function calcularReadiness(
     dataCompleteness,
     missingSignals,
     contribuyentes: {
-      hrv: compHrv, rhr: compRhr, sueno: compSueno,
+      hrv: compHrv, rhr: compRhr, duracionSueno: compSueno,
       carga: { valor: nivelCarga, descripcion: nivelCarga === 'alta' ? 'Carga elevada reciente' : nivelCarga === 'baja' ? 'Carga baja, buen margen' : 'Carga dentro de lo habitual' },
     },
     resumenTexto,

@@ -7,11 +7,14 @@ export interface PuntoFisiologico {
   fecha: string;
   hrv: number | null;
   rhr: number | null;
-  sueno: number | null; // score 0-100 o minutos, segun la fuente real
+  // FIX SEMANTICO: renombrado de 'sueno' a 'duracionSueno' para dejar explicito que esta senal
+  // mide DURACION (horas normalizadas a score 0-100), nunca calidad de sueño real (fases,
+  // interrupciones, consistencia) — evita que se interprete como algo que no es.
+  duracionSueno: number | null; // score 0-100 derivado de duracion, NUNCA "calidad"
 }
 
 export interface BaselinePersonal {
-  metrica: 'hrv' | 'rhr' | 'sueno';
+  metrica: 'hrv' | 'rhr' | 'duracionSueno';
   media: number;
   desviacionEstandar: number;
   diasUsados: number;
@@ -19,7 +22,7 @@ export interface BaselinePersonal {
 }
 
 export interface ComparacionHoy {
-  metrica: 'hrv' | 'rhr' | 'sueno';
+  metrica: 'hrv' | 'rhr' | 'duracionSueno';
   valorHoy: number;
   baseline: BaselinePersonal;
   desviacionZ: number; // cuantas desviaciones estandar por encima/debajo del baseline
@@ -42,7 +45,7 @@ function desviacionEstandar(valores: number[], mediaValores: number): number {
  */
 export function calcularBaselinePersonal(
   registros: PuntoFisiologico[],
-  metrica: 'hrv' | 'rhr' | 'sueno',
+  metrica: 'hrv' | 'rhr' | 'duracionSueno',
   diasVentana: number = 28
 ): BaselinePersonal {
   const valores = registros
@@ -62,7 +65,7 @@ export function calcularBaselinePersonal(
 }
 
 // Para RHR, un valor MAS BAJO es favorable (invertido respecto a HRV/sueño donde mas alto es mejor)
-const METRICAS_INVERTIDAS: Array<'hrv' | 'rhr' | 'sueno'> = ['rhr'];
+const METRICAS_INVERTIDAS: Array<'hrv' | 'rhr' | 'duracionSueno'> = ['rhr'];
 
 /**
  * Compara el valor de HOY contra el baseline personal ya calculado, determinando si es

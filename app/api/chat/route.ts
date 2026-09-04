@@ -728,7 +728,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "API key not found" }, { status: 500 });
   }
 
-  const { messages, system, model, max_tokens, action, codigo, datos, email, codigoConjunto } = await req.json();
+  const { messages, system, model, max_tokens, action, codigo, datos, email, codigoConjunto, pendingId } = await req.json();
 
   // FORGE MOBILE IDENTITY BRIDGE — colocada AQUI AL PRINCIPIO (antes del rate limiting y cualquier
   // otra logica) porque esta accion no envia "codigo" en el nivel raiz del payload (solo authUserId
@@ -3179,60 +3179,120 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
 
       const accionCompleta = { week_start: weekStartProp, dia: parsed.dia, tipo: detalles.tipo, titulo: detalles.titulo, descripcion: detalles.descripcion, motivo: parsed.motivo };
       await supabase.from("pending_actions").update({ estado: "expirado" }).eq("user_codigo", codigo).eq("tipo", "modificar_sesion").eq("estado", "pendiente");
-      await supabase.from("pending_actions").insert({ user_codigo: codigo, tipo: "modificar_sesion", accion: accionCompleta, estado: "pendiente" });
+      const { data: propuestaCreada, error: errorPropuesta } = await supabase.from("pending_actions").insert({ user_codigo: codigo, tipo: "modificar_sesion", accion: accionCompleta, estado: "pendiente" }).select("id").single();
+      if (errorPropuesta || !propuestaCreada?.id) return NextResponse.json({ ok: false, error: "PENDING_CREATE_FAILED" }, { status: 500 });
 
-      return NextResponse.json({ ok: true, propuestaDetectada: true });
+      return NextResponse.json({ ok: true, propuestaDetectada: true, pendingId: propuestaCreada.id, dia: accionCompleta.dia, titulo: accionCompleta.titulo, motivo: accionCompleta.motivo });
     } catch {
       return NextResponse.json({ ok: true, propuestaDetectada: false });
     }
   }
 
   if (action === "confirmar_pending_action") {
-    // Se dispara cuando el Intent Router (no el LLM) detecta que el usuario confirmo una propuesta.
-    // Ejecuta la accion de forma deterministica, sin volver a pedirle nada al modelo.
-    const { data: pendiente } = await supabase.from("pending_actions").select("*").eq("user_codigo", codigo).eq("estado", "pendiente").order("created_at", { ascending: false }).limit(1).single();
-    if (!pendiente) return NextResponse.json({ ok: true, ejecutado: false, motivo: "no_hay_pending" });
+    const fallo = (error: string, status: number) => NextResponse.json({ ok: false, ejecutado: false, error }, { status });
+    if (typeof pendingId !== "string" || !pendingId.trim() || typeof codigo !== "string" || !codigo.trim()) {
+      return fallo("PENDING_ID_REQUIRED", 400);
+    }
+    const { data: pendiente, error: errorPending } = await supabase.from("pending_actions").select("*")
+      .eq("user_codigo", codigo).eq("id", pendingId).maybeSingle();
+    if (errorPending) return fallo("PENDING_READ_FAILED", 500);
+    if (!pendiente || pendiente.id !== pendingId || pendiente.user_codigo !== codigo) return fallo("PENDING_NOT_FOUND", 404);
+    if (pendiente.estado !== "pendiente") return fallo("PENDING_INVALID_STATE", 409);
+    if (pendiente.tipo !== "modificar_sesion") return fallo("PENDING_INVALID_TYPE", 422);
 
-    if (pendiente.tipo === "modificar_sesion") {
-      const acc = pendiente.accion;
-      const { data: planActualPending } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", acc.week_start).single();
-      if (!planActualPending) return NextResponse.json({ ok: true, ejecutado: false, motivo: "plan_no_encontrado" });
-      const normalizar = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-      const sessions = planActualPending.sessions.map((s: any) => {
-        if (normalizar(s.dia) === normalizar(acc.dia)) {
-          // FIX: siempre establecer "completada" explicitamente (nunca dejarlo undefined) para que el
-          // calculo de cierre de semana funcione correctamente. No se marca automaticamente al confirmar
-          // el cambio — se completa por reporte del usuario, igual que cualquier otra sesion.
-          // FIX: por_que tambien debe actualizarse al modificar la sesion — antes quedaba con el valor
-        // de la sesion original, mostrando una justificacion incoherente con el nuevo titulo/tipo.
-        // FIX: debilidad_relacionada tambien debe limpiarse/actualizarse al modificar la sesion — antes
-        // quedaba con el valor de la sesion original, mostrando "Trabaja: X" incoherente con el
-        // nuevo contenido (una sesion de emergencia por molestia no necesariamente trabaja la misma
-        // debilidad que la sesion planificada originalmente).
-        // FIX: por_que ahora usa el campo semanticamente correcto (la justificacion tecnica de la
-        // sesion), separado de motivo_modificacion (la causa del cambio) — antes se reutilizaba
-        // el mismo texto para ambos, perdiendo la distincion conceptual entre "por que cambio" y
-        // "por que esta sesion concreta".
-        return { ...s, tipo: acc.tipo, titulo: acc.titulo, descripcion: acc.descripcion, por_que: acc.por_que || acc.motivo || s.por_que, debilidad_relacionada: acc.debilidad_relacionada ?? null, modificado: true, motivo_modificacion: acc.motivo || "", modificado_at: new Date().toISOString(), completada: s.completada ?? false };
-        }
-        return s;
-      });
-      await supabase.from("weekly_plan").update({ sessions }).eq("user_codigo", codigo).eq("week_start", acc.week_start);
+    const esObjeto = (value: unknown): value is Record<string, any> =>
+      value !== null && typeof value === "object" && !Array.isArray(value);
+    const acc = pendiente.accion;
+    if (!esObjeto(acc) || ["week_start", "dia", "tipo", "titulo", "descripcion"].some(k => typeof acc[k] !== "string" || !acc[k].trim())
+      || (acc.por_que !== undefined && typeof acc.por_que !== "string")
+      || (acc.motivo !== undefined && typeof acc.motivo !== "string")
+      || (acc.debilidad_relacionada !== undefined && acc.debilidad_relacionada !== null && typeof acc.debilidad_relacionada !== "string")) {
+      return fallo("PENDING_INVALID_PAYLOAD", 422);
+    }
+    const evt = acc.modification_event_pendiente ?? {};
+    const camposEvento = ["trigger_type", "reason_code", "original_tipo", "original_titulo", "original_descripcion",
+      "affected_exercise", "body_area", "que_evitar"];
+    if (!esObjeto(evt) || camposEvento.some(k => evt[k] !== undefined && evt[k] !== null && typeof evt[k] !== "string")) {
+      return fallo("PENDING_INVALID_EVENT_PAYLOAD", 422);
+    }
+    const { data: planActualPending, error: errorPlan } = await supabase.from("weekly_plan").select("*")
+      .eq("user_codigo", codigo).eq("week_start", acc.week_start).maybeSingle();
+    if (errorPlan) return fallo("PLAN_READ_FAILED", 500);
+    if (!planActualPending) return fallo("PLAN_NOT_FOUND", 404);
+    if (!Array.isArray(planActualPending.sessions)) return fallo("PLAN_INVALID_SESSIONS", 422);
+    const normalizar = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const indices = planActualPending.sessions.flatMap((s: any, i: number) =>
+      typeof s?.dia === "string" && normalizar(s.dia) === normalizar(acc.dia) ? [i] : []);
+    if (indices.length !== 1) return fallo(indices.length ? "SESSION_AMBIGUOUS" : "SESSION_NOT_FOUND", 409);
+    const indice = indices[0];
+    const target = planActualPending.sessions[indice];
+    if (target.completada === true) return fallo("SESSION_COMPLETED", 409);
+    const snapshotFields = ["tipo", "titulo", "descripcion"];
+    const snapshotCompleto = snapshotFields.every(k => typeof evt[`original_${k}`] === "string" && evt[`original_${k}`].trim());
+    if (snapshotCompleto && snapshotFields.some(k => evt[`original_${k}`] !== target[k])) return fallo("PENDING_STALE", 409);
+    // Sin snapshot suficiente se conserva la admision legacy: NO garantiza vigencia ni sustituye revision/CAS.
+    const prescripcion: Extract<PlanMutationCommand, { operationType: "replace_session" }>["proposal"]["session"] = {
+      tipo: acc.tipo, titulo: acc.titulo, descripcion: acc.descripcion,
+      por_que: acc.por_que || acc.motivo || (typeof target.por_que === "string" ? target.por_que : undefined),
+      debilidad_relacionada: acc.debilidad_relacionada ?? null,
+    };
+    const sesionModificada = { ...target, ...prescripcion, modificado: true,
+      motivo_modificacion: acc.motivo || "", modificado_at: new Date().toISOString() };
+    const candidate: PlanCandidate = { ...planActualPending,
+      sessions: planActualPending.sessions.map((s: any, i: number) => i === indice ? sesionModificada : s) };
+    const command: PlanMutationCommand = { operationType: "replace_session", source: "pending_confirmation",
+      target: { userCodigo: codigo, weekStart: acc.week_start, day: target.dia },
+      proposal: { session: prescripcion, ...(acc.motivo !== undefined ? { reason: acc.motivo } : {}) },
+      confirmation: { pendingId, confirmed: true } };
+    const context: PlanMutationContext = { existingPlan: planActualPending, normalizedWeekStart: acc.week_start,
+      pending: { id: pendiente.id, status: pendiente.estado } };
+    const changeSet: PlanChangeSet = { operationType: "replace_session", affectedDays: [target.dia],
+      changedFields: [...Object.keys(prescripcion), "modificado", "motivo_modificacion", "modificado_at"]
+        .filter(k => !Object.is(target[k], sesionModificada[k])).map(k => `sessions.${indice}.${k}`) };
+    const validationResult = await validatePlanMutation({ command, context, candidate, changeSet });
+    if (validationResult.status !== "ready_for_commit") {
+      return fallo(validationResult.status === "rejected" ? "PLAN_MUTATION_REJECTED" : "PLAN_MUTATION_VALIDATION_FAILED",
+        validationResult.status === "rejected" ? 422 : 500);
+    }
+    let planGuardado = false;
+    let stage = "weekly_plan";
+    const warnings: string[] = [];
+    // Cada efecto se comprueba, pero estas operaciones NO son una transaccion.
+    const comprobarEfecto = async (etapa: string, consulta: PromiseLike<{ data: any; error: any }>) => {
+      stage = etapa;
+      const result = await consulta;
+      if (result.error || !result.data?.id) throw new Error(etapa);
+      return result.data;
+    };
+    try {
+      const { data: planPersistido, error: errorEscritura } = await supabase.from("weekly_plan").update({
+        sessions: validationResult.candidate.sessions,
+      }).eq("user_codigo", codigo).eq("week_start", acc.week_start).select("user_codigo,week_start").maybeSingle();
+      if (errorEscritura) return fallo("PLAN_WRITE_FAILED", 500);
+      if (!planPersistido || planPersistido.user_codigo !== codigo || planPersistido.week_start !== acc.week_start) {
+        return fallo("PLAN_WRITE_UNCONFIRMED", 409);
+      }
+      planGuardado = true;
       // NIVEL B — modificacion de sesion concreta, NO cuenta contra el limite de generaciones de semana,
       // pero queda auditada igual (confirmada explicitamente por el flujo de Pending Actions).
-      await supabase.from("weekly_plan_events").insert({
-        user_codigo: codigo,
-        week_start: acc.week_start,
-        nivel: "B_modificacion_sesion",
-        accion: "modificar_sesion",
-        motivo: acc.motivo || null,
-        dia_afectado: acc.dia,
-        confirmado_por_usuario: true
-      });
+      try {
+        const { error: errorAuditoria } = await supabase.from("weekly_plan_events").insert({
+          user_codigo: codigo,
+          week_start: acc.week_start,
+          nivel: "B_modificacion_sesion",
+          accion: "modificar_sesion",
+          motivo: acc.motivo || null,
+          dia_afectado: acc.dia,
+          confirmado_por_usuario: true
+        });
+        if (errorAuditoria) throw new Error("weekly_plan_events");
+      } catch {
+        warnings.push("WEEKLY_PLAN_EVENT_FAILED");
+        console.error("confirmar_pending_action: fallo de auditoria", pendingId);
+      }
 
       // FORGE MODIFICATION LEDGER — registro estructurado completo. reason_code determina
       // deterministicamente objective_impact/persistence, SIN depender de que el LLM decida esto.
-      const evt = acc.modification_event_pendiente || {};
       const REASON_TO_PERSISTENCE: Record<string, { persistence: string; objective_impact: string }> = {
         rodilla_dolor: { persistence: "active_constraint", objective_impact: "partial" },
         lesion: { persistence: "active_constraint", objective_impact: "partial" },
@@ -3246,7 +3306,7 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
       const matchReason = Object.keys(REASON_TO_PERSISTENCE).find(k => reasonKey.includes(k));
       const config = matchReason ? REASON_TO_PERSISTENCE[matchReason] : { persistence: "session", objective_impact: "preserved" };
 
-      await supabase.from("session_modification_events").insert({
+      await comprobarEfecto("session_modification_events", supabase.from("session_modification_events").insert({
         user_codigo: codigo,
         week_start: acc.week_start,
         dia: acc.dia,
@@ -3261,7 +3321,7 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
         affected_exercise: evt.affected_exercise || null,
         objective_impact: config.objective_impact,
         persistence: config.persistence,
-      });
+      }).select("id").single());
 
       // Si la persistencia es active_constraint o permanent Y hay un ejercicio afectado concreto,
       // generar automaticamente una Coaching Note para que el planificador la respete en el futuro.
@@ -3270,24 +3330,26 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
       // sistema NO debe volver a reaccionar sesion-a-sesion al mismo problema — la restriccion ya
       // gobierna toda la planificacion futura hasta que se resuelva explicitamente.
       if (config.persistence === "active_constraint" || config.persistence === "permanent") {
-        const { data: estadoActivoExistente } = await supabase.from("athlete_state_events").select("id,estado").eq("user_codigo", codigo).eq("activo", true).maybeSingle();
+        stage = "athlete_state_read";
+        const { data: estadoActivoExistente, error: errorEstado } = await supabase.from("athlete_state_events").select("id,estado").eq("user_codigo", codigo).eq("activo", true).maybeSingle();
+        if (errorEstado) throw new Error(stage);
         if (!estadoActivoExistente || estadoActivoExistente.estado === "normal") {
           if (estadoActivoExistente) {
-            await supabase.from("athlete_state_events").update({ activo: false, fecha_fin: new Date().toISOString().split('T')[0] }).eq("id", estadoActivoExistente.id);
+            await comprobarEfecto("athlete_state_deactivate", supabase.from("athlete_state_events").update({ activo: false, fecha_fin: new Date().toISOString().split('T')[0] }).eq("id", estadoActivoExistente.id).select("id").maybeSingle());
           }
           const descripcionHumana = evt.body_area
             ? `Molestia/restricción en ${evt.body_area}${evt.affected_exercise ? ` (especialmente con ${evt.affected_exercise})` : ''}. Forge evita cargas/movimientos que puedan agravarla mientras se evalúa tu evolución.`
             : evt.affected_exercise
             ? `Molestia/restricción reportada con ${evt.affected_exercise}. Evitar prescribir hasta revisión.`
             : null;
-          await supabase.from("athlete_state_events").insert({
+          await comprobarEfecto("athlete_state_insert", supabase.from("athlete_state_events").insert({
             user_codigo: codigo,
             estado: "restricted",
             motivo: evt.reason_code || "restriccion activa",
             body_area: evt.body_area || null,
             reason_description: descripcionHumana,
             activo: true
-          });
+          }).select("id").single());
           console.log("🔴 ATHLETE STATE ENGINE: atleta", codigo, "entra en estado RESTRICTED por", evt.reason_code);
         } else {
           console.log("🔴 ATHLETE STATE ENGINE: atleta", codigo, "ya estaba en estado", estadoActivoExistente.estado, "— no se duplica transicion");
@@ -3316,7 +3378,7 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
         const bodyAreaKey = (evt.body_area || "").toLowerCase();
         const prohibiciones = PERFIL_PROHIBICIONES_POR_ZONA[bodyAreaKey] || {};
 
-        await supabase.from("athlete_coaching_notes").insert({
+        await comprobarEfecto("athlete_coaching_notes", supabase.from("athlete_coaching_notes").insert({
           user_codigo: codigo,
           type: "weakness",
           domain: null,
@@ -3333,13 +3395,22 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
           prohibits_axial_load: prohibiciones.axial_load || false,
           prohibits_deep_flexion: prohibiciones.deep_flexion || false,
           prohibits_overhead_load: prohibiciones.overhead_load || false,
-        });
+        }).select("id").single());
         console.log("🛡️ MODIFICATION LEDGER: HARD CONSTRAINT creada para", identificadorRestriccion, "valida hasta", validUntilConstraint || "sin caducidad (permanente)");
       }
+      const resuelto = await comprobarEfecto("pending_resolution", supabase.from("pending_actions")
+        .update({ estado: "ejecutado", resuelto_at: new Date().toISOString() })
+        .eq("user_codigo", codigo).eq("id", pendingId).eq("estado", "pendiente")
+        .select("id,user_codigo,estado").maybeSingle());
+      if (resuelto.id !== pendingId || resuelto.user_codigo !== codigo || resuelto.estado !== "ejecutado") throw new Error("pending_resolution");
+      return NextResponse.json({ ok: true, ejecutado: true, tipo: pendiente.tipo, warnings });
+    } catch {
+      if (!planGuardado) return fallo("PLAN_WRITE_FAILED", 500);
+      // HTTP 200 entrega el resultado parcial a apiCall sin reintentar toda la confirmacion.
+      // El plan permanece guardado; no hay rollback ni garantia de idempotencia al reintentar manualmente.
+      return NextResponse.json({ ok: false, partial: true, planPersisted: true, pendingId,
+        stage, error: "PENDING_EXECUTION_PARTIAL", warnings });
     }
-
-    await supabase.from("pending_actions").update({ estado: "ejecutado", resuelto_at: new Date().toISOString() }).eq("id", pendiente.id);
-    return NextResponse.json({ ok: true, ejecutado: true, tipo: pendiente.tipo });
   }
 
   if (action === "obtener_pending_action_activo") {
@@ -3349,7 +3420,7 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
     if (!pendienteActivo || pendienteActivo.tipo !== "modificar_sesion") {
       return NextResponse.json({ hayPending: false });
     }
-    return NextResponse.json({ hayPending: true, dia: pendienteActivo.accion?.dia, titulo: pendienteActivo.accion?.titulo, motivo: pendienteActivo.accion?.motivo });
+    return NextResponse.json({ hayPending: true, pendingId: pendienteActivo.id, dia: pendienteActivo.accion?.dia, titulo: pendienteActivo.accion?.titulo, motivo: pendienteActivo.accion?.motivo });
   }
 
   if (action === "rechazar_pending_action") {

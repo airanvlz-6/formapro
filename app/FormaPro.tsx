@@ -821,8 +821,8 @@ export default function Forge() {
           }
         });
         apiCall({action:"obtener_pending_action_activo",codigo:u.codigo}).then((resPending:any)=>{
-          if(resPending?.hayPending){
-            setModificacionPendienteConfirmar({pendingId:"restaurado",dia:resPending.dia,titulo:resPending.titulo,motivo:resPending.motivo});
+          if(resPending?.hayPending && typeof resPending.pendingId==="string" && resPending.pendingId.trim()){
+            setModificacionPendienteConfirmar({pendingId:resPending.pendingId,dia:resPending.dia,titulo:resPending.titulo,motivo:resPending.motivo});
           }
         });
         if((u as any).is_beta_founder){ apiCall({action:"verificar_renovacion_beta",codigo:u.codigo}); }
@@ -1611,7 +1611,10 @@ const forgeValidator=(texto:string):string=>{
     // FORGE PENDING ACTIONS — el Coach propone un cambio, se guarda como pending. La confirmacion
     // se detecta deterministicamente (regex), NUNCA dependiendo de que el LLM genere otro tag despues.
     await procesarTag("[PROPONER_MODIFICACION:",24,async(data)=>{
-      await apiCall({action:"guardar_pending_action",codigo:codigoUsuario,datos:{tipo:"modificar_sesion",accion:data}});
+      const resPending=await apiCall({action:"guardar_pending_action",codigo:codigoUsuario,datos:{tipo:"modificar_sesion",accion:data}});
+      if(resPending?.ok && typeof resPending.pendingId==="string" && resPending.pendingId.trim()){
+        setModificacionPendienteConfirmar({pendingId:resPending.pendingId,dia:data.dia,titulo:data.titulo,motivo:data.motivo});
+      }
     });
     // FORGE MODIFICATION SAFETY NET — se ejecuta SIEMPRE tras procesar los tags normales, sin
     // bloquear la respuesta al usuario (fire-and-forget). Si el LLM anuncio un cambio de sesion
@@ -1619,7 +1622,7 @@ const forgeValidator=(texto:string):string=>{
     // de todos modos — nunca dejamos que el LLM decida silenciosamente si algo importante se registra.
     if(codigoUsuario){
       apiCall({action:"verificar_modificacion_sesion_deterministico",codigo:codigoUsuario,datos:{respuestaCoach:texto,mensajeUsuario:mensajeUsuarioOriginal}}).then((resSafety:any)=>{
-        if(resSafety?.detectado){
+        if(resSafety?.detectado && typeof resSafety.pendingId==="string" && resSafety.pendingId.trim()){
           console.log("🛡️ Safety net: modificacion detectada y registrada automaticamente");
           setModificacionPendienteConfirmar({pendingId:resSafety.pendingId,dia:resSafety.dia,titulo:resSafety.titulo,motivo:resSafety.motivo});
         }
@@ -1945,10 +1948,15 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
           setTimeout(dispararGeneracion, 2500);
         }
         return;
-      } else if(esConfirmacionSimple && codigoUsuario){
-        apiCall({action:"confirmar_pending_action",codigo:codigoUsuario}).then((resPending:any)=>{
-          if(resPending?.ejecutado){
+      } else if(esConfirmacionSimple && codigoUsuario && typeof modificacionPendienteConfirmar?.pendingId==="string" && modificacionPendienteConfirmar.pendingId.trim()){
+        const pendingConfirmado=modificacionPendienteConfirmar.pendingId;
+        apiCall({action:"confirmar_pending_action",codigo:codigoUsuario,pendingId:modificacionPendienteConfirmar.pendingId}).then((resPending:any)=>{
+          if((resPending?.ok && resPending.ejecutado) || resPending?.partial){
             cargarPlanSemanal(codigoUsuario);
+            setModificacionPendienteConfirmar(actual=>actual?.pendingId===pendingConfirmado?null:actual);
+          }
+          if(resPending?.partial){
+            setMensajes(prev=>[...prev,{role:"assistant",content:"⚠️ El plan se guardó, pero no se completaron todos los registros del cambio. No repitas la confirmación; requiere revisión."}]);
           }
         });
       }
@@ -2074,7 +2082,11 @@ const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:build
       // FORGE PROPOSAL PARSER — Nivel 1 deterministico: detecta si el Coach acaba de proponer un
       // cambio de sesion, sin depender de ningun tag. Se ejecuta en cada respuesta, en segundo plano.
       if(codigoUsuario && typeof texto==="string"){
-        apiCall({action:"detectar_propuesta_sesion",codigo:codigoUsuario,datos:{mensajeUsuario:texto,respuestaCoach:respText}});
+        apiCall({action:"detectar_propuesta_sesion",codigo:codigoUsuario,datos:{mensajeUsuario:texto,respuestaCoach:respText}}).then((resPropuesta:any)=>{
+          if(resPropuesta?.ok && resPropuesta.propuestaDetectada && typeof resPropuesta.pendingId==="string" && resPropuesta.pendingId.trim()){
+            setModificacionPendienteConfirmar({pendingId:resPropuesta.pendingId,dia:resPropuesta.dia,titulo:resPropuesta.titulo,motivo:resPropuesta.motivo});
+          }
+        });
       }
       const histFinal=hist.length>=20?hist.slice(-10):hist;
       setHistorial(histFinal);
@@ -3367,12 +3379,20 @@ ${testStr}`}]});
                 <p style={{color:"#fff",fontSize:11.5,opacity:0.85,marginBottom:12}}>{modificacionPendienteConfirmar.motivo}</p>
                 <div style={{display:"flex",gap:8}}>
                   <button onClick={async()=>{
-                    const res=await apiCall({action:"confirmar_pending_action",codigo:codigoUsuario});
-                    if(res?.ejecutado){
+                    if(typeof modificacionPendienteConfirmar.pendingId!=="string" || !modificacionPendienteConfirmar.pendingId.trim()) return;
+                    const pendingConfirmado=modificacionPendienteConfirmar.pendingId;
+                    const res=await apiCall({action:"confirmar_pending_action",codigo:codigoUsuario,pendingId:modificacionPendienteConfirmar.pendingId});
+                    if(res?.ok && res.ejecutado){
                       setMensajes(prev=>[...prev,{role:"assistant",content:"✅ Sesión actualizada correctamente en Mi Plan."}]);
                       cargarPlanSemanal(codigoUsuario);
                     }
-                    setModificacionPendienteConfirmar(null);
+                    if(res?.partial){
+                      cargarPlanSemanal(codigoUsuario);
+                      setMensajes(prev=>[...prev,{role:"assistant",content:"⚠️ El plan se guardó, pero no se completaron todos los registros del cambio. No repitas la confirmación; requiere revisión."}]);
+                    } else if(!res?.ok){
+                      setMensajes(prev=>[...prev,{role:"assistant",content:"No se pudo confirmar el cambio de sesión. Revisa la propuesta antes de continuar."}]);
+                    }
+                    setModificacionPendienteConfirmar(actual=>actual?.pendingId===pendingConfirmado?null:actual);
                   }} style={{flex:1,background:"#fff",color:"#CC5500",border:"none",borderRadius:100,padding:"10px 16px",fontSize:13,fontWeight:700,cursor:"pointer"}}>
                     Sí, confirmar cambio
                   </button>

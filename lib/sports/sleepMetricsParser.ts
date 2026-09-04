@@ -7,7 +7,7 @@ export interface ParsedSleepMetrics {
   detected: boolean;
   hrv: number | null;
   sueno: number | null; // puntuacion 0-100
-  rhr: number | null; // frecuencia cardiaca reposo/media
+  rhr: number | null; // frecuencia cardiaca de reposo explícita
   duracionHoras: number | null;
   valoresSospechosos?: { hrv: number | null; sueno: number | null; rhr: number | null };
 }
@@ -31,9 +31,9 @@ export function parseSleepMetrics(mensaje: string): ParsedSleepMetrics {
   // Puntuacion de sueño (0-100), evitando confundir con HRV/FC — exige contexto "puntuacion"/"score"
   const matchSueno = mensaje.match(/puntuaci[oó]n\s*(?:del?\s*)?sue[nñ]o\s*(?:de)?\s*(\d{1,3})\s*(?:puntos?)?/i);
 
-  // Frecuencia cardiaca (media o reposo) — evita capturar "frecuencia minima" como RHR
-  const matchRhr = mensaje.match(/frecuencia\s*card[ií]aca\s*media\s*(\d{2,3})\s*(?:ppm|bpm)?/i)
-    || mensaje.match(/fc\s*(?:media|reposo)\s*(\d{2,3})/i);
+  // Solo reposo explícito: una media nocturna no es resting HR.
+  const matchRhr = mensaje.match(/frecuencia\s*card[ií]aca\s*(?:en\s*)?reposo\s*(\d{2,3})\s*(?:ppm|bpm)?/i)
+    || mensaje.match(/fc\s*(?:en\s*)?reposo\s*(\d{2,3})/i);
 
   // Duracion: "5h 41min" o "5 horas 41 minutos" -> decimal
   const matchDuracion = mensaje.match(/duraci[oó]n\s*(?:del?\s*)?sue[nñ]o\s*:?\s*(\d{1,2})\s*h(?:oras?)?\s*(\d{1,2})?\s*m(?:in(?:utos?)?)?/i);

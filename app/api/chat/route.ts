@@ -1,3 +1,5 @@
+import { writePhysiology, stripGenericPhysiology, contextualPhysiology, type PhysiologyResult } from "@/lib/physiology/authority";
+import { manualPatch, conversationalPatch, historicalPatch, imagePatch, healthKitPatch, physiologyToday, latestUserText } from "@/lib/physiology/adapters";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { render } from "@react-email/render";
@@ -1399,6 +1401,13 @@ if (action === "verificar_cambio_modo") {
   return NextResponse.json({data});
 }
   if (action === "actualizar_usuario") {
+    let physiologyResult: PhysiologyResult | undefined;
+    const physiologyContext = stripGenericPhysiology(datos);
+    if (Object.keys(physiologyContext).length) {
+      const read = await supabase.from("usuarios").select("estado_fisiologico").eq("codigo", codigo).single();
+      if (read.error || !read.data) return NextResponse.json({ ok: false, error: "db_error" }, { status: 500 });
+      datos.estado_fisiologico = { ...(read.data.estado_fisiologico || {}), ...physiologyContext };
+    }
     // Limitar historial a máximo 15 mensajes antes de guardar
     if (datos.historial && Array.isArray(datos.historial)) {
       // Eliminar imágenes del historial antes de guardar
@@ -1523,24 +1532,19 @@ ${ultimos}`;
 
 // FORGE EXTRACTION VALIDATOR — el LLM propone, el backend verifica antes de persistir.
         extracted = validateExtraction(extracted, soloUsuario);
-        if (extracted.estado_fisiologico && Object.values(extracted.estado_fisiologico).some(v => v !== null && typeof v !== 'object')) {
-          const estadoActual = usuarioData?.estado_fisiologico || {};
-          const hoy = new Date().toLocaleDateString('en-CA', {timeZone: 'Europe/Madrid'});
-          const valoresSimples = Object.fromEntries(
-            Object.entries(extracted.estado_fisiologico).filter(([k,v]) => 
-              v !== null && typeof v === 'number' && ['hrv','sueno','rhr','fatiga_aguda'].includes(k)
-            )
-          );
-          if(Object.keys(valoresSimples).length > 0){
-            const { error: errorUpsertFisio } = await supabase.from("physiology_records").upsert({
-              user_codigo: codigo,
-              fecha: hoy,
-              ...valoresSimples,
-              updated_at: new Date().toISOString()
-            }, { onConflict: "user_codigo,fecha" });
-            if (errorUpsertFisio) console.error("Error upsert physiology_records:", errorUpsertFisio);
-
-            updates.estado_fisiologico = { ...estadoActual, ...valoresSimples };
+        if (extracted.estado_fisiologico) {
+          const text = latestUserText(datos.historial);
+          const patch = conversationalPatch(text, extracted.estado_fisiologico);
+          if (Object.keys(patch).length) {
+            physiologyResult = await writePhysiology(supabase, { operation: "observe", userCodigo: codigo,
+              fecha: physiologyToday(), source: "llm_conversation_extraction", patch });
+          }
+          const context = contextualPhysiology(extracted.estado_fisiologico);
+          if (Object.keys(context).length) {
+            // Re-read after the canonical mirror; never merge the pre-admission snapshot.
+            const fresh = await supabase.from("usuarios").select("estado_fisiologico").eq("codigo", codigo).single();
+            if (fresh.error || !fresh.data) return NextResponse.json({ ok: false, error: "partial_legacy_failure", physiology: physiologyResult });
+            updates.estado_fisiologico = { ...(fresh.data.estado_fisiologico || {}), ...context };
           }
         }
 
@@ -1705,21 +1709,27 @@ ${ultimos}`;
           delete updates.ciclo_actual;
         }
         if (Object.keys(updates).length > 0) {
-          await supabase.from("usuarios").update(updates).eq("codigo", codigo);
+          if (updates.estado_fisiologico) {
+            const savedContext = await supabase.from("usuarios").update(updates).eq("codigo", codigo).select("codigo");
+            if (savedContext.error || savedContext.data?.length !== 1)
+              return NextResponse.json({ ok: false, error: "partial_legacy_failure", physiology: physiologyResult });
+          } else {
+            await supabase.from("usuarios").update(updates).eq("codigo", codigo);
+          }
         }
         // Marcar el evento como ya extraido, iniciando ventana de correccion de 3 minutos
         await marcarEventoComoExtraido(supabase, apiKey!, codigo, true);
         // FORGE CARDS — si se detecto un nuevo PR o un hito de racha, lo devolvemos para que el
         // frontend ofrezca generar la tarjeta compartible inmediatamente despues de reportar.
         if (nuevoPrDetectado || rachaDetectada || objetivoConseguidoDetectado) {
-          return NextResponse.json({ ok: true, nuevoPrDetectado, rachaDetectada, objetivoConseguidoDetectado });
+          return NextResponse.json({ ok: physiologyResult?.ok ?? true, physiology: physiologyResult, error: physiologyResult?.error, nuevoPrDetectado, rachaDetectada, objetivoConseguidoDetectado });
         }
       } catch (e) {
         console.error("Error extraccion servidor:", e);
       }
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: physiologyResult?.ok ?? true, error: physiologyResult?.error, physiology: physiologyResult });
   }
 
   if (action === "crear_equipo") {
@@ -1949,27 +1959,16 @@ ${ultimos}`;
   }
 
   if (action === "registrar_metrica_pasada") {
-    const { fecha: fechaRaw, hrv, sueno, rhr } = datos;
-    // Normalizar fecha a formato YYYY-MM-DD sin importar si viene con hora/timezone
-    const fecha = String(fechaRaw).split('T')[0];
-    const { data: usuarioFresh } = await supabase.from("usuarios").select("historial_fisiologico").eq("codigo", codigo).single();
-    const historialActual = usuarioFresh?.historial_fisiologico || [];
-    // Normalizar también las fechas existentes al comparar, y actualizar si ya existe en vez de solo bloquear
-    const idxExistente = historialActual.findIndex((e:any) => String(e.fecha).split('T')[0] === fecha);
-    const nuevaEntrada:any = { fecha };
-    if(hrv) nuevaEntrada.hrv = hrv;
-    if(sueno) nuevaEntrada.sueno = sueno;
-    if(rhr) nuevaEntrada.rhr = rhr;
-    let historialActualizado;
-    if(idxExistente >= 0){
-      historialActualizado = [...historialActual];
-      historialActualizado[idxExistente] = { ...historialActual[idxExistente], ...nuevaEntrada, fecha };
-    } else {
-      historialActualizado = [...historialActual, nuevaEntrada];
+    let evidence = typeof datos.mensajeUsuario === "string" ? datos.mensajeUsuario : "";
+    if (!evidence) {
+      const read = await supabase.from("usuarios").select("historial").eq("codigo", codigo).single();
+      if (read.error || !read.data) return NextResponse.json({ ok: false, error: "db_error" }, { status: 500 });
+      evidence = latestUserText(read.data.historial);
     }
-    historialActualizado = historialActualizado.sort((a,b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()).slice(-30);
-    await supabase.from("usuarios").update({ historial_fisiologico: historialActualizado }).eq("codigo", codigo);
-    return NextResponse.json({ ok: true });
+    const patch = historicalPatch(datos, evidence);
+    const physiology = await writePhysiology(supabase, { operation: "observe", userCodigo: codigo,
+      fecha: datos.fecha, source: "llm_conversation_extraction", patch });
+    return NextResponse.json({ ...physiology, physiology });
   }
 
   if (action === "borrar_ultima_sesion") {
@@ -3479,6 +3478,7 @@ Extrae SOLO los datos fisiologicos de sueño/recuperacion que veas CLARAMENTE vi
 Responde SOLO con este JSON, sin texto adicional ni markdown:
 {"hrv":numero_o_null,"hrv_confianza":0.0_a_1.0,"sueno":numero_puntuacion_0_a_100_o_null,"sueno_confianza":0.0_a_1.0,"rhr":numero_o_null,"rhr_confianza":0.0_a_1.0,"duracion_horas":numero_decimal_o_null,"duracion_confianza":0.0_a_1.0}
 
+Incluye además "hrv_unit":"ms|unknown", "rhr_kind":"resting|minimum|average|unknown", "sueno_scale":100_o_null. Solo usa resting si la imagen etiqueta explícitamente FC en reposo; no mínima ni media nocturna. Solo usa ms y escala 100 si son inequívocos.
 Si un dato no es visible o no estas seguro, pon el valor en null y confianza 0. NUNCA inventes un numero que no veas claramente en la imagen.`;
 
     try {
@@ -3518,33 +3518,17 @@ Si un dato no es visible o no estas seguro, pon el valor en null y confianza 0. 
       if (extraido.rhr !== null && extraido.rhr_confianza >= UMBRAL_CONFIANZA) camposAltaCorfianza.rhr = extraido.rhr;
       else if (extraido.rhr !== null) camposBajaConfianza.rhr = extraido.rhr;
 
-      // Auto-guardar SOLO los campos de alta confianza
-      if (Object.keys(camposAltaCorfianza).length > 0) {
-        const hoyImagen = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
-        await supabase.from("physiology_records").upsert({
-          user_codigo: codigo,
-          fecha: hoyImagen,
-          ...camposAltaCorfianza,
-          source: "vision_extractor",
-          updated_at: new Date().toISOString()
-        }, { onConflict: "user_codigo,fecha" });
-
-        const { data: usuarioVision } = await supabase.from("usuarios").select("estado_fisiologico").eq("codigo", codigo).single();
-        await supabase.from("usuarios").update({
-          estado_fisiologico: { ...(usuarioVision?.estado_fisiologico || {}), ...camposAltaCorfianza }
-        }).eq("codigo", codigo);
-      }
-
+      const physiology = await writePhysiology(supabase, { operation: "observe", userCodigo: codigo,
+        fecha: physiologyToday(), source: "llm_vision_extraction", patch: imagePatch(extraido) });
       return NextResponse.json({
-        ok: true,
-        extraido: true,
-        guardadoAutomatico: camposAltaCorfianza,
+        ok: physiology.ok, error: physiology.error, extraido: true, physiology,
+        guardadoAutomatico: physiology.legacyValues,
         pendienteConfirmacion: camposBajaConfianza,
         duracionHoras: extraido.duracion_horas
       });
     } catch (err: any) {
       console.error("Error en extraccion visual:", err);
-      return NextResponse.json({ ok: true, extraido: false });
+      return NextResponse.json({ ok: false, extraido: false, error: "db_error" });
     }
   }
 
@@ -4334,42 +4318,23 @@ Mensaje: "${mensaje}"
     // fallo ya resuelto con PR Detection y Pending Actions. El LLM nunca decide si se guarda un
     // dato fisiologico critico — este parser lo hace de forma directa y auditable.
     const { mensaje } = datos;
-    const parsedSueno = parseSleepMetrics(mensaje);
-    if (!parsedSueno.detected) {
+    const parsedSueno = parseSleepMetrics(typeof mensaje === "string" ? mensaje : "");
+    const patch = manualPatch(mensaje);
+    if (!parsedSueno.detected && !Object.keys(patch).length) {
       return NextResponse.json({ ok: true, detectado: false });
     }
 
-    const hoySueno = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
-    const valoresGuardar: any = {};
-    if (parsedSueno.hrv !== null) valoresGuardar.hrv = parsedSueno.hrv;
-    if (parsedSueno.sueno !== null) valoresGuardar.sueno = parsedSueno.sueno;
-    if (parsedSueno.rhr !== null) valoresGuardar.rhr = parsedSueno.rhr;
-
-    if (Object.keys(valoresGuardar).length > 0) {
-      const { error: errorUpsertSuenoDet } = await supabase.from("physiology_records").upsert({
-        user_codigo: codigo,
-        fecha: hoySueno,
-        ...valoresGuardar,
-        source: "manual_parser",
-        updated_at: new Date().toISOString()
-      }, { onConflict: "user_codigo,fecha" });
-      if (errorUpsertSuenoDet) {
-        console.error("Error guardando metricas de sueño deterministicas:", errorUpsertSuenoDet);
-        return NextResponse.json({ ok: true, detectado: true, guardado: false });
-      }
-      // Actualizar tambien el snapshot rapido en usuarios.estado_fisiologico (consistencia con el resto del sistema)
-      const { data: usuarioSuenoDet } = await supabase.from("usuarios").select("estado_fisiologico").eq("codigo", codigo).single();
-      await supabase.from("usuarios").update({
-        estado_fisiologico: { ...(usuarioSuenoDet?.estado_fisiologico || {}), ...valoresGuardar }
-      }).eq("codigo", codigo);
-    }
+    const hoySueno = physiologyToday();
+    const physiology = await writePhysiology(supabase, { operation: "observe", userCodigo: codigo,
+      fecha: hoySueno, source: "deterministic_extraction", patch });
+    const valoresGuardar = physiology.legacyValues;
 
     // FIX: si hubo valores descartados por estar fuera de rango fisiologico razonable, informar
     // al frontend para que pueda preguntar explicitamente al usuario en vez de guardar silenciosamente
     // o simplemente perder el dato sin decir nada — bug real confirmado: "888ms" de HRV se persistio
     // sin ninguna alerta porque no existia validacion de rango.
     const haySospechosos = parsedSueno.valoresSospechosos && Object.values(parsedSueno.valoresSospechosos).some(v => v !== null);
-    return NextResponse.json({ ok: true, detectado: true, guardado: Object.keys(valoresGuardar).length > 0, valores: valoresGuardar, fecha: hoySueno, valoresSospechosos: haySospechosos ? parsedSueno.valoresSospechosos : null });
+    return NextResponse.json({ ok: physiology.ok, error: physiology.error, physiology, detectado: true, guardado: physiology.ok && physiology.results.some(r => "status" in r && ["accepted", "no_op"].includes(r.status)), valores: valoresGuardar, fecha: hoySueno, valoresSospechosos: haySospechosos ? parsedSueno.valoresSospechosos : null });
   }
 
   if (action === "verificar_pr_deterministico") {
@@ -5494,35 +5459,12 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
   }
 
   if (action === "sincronizar_healthkit_real") {
-    // FORGE HEALTHKIT SYNC — conecta los datos REALES de HealthKit (leidos automaticamente por
-    // el hook useForgeHealthKit) con physiology_records, la tabla que alimenta el Readiness Engine.
-    // Antes estaban desconectados: HealthKit mostraba datos reales en pantalla, pero
-    // physiology_records solo se llenaba si el usuario lo mencionaba manualmente en el chat.
-    const { hrv, rhr, suenoHoras } = datos;
-    const hoySync = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
-
-    // Convertir sueño de horas reales a score 0-100 (coherente con la escala ya usada en
-    // physiology_records) — 8h se considera referencia de score 100, escala lineal simple V1
-    const suenoScore = suenoHoras !== null && suenoHoras !== undefined ? Math.round(Math.min(100, (suenoHoras / 8) * 100)) : null;
-
-    const { data: registroExistente } = await supabase.from("physiology_records").select("id,hrv,rhr,sueno").eq("user_codigo", codigo).eq("fecha", hoySync).maybeSingle();
-
-    const actualizacionSync: any = {};
-    // Solo actualiza los campos que HealthKit realmente trae — nunca sobreescribe con null
-    // un valor que ya existiera (ej: si el usuario ya lo conto manualmente antes)
-    if (hrv !== null && hrv !== undefined) actualizacionSync.hrv = Math.round(hrv);
-    if (rhr !== null && rhr !== undefined) actualizacionSync.rhr = Math.round(rhr);
-    if (suenoScore !== null) actualizacionSync.sueno = suenoScore;
-
-    if (Object.keys(actualizacionSync).length === 0) return NextResponse.json({ ok: true, sincronizado: false });
-
-    if (registroExistente) {
-      await supabase.from("physiology_records").update(actualizacionSync).eq("id", registroExistente.id);
-    } else {
-      await supabase.from("physiology_records").insert({ user_codigo: codigo, fecha: hoySync, ...actualizacionSync });
-    }
-    console.log(`🍎 HEALTHKIT SYNC: ${codigo} — ${JSON.stringify(actualizacionSync)}`);
-    return NextResponse.json({ ok: true, sincronizado: true });
+    // The available contract supplies today's aggregate, not the wearable's measurement date.
+    const physiology = await writePhysiology(supabase, { operation: "observe", userCodigo: codigo,
+      fecha: physiologyToday(), source: "device_measurement", patch: healthKitPatch(datos) });
+    return NextResponse.json({ ok: physiology.ok, error: physiology.error, physiology,
+      sincronizado: physiology.ok && physiology.results.some(r => "status" in r && ["accepted", "no_op"].includes(r.status)),
+      unsupportedSignals: ["hrv_unit_unverified", "rhr_semantics_unverified"] });
   }
 
   if (action === "guardar_feedback_app") {

@@ -1,4 +1,5 @@
 'use client';
+import { contextualPhysiology } from "@/lib/physiology/authority";
 import { useState, useRef, useEffect } from "react";
 import { aplicarTodasLasReglas } from "@/lib/validators/scientificRules";
 import { validarIntegridadSemana, validarBlueprintDisponibilidad, validateBlueprint } from "@/lib/validators/weekIntegrityValidator";
@@ -1663,7 +1664,7 @@ const forgeValidator=(texto:string):string=>{
       }
     });
     await procesarTag("[METRICA:",9,async(data)=>{
-      await apiCall({action:"registrar_metrica_pasada",codigo:codigoUsuario,datos:data});
+      await apiCall({action:"registrar_metrica_pasada",codigo:codigoUsuario,datos:{...data,mensajeUsuario:mensajeUsuarioOriginal}});
     });
     await procesarTag("[BORRAR_SESION:",15,async(data)=>{
       await apiCall({action:"borrar_sesion_fecha",codigo:codigoUsuario,datos:data});
@@ -2189,9 +2190,10 @@ Extrae SOLO lo que puedas determinar con certeza. Responde SOLO con este JSON:
               try{
                 const estadoExtra=typeof datos.estado_fisiologico==="string"?JSON.parse(datos.estado_fisiologico):datos.estado_fisiologico;
                 if(typeof estadoExtra==="object"&&estadoExtra!==null){
-                  const nuevoEstado={...estadoFisiologico,...Object.fromEntries(Object.entries(estadoExtra).filter(([,v])=>v!==null))};
+                  const subjectiveContext=contextualPhysiology(estadoExtra);
+                  const nuevoEstado={...estadoFisiologico,...subjectiveContext};
                   setEstadoFisiologico(nuevoEstado);
-                  nuevaMemoria.estado_fisiologico=nuevoEstado;
+                  nuevaMemoria.estado_fisiologico=subjectiveContext;
                 }
               }catch{}
             }

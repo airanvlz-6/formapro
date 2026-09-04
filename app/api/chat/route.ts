@@ -5265,7 +5265,32 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
   }
 
   if (action === "actualizar_sesion_plan") {
+    const esObjetoPatch = (valor: unknown): valor is Record<string, unknown> =>
+      valor !== null && typeof valor === "object" && !Array.isArray(valor)
+      && (Object.getPrototypeOf(valor) === Object.prototype || Object.getPrototypeOf(valor) === null);
+    if (!esObjetoPatch(datos)) return NextResponse.json({ error: "Payload invalido" }, { status: 400 });
     const { dia, cambios, motivo, confidence } = datos;
+    if (typeof dia !== "string" || !dia.trim() || !esObjetoPatch(cambios)
+      || (motivo !== undefined && typeof motivo !== "string")
+      || (confidence !== undefined && confidence !== null
+        && (typeof confidence !== "number" || !Number.isFinite(confidence)))) {
+      return NextResponse.json({ error: "Patch de prescripcion invalido" }, { status: 400 });
+    }
+    const camposPrescripcion = ["tipo", "titulo", "descripcion", "por_que", "debilidad_relacionada"] as const;
+    const clavesCambios = Object.keys(cambios);
+    if (!clavesCambios.length || clavesCambios.some(campo =>
+      !camposPrescripcion.some(permitido => permitido === campo)
+      || (typeof cambios[campo] !== "string" && !(campo === "debilidad_relacionada" && cambios[campo] === null)))) {
+      return NextResponse.json({ error: "Campos de prescripcion no permitidos o invalidos" }, { status: 400 });
+    }
+    type CambiosPrescripcion = Extract<PlanMutationCommand, { operationType: "patch_session" }>["proposal"]["changes"];
+    const cambiosPrescripcion: { -readonly [K in keyof CambiosPrescripcion]: CambiosPrescripcion[K] } = {};
+    for (const campo of camposPrescripcion) {
+      if (Object.prototype.hasOwnProperty.call(cambios, campo)) {
+        if (campo === "debilidad_relacionada") cambiosPrescripcion[campo] = cambios[campo] as string | null;
+        else cambiosPrescripcion[campo] = cambios[campo] as string;
+      }
+    }
     // CORRECCIÓN DE RAÍZ: ignorar el week_start que envió el modelo (puede estar mal calculado)
     // y usar siempre el de la semana actual real, igual que hacemos en guardar_plan_semana.
     const ahoraMod = new Date();
@@ -5276,19 +5301,58 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
     lunesMod.setDate(hoyModFecha.getDate() - diaSemanaMod + 1);
     const week_start = lunesMod.toISOString().split('T')[0];
 
-    const { data: planActual } = await supabase.from("weekly_plan").select("sessions,confidence").eq("user_codigo", codigo).eq("week_start", week_start).single();
+    const { data: planActual, error: errorLectura } = await supabase.from("weekly_plan").select("*").eq("user_codigo", codigo).eq("week_start", week_start).maybeSingle();
+    if (errorLectura) return NextResponse.json({ error: errorLectura.message }, { status: 500 });
     if (!planActual) return NextResponse.json({ error: "Plan no encontrado para la semana actual", week_start_usado: week_start }, { status: 404 });
-    const sessions = planActual.sessions.map((s: any) => {
-      if (s.dia === dia) {
-        return { ...s, ...cambios, modificado: true, motivo_modificacion: motivo || "", modificado_at: new Date().toISOString() };
-      }
-      return s;
-    });
-    const updates: any = { sessions, updated_at: new Date().toISOString() };
-    if (confidence !== undefined && confidence !== null) {
-      updates.confidence = Math.max(0, Math.min(100, confidence));
+    if (!Array.isArray(planActual.sessions)) return NextResponse.json({ error: "Plan existente invalido" }, { status: 422 });
+    const coincidencias = planActual.sessions.filter((s: any) => s?.dia === dia);
+    if (!coincidencias.length) return NextResponse.json({ error: "Sesion no encontrada" }, { status: 404 });
+    if (coincidencias.length !== 1) return NextResponse.json({ error: "Dia duplicado en el plan" }, { status: 409 });
+    const sesionDestino = coincidencias[0];
+    if (sesionDestino.completada === true) return NextResponse.json({ error: "No se puede modificar una sesion completada" }, { status: 409 });
+    const camposEfectivos = clavesCambios.filter(campo => !Object.is(sesionDestino[campo], cambios[campo]));
+    if (!camposEfectivos.length) return NextResponse.json({ error: "El patch no cambia la prescripcion" }, { status: 400 });
+
+    const modificadoAt = new Date().toISOString();
+    const sesionModificada = { ...sesionDestino, ...cambiosPrescripcion,
+      modificado: true, motivo_modificacion: motivo || "", modificado_at: modificadoAt };
+    const confidenceFinal = typeof confidence === "number" ? Math.max(0, Math.min(100, confidence)) : undefined;
+    const candidate: PlanCandidate = {
+      ...planActual,
+      sessions: planActual.sessions.map((s: any) => s === sesionDestino ? sesionModificada : s),
+      updated_at: modificadoAt,
+      ...(confidenceFinal !== undefined ? { confidence: confidenceFinal } : {}),
+    };
+    const command: PlanMutationCommand = {
+      source: "direct_session_update", operationType: "patch_session",
+      target: { userCodigo: codigo, weekStart: week_start, day: dia },
+      proposal: { changes: cambiosPrescripcion, ...(motivo !== undefined ? { reason: motivo } : {}),
+        ...(confidenceFinal !== undefined ? { confidence: confidenceFinal } : {}) },
+    };
+    const context: PlanMutationContext = { existingPlan: planActual, normalizedWeekStart: week_start };
+    const camposSesionCambiados = [...camposEfectivos, ...["modificado", "motivo_modificacion", "modificado_at"]
+      .filter(campo => !Object.is(sesionDestino[campo], sesionModificada[campo]))];
+    const changeSet: PlanChangeSet = {
+      operationType: "patch_session", affectedDays: [dia],
+      changedFields: [...camposSesionCambiados.map(campo => `sessions.${planActual.sessions.indexOf(sesionDestino)}.${campo}`),
+        ...["updated_at", "confidence"].filter(campo => !Object.is(planActual[campo], candidate[campo]))],
+    };
+    const validationResult = await validatePlanMutation({ command, context, candidate, changeSet });
+    if (validationResult.status !== "ready_for_commit") {
+      return NextResponse.json({ error: "Patch no validado", blocked: true,
+        reason: validationResult.status === "rejected" ? "PLAN_MUTATION_REJECTED" : "PLAN_MUTATION_VALIDATION_FAILED",
+        violaciones: validationResult.violations }, { status: validationResult.status === "rejected" ? 422 : 500 });
     }
-    await supabase.from("weekly_plan").update(updates).eq("user_codigo", codigo).eq("week_start", week_start);
+    const { data: planPersistido, error: errorEscritura } = await supabase.from("weekly_plan").update({
+      sessions: validationResult.candidate.sessions,
+      updated_at: validationResult.candidate.updated_at,
+      ...(Object.prototype.hasOwnProperty.call(validationResult.candidate, "confidence")
+        ? { confidence: validationResult.candidate.confidence } : {}),
+    }).eq("user_codigo", codigo).eq("week_start", week_start).select("user_codigo,week_start").maybeSingle();
+    if (errorEscritura) return NextResponse.json({ error: errorEscritura.message }, { status: 500 });
+    if (!planPersistido || planPersistido.user_codigo !== codigo || planPersistido.week_start !== week_start) {
+      return NextResponse.json({ error: "No se pudo confirmar la fila actualizada" }, { status: 409 });
+    }
     return NextResponse.json({ ok: true });
   }
 

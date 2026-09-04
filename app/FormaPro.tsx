@@ -1865,8 +1865,11 @@ const forgeValidator=(texto:string):string=>{
       // directamente y guarda el reporte de entreno de forma determinista.
       if(codigoUsuario && texto.trim().length>=10){
         apiCall({action:"verificar_sesion_completada_deterministico",codigo:codigoUsuario,datos:{mensaje:texto}}).then((resSesionDet:any)=>{
-          if(resSesionDet?.detectado){
-            console.log("🛡️ Session safety net: entreno detectado y registrado automaticamente");
+          if(resSesionDet?.partial){
+            setMensajes(prev=>[...prev,{role:"assistant",content:"⚠️ Entrenamiento guardado en el historial, pero no se pudo confirmar el cambio en Mi Plan. No repitas el registro automáticamente; requiere revisión."}]);
+          } else if(resSesionDet?.detectado && resSesionDet.ok){
+            if(resSesionDet.planCompleted) cargarPlanSemanal(codigoUsuario);
+            console.log("Session safety net:",resSesionDet.status);
           }
         });
         // FORGE FOCUS — detecta reportes de carga externa (disciplina que Forge NO gestiona) y los
@@ -3575,8 +3578,26 @@ ${testStr}`}]});
                   <div style={{display:"flex",gap:6}}>
                     <button onClick={async()=>{
                       const res=await apiCall({action:"registrar_sesion",codigo:codigoUsuario,datos:{sesion:sesionPendiente}});
-                      await apiCall({action:"marcar_sesion_completada",codigo:codigoUsuario,datos:{fecha:sesionPendiente.fecha,sesion:sesionPendiente}});
-                      cargarPlanSemanal(codigoUsuario);
+                      if(!res?.ok || !res.historyRecorded){
+                        setMensajes(prev=>[...prev,{role:"assistant",content:res?.historyRecorded
+                          ? "⚠️ El historial se guardó parcialmente. No se ha solicitado completar el plan; requiere revisión."
+                          : "No se pudo confirmar el registro del entrenamiento. No se ha solicitado completar el plan."}]);
+                        if(res?.historyRecorded) setSesionPendiente(null);
+                        return;
+                      }
+                      const completion=await apiCall({action:"marcar_sesion_completada",codigo:codigoUsuario,datos:{fecha:sesionPendiente.fecha,sesion:sesionPendiente}});
+                      if(!completion?.ok){
+                        setMensajes(prev=>[...prev,{role:"assistant",content:"⚠️ Registro parcial: entrenamiento guardado en el historial, pero no se pudo confirmar el cambio en Mi Plan. No repitas el registro automáticamente; requiere revisión."}]);
+                        setSesionPendiente(null);
+                        return;
+                      }
+                      if(completion.planCompleted) cargarPlanSemanal(codigoUsuario);
+                      setMensajes(prev=>[...prev,{role:"assistant",content:completion.historyOnly
+                        ? "Entrenamiento registrado solo en el historial: no hay una sesión compatible que completar en Mi Plan."
+                        : completion.corrected ? "Datos de la sesión realizada actualizados en Mi Plan."
+                        : completion.alreadyCompleted ? "La sesión ya estaba completada con estos datos; Mi Plan no se ha modificado."
+                        : "Entrenamiento registrado y sesión completada en Mi Plan."}]);
+                      if(res.warnings?.length) setMensajes(prev=>[...prev,{role:"assistant",content:"El entrenamiento se guardó, pero no se pudo registrar su evento para el contexto del Coach."}]);
                       // FORGE SHARE CARDS — tras registrar con exito, ofrecer compartir. Los datos
                       // numericos (distancia/tiempo/ritmo/resultado) no siempre vienen estructurados
                       // del extractor todavia — el usuario puede completarlos en la propia Card si faltan.
@@ -3596,7 +3617,14 @@ ${testStr}`}]});
                     {sesionPendiente.yaExiste && (
                       <button onClick={async()=>{
                         const sesionSegunda={...sesionPendiente,workout_id:`${sesionPendiente.workout_id}_2`};
-                        await apiCall({action:"registrar_sesion",codigo:codigoUsuario,datos:{sesion:sesionSegunda}});
+                        const res=await apiCall({action:"registrar_sesion",codigo:codigoUsuario,datos:{sesion:sesionSegunda}});
+                        if(!res?.ok || !res.historyRecorded){
+                          setMensajes(prev=>[...prev,{role:"assistant",content:"No se pudo confirmar el registro de la segunda sesión."}]);
+                          return;
+                        }
+                        setMensajes(prev=>[...prev,{role:"assistant",content:res.warnings?.length
+                          ? "Segunda sesión guardada solo en el historial; no se pudo registrar su evento para el Coach."
+                          : "Segunda sesión registrada solo en el historial. Mi Plan no se ha modificado."}]);
                         setSesionPendiente(null);
                       }} style={{background:"none",color:"#4CAF50",border:"1px solid #4CAF50",borderRadius:8,padding:"6px 10px",fontSize:11,cursor:"pointer"}}>
                         2ª sesión

@@ -19,6 +19,8 @@ import { buildAthleteKnowledge, knowledgeRouter, getObjectiveProgress } from "@/
 import { getResponseMode, buildStaticResponse, getCapabilities, buildCapabilityInstruction } from "@/lib/response/responseEngine";
 import { sendEmail } from "@/lib/email/sendEmail";
 import FounderEmail from "@/lib/email/templates/FounderEmail";
+import { getCanonicalRestrictions } from "@/lib/athlete/getCanonicalRestrictions";
+import type { CanonicalRestrictions } from "@/lib/athlete/getCanonicalRestrictions";
 import { validatePlanMutation } from "@/lib/planning/planMutation";
 import { recordPlanCompletion, resolveCompletionDate } from "@/lib/planning/recordCompletion";
 import { projectWeekClosure, weeklyFacts } from "@/lib/planning/weekClosure";
@@ -55,7 +57,7 @@ async function buildBlockNarrative(supabase: any, codigo: string): Promise<strin
   return `NARRATIVA DEL BLOQUE ACTUAL (${bloqueActual}, ${resumenes.length} semana(s) registrada(s)):\n${lineas.join("\n")}`;
 }
 
-async function generarEstadoCanonico(supabase: any, codigo: string) {
+async function generarEstadoCanonico(supabase: any, codigo: string, restrictions?: CanonicalRestrictions) {
   const DIAS_MAP = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
   const ahora = new Date();
   const hoyStr = ahora.toLocaleDateString('en-CA', {timeZone: 'Europe/Madrid'});
@@ -85,7 +87,8 @@ async function generarEstadoCanonico(supabase: any, codigo: string) {
   // FORGE ATHLETE STATE ENGINE — estado activo del atleta (normal/restricted/paused/etc). Fuente
   // unica de verdad consultada tanto por el Coach conversacional como por el Block Analyzer, para
   // que ambos sepan si el atleta esta en un periodo de restriccion que gobierna toda la planificacion.
-  const { data: estadoAtletaActivo } = await supabase.from("athlete_state_events").select("estado,motivo,fecha_inicio").eq("user_codigo", codigo).eq("activo", true).maybeSingle();
+  const canonicalRestrictions = restrictions ?? await getCanonicalRestrictions(supabase, codigo);
+  const estadoAtletaActivo = canonicalRestrictions.state;
   // FUENTE ATOMICA: physiology_records reemplaza el JSON historial_fisiologico, elimina RMW
   const { data: fisioRecords } = await supabase.from("physiology_records").select("fecha,hrv,sueno,rhr,fatiga_aguda").eq("user_codigo", codigo).order("fecha", { ascending: false }).limit(30);
   const historialFisiologicoAtomico = (fisioRecords || []).map((r: any) => ({ fecha: r.fecha, hrv: r.hrv, sueno: r.sueno, rhr: r.rhr, fatiga_aguda: r.fatiga_aguda }));
@@ -135,6 +138,7 @@ async function generarEstadoCanonico(supabase: any, codigo: string) {
     objetivo_principal: usuario?.objetivo_principal || null,
     debilidades_activas: (usuario?.athlete_development || []).filter((d: any) => d.estado !== "resuelta").map((d: any) => d.nombre_visible || d.indicador),
     athlete_state: estadoAtletaActivo ? { estado: estadoAtletaActivo.estado, motivo: estadoAtletaActivo.motivo, desde: estadoAtletaActivo.fecha_inicio } : { estado: "normal" },
+    restrictions: canonicalRestrictions,
     generado_at: ahora.toISOString()
   };
 
@@ -2112,7 +2116,10 @@ async function buildAthleteSnapshot(supabase: any, codigo: string) {
 
 if (action === "analizar_bloque_semana") {
     // FORGE ORCHESTRATOR — Paso 1: Block Analyzer. Solo decide estructura, no genera entrenamientos.
-    const estado = await generarEstadoCanonico(supabase, codigo);
+    let canonicalRestrictions: CanonicalRestrictions;
+    try { canonicalRestrictions = await getCanonicalRestrictions(supabase, codigo); }
+    catch (err: any) { return NextResponse.json({ error: err.message }, { status: 503 }); }
+    const estado = await generarEstadoCanonico(supabase, codigo, canonicalRestrictions);
     // FORGE FOCUS — contrato determinista de disciplinas externas, consultado ANTES del prompt.
     const focusContext = await buildFocusContext(supabase, codigo);
     // FIX CRITICO: coherencia longitudinal real entre bloques — ahora que block_outcomes se guarda
@@ -2217,25 +2224,22 @@ const { data: exposicionesParaSeguimiento } = await supabase.from("weakness_expo
     // NUNCA aplicadas directamente a una sesion (ver regla de prompt), su unico canal de entrada
     // a la planificacion real es aqui, en el Block Analyzer del cierre de semana. Priorizadas por
     // confianza y veces_mencionado — una nota mencionada varias veces pesa mas que una unica mencion.
-    const hoyConstraintCheck = new Date().toISOString().split('T')[0];
+    // Soft observations retain their own ranking; they never select active restrictions.
     const { data: coachingNotesPendientes } = await supabase.from("athlete_coaching_notes")
-      .select("id,type,domain,movement,issue,priority,confidence,veces_mencionado,source,constraint_level,valid_until")
-      .eq("user_codigo", codigo)
-      .in("status", ["pending", "considerada"])
-      .order("confidence", { ascending: false })
-      .limit(10);
-
-    // FORGE CONSTRAINT ENGINE — usa el campo EXPLICITO constraint_level (no inferido desde source,
-    // fragil e implicito). Respeta vigencia: una restriccion con valid_until pasado ya no aplica
-    // (la molestia pudo resolverse), evitando bloqueos permanentes por una lesion ya curada.
-    const restriccionesDuras = (coachingNotesPendientes || []).filter((n: any) =>
-      n.constraint_level === "hard" && (!n.valid_until || n.valid_until >= hoyConstraintCheck)
-    );
-    const observacionesSuaves = (coachingNotesPendientes || []).filter((n: any) => n.constraint_level !== "hard");
+      .select("id,type,domain,movement,issue,priority,confidence,veces_mencionado,source,constraint_level")
+      .eq("user_codigo", codigo).in("status", ["pending", "considerada"])
+      .or("constraint_level.is.null,constraint_level.not.in.(hard,reassessment)")
+      .order("confidence", { ascending: false }).limit(10);
+    const restriccionesDuras = canonicalRestrictions.restrictions;
+    const observacionesSuaves = coachingNotesPendientes || [];
 
     let restriccionesTexto = "";
     if (restriccionesDuras.length > 0) {
       restriccionesTexto = `\n🚫 RESTRICCIONES ACTIVAS — OBLIGATORIO RESPETAR, NO SON SUGERENCIAS:\n${restriccionesDuras.map((n: any) => `- NO prescribir "${n.movement}": ${n.issue}`).join("\n")}\nEstas restricciones vienen de modificaciones reales confirmadas por el atleta (lesion/molestia). Debes evitar estos ejercicios/movimientos en la planificacion de esta semana sin excepcion, hasta que exista evidencia de que el atleta ya no tiene molestia con ellos.`;
+    }
+
+    if (canonicalRestrictions.reassessments.length) {
+      restriccionesTexto += `\nZONAS EN REEVALUACION — progresion controlada: ${canonicalRestrictions.reassessments.map(n => `${n.movement}: ${n.issue}`).join("; ")}`;
     }
 
     let coachingNotesTexto = "";
@@ -2543,15 +2547,12 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
     // individual, nunca sustituto del Deterministic Plan Validator final. El Block Analyzer ya
     // decidio la estructura semanal respetando restricciones, pero el Session Builder tambien
     // debe recibirlas directamente — no confiamos en que la intencion heredada sea suficiente.
-    const hoyConstraintBuilder = new Date().toISOString().split('T')[0];
-    const { data: hardConstraintsBuilder } = await supabase.from("athlete_coaching_notes")
-      .select("movement,issue,constraint_level,prohibits_impact,prohibits_jump,prohibits_axial_load,prohibits_deep_flexion,prohibits_overhead_load")
-      .eq("user_codigo", codigo)
-      .in("constraint_level", ["hard", "reassessment"])
-      .in("status", ["pending", "considerada"])
-      .or(`valid_until.is.null,valid_until.gte.${hoyConstraintBuilder}`);
-    const restriccionesHardBuilder = (hardConstraintsBuilder || []).filter((c: any) => c.constraint_level === "hard");
-    const restriccionesReassessmentBuilder = (hardConstraintsBuilder || []).filter((c: any) => c.constraint_level === "reassessment");
+    let canonicalRestrictions: CanonicalRestrictions;
+    try { canonicalRestrictions = await getCanonicalRestrictions(supabase, codigo); }
+    catch (err: any) { return NextResponse.json({ error: err.message }, { status: 503 }); }
+    const hardConstraintsBuilder = [...canonicalRestrictions.restrictions, ...canonicalRestrictions.reassessments];
+    const restriccionesHardBuilder = canonicalRestrictions.restrictions;
+    const restriccionesReassessmentBuilder = canonicalRestrictions.reassessments;
     const restriccionesBuilderTexto =
       (restriccionesHardBuilder.length > 0
         ? `\n🚫 RESTRICCIONES ACTIVAS DEL ATLETA — OBLIGATORIO RESPETAR, NO SON SUGERENCIAS:\n${restriccionesHardBuilder.map((c: any) => `- Evitar "${c.movement}": ${c.issue}`).join("\n")}\nEstas restricciones vienen de una molestia/lesion real confirmada. La sesion que generes NO puede incluir estos movimientos ni cargas que los agraven, sin excepcion.`
@@ -2589,8 +2590,7 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
         });
         const { buildExposureReport: buildExpReportLocal } = await import("@/lib/sports/exposureEngine");
         const reportLocal = buildExpReportLocal(exposicionesCandidatos.map((e: any) => ({ fecha: e.dia, tipo: e.tipo, titulo: e.titulo, descripcionReal: e.descripcionReal })), disciplinaSesion);
-        const { data: athleteStateBuilder } = await supabase.from("athlete_state_events").select("body_area").eq("user_codigo", codigo).eq("estado", "restricted").order("created_at", { ascending: false }).limit(3);
-        const zonasRestringidasBuilder = (athleteStateBuilder || []).map((r: any) => r.body_area).filter(Boolean);
+        const zonasRestringidasBuilder = canonicalRestrictions.areas;
         const candidatosRankeados = rankearCandidatos(estimuloObjetivoReal, disciplinaSesion, zonasRestringidasBuilder, reportLocal.exposiciones);
         if (candidatosRankeados.length > 0) {
           candidatosTexto = `\n🎯 MOVIMIENTOS CANDIDATOS PARA EL ESTÍMULO "${estimuloObjetivoReal}" (ya priorizados por exposición reciente, los primeros son los MENOS usados recientemente — prioriza estos para dar variedad real): ${candidatosRankeados.slice(0, 5).map((c: any) => `${c.id}${c.vecesExpuestoReciente > 0 ? ` (usado ${c.vecesExpuestoReciente}x recientemente)` : " (sin exposición reciente)"}`).join(", ")}`;
@@ -2717,8 +2717,7 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
           // contenido corresponde a una SUSTITUCION VALIDA (ej: bici por rodaje_largo cuando
           // hay restriccion de rodilla activa), en vez de una incoherencia real.
           const movimientoPrimarioEsperado = getMovimientosPorEstimulo(estimuloObjetivoReal, disciplinaValidacionFinal)[0]?.id || "";
-          const { data: athleteStateValidacion } = await supabase.from("athlete_state_events").select("body_area").eq("user_codigo", codigo).eq("estado", "restricted").order("created_at", { ascending: false }).limit(3);
-          const zonasRestringidasValidacion = (athleteStateValidacion || []).map((r: any) => r.body_area).filter(Boolean);
+          const zonasRestringidasValidacion = canonicalRestrictions.areas;
           const evaluacionSust = movimientoPrimarioEsperado ? evaluarSustitucion(movimientoPrimarioEsperado, descripcionEnsamblada, zonasRestringidasValidacion) : null;
           if (evaluacionSust?.resultado === "sustitucion_valida") {
             console.log(`✅ SUSTITUCION VALIDA [${dia}]: ${evaluacionSust.explicacion}`);
@@ -2733,7 +2732,7 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
       // FORGE REASSESSMENT SAFETY CHECK — determinista, no depende de que el LLM respete la instruccion.
       // Bug real confirmado con evidencia: una zona en reevaluacion de rodilla (prohibits_impact=true)
       // recibio una sesion de 400m Z3 (alto impacto) el mismo dia que empezo la reevaluacion.
-      const restriccionesReassessmentCheck = (hardConstraintsBuilder || []).filter((c: any) => c.constraint_level === "reassessment");
+      const restriccionesReassessmentCheck = canonicalRestrictions.reassessments;
       if (restriccionesReassessmentCheck.length > 0) {
         const requierePrudenciaImpacto = restriccionesReassessmentCheck.some((c: any) => c.prohibits_impact || c.prohibits_jump);
         const movimientosAltoImpactoEnSesion = Object.values(MOVEMENT_LIBRARY).filter((m: any) => m.impact === "alto").some((m: any) => {
@@ -4004,18 +4003,10 @@ Mensaje: "${mensaje}"
     const { respuestaCoach } = datos;
     if (!respuestaCoach) return NextResponse.json({ ok: true, alerta: null });
 
-    const { data: estadoAtletaFuturo } = await supabase.from("athlete_state_events").select("estado,body_area,motivo").eq("user_codigo", codigo).eq("activo", true).maybeSingle();
-    if (!estadoAtletaFuturo || estadoAtletaFuturo.estado === "normal") {
-      return NextResponse.json({ ok: true, alerta: null });
-    }
-
-    const hoyFuturo = new Date().toISOString().split('T')[0];
-    const { data: hardConstraintsFuturo } = await supabase.from("athlete_coaching_notes")
-      .select("movement,issue")
-      .eq("user_codigo", codigo)
-      .eq("constraint_level", "hard")
-      .in("status", ["pending", "considerada"])
-      .or(`valid_until.is.null,valid_until.gte.${hoyFuturo}`);
+    let canonicalRestrictions: CanonicalRestrictions;
+    try { canonicalRestrictions = await getCanonicalRestrictions(supabase, codigo); }
+    catch (err: any) { return NextResponse.json({ ok: false, error: err.message }, { status: 503 }); }
+    const hardConstraintsFuturo = canonicalRestrictions.restrictions;
     if (!hardConstraintsFuturo || hardConstraintsFuturo.length === 0) {
       return NextResponse.json({ ok: true, alerta: null });
     }
@@ -5196,12 +5187,9 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
       console.log(`✅ FOCUS GUARD: plan verificado, dias externos [${Array.from(diasExternosValidator).join(", ")}] respetados`);
     }
 
-    const { data: hardConstraintsValidator } = await supabase.from("athlete_coaching_notes")
-      .select("movement,issue,prohibits_impact,prohibits_jump,prohibits_axial_load,prohibits_deep_flexion,prohibits_overhead_load")
-      .eq("user_codigo", codigo)
-      .eq("constraint_level", "hard")
-      .in("status", ["pending", "considerada"])
-      .or(`valid_until.is.null,valid_until.gte.${new Date().toISOString().split('T')[0]}`);
+    let hardConstraintsValidator: CanonicalRestrictions["restrictions"];
+    try { hardConstraintsValidator = (await getCanonicalRestrictions(supabase, codigo)).restrictions; }
+    catch (err: any) { return NextResponse.json({ error: err.message }, { status: 503 }); }
 
     if (hardConstraintsValidator && hardConstraintsValidator.length > 0 && Array.isArray(plan.sessions)) {
       // FORGE CONSTRAINT ENGINE V2 — MOVEMENT CLASSIFIER. Sustituye por completo el matching de

@@ -1584,8 +1584,11 @@ const forgeValidator=(texto:string):string=>{
     };
 
     await procesarTag("[RESUMEN_SEMANA:",16,async(data)=>{
-      await apiCall({action:"guardar_resumen_semana",codigo:codigoUsuario,datos:data});
-      setMostrarBotonNuevaSemana(true);
+      const summary=await apiCall({action:"guardar_resumen_semana",codigo:codigoUsuario,datos:data});
+      if(summary?.ok && summary.summarySaved){
+        const closure=await apiCall({action:"check_week_closure",codigo:codigoUsuario});
+        if(closure?.ok && closure.ready && closure.canGenerateNextWeek) setMostrarBotonNuevaSemana(true);
+      }
     });
     await procesarTag("[BLOCK_OUTCOME:",15,async(data)=>{
       await apiCall({action:"guardar_block_outcome",codigo:codigoUsuario,datos:data});
@@ -3444,11 +3447,14 @@ ${testStr}`}]});
                     return;
                   }
                   // FORGE CLOSE_WEEK — ejecucion real del cierre (Insight, Summary, Weakness Exposure,
-                  // Celebrations), SOLO ahora tras confirmacion explicita del usuario. Idempotente:
-                  // si ya estaba cerrada (doble clic, race condition), simplemente no repite el trabajo.
+                  // Celebrations), SOLO ahora tras confirmacion explicita del usuario.
+                  // Un closure log existente evita repetir los efectos de una semana ya cerrada.
                   const resClose=await apiCall({action:"close_week",codigo:codigoUsuario});
-                  if(!resClose?.ok && !resClose?.semanaCompleta){
-                    setMensajes(prev=>[...prev,{role:"assistant",content:"⚠️ Hubo un problema cerrando la semana. Inténtalo de nuevo en unos segundos."}]);
+                  if(resClose?.ok!==true || resClose.closed!==true || resClose.partial){
+                    if(resClose?.planPersisted) cargarPlanSemanal(codigoUsuario);
+                    setMensajes(prev=>[...prev,{role:"assistant",content:resClose?.partial
+                      ? "⚠️ El cierre quedó incompleto. Algunos cambios pueden estar guardados; no se generará la siguiente semana. Requiere revisión antes de repetir el cierre."
+                      : "No se ha confirmado el cierre de la semana. No se generará la siguiente semana."}]);
                     return;
                   }
                   // FIX: preguntar disponibilidad ANTES de generar, en vez de asumir silenciosamente

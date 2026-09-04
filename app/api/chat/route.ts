@@ -21,6 +21,7 @@ import { sendEmail } from "@/lib/email/sendEmail";
 import FounderEmail from "@/lib/email/templates/FounderEmail";
 import { validatePlanMutation } from "@/lib/planning/planMutation";
 import { recordPlanCompletion, resolveCompletionDate } from "@/lib/planning/recordCompletion";
+import { projectWeekClosure, weeklyFacts } from "@/lib/planning/weekClosure";
 import type { PlanCandidate, PlanMutationCommand, PlanMutationContext, PlanChangeSet } from "@/lib/planning/planMutationTypes";
 
 const supabase = createClient(
@@ -486,12 +487,14 @@ interface Celebration {
 
 async function detectarCelebraciones(supabase: any, codigo: string): Promise<Celebration[]> {
   const celebraciones: Celebration[] = [];
-  const { data } = await supabase.from("usuarios").select("workout_history,historial_fisiologico").eq("codigo", codigo).single();
+  const { data, error: celebrationReadError } = await supabase.from("usuarios").select("workout_history,historial_fisiologico").eq("codigo", codigo).single();
+  if (celebrationReadError) throw new Error("CELEBRATIONS_READ_FAILED");
   const workoutHistory = data?.workout_history || [];
   const fisioHistory = data?.historial_fisiologico || [];
 
   // 1. Racha de semanas consecutivas con adherencia completa (usando athlete_events forge_insight)
-  const { data: insightsRecientes } = await supabase.from("athlete_events").select("data,date").eq("user_codigo", codigo).eq("type", "forge_insight").order("date", { ascending: false }).limit(4);
+  const { data: insightsRecientes, error: insightsReadError } = await supabase.from("athlete_events").select("data,date").eq("user_codigo", codigo).eq("type", "forge_insight").order("date", { ascending: false }).limit(4);
+  if (insightsReadError) throw new Error("CELEBRATIONS_READ_FAILED");
   const semanasCompletas = (insightsRecientes || []).filter((i: any) => {
     const adherencia = i.data?.adherencia || "";
     const match = adherencia.match(/(\d+)\/(\d+)/);
@@ -526,8 +529,9 @@ async function detectarCelebraciones(supabase: any, codigo: string): Promise<Cel
 // que ejercicios/intensidades generan mejor adaptacion, cuales generan mas fatiga, como responde
 // el sueño al tipo de sesion previa, etc. Requiere evidencia real, nunca especula. Se ejecuta con
 // menor frecuencia que Discovery (necesita mas datos acumulados para ser fiable).
-async function ejecutarAthleteResponseEngine(supabase: any, apiKey: string, codigo: string): Promise<{ generado: boolean }> {
-  const { data: usuario } = await supabase.from("usuarios").select("workout_history,historial_fisiologico").eq("codigo", codigo).single();
+async function ejecutarAthleteResponseEngine(supabase: any, apiKey: string, codigo: string): Promise<{ generado: boolean; error?: string }> {
+  const { data: usuario, error: userError } = await supabase.from("usuarios").select("workout_history,historial_fisiologico").eq("codigo", codigo).single();
+  if (userError) return { generado: false, error: "KNOWLEDGE_READ_FAILED" };
   const workoutHistory = (usuario?.workout_history || []).slice(-40);
   const fisioHistory = (usuario?.historial_fisiologico || []).slice(-40);
 
@@ -535,8 +539,9 @@ async function ejecutarAthleteResponseEngine(supabase: any, apiKey: string, codi
     return { generado: false }; // necesita suficiente historial para correlaciones fiables
   }
 
-  const { data: patronesExistentes } = await supabase.from("athlete_response_patterns").select("patron").eq("user_codigo", codigo).eq("activo", true).limit(10);
+  const { data: patronesExistentes, error: patternsError } = await supabase.from("athlete_response_patterns").select("patron").eq("user_codigo", codigo).eq("activo", true).limit(10);
 
+  if (patternsError) return { generado: false, error: "KNOWLEDGE_READ_FAILED" };
   const responsePrompt = `Eres el Forge Athlete Response Engine. Tu unica tarea es analizar datos reales de entrenamiento
 y fisiologia de un atleta buscando UNA correlacion especifica y verificable entre un ESTIMULO CONCRETO
 (un ejercicio, tipo de sesion, o patron de sueño) y la RESPUESTA del atleta (fatiga, calidad, recuperacion).
@@ -565,11 +570,12 @@ Si NO hay evidencia suficientemente especifica y solida, responde SOLO con:
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 350, messages: [{ role: "user", content: responsePrompt }] }),
     });
+    if (!responseRes.ok) throw new Error("KNOWLEDGE_GENERATION_FAILED");
     const responseData = await responseRes.json();
     const responseTexto = responseData.content?.map((b: any) => b.text || "").join("") || "{}";
     const responseClean = responseTexto.replace(/```json|```/gi, "").trim();
     const responseMatch = responseClean.match(/\{[\s\S]*\}/);
-    if (!responseMatch) return { generado: false };
+    if (!responseMatch) return { generado: false, error: "KNOWLEDGE_PARSE_FAILED" };
 
     const resultado = JSON.parse(responseMatch[0]);
     if (!resultado.hay_patron || !resultado.patron) return { generado: false };
@@ -579,7 +585,7 @@ Si NO hay evidencia suficientemente especifica y solida, responde SOLO con:
     // desde una sola deteccion del LLM, evitando el mismo error que tuvo aprendizajes_atleta.
     const puntosEvidenciaNuevo = resultado.puntos_evidencia || 3;
     const esActivo = puntosEvidenciaNuevo >= 8;
-    await supabase.from("athlete_knowledge_points").insert({
+    const { data: knowledgeSaved, error: knowledgeError } = await supabase.from("athlete_knowledge_points").insert({
       user_codigo: codigo,
       categoria: resultado.categoria || "respuesta_entrenamiento",
       conocimiento: resultado.patron,
@@ -588,18 +594,20 @@ Si NO hay evidencia suficientemente especifica y solida, responde SOLO con:
       estado: esActivo ? "activo" : "candidato",
       fuente: "athlete_response_engine",
       ultima_evidencia: new Date().toISOString()
-    });
+    }).select("id").single();
+    if (knowledgeError || !knowledgeSaved?.id) return { generado: false, error: "KNOWLEDGE_WRITE_FAILED" };
 
     // NOTA: ya no se escribe en aprendizajes_atleta (deprecado). athlete_knowledge_points es ahora
     // la unica fuente real del Nivel de Conocimiento, calculado dinamicamente en obtener_daily_briefing.
     return { generado: true };
   } catch {
-    return { generado: false };
+    return { generado: false, error: "KNOWLEDGE_FAILED" };
   }
 }
 
-async function ejecutarDiscoveryEngine(supabase: any, apiKey: string, codigo: string): Promise<{ generado: boolean; nivel?: string }> {
-  const { data: usuarioDiscovery } = await supabase.from("usuarios").select("workout_history,historial_fisiologico").eq("codigo", codigo).single();
+async function ejecutarDiscoveryEngine(supabase: any, apiKey: string, codigo: string): Promise<{ generado: boolean; nivel?: string; error?: string }> {
+  const { data: usuarioDiscovery, error: discoveryReadError } = await supabase.from("usuarios").select("workout_history,historial_fisiologico").eq("codigo", codigo).single();
+  if (discoveryReadError) return { generado: false, error: "DISCOVERY_READ_FAILED" };
   const historialCompleto = (usuarioDiscovery?.workout_history || []).slice(-30);
   const fisioCompleto = (usuarioDiscovery?.historial_fisiologico || []).slice(-30);
 
@@ -634,21 +642,23 @@ Si NO hay evidencia suficientemente clara para ningún nivel, responde SOLO con:
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 350, messages: [{ role: "user", content: discoveryPrompt }] }),
     });
+    if (!discoveryRes.ok) throw new Error("DISCOVERY_GENERATION_FAILED");
     const discoveryData = await discoveryRes.json();
     const discoveryTexto = discoveryData.content?.map((b: any) => b.text || "").join("") || "{}";
     const discoveryClean = discoveryTexto.replace(/```json|```/gi, "").trim();
     const discoveryMatch = discoveryClean.match(/\{[\s\S]*\}/);
-    if (!discoveryMatch) return { generado: false };
+    if (!discoveryMatch) return { generado: false, error: "DISCOVERY_PARSE_FAILED" };
 
     const discoveryResult = JSON.parse(discoveryMatch[0]);
     if (!discoveryResult.hay_patron || !discoveryResult.descubrimiento) return { generado: false };
 
     // Deduplicacion: no guardar si ya existe un descubrimiento muy similar reciente (ultimos 8)
-    const { data: descubrimientosRecientes } = await supabase.from("forge_discoveries").select("descubrimiento").eq("user_codigo", codigo).order("created_at", { ascending: false }).limit(8);
+    const { data: descubrimientosRecientes, error: duplicateReadError } = await supabase.from("forge_discoveries").select("descubrimiento").eq("user_codigo", codigo).order("created_at", { ascending: false }).limit(8);
+    if (duplicateReadError) return { generado: false, error: "DISCOVERY_READ_FAILED" };
     const yaExisteSimilar = (descubrimientosRecientes || []).some((d: any) => d.descubrimiento?.toLowerCase().includes(discoveryResult.descubrimiento.toLowerCase().substring(0, 30)));
     if (yaExisteSimilar) return { generado: false };
 
-    await supabase.from("forge_discoveries").insert({
+    const { data: discoverySaved, error: discoveryWriteError } = await supabase.from("forge_discoveries").insert({
       user_codigo: codigo,
       descubrimiento: discoveryResult.descubrimiento,
       categoria: discoveryResult.categoria || "general",
@@ -657,11 +667,12 @@ Si NO hay evidencia suficientemente clara para ningún nivel, responde SOLO con:
       puntos_evidencia: discoveryResult.puntos_evidencia || 3,
       visto: false,
       presentado_al_usuario: false
-    });
+    }).select("id").single();
+    if (discoveryWriteError || !discoverySaved?.id) return { generado: false, error: "DISCOVERY_WRITE_FAILED" };
 
     return { generado: true, nivel: discoveryResult.nivel };
   } catch {
-    return { generado: false };
+    return { generado: false, error: "DISCOVERY_FAILED" };
   }
 }
 
@@ -2741,135 +2752,86 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
   }
 
   if (action === "check_week_closure") {
-    // FORGE CHECK_WEEK_CLOSURE — SOLO LECTURA, sin efectos secundarios. Nunca genera Insight, Summary,
-    // Weakness Exposure ni Celebrations. Su unica funcion es responder: "¿esta semana lista para
-    // cerrarse?" para que el FRONTEND decida si mostrar el banner. La ejecucion real vive en CLOSE_WEEK,
-    // disparada solo cuando el usuario confirma explicitamente pulsando el boton.
-    const ahoraCheck = new Date();
-    const hoyCheckStr = ahoraCheck.toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
-    const hoyCheckFecha = new Date(hoyCheckStr + 'T12:00:00');
-    const diaSemCheck = hoyCheckFecha.getDay() || 7;
-    const lunesCheck = new Date(hoyCheckFecha);
-    lunesCheck.setDate(hoyCheckFecha.getDate() - diaSemCheck + 1);
-    const weekStartCheck = lunesCheck.toISOString().split('T')[0];
-
-    const { data: planSemanaCheck } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", weekStartCheck).single();
-    if (!planSemanaCheck) return NextResponse.json({ ready: false });
-
-    const ORDEN_DIAS_CHECK = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"];
-    const normalizarDiaCheck = (d: string) => (d || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-    const sesionesCheck = planSemanaCheck.sessions || [];
-    const sesionesQueRequierenReporteCheck = sesionesCheck.filter((s: any) => s.tipo !== "descanso");
-    const todasCompletadasCheck = sesionesQueRequierenReporteCheck.length > 0 && sesionesQueRequierenReporteCheck.every((s: any) => s.completada === true);
-
-    // FIX CRITICO: bug real confirmado — el domingo (ultimo dia REAL de la semana) nunca cumplia
-      // "semana terminada cronologicamente" porque la comparacion exigia ESTRICTAMENTE posterior al
-      // domingo. Ahora incluye el domingo mismo como dia valido para considerar la semana terminada.
-      const domingoSemanaCheck = new Date(lunesCheck);
-      domingoSemanaCheck.setDate(lunesCheck.getDate() + 6);
-      const semanaTerminadaCronologicamenteCheck = hoyCheckFecha.getTime() >= domingoSemanaCheck.getTime();
-
-    if (!todasCompletadasCheck && !semanaTerminadaCronologicamenteCheck) {
-      return NextResponse.json({ ready: false });
+    if (typeof codigo !== "string" || !codigo.trim()) return NextResponse.json({ ok: false, ready: false, error: "INVALID_USER" }, { status: 400 });
+    try {
+      const effective = resolveCompletionDate(new Date().toISOString())!;
+      const { data: closure, error: logError } = await supabase.from("week_closure_log").select("id")
+        .eq("user_codigo", codigo).eq("week_start", effective.weekStart).limit(1).maybeSingle();
+      if (logError) return NextResponse.json({ ok: false, ready: false, error: "CLOSURE_LOG_READ_FAILED" }, { status: 500 });
+      const { data: usuario, error: userError } = await supabase.from("usuarios").select("modo_entrada").eq("codigo", codigo).single();
+      if (userError || !usuario) return NextResponse.json({ ok: false, ready: false, error: "CLOSURE_USER_READ_FAILED" }, { status: 500 });
+      const canGenerateNextWeek = usuario.modo_entrada === "planificacion";
+      if (closure) return NextResponse.json({ ok: true, ready: true, yaCerrada: true, alreadyClosed: true, weekStart: effective.weekStart, canGenerateNextWeek });
+      const { data: plan, error: planError } = await supabase.from("weekly_plan").select("*")
+        .eq("user_codigo", codigo).eq("week_start", effective.weekStart).maybeSingle();
+      if (planError) return NextResponse.json({ ok: false, ready: false, error: "CLOSURE_PLAN_READ_FAILED" }, { status: 500 });
+      if (!plan) return NextResponse.json({ ok: true, ready: false, yaCerrada: false, reason: "no_plan" });
+      if (plan.user_codigo !== codigo || plan.week_start !== effective.weekStart) return NextResponse.json({ ok: false, ready: false, error: "CLOSURE_PLAN_IDENTITY_MISMATCH" }, { status: 409 });
+      const projection = projectWeekClosure(plan, effective.day);
+      return NextResponse.json({ ok: true, ready: projection.eligible, yaCerrada: false,
+        weekStart: effective.weekStart, canGenerateNextWeek, adherencia: projection.facts.adherence });
+    } catch (err: any) {
+      return NextResponse.json({ ok: false, ready: false, error: err.message || "CLOSURE_CHECK_FAILED" }, { status: 422 });
     }
-
-    // FORGE IDEMPOTENCY CHECK — comprueba si esta semana ya tiene un registro de cierre explicito
-    // en week_closure_log (tabla dedicada, no infiere del Insight que ya sabemos que es fragil).
-    const { data: cierreExistente } = await supabase.from("week_closure_log").select("id").eq("user_codigo", codigo).eq("week_start", weekStartCheck).limit(1);
-    const yaCerrada = !!(cierreExistente && cierreExistente.length > 0);
-
-    const { data: usuarioModoCheck } = await supabase.from("usuarios").select("modo_entrada").eq("codigo", codigo).single();
-    const puedeGenerarSiguiente = usuarioModoCheck?.modo_entrada === "planificacion";
-
-    return NextResponse.json({
-      ready: true,
-      weekStart: weekStartCheck,
-      yaCerrada,
-      canGenerateNextWeek: puedeGenerarSiguiente,
-      adherencia: `${sesionesQueRequierenReporteCheck.filter((s: any) => s.completada).length}/${sesionesQueRequierenReporteCheck.length}`
-    });
   }
 
   if (action === "close_week") {
-    // FORGE CLOSE_WEEK — ejecucion REAL del cierre, disparada SOLO cuando el usuario confirma
-    // explicitamente pulsando el boton. Idempotente por diseño: verifica week_closure_log ANTES
-    // de generar nada — si ya existe registro de cierre para esta semana, no repite el trabajo.
-    const ahoraClose = new Date();
-    const hoyCloseStr = ahoraClose.toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
-    const hoyCloseFecha = new Date(hoyCloseStr + 'T12:00:00');
-    const diaSemClose = hoyCloseFecha.getDay() || 7;
-    const lunesClose = new Date(hoyCloseFecha);
-    lunesClose.setDate(hoyCloseFecha.getDate() - diaSemClose + 1);
-    const weekStartClose = lunesClose.toISOString().split('T')[0];
-
-    const { data: cierreYaExisteClose } = await supabase.from("week_closure_log").select("id").eq("user_codigo", codigo).eq("week_start", weekStartClose).limit(1);
-    if (cierreYaExisteClose && cierreYaExisteClose.length > 0) {
-      console.error(`🚨 CLOSE_WEEK bloqueado — semana ${weekStartClose} ya tiene registro de cierre para ${codigo}, evitando duplicacion`);
-      return NextResponse.json({ ok: true, alreadyClosed: true, weekStart: weekStartClose });
+    const fail = (error: string, status = 500) => NextResponse.json({ ok: false, closed: false, error }, { status });
+    if (typeof codigo !== "string" || !codigo.trim()) return fail("INVALID_USER", 400);
+    const effective = resolveCompletionDate(new Date().toISOString())!;
+    const hoyCierreStr = effective.date;
+    const weekStartCierre = effective.weekStart;
+    const { data: closure, error: logError } = await supabase.from("week_closure_log").select("id")
+      .eq("user_codigo", codigo).eq("week_start", weekStartCierre).limit(1).maybeSingle();
+    if (logError) return fail("CLOSURE_LOG_READ_FAILED");
+    if (closure) return NextResponse.json({ ok: true, closed: true, alreadyClosed: true, weekStart: weekStartCierre, restsCompleted: 0 });
+    const { data: planSemana, error: planError } = await supabase.from("weekly_plan").select("*")
+      .eq("user_codigo", codigo).eq("week_start", weekStartCierre).maybeSingle();
+    if (planError) return fail("CLOSURE_PLAN_READ_FAILED");
+    if (!planSemana) return fail("CLOSURE_PLAN_NOT_FOUND", 404);
+    if (planSemana.user_codigo !== codigo || planSemana.week_start !== weekStartCierre) return fail("CLOSURE_PLAN_IDENTITY_MISMATCH", 409);
+    let projection;
+    try { projection = projectWeekClosure(planSemana, effective.day); }
+    catch (err: any) { return fail(err.message, 422); }
+    if (!projection.eligible) return NextResponse.json({ ok: true, closed: false, semanaCompleta: false, restsCompleted: 0, reason: "not_eligible" });
+    let canonicalPlan: PlanCandidate = planSemana;
+    let planPersisted = false;
+    let restsCompleted = 0;
+    if (projection.changedIndices.length) {
+      const command: PlanMutationCommand = { operationType: "complete_past_rest_days", source: "week_close",
+        target: { userCodigo: codigo, weekStart: weekStartCierre }, proposal: { asOfDate: hoyCierreStr } };
+      const context: PlanMutationContext = { existingPlan: planSemana, normalizedWeekStart: weekStartCierre };
+      const changeSet: PlanChangeSet = { operationType: "complete_past_rest_days",
+        affectedDays: projection.changedIndices.map(i => planSemana.sessions[i].dia),
+        changedFields: projection.changedIndices.map(i => `sessions.${i}.completada`) };
+      const validationResult = await validatePlanMutation({ command, context, candidate: projection.projectedPlan, changeSet });
+      if (validationResult.status !== "ready_for_commit") return fail(validationResult.status === "rejected" ? "PLAN_MUTATION_REJECTED" : "PLAN_MUTATION_VALIDATION_FAILED", validationResult.status === "rejected" ? 422 : 500);
+      const { data: saved, error: writeError } = await supabase.from("weekly_plan").update({ sessions: validationResult.candidate.sessions })
+        .eq("user_codigo", codigo).eq("week_start", weekStartCierre).select("user_codigo,week_start").maybeSingle();
+      if (writeError) return fail("CLOSURE_PLAN_WRITE_FAILED");
+      if (!saved || saved.user_codigo !== codigo || saved.week_start !== weekStartCierre) return fail("CLOSURE_PLAN_WRITE_UNCONFIRMED", 409);
+      canonicalPlan = validationResult.candidate;
+      planPersisted = true;
+      restsCompleted = projection.changedIndices.length;
     }
-
-    const { data: planSemana } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", weekStartClose).single();
-    if (!planSemana) return NextResponse.json({ error: "No hay plan para esta semana" }, { status: 404 });
-    // Alias para reutilizar el resto de la logica original sin renombrar mas variables innecesariamente
-    const hoyCierreStr = hoyCloseStr;
-    const hoyCierreFecha = hoyCloseFecha;
-    const diaSemCierre = diaSemClose;
-    const lunesCierre = lunesClose;
-    const weekStartCierre = weekStartClose;
-
-    // FIX: dias de descanso/recuperacion que ya PASARON (fecha anterior a hoy) sin reporte explicito
-    // se marcan automaticamente como completados al momento de verificar el cierre — un descanso no
-    // reportado simplemente significa que el atleta descanso, no que la sesion sigue "pendiente".
-    const ORDEN_DIAS_CIERRE = ["lunes","martes","miercoles","jueves","viernes","sabado","domingo"];
-    const normalizarDiaCierre = (d: string) => (d || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-    const hoyIdxCierre = diaSemCierre - 1;
-    let huboAutoCompletado = false;
-    const sessionsConAutoCompletado = (planSemana.sessions || []).map((s: any) => {
-      const esDescanso = /descanso/i.test(s.tipo || "");
-      const idxDiaSesion = ORDEN_DIAS_CIERRE.indexOf(normalizarDiaCierre(s.dia));
-      const diaYaPaso = idxDiaSesion < hoyIdxCierre;
-      if (esDescanso && diaYaPaso && s.completada !== true) {
-        huboAutoCompletado = true;
-        return { ...s, completada: true };
-      }
-      return s;
-    });
-    if (huboAutoCompletado) {
-      await supabase.from("weekly_plan").update({ sessions: sessionsConAutoCompletado }).eq("user_codigo", codigo).eq("week_start", weekStartCierre);
-      console.log("CIERRE: auto-completados dias de descanso pasados sin reporte");
-    }
-
-    const sessions = sessionsConAutoCompletado;
-    const sesionesQueRequierenReporte = sessions.filter((s: any) => s.tipo !== "descanso");
-    const todasCompletadas = sesionesQueRequierenReporte.length > 0 && sesionesQueRequierenReporte.every((s: any) => s.completada === true);
-    console.log("VERIFICAR CIERRE: sesionesQueRequierenReporte=", sesionesQueRequierenReporte.length, "todasCompletadas=", todasCompletadas, "detalle=", JSON.stringify(sesionesQueRequierenReporte.map((s:any)=>({dia:s.dia,tipo:s.tipo,completada:s.completada}))));
-
-    // FIX: separar "semana terminada" (cronologico, zona horaria real de Forge) de "semana completada"
-    // (100% adherencia). Antes se exigia 100% para siquiera considerar el cierre, dejando semanas
-    // incompletas "abiertas" indefinidamente. Ahora: si la semana termino cronologicamente (domingo real
-    // ya paso segun Europe/Madrid), se cierra igualmente, calculando el resultado real (sea 100% o no).
-    // FIX CRITICO: mismo bug real que en check_week_closure — el domingo mismo (ultimo dia real de
-    // la semana) nunca cumplia "semana terminada cronologicamente" por la comparacion estrictamente
-    // "mayor que". Esta es una copia INDEPENDIENTE de la misma logica en close_week (ejecucion real),
-    // separada de check_week_closure (verificacion) — ambas necesitaban el mismo fix por separado.
-    const domingoDeEstaSemana = new Date(lunesCierre);
-    domingoDeEstaSemana.setDate(lunesCierre.getDate() + 6);
-    const semanaTerminadaCronologicamente = hoyCierreFecha.getTime() >= domingoDeEstaSemana.getTime();
-
-    if (!todasCompletadas && !semanaTerminadaCronologicamente) {
-      // La semana sigue en curso Y no esta completa — legitimamente no hay nada que cerrar todavia
-      return NextResponse.json({ semanaCompleta: false });
-    }
-
-    const { data: insightExistente } = await supabase.from("athlete_events").select("id").eq("user_codigo", codigo).eq("type", "forge_insight").ilike("title", `%${weekStartCierre}%`).limit(1);
-
-    if (insightExistente && insightExistente.length > 0) {
-      return NextResponse.json({ semanaCompleta: true, yaCerrada: true });
-    }
-
+    const warnings: string[] = [];
+    const operationalEffectsCompleted: string[] = [];
+    let stage = "weekly_context";
+    let insightGenerado = false;
+    const requireWrite = async (name: string, query: PromiseLike<{ data: any; error: any }>, identity: Record<string, unknown>) => {
+      stage = name;
+      const { data, error } = await query;
+      if (error || !data || Object.entries(identity).some(([k, v]) => data[k] !== v)) throw new Error(name);
+      operationalEffectsCompleted.push(name);
+    };
+    try {
+    const facts = weeklyFacts(canonicalPlan);
+    const sesionesQueRequierenReporte = facts.required;
+    const sesionesResumen = facts.completed.map(s => `${s.dia}: ${s.titulo_real || s.titulo}${s.descripcion_real ? ' — ' + s.descripcion_real.substring(0, 100) : ''}`).join("\n") || "Ninguna";
+    const sesionesPendientesTexto = facts.pending.map(s => `${s.dia}: ${s.titulo}`).join("\n") || "Ninguna";
     // Generar el Forge Insight automaticamente con una llamada dedicada, basado en datos reales
-    const { data: usuarioInsight } = await supabase.from("usuarios").select("athlete_development,historial_fisiologico").eq("codigo", codigo).single();
-    const sesionesResumen = sessions.filter((s: any) => s.tipo !== "descanso").map((s: any) => `${s.dia}: ${s.titulo_real || s.titulo}${s.descripcion_real ? ' — ' + s.descripcion_real.substring(0, 100) : ''}`).join("\n");
+    const { data: usuarioInsight, error: insightContextError } = await supabase.from("usuarios").select("athlete_development,historial_fisiologico").eq("codigo", codigo).single();
+    if (insightContextError || !usuarioInsight) throw new Error("WEEKLY_CONTEXT_READ_FAILED");
     const histFisioSemana = (usuarioInsight?.historial_fisiologico || []).slice(-7);
     const debilidadesActivas = (usuarioInsight?.athlete_development || []).filter((d: any) => d.estado !== "resuelta").map((d: any) => d.nombre_visible);
 
@@ -2877,6 +2839,11 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
 
 SESIONES COMPLETADAS ESTA SEMANA:
 ${sesionesResumen}
+
+SESIONES PENDIENTES:
+${sesionesPendientesTexto}
+
+ADHERENCIA CALCULADA: ${facts.adherence}
 
 TENDENCIA FISIOLÓGICA (últimos registros):
 ${JSON.stringify(histFisioSemana)}
@@ -2886,36 +2853,47 @@ ${debilidadesActivas.join(", ") || "ninguna registrada"}
 
 Incluye: adherencia (X/${sesionesQueRequierenReporte.length} sesiones), tendencia fisiológica general, y una frase sobre el ajuste para la semana siguiente. NO inventes datos que no estén arriba.`;
 
-    let resumenGenerado = "Semana completada con éxito.";
+    let resumenGenerado: string | null = null;
     try {
       const insightRes = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
         body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 400, messages: [{ role: "user", content: insightPrompt }] }),
       });
+      if (!insightRes.ok) throw new Error("INSIGHT_GENERATION_FAILED");
       const insightData = await insightRes.json();
-      resumenGenerado = insightData.content?.map((b: any) => b.text || "").join("") || resumenGenerado;
-    } catch {}
+      resumenGenerado = insightData.content?.map((b: any) => b.text || "").join("") || null;
+      if (!resumenGenerado?.trim()) throw new Error("INSIGHT_GENERATION_FAILED");
+    } catch { resumenGenerado = null; warnings.push("INSIGHT_GENERATION_FAILED"); }
 
-    const puntosActuales = (usuarioInsight?.athlete_development || []).length; // placeholder simple, se puede refinar
-    await supabase.from("athlete_events").insert({
-      user_codigo: codigo,
-      date: hoyCierreStr,
-      type: "forge_insight",
-      title: `Forge Insight — Semana ${weekStartCierre}`,
-      data: { notas: resumenGenerado, adherencia: `${sesionesQueRequierenReporte.filter((s:any)=>s.completada).length}/${sesionesQueRequierenReporte.length}`, generado_automaticamente: true }
-    });
+    if (resumenGenerado) {
+      try {
+        const { data: insight, error } = await supabase.from("athlete_events").insert({ user_codigo: codigo,
+          date: hoyCierreStr, type: "forge_insight", title: `Forge Insight — Semana ${weekStartCierre}`,
+          data: { notas: resumenGenerado, adherencia: facts.adherence, generado_automaticamente: true }
+        }).select("id").single();
+        if (error || !insight?.id) throw new Error("INSIGHT_WRITE_FAILED");
+        insightGenerado = true;
+      } catch { warnings.push("INSIGHT_WRITE_FAILED"); }
+    }
 
     // FORGE BLOCK WEEK SUMMARY — objeto ESTRUCTURADO (no narrativo) que la Strategy de la proxima
     // semana leera para razonar progresion real dentro del bloque, en vez de partir de cero cada vez.
-    const { data: usuarioCicloSummary } = await supabase.from("usuarios").select("ciclo_actual").eq("codigo", codigo).single();
-    const cicloSummary = usuarioCicloSummary?.ciclo_actual || {};
+    stage = "block_week_summary";
+    const { data: usuarioCicloSummary, error: cycleError } = await supabase.from("usuarios").select("ciclo_actual").eq("codigo", codigo).single();
+    if (cycleError || !usuarioCicloSummary) throw new Error("CYCLE_READ_FAILED");
+    const cicloSummary = usuarioCicloSummary.ciclo_actual || {};
 
     const summaryPrompt = `Eres Forge analizando el resultado REAL de una semana de entrenamiento para generar un resumen ESTRUCTURADO
 que servira de memoria para planificar la siguiente semana del mismo bloque. NO es para el atleta, es para el sistema.
 
 SESIONES COMPLETADAS ESTA SEMANA:
 ${sesionesResumen}
+
+SESIONES PENDIENTES:
+${sesionesPendientesTexto}
+
+ADHERENCIA CALCULADA: ${facts.adherence}
 
 TENDENCIA FISIOLOGICA:
 ${JSON.stringify(histFisioSemana)}
@@ -2933,24 +2911,28 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
         headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
         body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 400, messages: [{ role: "user", content: summaryPrompt }] }),
       });
+      if (!summaryRes.ok) throw new Error("BLOCK_SUMMARY_GENERATION_FAILED");
       const summaryData = await summaryRes.json();
       const summaryTexto = summaryData.content?.map((b: any) => b.text || "").join("") || "{}";
       const summaryClean = summaryTexto.replace(/```json|```/g, "").trim();
       const summaryMatch = summaryClean.match(/\{[\s\S]*\}/);
       if (summaryMatch) summaryEstructurado = JSON.parse(summaryMatch[0]);
-    } catch (e) { console.error("Error generando BLOCK_WEEK_SUMMARY:", e); }
+    } catch { throw new Error("BLOCK_SUMMARY_GENERATION_FAILED"); }
+    if (!summaryEstructurado || typeof summaryEstructurado.objetivo_semanal !== "string"
+      || !["conseguido", "parcial", "no_conseguido"].includes(summaryEstructurado.resultado)
+      || !["baja", "media", "alta"].includes(summaryEstructurado.fatiga)
+      || !["buena", "regular", "mala"].includes(summaryEstructurado.recuperacion)
+      || ![summaryEstructurado.adaptaciones_conseguidas, summaryEstructurado.pendiente].every(a => Array.isArray(a) && a.every(v => typeof v === "string"))) {
+      throw new Error("INVALID_BLOCK_SUMMARY");
+    }
 
     // FIX: sesiones NO completadas calculadas de forma DETERMINISTICA (no por el LLM), para que
     // el Coach/Strategy de la proxima semana sepa exactamente que se salto, no solo un resumen narrativo.
-    const sesionesNoCompletadas = sesionesQueRequierenReporte
-      .filter((s: any) => s.completada !== true)
-      .map((s: any) => ({ dia: s.dia, tipo: s.tipo, titulo: s.titulo }));
-    const adherenciaRealCalc = sesionesQueRequierenReporte.length > 0
-      ? Math.round((sesionesQueRequierenReporte.filter((s: any) => s.completada === true).length / sesionesQueRequierenReporte.length) * 100)
-      : 100;
+    const sesionesNoCompletadas = facts.pending.map(s => ({ dia: s.dia, tipo: s.tipo, titulo: s.titulo }));
+    const adherenciaRealCalc = facts.percentage;
 
     if (summaryEstructurado) {
-      await supabase.from("block_week_summary").upsert({
+      await requireWrite("block_week_summary", supabase.from("block_week_summary").upsert({
         user_codigo: codigo,
         week_start: weekStartCierre,
         bloque: cicloSummary.bloque || null,
@@ -2964,7 +2946,7 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
         pendiente: summaryEstructurado.pendiente || [],
         sesiones_no_completadas: sesionesNoCompletadas,
         adherencia_real: adherenciaRealCalc
-      }, { onConflict: "user_codigo,week_start" });
+      }, { onConflict: "user_codigo,week_start" }).select("user_codigo,week_start").single(), { user_codigo: codigo, week_start: weekStartCierre });
       console.log("BLOCK WEEK SUMMARY generado:", JSON.stringify(summaryEstructurado), "sesiones_no_completadas:", JSON.stringify(sesionesNoCompletadas));
     }
 
@@ -2974,8 +2956,10 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
     // SIEMPRE al cerrar la ULTIMA semana de un bloque (semana === totalSemanas), usando el dato real
     // de ciclo_actual como unica fuente de verdad — nunca inferido de conversacion.
     if (cicloSummary.semana && cicloSummary.totalSemanas && cicloSummary.semana === cicloSummary.totalSemanas) {
-      const { data: usuarioBlockHist } = await supabase.from("usuarios").select("analisis_bloques").eq("codigo", codigo).single();
-      const analisisActualHist = usuarioBlockHist?.analisis_bloques || [];
+      stage = "analisis_bloques";
+      const { data: usuarioBlockHist, error: historyError } = await supabase.from("usuarios").select("analisis_bloques").eq("codigo", codigo).single();
+      if (historyError || !usuarioBlockHist) throw new Error("BLOCK_HISTORY_READ_FAILED");
+      const analisisActualHist = usuarioBlockHist.analisis_bloques || [];
       const yaRegistradoEsteBloque = analisisActualHist.some((a: any) => a.bloque_completado === cicloSummary.bloque && a.fecha === hoyCierreStr);
       if (!yaRegistradoEsteBloque) {
         const nuevoRegistroBloque = {
@@ -2987,7 +2971,7 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
           siguiente_bloque: "pendiente de definir",
           adherencia_estimada: String(adherenciaRealCalc)
         };
-        await supabase.from("usuarios").update({ analisis_bloques: [...analisisActualHist.slice(-5), nuevoRegistroBloque] }).eq("codigo", codigo);
+        await requireWrite("analisis_bloques", supabase.from("usuarios").update({ analisis_bloques: [...analisisActualHist.slice(-5), nuevoRegistroBloque] }).eq("codigo", codigo).select("codigo").maybeSingle(), { codigo });
         console.log("BLOCK HISTORY (deterministico): registrado cierre de bloque", JSON.stringify(nuevoRegistroBloque));
       }
     }
@@ -3013,14 +2997,20 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
     // para esta misma debilidad. Distingue SATURACION (exposicion alta + progreso avanzando → bajar
     // prioridad temporal, va bien) de ESTANCAMIENTO (exposicion alta + progreso estancado → subir
     // prioridad y señalar cambio de metodo, no esta funcionando).
-    const { data: desarrolloActualParaResponse } = await supabase.from("usuarios").select("athlete_development").eq("codigo", codigo).single();
-    const desarrolloActual = desarrolloActualParaResponse?.athlete_development || [];
+    stage = "weakness_exposure";
+    let desarrolloActual: any[] = [];
+    if (Object.keys(exposicionPorDebilidad).length) {
+      const { data: desarrolloActualParaResponse, error: developmentError } = await supabase.from("usuarios").select("athlete_development").eq("codigo", codigo).single();
+      if (developmentError || !desarrolloActualParaResponse) throw new Error("DEVELOPMENT_READ_FAILED");
+      desarrolloActual = desarrolloActualParaResponse.athlete_development || [];
+    }
 
     for (const [weaknessNombre, exposicion] of Object.entries(exposicionPorDebilidad)) {
       const debilidadActualObj = desarrolloActual.find((d: any) => d.nombre_visible === weaknessNombre);
       const progresoActual = debilidadActualObj?.progreso ?? null;
 
-      const { data: exposicionSemanaAnterior } = await supabase.from("weakness_exposure").select("progreso_al_cierre").eq("user_codigo", codigo).eq("weakness_id", weaknessNombre).order("week_start", { ascending: false }).limit(1).single();
+      const { data: exposicionSemanaAnterior, error: exposureReadError } = await supabase.from("weakness_exposure").select("progreso_al_cierre").eq("user_codigo", codigo).eq("weakness_id", weaknessNombre).order("week_start", { ascending: false }).limit(1).maybeSingle();
+      if (exposureReadError) throw new Error("EXPOSURE_READ_FAILED");
       const progresoAnterior = exposicionSemanaAnterior?.progreso_al_cierre ?? null;
 
       let responseCalculada = "sin_evaluar";
@@ -3035,7 +3025,7 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
         }
       }
 
-      await supabase.from("weakness_exposure").upsert({
+      await requireWrite("weakness_exposure", supabase.from("weakness_exposure").upsert({
         user_codigo: codigo,
         weakness_id: weaknessNombre,
         week_start: weekStartCierre,
@@ -3044,14 +3034,15 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
         response: responseCalculada,
         progreso_al_cierre: progresoActual,
         metodos_usados: exposicion.metodos
-      }, { onConflict: "user_codigo,weakness_id,week_start" });
+      }, { onConflict: "user_codigo,weakness_id,week_start" }).select("user_codigo,weakness_id,week_start").single(), { user_codigo: codigo, weakness_id: weaknessNombre, week_start: weekStartCierre });
     }
     console.log("WEAKNESS EXPOSURE registrado:", JSON.stringify(exposicionPorDebilidad));
 
     // FORGE CELEBRATIONS ENGINE — hitos objetivos deterministas (constancia, recuperacion, volumen)
+    try {
     const celebraciones = await detectarCelebraciones(supabase, codigo);
     for (const cel of celebraciones) {
-      await supabase.from("forge_discoveries").insert({
+      const { error: celebrationError } = await supabase.from("forge_discoveries").insert({
         user_codigo: codigo,
         descubrimiento: `${cel.emoji} ${cel.mensaje}`,
         categoria: `celebracion_${cel.tipo}`,
@@ -3061,29 +3052,43 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
         visto: false,
         presentado_al_usuario: false
       });
+      if (celebrationError) warnings.push("CELEBRATION_WRITE_FAILED");
     }
+    } catch { warnings.push("CELEBRATIONS_FAILED"); }
 
     // FORGE DISCOVERY ENGINE (v2) — se ejecuta tambien al cerrar cada semana, ademas de poder
     // dispararse de forma independiente via la accion "ejecutar_discovery_engine"
-    await ejecutarDiscoveryEngine(supabase, apiKey!, codigo);
+    try {
+      const discovery = await ejecutarDiscoveryEngine(supabase, apiKey!, codigo);
+      if (discovery.error) warnings.push(discovery.error);
+    } catch { warnings.push("DISCOVERY_FAILED"); }
 
     // FORGE ATHLETE RESPONSE ENGINE — se ejecuta tambien al cerrar semana, buscando correlaciones
     // especificas de respuesta del atleta (no patrones generales como Discovery)
-    await ejecutarAthleteResponseEngine(supabase, apiKey!, codigo);
+    try {
+      const knowledge = await ejecutarAthleteResponseEngine(supabase, apiKey!, codigo);
+      if (knowledge.error) warnings.push(knowledge.error);
+    } catch { warnings.push("KNOWLEDGE_FAILED"); }
 
     // FORGE CARDS — datos para ofrecer compartir la semana completada (solo si fue 100% adherencia)
-    const sesionesCompletadasCierre = sesionesQueRequierenReporte.filter((s:any)=>s.completada).length;
+    const sesionesCompletadasCierre = facts.completed.length;
     const cardSemanaData = sesionesCompletadasCierre === sesionesQueRequierenReporte.length
       ? { sesionesCompletadas: sesionesCompletadasCierre, sesionesTotales: sesionesQueRequierenReporte.length }
       : null;
 
     const adherenciaReal = sesionesQueRequierenReporte.length > 0 ? Math.round((sesionesCompletadasCierre / sesionesQueRequierenReporte.length) * 100) : 0;
 
-    // FORGE WEEK CLOSURE LOG — registro final e IDEMPOTENTE. Es lo unico que check_week_closure
-    // consulta para saber si ya se cerro esta semana.
-    await supabase.from("week_closure_log").insert({ user_codigo: codigo, week_start: weekStartCierre });
-
-    return NextResponse.json({ semanaCompleta: true, yaCerrada: false, weekStart: weekStartCierre, insightGenerado: true, cardSemanaData, adherenciaPorcentaje: adherenciaReal, sesionesCompletadas: sesionesCompletadasCierre, sesionesTotales: sesionesQueRequierenReporte.length });
+    // Marcador persistente de cierre, solo tras completar los derivados operativos requeridos.
+    await requireWrite("week_closure_log", supabase.from("week_closure_log").insert({ user_codigo: codigo, week_start: weekStartCierre })
+      .select("user_codigo,week_start").single(), { user_codigo: codigo, week_start: weekStartCierre });
+    return NextResponse.json({ ok: true, closed: true, semanaCompleta: true, alreadyClosed: false, weekStart: weekStartCierre,
+      insightGenerado, cardSemanaData, adherenciaPorcentaje: adherenciaReal, sesionesCompletadas: sesionesCompletadasCierre,
+      sesionesTotales: sesionesQueRequierenReporte.length, planPersisted, restsCompleted, operationalEffectsCompleted, warnings });
+    } catch (err: any) {
+      // No rollback; a retry could duplicate optional effects. Known partials use HTTP 200.
+      return NextResponse.json({ ok: false, partial: true, closed: false, stage, error: err.message || "CLOSURE_PARTIAL",
+        planPersisted, restsCompleted, operationalEffectsCompleted, warnings });
+    }
   }
 
   if (action === "ejecutar_discovery_engine") {
@@ -4944,28 +4949,54 @@ if (action === "obtener_daily_briefing") {
   }
 
   if (action === "guardar_resumen_semana") {
-    const { week_start, resumen, adherencia } = datos;
-    await supabase.from("weekly_plan").update({ resumen_semana: resumen }).eq("user_codigo", codigo).eq("week_start", week_start);
-
-    // Calcular nivel de conocimiento actual (mismo criterio que en Mi Atleta: 40 base + puntos de aprendizajes)
-    const { data: usuarioConocimiento } = await supabase.from("usuarios").select("aprendizajes_atleta").eq("codigo", codigo).single();
-    const aprendizajesActuales = usuarioConocimiento?.aprendizajes_atleta || [];
-    const puntosActuales = aprendizajesActuales.reduce((sum: number, a: any) => sum + (a.puntos || 0), 0);
-    const nivelConocimientoActual = Math.min(40 + puntosActuales, 100);
-
-    // Buscar el ultimo Insight anterior para saber el nivel previo
-    const { data: ultimoInsight } = await supabase.from("athlete_events").select("data").eq("user_codigo", codigo).eq("type", "forge_insight").order("date", { ascending: false }).limit(1).single();
-    const nivelAnterior = ultimoInsight?.data?.nivel_conocimiento ?? nivelConocimientoActual;
-
-    // Forge Insight: conocimiento permanente del atleta, categoria propia distinta a eventos normales
-    await supabase.from("athlete_events").insert({
-      user_codigo: codigo,
-      date: new Date().toISOString().split('T')[0],
-      type: "forge_insight",
-      title: `Forge Insight — Semana ${week_start}`,
-      data: { notas: resumen, adherencia: adherencia || "", nivel_conocimiento: nivelConocimientoActual, nivel_conocimiento_anterior: nivelAnterior }
-    });
-    return NextResponse.json({ ok: true, nivelConocimientoActual, nivelAnterior });
+    const { week_start, resumen, adherencia } = datos || {};
+    const date = resolveCompletionDate(week_start);
+    const fail = (error: string, status: number) => NextResponse.json({ ok: false, summarySaved: false, error }, { status });
+    if (typeof codigo !== "string" || !codigo.trim() || !date || date.date !== week_start || date.weekStart !== week_start
+      || typeof resumen !== "string" || !resumen.trim() || (adherencia !== undefined && typeof adherencia !== "string")) return fail("INVALID_WEEK_SUMMARY", 400);
+    const { data: existingPlan, error: readError } = await supabase.from("weekly_plan").select("*")
+      .eq("user_codigo", codigo).eq("week_start", week_start).maybeSingle();
+    if (readError) return fail("SUMMARY_PLAN_READ_FAILED", 500);
+    if (!existingPlan) return fail("SUMMARY_PLAN_NOT_FOUND", 404);
+    if (existingPlan.user_codigo !== codigo || existingPlan.week_start !== week_start) return fail("SUMMARY_PLAN_IDENTITY_MISMATCH", 409);
+    if (!Array.isArray(existingPlan.sessions)) return fail("INVALID_WEEK_SESSIONS", 422);
+    if (existingPlan.resumen_semana === resumen) return NextResponse.json({ ok: true, summarySaved: true, noOp: true, insightGenerado: false, warnings: [] });
+    // Legacy replacement is allowed; no revision/CAS. Coach adherence is proposal metadata only.
+    const candidate: PlanCandidate = { ...existingPlan, resumen_semana: resumen };
+    const command: PlanMutationCommand = { operationType: "set_week_summary", source: "week_summary",
+      target: { userCodigo: codigo, weekStart: week_start }, proposal: { summary: resumen, ...(adherencia !== undefined ? { adherence: adherencia } : {}) } };
+    const context: PlanMutationContext = { existingPlan, normalizedWeekStart: week_start };
+    const changeSet: PlanChangeSet = { operationType: "set_week_summary", affectedDays: [], changedFields: ["resumen_semana"] };
+    const validationResult = await validatePlanMutation({ command, context, candidate, changeSet });
+    if (validationResult.status !== "ready_for_commit") return fail(validationResult.status === "rejected" ? "PLAN_MUTATION_REJECTED" : "PLAN_MUTATION_VALIDATION_FAILED", validationResult.status === "rejected" ? 422 : 500);
+    const { data: saved, error: writeError } = await supabase.from("weekly_plan").update({ resumen_semana: validationResult.candidate.resumen_semana })
+      .eq("user_codigo", codigo).eq("week_start", week_start).select("user_codigo,week_start").maybeSingle();
+    if (writeError) return fail("SUMMARY_PLAN_WRITE_FAILED", 500);
+    if (!saved || saved.user_codigo !== codigo || saved.week_start !== week_start) return fail("SUMMARY_PLAN_WRITE_UNCONFIRMED", 409);
+    const warnings: string[] = [];
+    let insightGenerado = false;
+    let nivelConocimientoActual: number | undefined;
+    let nivelAnterior: number | undefined;
+    try {
+      const { data: usuarioConocimiento, error: knowledgeError } = await supabase.from("usuarios").select("aprendizajes_atleta").eq("codigo", codigo).single();
+      if (knowledgeError || !usuarioConocimiento) throw new Error("SUMMARY_INSIGHT_CONTEXT_FAILED");
+      const aprendizajesActuales = usuarioConocimiento.aprendizajes_atleta || [];
+      const puntosActuales = aprendizajesActuales.reduce((sum: number, a: any) => sum + (a.puntos || 0), 0);
+      nivelConocimientoActual = Math.min(40 + puntosActuales, 100);
+      const { data: ultimoInsight, error: previousError } = await supabase.from("athlete_events").select("data")
+        .eq("user_codigo", codigo).eq("type", "forge_insight").order("date", { ascending: false }).limit(1).maybeSingle();
+      if (previousError) throw new Error("SUMMARY_INSIGHT_CONTEXT_FAILED");
+      nivelAnterior = ultimoInsight?.data?.nivel_conocimiento ?? nivelConocimientoActual;
+      // Narrative is never a closure marker. Event adherence comes from the validated plan.
+      const { data: insight, error: insightError } = await supabase.from("athlete_events").insert({ user_codigo: codigo,
+        date: resolveCompletionDate(new Date().toISOString())!.date, type: "forge_insight", title: `Forge Insight — Semana ${week_start}`,
+        data: { notas: validationResult.candidate.resumen_semana, adherencia: weeklyFacts(validationResult.candidate).adherence,
+          nivel_conocimiento: nivelConocimientoActual, nivel_conocimiento_anterior: nivelAnterior }
+      }).select("id").single();
+      if (insightError || !insight?.id) throw new Error("SUMMARY_INSIGHT_WRITE_FAILED");
+      insightGenerado = true;
+    } catch (err: any) { warnings.push(err.message || "SUMMARY_INSIGHT_FAILED"); }
+    return NextResponse.json({ ok: true, summarySaved: true, noOp: false, insightGenerado, nivelConocimientoActual, nivelAnterior, warnings });
   }
 
   if (action === "guardar_plan_semana") {

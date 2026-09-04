@@ -9,7 +9,8 @@ export interface ContextoValidacion {
   estructura: any; // salida del Week Planner
   esDeload: boolean;
   hayLesionLumbarActiva: boolean;
-  estadoFisio?: { hrv?: number; sueno?: number; fatiga_aguda?: number };
+  estadoFisio?: { fatiga_aguda?: number };
+  objectivePhysiology?: { hrv?: { status?: string; value?: number | null }; sleepScore?: { status?: string; value?: number | null } };
   debilidadesActivas?: any[];
   historialFisiologico?: { fecha: string; hrv?: number; sueno?: number }[];
 }
@@ -70,9 +71,10 @@ function regla005ProgresionCargas(ctx: ContextoValidacion) {
 
 // 006 — Recuperacion baja (HRV/sueño) no deberia acompañarse de VO2max/alta intensidad
 function regla006Recuperacion(ctx: ContextoValidacion) {
-  const hrv = ctx.estadoFisio?.hrv;
-  const sueno = ctx.estadoFisio?.sueno;
-  const recuperacionBaja = (hrv !== undefined && hrv < 60) || (sueno !== undefined && sueno < 60);
+  const hrv = ctx.objectivePhysiology?.hrv?.status === "available" ? ctx.objectivePhysiology.hrv.value : null;
+  // The original 0-100 type and <60 threshold prove this branch expects quality score, not duration.
+  const sueno = ctx.objectivePhysiology?.sleepScore?.status === "available" ? ctx.objectivePhysiology.sleepScore.value : null;
+  const recuperacionBaja = (hrv !== null && hrv !== undefined && hrv < 60) || (sueno !== null && sueno !== undefined && sueno < 60);
   if (!recuperacionBaja) return;
   ctx.sesiones.forEach((s: any, idx: number) => {
     if (idx === 0 && /VO2max|Z5|sprint/i.test(s.descripcion || "")) {

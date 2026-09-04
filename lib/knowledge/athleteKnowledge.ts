@@ -1,3 +1,6 @@
+import { prepareRecoveryContext, assertRecoveryIdentity, RecoveryReadError, type RecoveryContext } from "../physiology/recoveryContext";
+import { getCanonicalPhysiologyHistory } from "../physiology/getCanonicalPhysiology";
+import { physiologyToday } from "../physiology/authority";
 // FORGE KNOWLEDGE ENGINE — athleteKnowledge.ts
 // Cada funcion responde UNA unica pregunta determinista sobre el atleta.
 // Nunca razona, nunca decide. Solo informa. El Coach decide que hacer con la informacion.
@@ -40,11 +43,10 @@ export async function getLatestWorkout(codigo: string): Promise<{ tipo: string; 
   return { tipo: ultimo.tipo, fecha: ultimo.fecha, notas: ultimo.notas };
 }
 
-export async function getRecoveryStatus(codigo: string): Promise<{ hrv: number | null; sueno: number | null; tendencia: string | null } | null> {
-  const { data } = await supabase.from("usuarios").select("estado_fisiologico").eq("codigo", codigo).single();
-  const estado = data?.estado_fisiologico;
-  if (!estado) return null;
-  return { hrv: estado.hrv, sueno: estado.sueno, tendencia: estado.tendencia };
+export async function getRecoveryStatus(codigo: string, prepared?: RecoveryContext): Promise<RecoveryContext> {
+  const effectiveDate = prepared?.objective.effectiveDate ?? physiologyToday();
+  if (prepared) { assertRecoveryIdentity(prepared, codigo, effectiveDate); return prepared; }
+  return prepareRecoveryContext(supabase, codigo, effectiveDate);
 }
 
 export async function getBenchmark(codigo: string, nombreEjercicio?: string): Promise<any> {
@@ -123,14 +125,14 @@ export async function getObjectiveProgress(codigo: string): Promise<{ percentage
   return { percentage, daysRemaining: diasRestantes };
 }
 
-export async function buildAthleteKnowledge(codigo: string) {
+export async function buildAthleteKnowledge(codigo: string, preparedRecovery?: RecoveryContext) {
   const [objective, block, weaknesses, latestInsight, latestWorkout, recovery, objectiveProgress] = await Promise.all([
     getCurrentObjective(codigo),
     getCurrentBlock(codigo),
     getActiveWeaknesses(codigo),
     getLatestInsight(codigo),
     getLatestWorkout(codigo),
-    getRecoveryStatus(codigo),
+    getRecoveryStatus(codigo, preparedRecovery),
     getObjectiveProgress(codigo)
   ]);
   return { objective, block, weaknesses, latestInsight, latestWorkout, recovery, objectiveProgress };
@@ -144,8 +146,15 @@ export async function knowledgeRouter(codigo: string, intent: string, entidad?: 
       return { tipo: "debilidades_activas", valor: await getActiveWeaknesses(codigo) };
     case "ULTIMO_INSIGHT":
       return { tipo: "ultimo_insight", valor: await getLatestInsight(codigo) };
-    case "HISTORIAL_FISIOLOGICO":
-      return { tipo: "estado_recuperacion", valor: await getRecoveryStatus(codigo) };
+    case "HISTORIAL_FISIOLOGICO": {
+      const recovery = await getRecoveryStatus(codigo);
+      const history = await getCanonicalPhysiologyHistory(supabase, codigo, {
+        asOfDate: recovery.objective.effectiveDate, toDate: recovery.objective.effectiveDate, limit: 30,
+      });
+      if (!history.ok) throw new RecoveryReadError(history);
+      // Keep the existing envelope; expose actual dated history separately from current recovery.
+      return { tipo: "estado_recuperacion", valor: recovery, history };
+    }
     case "BENCHMARK":
       return { tipo: "benchmark", valor: await getBenchmark(codigo, entidad) };
     case "PLAN_SEMANA":

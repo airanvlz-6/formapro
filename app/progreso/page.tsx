@@ -52,7 +52,24 @@ useEffect(() => {
   const ciclo = datos?.ciclo_actual || {};
   const datosEntreno = datos?.datos_entrenamiento || {};
   const [adherencia, setAdherencia] = useState<{adherencia7?:number;adherencia28?:number;adherenciaBloque?:number;diasSemana?:number}>({});
-  const histFisio = datos?.historial_fisiologico || [];
+  const canonicalPhysiology = datos?.canonical_physiology;
+  const currentPhysiology = canonicalPhysiology?.current;
+  const subjectivePhysiology = canonicalPhysiology?.subjective;
+  // Canonical API is DESC; presentation/trend formulas below require chronological order.
+  const histFisio = [...(canonicalPhysiology?.history || [])].reverse().map((snapshot:any) => ({
+    fecha: snapshot.effectiveDate,
+    hrv: snapshot.hrv?.status === "available" ? snapshot.hrv.value : null,
+    rhr: snapshot.restingHr?.status === "available" ? snapshot.restingHr.value : null,
+    sueno: snapshot.sleepScore?.status === "available" ? snapshot.sleepScore.value : null,
+    sleepDurationMinutes: snapshot.sleepDuration?.status === "available" ? snapshot.sleepDuration.value : null,
+  }));
+  const estadoFisiologicoActual = {
+    hrv: currentPhysiology?.hrv?.status === "available" ? currentPhysiology.hrv.value : null,
+    rhr: currentPhysiology?.restingHr?.status === "available" ? currentPhysiology.restingHr.value : null,
+    sueno: currentPhysiology?.sleepScore?.status === "available" ? currentPhysiology.sleepScore.value : null,
+    sleepDurationMinutes: currentPhysiology?.sleepDuration?.status === "available" ? currentPhysiology.sleepDuration.value : null,
+    fatiga_aguda: subjectivePhysiology?.acuteFatigue ?? null,
+  };
 
   useEffect(()=>{
     if(autenticado && codigo){
@@ -166,8 +183,8 @@ useEffect(() => {
         </div>
 
         {/* 1. Estado fisiologico */}
-        {datos?.estado_fisiologico && Object.keys(datos.estado_fisiologico).some(k => datos.estado_fisiologico[k]) && (()=>{
-          const ef = datos.estado_fisiologico;
+        {canonicalPhysiology && Object.values(estadoFisiologicoActual).some(v => v !== null) && (()=>{
+          const ef = estadoFisiologicoActual;
           const hrv = ef.hrv;
           const sueno = ef.sueno;
           const fatiga = ef.fatiga_aguda;
@@ -293,17 +310,17 @@ useEffect(() => {
           const alertas: {mensaje: string; tipo: 'precaucion' | 'warning' | 'danger'}[] = [];
           const ahora = new Date();
 
-          if(datos?.estado_fisiologico?.sueno && datos.estado_fisiologico.sueno < 50){
+          if(estadoFisiologicoActual.sueno && estadoFisiologicoActual.sueno < 50){
             alertas.push({mensaje: `Tu calidad de sueño está por debajo de 50/100. La recuperación puede verse afectada de forma significativa.`, tipo: 'warning'});
           }
 
-          if(datos?.estado_fisiologico?.hrv && histFisio.length >= 3){
+          if(estadoFisiologicoActual.hrv && histFisio.length >= 3){
             const mediaHrv = histFisio.slice(-7).filter((e:any)=>e.hrv).reduce((a:number,b:any)=>a+b.hrv,0) / histFisio.slice(-7).filter((e:any)=>e.hrv).length;
-            const ratioHrv = datos.estado_fisiologico.hrv / mediaHrv;
+            const ratioHrv = estadoFisiologicoActual.hrv / mediaHrv;
             if(ratioHrv < 0.70){
-              alertas.push({mensaje: `Tu HRV actual (${datos.estado_fisiologico.hrv}ms) está un 30% o más por debajo de tu media reciente. Reduce intensidad hoy.`, tipo: 'danger'});
+              alertas.push({mensaje: `Tu HRV actual (${estadoFisiologicoActual.hrv}ms) está un 30% o más por debajo de tu media reciente. Reduce intensidad hoy.`, tipo: 'danger'});
             } else if(ratioHrv < 0.85){
-              alertas.push({mensaje: `Tu HRV actual (${datos.estado_fisiologico.hrv}ms) está por debajo de tu media reciente (${Math.round(mediaHrv)}ms). Vigila cómo te sientes.`, tipo: 'precaucion'});
+              alertas.push({mensaje: `Tu HRV actual (${estadoFisiologicoActual.hrv}ms) está por debajo de tu media reciente (${Math.round(mediaHrv)}ms). Vigila cómo te sientes.`, tipo: 'precaucion'});
             }
           }
 
@@ -383,7 +400,7 @@ useEffect(() => {
 
         {/* 4. Prediccion de riesgo */}
         {(()=>{
-          const ef = datos?.estado_fisiologico || {};
+          const ef = estadoFisiologicoActual;
           const wh = datos?.workout_history || [];
           const ahora = new Date();
           const hace7 = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);

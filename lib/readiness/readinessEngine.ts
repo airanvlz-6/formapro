@@ -8,7 +8,9 @@
 // Engine), que solo actua tras confirmacion EXPLICITA del usuario. Este motor solo calcula y
 // explica el numero — nunca decide ni ejecuta cambios en la planificacion.
 
-import { PuntoFisiologico, calcularBaselinePersonal, compararConBaseline, ComparacionHoy } from './personalBaselineEngine';
+import { PuntoFisiologico, calcularBaselinePersonal, compararConBaseline, ComparacionHoy, BaselinePersonal } from './personalBaselineEngine';
+
+export type PreparedReadinessBaselines = Record<'hrv' | 'rhr' | 'duracionSueno', BaselinePersonal>;
 
 export interface ReadinessResultado {
   score: number | null; // 0-100, o null si confianza es "insuficiente"
@@ -58,7 +60,8 @@ function frecuenciaAPuntuacion(nivelFrecuencia: 'baja' | 'normal' | 'alta'): num
  */
 export function calcularReadiness(
   historicoFisiologico: PuntoFisiologico[], // ya ordenado mas reciente primero, incluye HOY en [0]
-  cargaRecienteRelativa: number // 0-1, ej: volumen_relativo del ciclo actual o similar
+  cargaRecienteRelativa: number, // 0-1, ej: volumen_relativo del ciclo actual o similar
+  preparedBaselines?: PreparedReadinessBaselines // Canonical adapter selects real prior observations per signal.
 ): ReadinessResultado {
   const hoy = historicoFisiologico[0];
   const historicoSinHoy = historicoFisiologico.slice(1); // el baseline se calcula SIN el dia de hoy
@@ -72,9 +75,9 @@ export function calcularReadiness(
     };
   }
 
-  const baselineHrv = calcularBaselinePersonal(historicoSinHoy, 'hrv');
-  const baselineRhr = calcularBaselinePersonal(historicoSinHoy, 'rhr');
-  const baselineSueno = calcularBaselinePersonal(historicoSinHoy, 'duracionSueno');
+  const baselineHrv = preparedBaselines?.hrv ?? calcularBaselinePersonal(historicoSinHoy, 'hrv');
+  const baselineRhr = preparedBaselines?.rhr ?? calcularBaselinePersonal(historicoSinHoy, 'rhr');
+  const baselineSueno = preparedBaselines?.duracionSueno ?? calcularBaselinePersonal(historicoSinHoy, 'duracionSueno');
 
   const confianzaMinima = [baselineHrv, baselineRhr, baselineSueno]
     .map(b => b.confianza)

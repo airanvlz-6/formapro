@@ -331,30 +331,13 @@ ${datosEntreno&&Object.keys(datosEntreno).length>0?`
 DATOS DE ENTRENAMIENTO ESPECÍFICOS:
 ${Object.entries(datosEntreno).map(([k,v])=>`- ${k}: ${v}`).join("\n")}
 IMPORTANTE: Usa estos datos para programar con precisión. Son los valores reales del atleta y deben respetarse siempre.`:""}
-${histFisio&&histFisio.length>=3?(()=>{
-  const ultimos=histFisio.slice(-7);
-  const hrvValues=ultimos.filter(e=>e.hrv).map(e=>e.hrv as number);
-  const suenoValues=ultimos.filter(e=>e.sueno).map(e=>e.sueno as number);
-  const tendenciaHrv=hrvValues.length>=3?(hrvValues[hrvValues.length-1]-hrvValues[0]>5?"ascendente":hrvValues[hrvValues.length-1]-hrvValues[0]<-5?"descendente":"estable"):"sin datos";
-  const tendenciaSueno=suenoValues.length>=3?(suenoValues[suenoValues.length-1]-suenoValues[0]>5?"ascendente":suenoValues[suenoValues.length-1]-suenoValues[0]<-5?"descendente":"estable"):"sin datos";
-  const diasNegativo=[tendenciaHrv,tendenciaSueno].filter(t=>t==="descendente").length;
-  return `
-TENDENCIAS FISIOLÓGICAS (últimos ${ultimos.length} días):
-- HRV: ${hrvValues.length>0?`media ${Math.round(hrvValues.reduce((a,b)=>a+b,0)/hrvValues.length)}ms, tendencia ${tendenciaHrv}`:"sin datos"}
-- Sueño: ${suenoValues.length>0?`media ${Math.round(suenoValues.reduce((a,b)=>a+b,0)/suenoValues.length)}/100, tendencia ${tendenciaSueno}`:"sin datos"}
-${diasNegativo>=2?"⚠️ ALERTA: Tendencia negativa en múltiples métricas. Considera consolidar antes de aumentar carga.":"✅ Tendencia estable o positiva."}
-IMPORTANTE: Si detectas patrón negativo sostenido (>5 días), intervén proactivamente antes de que el atleta lo mencione.`;
-})():""}
 ${estadoFisio&&Object.keys(estadoFisio).length>0?`
-ESTADO FISIOLÓGICO ACTUAL:
-- Fatiga aguda (ATL): ${estadoFisio.fatiga_aguda??'no disponible'}/100
-- Fatiga crónica (CTL): ${estadoFisio.fatiga_cronica??'no disponible'}/100
-- Tendencia: ${estadoFisio.tendencia||'no disponible'}
-- HRV: ${estadoFisio.hrv??'no disponible'} ms
-- Calidad sueño: ${estadoFisio.sueno??'no disponible'}/100
-- FC reposo: ${estadoFisio.rhr??'no disponible'} bpm
-- Adherencia: ${estadoFisio.adherencia??'no disponible'}%
-IMPORTANTE: Ajusta la intensidad y volumen de la sesión según este estado. HRV bajo (<50ms) o fatiga aguda alta (>80) = reduce intensidad. Sueño bajo (<60) = sesión de recuperación activa.`:""}
+CONTEXTO SUBJETIVO ACTUAL (no es medición fisiológica objetiva):
+- Fatiga aguda percibida: ${estadoFisio.fatiga_aguda??'no disponible'}/100
+- Fatiga crónica percibida: ${estadoFisio.fatiga_cronica??'no disponible'}/100
+- Tendencia contextual: ${estadoFisio.tendencia||'no disponible'}
+- Adherencia contextual: ${estadoFisio.adherencia??'no disponible'}%
+IMPORTANTE: La fatiga subjetiva puede orientar una pregunta o cautela, pero no sustituye HRV, FC en reposo o sueño objetivos.`:""}
 ${athleteStateStr}
 
 ${estadoCanonico?`
@@ -362,8 +345,12 @@ ${estadoCanonico?`
 Hoy es ${estadoCanonico.dia_semana_hoy} ${estadoCanonico.fecha_hoy}. Mañana es ${estadoCanonico.dia_semana_manana} ${estadoCanonico.fecha_manana}.
 ${estadoCanonico.sesion_hoy?`Sesión de HOY: "${estadoCanonico.sesion_hoy.titulo}"${estadoCanonico.sesion_hoy.completada?" [YA COMPLETADA]":" [PENDIENTE]"}`:"Sin sesión programada para hoy en el plan."}
 ${estadoCanonico.sesion_manana?`Sesión de MAÑANA: "${estadoCanonico.sesion_manana.titulo}"${estadoCanonico.sesion_manana.completada?" [YA COMPLETADA]":" [PENDIENTE]"}`:"Sin sesión programada para mañana en el plan."}
-${estadoCanonico.ultimo_registro_fisiologico?`Último registro fisiológico guardado: ${estadoCanonico.ultimo_registro_fisiologico.fecha} (HRV ${estadoCanonico.ultimo_registro_fisiologico.hrv||'-'}, sueño ${estadoCanonico.ultimo_registro_fisiologico.sueno||'-'})`:""}
-${estadoCanonico.tendencia_fisiologica?`Tendencia últimas noches — Sueño: ${estadoCanonico.tendencia_fisiologica.ultimas_noches_sueno.join(" → ")} (${estadoCanonico.tendencia_fisiologica.sueno_tendencia}). HRV: ${estadoCanonico.tendencia_fisiologica.ultimas_noches_hrv.join(" → ")} (${estadoCanonico.tendencia_fisiologica.hrv_tendencia}). Si detectas una tendencia clara de varios días (no un solo dato aislado), puedes mencionarla como análisis de tendencia (ej: "llevas 3 noches consecutivas con recuperación ascendente").`:""}
+FISIOLOGÍA OBJETIVA DE HOY (${estadoCanonico.recovery?.objective?.effectiveDate||estadoCanonico.fecha_hoy}, sin sustituir con días anteriores):
+- HRV: ${estadoCanonico.recovery?.objective?.hrv?.status==="available"?`${estadoCanonico.recovery.objective.hrv.value} ms`:"no disponible"}
+- FC reposo: ${estadoCanonico.recovery?.objective?.restingHr?.status==="available"?`${estadoCanonico.recovery.objective.restingHr.value} bpm`:"no disponible"}
+- Duración de sueño: ${estadoCanonico.recovery?.objective?.sleepDuration?.status==="available"?`${estadoCanonico.recovery.objective.sleepDuration.value} min`:"no disponible"}
+- Score de sueño: ${estadoCanonico.recovery?.objective?.sleepScore?.status==="available"?`${estadoCanonico.recovery.objective.sleepScore.value}/100`:"no disponible"}
+TENDENCIA HRV CANÓNICA: ${estadoCanonico.recovery?.trends?.hrv?.status==="available"?`${estadoCanonico.recovery.trends.hrv.observations.map((p:any)=>`${p.effectiveDate}: ${p.value}`).join(" → ")} (${estadoCanonico.recovery.trends.hrv.direction})`:"sin datos suficientes"}
 ${estadoCanonico?.athlete_state?.estado&&estadoCanonico.athlete_state.estado!=="normal"?`
 🔴 ESTADO DEL ATLETA — RESTRICCIÓN ACTIVA (${estadoCanonico.athlete_state.estado.toUpperCase()}): El atleta está en un periodo de restricción desde ${estadoCanonico.athlete_state.desde} por: ${estadoCanonico.athlete_state.motivo}. REGLA CRÍTICA: NO reacciones sesión a sesión a este mismo problema — la restricción ya gobierna toda la planificación mientras esté activa. Si el atleta menciona de nuevo el mismo problema (ej: "sigue la molestia"), NO propongas otra modificación puntual — responde reconociendo que sigue en periodo de restricción y que la planificación ya lo tiene en cuenta. Solo si el atleta confirma EXPLÍCITAMENTE que el problema se ha resuelto, indica que evaluaréis juntos cómo retomar progresivamente (nunca asumas retorno automático a la carga previa).`:""}
 ESTAS FECHAS Y ESTADOS SON LA ÚNICA VERDAD. Nunca calcules fechas por tu cuenta cuando este bloque esté presente — solo interprétalo y explica.`:`
@@ -1089,7 +1076,8 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
       estructura,
       esDeload,
       hayLesionLumbarActiva,
-      estadoFisio:estadoFisiologico,
+      estadoFisio:{fatiga_aguda:estadoFisiologico.fatiga_aguda},
+      objectivePhysiology:estadoCanonico?.recovery?.objective,
       debilidadesActivas:debilidades,
       historialFisiologico
     });

@@ -25,7 +25,7 @@ export async function getAthleteContext(codigo: string) {
   // Query principal — replica exactamente los campos que la web carga en recuperarUsuario/useEffect
   const { data: u, error } = await supabase
     .from("usuarios")
-    .select("categoria,especialidad,perfil,marcas,historial,lesiones_actuales,plan_proxima_semana,notas_coach,ciclo_actual,perfil_psicologico,premium,admin,athlete_state,datos_entrenamiento,estado_fisiologico,historial_fisiologico,distribucion_semanal,objetivo_principal,debilidades,analisis_bloques")
+    .select("categoria,especialidad,perfil,marcas,historial,lesiones_actuales,plan_proxima_semana,notas_coach,ciclo_actual,perfil_psicologico,premium,admin,athlete_state,datos_entrenamiento,distribucion_semanal,objetivo_principal,debilidades,analisis_bloques")
     .eq("codigo", codigo)
     .single();
 
@@ -88,8 +88,11 @@ export async function getAthleteContext(codigo: string) {
     esPremiumOAdmin: !!(u.premium || u.admin),
     athleteState: u.athlete_state || {},
     datosEntrenamiento: u.datos_entrenamiento || {},
-    estadoFisiologico: u.estado_fisiologico || {},
-    historialFisiologico: u.historial_fisiologico || [],
+    estadoFisiologico: {
+      fatiga_aguda: estadoCanonico?.recovery?.subjective?.acuteFatigue ?? undefined,
+      tendencia: estadoCanonico?.recovery?.subjective?.trend ?? undefined,
+    },
+    historialFisiologico: [],
     distribucionSemanal: u.distribucion_semanal || "",
     objetivoPrincipal: u.objetivo_principal || {},
     planSemanal,

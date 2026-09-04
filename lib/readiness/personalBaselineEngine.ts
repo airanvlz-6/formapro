@@ -7,10 +7,9 @@ export interface PuntoFisiologico {
   fecha: string;
   hrv: number | null;
   rhr: number | null;
-  // FIX SEMANTICO: renombrado de 'sueno' a 'duracionSueno' para dejar explicito que esta senal
-  // mide DURACION (horas normalizadas a score 0-100), nunca calidad de sueño real (fases,
-  // interrupciones, consistencia) — evita que se interprete como algo que no es.
-  duracionSueno: number | null; // score 0-100 derivado de duracion, NUNCA "calidad"
+  // Canonical callers supply actual sleep minutes, consistently for today and baseline.
+  // Z-score arithmetic has no hours-specific dependency. Never use a sleep quality score.
+  duracionSueno: number | null;
 }
 
 export interface BaselinePersonal {

@@ -1,3 +1,6 @@
+import { getCanonicalPhysiologyHistory } from "@/lib/physiology/getCanonicalPhysiology";
+import { prepareRecoveryContext, assertRecoveryIdentity, RecoveryReadError, type RecoveryContext } from "@/lib/physiology/recoveryContext";
+import { prepareCanonicalReadiness } from "@/lib/readiness/prepareCanonicalReadiness";
 import { writePhysiology, stripGenericPhysiology, contextualPhysiology, type PhysiologyResult } from "@/lib/physiology/authority";
 import { manualPatch, conversationalPatch, historicalPatch, imagePatch, healthKitPatch, physiologyToday, latestUserText } from "@/lib/physiology/adapters";
 import { NextRequest, NextResponse } from "next/server";
@@ -59,7 +62,7 @@ async function buildBlockNarrative(supabase: any, codigo: string): Promise<strin
   return `NARRATIVA DEL BLOQUE ACTUAL (${bloqueActual}, ${resumenes.length} semana(s) registrada(s)):\n${lineas.join("\n")}`;
 }
 
-async function generarEstadoCanonico(supabase: any, codigo: string, restrictions?: CanonicalRestrictions) {
+async function generarEstadoCanonico(supabase: any, codigo: string, restrictions?: CanonicalRestrictions, recoveryContext?: RecoveryContext) {
   const DIAS_MAP = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
   const ahora = new Date();
   const hoyStr = ahora.toLocaleDateString('en-CA', {timeZone: 'Europe/Madrid'});
@@ -72,7 +75,7 @@ async function generarEstadoCanonico(supabase: any, codigo: string, restrictions
   const lunesFecha = new Date(hoyFecha); lunesFecha.setDate(hoyFecha.getDate() - diaSemanaNum + 1);
   const weekStart = lunesFecha.toISOString().split('T')[0];
 
-  const { data: usuario } = await supabase.from("usuarios").select("ciclo_actual,estado_fisiologico,objetivo_principal,debilidades,athlete_development").eq("codigo", codigo).single();
+  const { data: usuario } = await supabase.from("usuarios").select("ciclo_actual,objetivo_principal,debilidades,athlete_development").eq("codigo", codigo).single();
   const { data: plan } = await supabase.from("weekly_plan").select("*").eq("user_codigo", codigo).eq("week_start", weekStart).single();
 
   // FIX CRITICO: cuando "mañana" cruza a otra semana (ej: hoy domingo, mañana lunes de la semana
@@ -91,31 +94,12 @@ async function generarEstadoCanonico(supabase: any, codigo: string, restrictions
   // que ambos sepan si el atleta esta en un periodo de restriccion que gobierna toda la planificacion.
   const canonicalRestrictions = restrictions ?? await getCanonicalRestrictions(supabase, codigo);
   const estadoAtletaActivo = canonicalRestrictions.state;
-  // FUENTE ATOMICA: physiology_records reemplaza el JSON historial_fisiologico, elimina RMW
-  const { data: fisioRecords } = await supabase.from("physiology_records").select("fecha,hrv,sueno,rhr,fatiga_aguda").eq("user_codigo", codigo).order("fecha", { ascending: false }).limit(30);
-  const historialFisiologicoAtomico = (fisioRecords || []).map((r: any) => ({ fecha: r.fecha, hrv: r.hrv, sueno: r.sueno, rhr: r.rhr, fatiga_aguda: r.fatiga_aguda }));
+  const recovery = recoveryContext ?? await prepareRecoveryContext(supabase, codigo, hoyStr);
+  assertRecoveryIdentity(recovery, codigo, hoyStr);
 
   const normalizar = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
   const sesionHoy = plan?.sessions?.find((s: any) => normalizar(s.dia) === normalizar(diaSemanaHoy));
   const sesionManana = planParaManana?.sessions?.find((s: any) => normalizar(s.dia) === normalizar(diaSemanaManana));
-
-  const histFisio = historialFisiologicoAtomico;
-  const ultimosRegistrosFisio = [...histFisio].sort((a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()).slice(0, 3);
-  const ultimoRegistroFisio = ultimosRegistrosFisio[0];
-
-  let tendenciaFisio = null;
-  if (ultimosRegistrosFisio.length >= 2) {
-    const suenoValores = ultimosRegistrosFisio.filter((r: any) => r.sueno).map((r: any) => r.sueno).reverse();
-    const hrvValores = ultimosRegistrosFisio.filter((r: any) => r.hrv).map((r: any) => r.hrv).reverse();
-    const esAscendente = (arr: number[]) => arr.length >= 2 && arr.every((v, i) => i === 0 || v >= arr[i - 1]);
-    const esDescendente = (arr: number[]) => arr.length >= 2 && arr.every((v, i) => i === 0 || v <= arr[i - 1]);
-    tendenciaFisio = {
-      ultimas_noches_sueno: suenoValores,
-      ultimas_noches_hrv: hrvValores,
-      sueno_tendencia: esAscendente(suenoValores) ? "ascendente" : esDescendente(suenoValores) ? "descendente" : "estable",
-      hrv_tendencia: esAscendente(hrvValores) ? "ascendente" : esDescendente(hrvValores) ? "descendente" : "estable"
-    };
-  }
 
   const estado = {
     fecha_hoy: hoyStr,
@@ -135,8 +119,21 @@ async function generarEstadoCanonico(supabase: any, codigo: string, restrictions
       descripcion: sesionManana.descripcion,
       por_que: sesionManana.por_que
     } : null,
-    ultimo_registro_fisiologico: ultimoRegistroFisio || null,
-    tendencia_fisiologica: tendenciaFisio,
+    recovery,
+    // Compatibility fields carry only canonical presentation values for the exact current date.
+    ultimo_registro_fisiologico: recovery.objective.rowPresent ? {
+      fecha: recovery.objective.effectiveDate, hrv: recovery.hrv,
+      rhr: recovery.objective.restingHr.value, sueno: recovery.sueno,
+      sleep_duration_minutes: recovery.objective.sleepDuration.value,
+      sleep_score: recovery.objective.sleepScore.value,
+    } : null,
+    tendencia_fisiologica: {
+      ultimas_noches_hrv: recovery.trends.hrv.observations.map(p => p.value),
+      fechas_hrv: recovery.trends.hrv.observations.map(p => p.effectiveDate),
+      hrv_tendencia: recovery.trends.hrv.direction,
+      ultimas_noches_sueno: [], sueno_tendencia: null,
+      sleep_status: recovery.trends.sleep,
+    },
     objetivo_principal: usuario?.objetivo_principal || null,
     debilidades_activas: (usuario?.athlete_development || []).filter((d: any) => d.estado !== "resuelta").map((d: any) => d.nombre_visible || d.indicador),
     athlete_state: estadoAtletaActivo ? { estado: estadoAtletaActivo.estado, motivo: estadoAtletaActivo.motivo, desde: estadoAtletaActivo.fecha_inicio } : { estado: "normal" },
@@ -445,7 +442,7 @@ Respuesta INCORRECTA (nunca hagas esto): dar una prescripcion tecnica detallada 
   if (instruccionFacts) partes.push(instruccionFacts);
 
   // FORGE KNOWLEDGE ENGINE — informacion determinista, sin razonamiento, el Coach decide que hacer con ella
-  const knowledge = await buildAthleteKnowledge(codigo);
+  const knowledge = await buildAthleteKnowledge(codigo, estadoParaReferencia.recovery);
   const lineasKnowledge: string[] = [];
   if (knowledge.objective) lineasKnowledge.push(`Objetivo: ${knowledge.objective}`);
   if (knowledge.block) lineasKnowledge.push(`Bloque: ${knowledge.block.bloque} — Semana ${knowledge.block.semana}/${knowledge.block.totalSemanas}`);
@@ -490,13 +487,41 @@ interface Celebration {
   mensaje: string;
   emoji: string;
 }
+function canonicalPhysiologyForAnalytics(snapshot: any) {
+  const value = (signal: any) => signal?.status === "available" ? signal.value : null;
+  return {
+    date: snapshot.effectiveDate,
+    hrv_ms: value(snapshot.hrv), resting_hr_bpm: value(snapshot.restingHr),
+    sleep_duration_minutes: value(snapshot.sleepDuration), sleep_score: value(snapshot.sleepScore),
+    signal_statuses: { hrv_ms: snapshot.hrv.status, resting_hr_bpm: snapshot.restingHr.status,
+      sleep_duration_minutes: snapshot.sleepDuration.status, sleep_score: snapshot.sleepScore.status },
+  };
+}
+async function latestCanonicalHrv(db: any, codigo: string, count: number, asOfDate: string): Promise<number[] | null> {
+  const newest: number[] = [];
+  let toDate: string | undefined = asOfDate;
+  while (toDate && newest.length < count) {
+    const history = await getCanonicalPhysiologyHistory(db, codigo, { asOfDate, toDate, limit: 1000 });
+    if (!history.ok) return null;
+    if (!history.snapshots.length) break;
+    for (const snapshot of history.snapshots) {
+      if (snapshot.hrv.status === "available") newest.push(snapshot.hrv.value);
+      if (newest.length === count) break;
+    }
+    const oldest = history.snapshots[history.snapshots.length - 1].effectiveDate;
+    toDate = oldest === "0001-01-01" ? undefined
+      : new Date(Date.parse(oldest) - 86400000).toISOString().slice(0, 10);
+  }
+  return newest.reverse();
+}
 
 async function detectarCelebraciones(supabase: any, codigo: string): Promise<Celebration[]> {
   const celebraciones: Celebration[] = [];
-  const { data, error: celebrationReadError } = await supabase.from("usuarios").select("workout_history,historial_fisiologico").eq("codigo", codigo).single();
+  const { data, error: celebrationReadError } = await supabase.from("usuarios").select("workout_history").eq("codigo", codigo).single();
   if (celebrationReadError) throw new Error("CELEBRATIONS_READ_FAILED");
   const workoutHistory = data?.workout_history || [];
-  const fisioHistory = data?.historial_fisiologico || [];
+  const ultimosHRV = await latestCanonicalHrv(supabase, codigo, 5, physiologyToday());
+  if (!ultimosHRV) throw new Error("CELEBRATIONS_READ_FAILED");
 
   // 1. Racha de semanas consecutivas con adherencia completa (usando athlete_events forge_insight)
   const { data: insightsRecientes, error: insightsReadError } = await supabase.from("athlete_events").select("data,date").eq("user_codigo", codigo).eq("type", "forge_insight").order("date", { ascending: false }).limit(4);
@@ -513,7 +538,6 @@ async function detectarCelebraciones(supabase: any, codigo: string): Promise<Cel
   }
 
   // 2. Tendencia de recuperacion ascendente sostenida (HRV subiendo en las ultimas 5 mediciones)
-  const ultimosHRV = fisioHistory.slice(-5).map((f: any) => f.hrv).filter((v: any) => v !== null && v !== undefined);
   if (ultimosHRV.length >= 5) {
     const esAscendente = ultimosHRV.every((v: number, i: number) => i === 0 || v >= ultimosHRV[i - 1] - 5); // tolerancia pequeña
     if (esAscendente && ultimosHRV[ultimosHRV.length - 1] > ultimosHRV[0]) {
@@ -536,14 +560,14 @@ async function detectarCelebraciones(supabase: any, codigo: string): Promise<Cel
 // el sueño al tipo de sesion previa, etc. Requiere evidencia real, nunca especula. Se ejecuta con
 // menor frecuencia que Discovery (necesita mas datos acumulados para ser fiable).
 async function ejecutarAthleteResponseEngine(supabase: any, apiKey: string, codigo: string): Promise<{ generado: boolean; error?: string }> {
-  const { data: usuario, error: userError } = await supabase.from("usuarios").select("workout_history,historial_fisiologico").eq("codigo", codigo).single();
+  const { data: usuario, error: userError } = await supabase.from("usuarios").select("workout_history").eq("codigo", codigo).single();
   if (userError) return { generado: false, error: "KNOWLEDGE_READ_FAILED" };
   const workoutHistory = (usuario?.workout_history || []).slice(-40);
-  const fisioHistory = (usuario?.historial_fisiologico || []).slice(-40);
-
-  if (workoutHistory.length < 10) {
-    return { generado: false }; // necesita suficiente historial para correlaciones fiables
-  }
+  if (workoutHistory.length < 10) return { generado: false };
+  const canonicalHistory = await getCanonicalPhysiologyHistory(supabase, codigo, { asOfDate: physiologyToday(), limit: 40 });
+  if (!canonicalHistory.ok) return { generado: false, error: `KNOWLEDGE_${canonicalHistory.error.toUpperCase()}` };
+  const fisioHistory = canonicalHistory.snapshots.map(canonicalPhysiologyForAnalytics)
+    .filter(row => Object.values(row.signal_statuses).some(status => status === "available"));
 
   const { data: patronesExistentes, error: patternsError } = await supabase.from("athlete_response_patterns").select("patron").eq("user_codigo", codigo).eq("activo", true).limit(10);
 
@@ -558,7 +582,7 @@ por ejemplo: "las sesiones con [ejercicio X] a partir de [condicion Y] generan [
 HISTORIAL DE ENTRENOS (hasta 40 ultimos):
 ${JSON.stringify(workoutHistory.map((w: any) => ({ tipo: w.tipo, fecha: w.fecha, sensacion: w.sensacion, notas: (w.notas || "").substring(0, 150) })))}
 
-HISTORIAL FISIOLOGICO (hasta 40 ultimos dias):
+HISTORIAL FISIOLOGICO CANONICO (hasta 40 observaciones, orden DESC por fecha; campos y unidades explícitos):
 ${JSON.stringify(fisioHistory)}
 
 PATRONES YA CONFIRMADOS ANTERIORMENTE (no repitas, busca uno DIFERENTE):
@@ -612,10 +636,13 @@ Si NO hay evidencia suficientemente especifica y solida, responde SOLO con:
 }
 
 async function ejecutarDiscoveryEngine(supabase: any, apiKey: string, codigo: string): Promise<{ generado: boolean; nivel?: string; error?: string }> {
-  const { data: usuarioDiscovery, error: discoveryReadError } = await supabase.from("usuarios").select("workout_history,historial_fisiologico").eq("codigo", codigo).single();
+  const { data: usuarioDiscovery, error: discoveryReadError } = await supabase.from("usuarios").select("workout_history").eq("codigo", codigo).single();
   if (discoveryReadError) return { generado: false, error: "DISCOVERY_READ_FAILED" };
   const historialCompleto = (usuarioDiscovery?.workout_history || []).slice(-30);
-  const fisioCompleto = (usuarioDiscovery?.historial_fisiologico || []).slice(-30);
+  const canonicalHistory = await getCanonicalPhysiologyHistory(supabase, codigo, { asOfDate: physiologyToday(), limit: 30 });
+  if (!canonicalHistory.ok) return { generado: false, error: `DISCOVERY_${canonicalHistory.error.toUpperCase()}` };
+  const fisioCompleto = canonicalHistory.snapshots.map(canonicalPhysiologyForAnalytics)
+    .filter(row => Object.values(row.signal_statuses).some(status => status === "available"));
 
   if (historialCompleto.length < 3 && fisioCompleto.length < 3) {
     return { generado: false }; // sin datos suficientes, ni lo intentamos
@@ -626,7 +653,7 @@ async function ejecutarDiscoveryEngine(supabase: any, apiKey: string, codigo: st
 HISTORIAL DE ENTRENOS (hasta 30 últimos):
 ${JSON.stringify(historialCompleto.map((w: any) => ({ tipo: w.tipo, fecha: w.fecha, sensacion: w.sensacion })))}
 
-HISTORIAL FISIOLÓGICO (hasta 30 últimos días):
+HISTORIAL FISIOLÓGICO CANÓNICO (hasta 30 observaciones, orden DESC por fecha; campos y unidades explícitos):
 ${JSON.stringify(fisioCompleto)}
 
 NIVELES DE EVIDENCIA (elige el nivel correcto según cuántos puntos de datos respaldan el patrón):
@@ -740,6 +767,15 @@ async function marcarEventoComoExtraido(supabase: any, apiKey: string, codigo: s
 }
 
 export async function POST(req: NextRequest) {
+  try { return await handlePost(req); }
+  catch (error) {
+    if (error instanceof RecoveryReadError) return NextResponse.json(error.failure,
+      { status: error.failure.error === "invalid_input" ? 400 : 503 });
+    throw error;
+  }
+}
+
+async function handlePost(req: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {
@@ -1379,19 +1415,18 @@ if (action === "verificar_cambio_modo") {
 
   // Recuperar usuario por codigo
   if (action === "recuperar_usuario") {
-    const { data, error } = await supabase
-      .from("usuarios")
-      .select("*")
-      .eq("codigo", codigo)
-      .single();
+    const { data, error } = await supabase.from("usuarios").select("*").eq("codigo", codigo).single();
     if (error) return NextResponse.json({ error: "Codigo no encontrado" }, { status: 404 });
-    // FUENTE ATOMICA: sobrescribir historial_fisiologico con los datos reales de physiology_records,
-    // que es la fuente de verdad desde el fix del patron read-modify-write.
-    const { data: fisioRecordsUsuario } = await supabase.from("physiology_records").select("fecha,hrv,sueno,rhr,fatiga_aguda").eq("user_codigo", codigo).order("fecha", { ascending: true }).limit(60);
-    if (fisioRecordsUsuario) {
-      data.historial_fisiologico = fisioRecordsUsuario.map((r: any) => ({ fecha: r.fecha, hrv: r.hrv, sueno: r.sueno, rhr: r.rhr, fatiga_aguda: r.fatiga_aguda }));
-    }
-    return NextResponse.json({ data });
+    const recovery = await prepareRecoveryContext(supabase, codigo, physiologyToday());
+    const canonicalHistory = await getCanonicalPhysiologyHistory(supabase, codigo, {
+      asOfDate: recovery.objective.effectiveDate, toDate: recovery.objective.effectiveDate, limit: 60,
+    });
+    if (!canonicalHistory.ok) throw new RecoveryReadError(canonicalHistory);
+    return NextResponse.json({ data: {
+      ...data,
+      canonical_physiology: { current: recovery.objective, subjective: recovery.subjective,
+        trends: recovery.trends, history: canonicalHistory.snapshots },
+    } });
   }
 
   // Actualizar historial y marcas
@@ -1447,7 +1482,7 @@ if (action === "verificar_cambio_modo") {
     // Extracción automática de memoria en el servidor cuando se guarda historial
     if (datos.historial && Array.isArray(datos.historial) && datos.historial.length > 0) {
       try {
-        const {data: usuarioData} = await supabase.from("usuarios").select("ciclo_actual,notas_coach,datos_entrenamiento,estado_fisiologico,workout_history,historial_fisiologico,distribucion_semanal,objetivo_principal,historial_marcas,analisis_bloques").eq("codigo", codigo).single();
+        const {data: usuarioData} = await supabase.from("usuarios").select("ciclo_actual,notas_coach,datos_entrenamiento,workout_history,distribucion_semanal,objetivo_principal,historial_marcas,analisis_bloques").eq("codigo", codigo).single();
         const cicloActual = usuarioData?.ciclo_actual || {};
         const ultimos = datos.historial.slice(-6).map((m: any) => `${m.role === "user" ? "ATLETA" : "COACH"}: ${typeof m.content === "string" ? m.content.substring(0, 1500) : "[archivo]"}`).join("\n\n");
         const extraerTextoContenido = (content: any): string => {
@@ -2828,9 +2863,14 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
     const sesionesResumen = facts.completed.map(s => `${s.dia}: ${s.titulo_real || s.titulo}${s.descripcion_real ? ' — ' + s.descripcion_real.substring(0, 100) : ''}`).join("\n") || "Ninguna";
     const sesionesPendientesTexto = facts.pending.map(s => `${s.dia}: ${s.titulo}`).join("\n") || "Ninguna";
     // Generar el Forge Insight automaticamente con una llamada dedicada, basado en datos reales
-    const { data: usuarioInsight, error: insightContextError } = await supabase.from("usuarios").select("athlete_development,historial_fisiologico").eq("codigo", codigo).single();
+    const { data: usuarioInsight, error: insightContextError } = await supabase.from("usuarios").select("athlete_development").eq("codigo", codigo).single();
     if (insightContextError || !usuarioInsight) throw new Error("WEEKLY_CONTEXT_READ_FAILED");
-    const histFisioSemana = (usuarioInsight?.historial_fisiologico || []).slice(-7);
+    const weekEndCierre = new Date(Date.parse(`${weekStartCierre}T00:00:00Z`) + 6 * 86400000).toISOString().slice(0, 10);
+    const physiologyWeek = await getCanonicalPhysiologyHistory(supabase, codigo, {
+      asOfDate: hoyCierreStr, fromDate: weekStartCierre, toDate: weekEndCierre, limit: 7,
+    });
+    if (!physiologyWeek.ok) throw new Error(`WEEKLY_CONTEXT_${physiologyWeek.error.toUpperCase()}`);
+    const histFisioSemana = physiologyWeek.snapshots.map(canonicalPhysiologyForAnalytics);
     const debilidadesActivas = (usuarioInsight?.athlete_development || []).filter((d: any) => d.estado !== "resuelta").map((d: any) => d.nombre_visible);
 
     const insightPrompt = `Eres Forge generando el resumen semanal (Forge Insight) de un atleta. Basándote SOLO en estos datos reales, escribe un resumen de 5-6 líneas máximo, en español, tono cercano y profesional:
@@ -2843,8 +2883,10 @@ ${sesionesPendientesTexto}
 
 ADHERENCIA CALCULADA: ${facts.adherence}
 
-TENDENCIA FISIOLÓGICA (últimos registros):
+FISIOLOGÍA OBJETIVA CANÓNICA DE LA SEMANA CIVIL (orden DESC, sin rellenar días ausentes):
 ${JSON.stringify(histFisioSemana)}
+
+FATIGA SUBJETIVA HISTÓRICA: no disponible con fecha acreditada; no inferir desde fisiología objetiva.
 
 DEBILIDADES ACTIVAS:
 ${debilidadesActivas.join(", ") || "ninguna registrada"}
@@ -4191,14 +4233,16 @@ Mensaje: "${mensaje}"
     // pura presentacion, nunca calcular nada — toda la logica de Readiness/Discrepancy/Decision
     // Layer vive aqui, en el backend, ya resuelta. 3 dimensiones independientes, nunca combinadas
     // en estados artificiales (BUILDING_BASELINE_WITH_CRITICAL_INSIGHT no existe).
-    const { data: historicoTodayState } = await supabase.from("physiology_records").select("fecha,hrv,rhr,sueno").eq("user_codigo", codigo).order("fecha", { ascending: false }).limit(29);
+    const preparedToday = await prepareCanonicalReadiness(supabase, codigo);
+    if (!preparedToday.ok) return NextResponse.json({ ok: false, error: preparedToday.error, reason: preparedToday.reason },
+      { status: preparedToday.error === "invalid_input" ? 400 : 503 });
     // FASE 3 — FIX: eliminado el placeholder 0.5 hardcoded, conectado a la señal real ya construida
     // (calcularFrecuenciaRealRelativa, misma que alimenta el Training Frequency Safety Net) —
     // sesiones completadas ultimos 7 dias / dias declarados, dato 100% objetivo y determinista.
     const { data: usuarioParaFrecuenciaToday } = await supabase.from("usuarios").select("perfil,workout_history").eq("codigo", codigo).single();
     const diasDeclaradosToday = parseInt(usuarioParaFrecuenciaToday?.perfil?.dias || "0") || 0;
     const frecuenciaRealTodayState = calcularFrecuenciaRealRelativa(usuarioParaFrecuenciaToday?.workout_history || [], diasDeclaradosToday) ?? 0.5;
-    const resultadoReadinessToday = calcularReadiness((historicoTodayState || []).map((r: any) => ({ fecha: r.fecha, hrv: r.hrv, rhr: r.rhr, duracionSueno: r.sueno })), frecuenciaRealTodayState);
+    const resultadoReadinessToday = calcularReadiness(preparedToday.points, frecuenciaRealTodayState, preparedToday.baselines);
     const forgeStateToday = scoreAForgeState(resultadoReadinessToday.score);
 
     const hoyTodayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
@@ -4272,18 +4316,20 @@ Mensaje: "${mensaje}"
       checkinDisponible: checkinTodayData?.readiness_score === undefined || checkinTodayData?.readiness_score === null,
     };
 
-    return NextResponse.json(todayState);
+    return NextResponse.json({ ...todayState, physiology: preparedToday.physiology });
   }
 
   if (action === "obtener_readiness_calculado") {
     // FORGE READINESS ENGINE V1 — score real 0-100 calculado a partir del baseline personal
     // del atleta (HRV/RHR/sueño de los ultimos 28 dias reales), nunca valores absolutos genericos.
-    const { data: historicoParaReadiness } = await supabase.from("physiology_records").select("fecha,hrv,rhr,sueno").eq("user_codigo", codigo).order("fecha", { ascending: false }).limit(29);
+    const preparedReadiness = await prepareCanonicalReadiness(supabase, codigo);
+    if (!preparedReadiness.ok) return NextResponse.json({ ok: false, error: preparedReadiness.error, reason: preparedReadiness.reason },
+      { status: preparedReadiness.error === "invalid_input" ? 400 : 503 });
     // FASE 3 — FIX: eliminado el placeholder 0.5 hardcoded, conectado a calcularFrecuenciaRealRelativa
     const { data: usuarioParaFrecuenciaCalculado } = await supabase.from("usuarios").select("perfil,workout_history").eq("codigo", codigo).single();
     const diasDeclaradosCalculado = parseInt(usuarioParaFrecuenciaCalculado?.perfil?.dias || "0") || 0;
     const frecuenciaRealCalculado = calcularFrecuenciaRealRelativa(usuarioParaFrecuenciaCalculado?.workout_history || [], diasDeclaradosCalculado) ?? 0.5;
-    const resultadoReadiness = calcularReadiness((historicoParaReadiness || []).map((r: any) => ({ fecha: r.fecha, hrv: r.hrv, rhr: r.rhr, duracionSueno: r.sueno })), frecuenciaRealCalculado);
+    const resultadoReadiness = calcularReadiness(preparedReadiness.points, frecuenciaRealCalculado, preparedReadiness.baselines);
     const forgeState = scoreAForgeState(resultadoReadiness.score);
 
     const hoyCheckinReadiness = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
@@ -4302,7 +4348,7 @@ Mensaje: "${mensaje}"
       : null;
     const decisionContextual = evaluarRelevanciaContextual(resultadoReadiness, intensidadHoyDecision);
 
-    return NextResponse.json({ ...resultadoReadiness, forgeState, checkinSubjetivo: contextoCompleto.fatigaPercibida, hayDiscrepancia: contextoCompleto.hayDiscrepancia, mensajeDiscrepancia: contextoCompleto.mensajeDiscrepancia, decision: decisionContextual });
+    return NextResponse.json({ ...resultadoReadiness, physiology: preparedReadiness.physiology, forgeState, checkinSubjetivo: contextoCompleto.fatigaPercibida, hayDiscrepancia: contextoCompleto.hayDiscrepancia, mensajeDiscrepancia: contextoCompleto.mensajeDiscrepancia, decision: decisionContextual });
   }
 
   if (action === "obtener_readiness_hoy") {
@@ -4611,7 +4657,7 @@ Menciona el numero exacto de dias en la frase.`;
     // FORGE COACH PROACTIVO — si han pasado varios dias sin actividad Y hay contenido relevante
     // acumulado (insight reciente no comentado, tendencia relevante), Forge inicia con algo util
     // en vez de esperar pasivamente. Es determinista: solo se activa si hay datos reales que ofrecer.
-    const { data: usuarioProactivo } = await supabase.from("usuarios").select("ultima_visita,historial_fisiologico").eq("codigo", codigo).single();
+    const { data: usuarioProactivo } = await supabase.from("usuarios").select("ultima_visita").eq("codigo", codigo).single();
     const ultimaVisita = usuarioProactivo?.ultima_visita ? new Date(usuarioProactivo.ultima_visita) : null;
     const diasSinVisitar = ultimaVisita ? Math.floor((Date.now() - ultimaVisita.getTime()) / (24*60*60*1000)) : 0;
 
@@ -4715,24 +4761,24 @@ if (action === "obtener_daily_briefing") {
     // FORGE DAILY BRIEFING — agrega todo lo necesario para la pantalla "Hoy" en una sola llamada.
     // Responde en <10s a: que ha pasado, que toca hoy, que ha aprendido Forge, como voy.
     // Su contenido varia segun modo_entrada: Coach (sesion del plan) vs Supervision (recuperacion + ultimo entreno).
-    const { data: usuarioModoBriefing } = await supabase.from("usuarios").select("modo_entrada,workout_history,estado_fisiologico").eq("codigo", codigo).single();
+    const { data: usuarioModoBriefing } = await supabase.from("usuarios").select("modo_entrada,workout_history").eq("codigo", codigo).single();
+    const recovery = await prepareRecoveryContext(supabase, codigo, physiologyToday());
     const modoEntradaBriefing = usuarioModoBriefing?.modo_entrada || "planificacion";
 
     if (modoEntradaBriefing === "supervision" || modoEntradaBriefing === "consulta") {
       const workoutHistoryBriefing = usuarioModoBriefing?.workout_history || [];
       const ultimoEntreno = workoutHistoryBriefing[workoutHistoryBriefing.length - 1] || null;
-      const estadoFisioBriefing = usuarioModoBriefing?.estado_fisiologico || {};
       return NextResponse.json({
         briefing: {
           modoEntrada: modoEntradaBriefing,
           ultimoEntreno: ultimoEntreno ? { tipo: ultimoEntreno.tipo, fecha: ultimoEntreno.fecha, sensacion: ultimoEntreno.sensacion } : null,
-          recuperacion: { hrv: estadoFisioBriefing.hrv || null, sueno: estadoFisioBriefing.sueno || null, tendencia: estadoFisioBriefing.tendencia || null }
+          recuperacion: recovery
         }
       });
     }
 
-    const estado = await generarEstadoCanonico(supabase, codigo);
-    const knowledge = await buildAthleteKnowledge(codigo);
+    const estado = await generarEstadoCanonico(supabase, codigo, undefined, recovery);
+    const knowledge = await buildAthleteKnowledge(codigo, recovery);
 
     const { data: usuarioBriefing } = await supabase.from("usuarios").select("aprendizajes_atleta,ciclo_actual,workout_history,historial_marcas,perfil,fecha_registro").eq("codigo", codigo).single();
     const aprendizajes = usuarioBriefing?.aprendizajes_atleta || [];
@@ -4755,6 +4801,7 @@ if (action === "obtener_daily_briefing") {
     return NextResponse.json({
       briefing: {
         modoEntrada: "planificacion",
+        recuperacion: recovery,
         diaSemana: estado.dia_semana_hoy,
         sesionHoy: estado.sesion_hoy,
         nivelConocimiento,
@@ -5451,11 +5498,12 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
   }
 
   if (action === "obtener_physiology_records_recientes") {
-    // FORGE — fuente REAL y actualizada (physiology_records, alimentada por HealthKit sync)
-    // en vez del campo antiguo estado_fisiologico que quedaba desactualizado. Devuelve los
-    // ultimos 7 dias reales para permitir tanto el dato de hoy como el futuro grafico de tendencia.
-    const { data: recordsRecientes } = await supabase.from("physiology_records").select("fecha,hrv,rhr,sueno").eq("user_codigo", codigo).order("fecha", { ascending: false }).limit(7);
-    return NextResponse.json({ ok: true, records: recordsRecientes || [] });
+    const effectiveDate = physiologyToday();
+    const history = await getCanonicalPhysiologyHistory(supabase, codigo, {
+      asOfDate: effectiveDate, toDate: effectiveDate, limit: 7,
+    });
+    if (!history.ok) return NextResponse.json(history, { status: history.error === "invalid_input" ? 400 : 503 });
+    return NextResponse.json({ ok: true, effectiveDate, order: "desc", records: history.snapshots });
   }
 
   if (action === "sincronizar_healthkit_real") {

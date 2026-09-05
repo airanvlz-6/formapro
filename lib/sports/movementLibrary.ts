@@ -254,6 +254,39 @@ const MOVIMIENTOS_CARRERA: Record<string, Movimiento> = {
 
 export const MOVEMENT_LIBRARY: Record<string, Movimiento> = { ...MOVIMIENTOS_BOX, ...MOVIMIENTOS_CARRERA };
 
+export type BiomechanicalProperty = 'impact' | 'jump' | 'axial_load' | 'deep_flexion' | 'overhead_load';
+/** Presence of the prohibited property in the canonical variant, NOT medical clearance.
+ * Missing entries/properties are UNKNOWN. Low ordinal load is never treated as absence.
+ * Negative evidence is deliberately narrow: supported/floor movements and explicit non-jumping
+ * canonical variants. Adding a loaded/ballistic variant requires its own review and ID.
+ */
+export const MOVEMENT_RESTRICTION_EVIDENCE: Readonly<Record<string, {
+  properties: Partial<Record<BiomechanicalProperty, boolean>>; basis: string;
+}>> = {
+  bench_press: { properties: { impact: false, jump: false, axial_load: false, deep_flexion: false, overhead_load: false }, basis: 'Supine bench support; horizontal press, no loaded deep knee flexion, vertical standing spinal load or overhead press.' },
+  db_bench_press: { properties: { impact: false, jump: false, axial_load: false, deep_flexion: false, overhead_load: false }, basis: 'Supine bench support and horizontal dumbbell press.' },
+  push_up: { properties: { impact: false, jump: false, axial_load: false, deep_flexion: false, overhead_load: false }, basis: 'Canonical floor horizontal press; ballistic/clapping variants are not this ID.' },
+  ring_row: { properties: { impact: false, jump: false, axial_load: false, deep_flexion: false, overhead_load: false }, basis: 'Supported horizontal pull; no landing, standing spinal load or overhead work.' },
+  plank: { properties: { impact: false, jump: false, axial_load: false, deep_flexion: false, overhead_load: false }, basis: 'Static floor support, no external load; not a weighted or jumping variant.' },
+  hollow_hold: { properties: { impact: false, jump: false, axial_load: false, deep_flexion: false, overhead_load: false }, basis: 'Supine bodyweight hold, no landing or external overhead/spinal load.' },
+  calf_raise: { properties: { impact: false, jump: false, axial_load: false, deep_flexion: false, overhead_load: false }, basis: 'Catalog equipment is empty: controlled bodyweight heel raise, no jump or loaded squat; weighted variants not covered.' },
+  back_squat: { properties: { impact: false, jump: false, axial_load: true, deep_flexion: true, overhead_load: false }, basis: 'Barbell squat with standing axial load and loaded knee flexion; not a jump squat.' },
+  front_squat: { properties: { impact: false, jump: false, axial_load: true, deep_flexion: true, overhead_load: false }, basis: 'Front rack barbell squat; loaded knee flexion and standing axial load.' },
+  deadlift: { properties: { impact: false, jump: false, axial_load: true, overhead_load: false }, basis: 'Standing loaded hinge; depth not certified by the catalog.' },
+  rdl: { properties: { impact: false, jump: false, axial_load: true, deep_flexion: false, overhead_load: false }, basis: 'Loaded standing Romanian hinge with shallow knee flexion; no overhead movement.' },
+  strict_press: { properties: { impact: false, jump: false, axial_load: true, deep_flexion: false, overhead_load: true }, basis: 'Standing loaded overhead press without dip or jump.' },
+  box_step_up: { properties: { impact: false, jump: false, overhead_load: false }, basis: 'Step-up is non-jumping despite legacy jump pattern. Box height and loading are not specified: knee/spinal properties remain unknown.' },
+  box_jump: { properties: { impact: true, jump: true }, basis: 'Explicit jumping and landing; other load properties not certified.' },
+  row_erg: { properties: { impact: false, jump: false, axial_load: false, overhead_load: false }, basis: 'Seated erg without landing/overhead load; knee flexion at catch is not certified safe.' },
+  bike_erg: { properties: { impact: false, jump: false, axial_load: false, overhead_load: false }, basis: 'Stationary seated cycling; knee flexion depends on setup and remains unknown.' },
+  hip_thrust: { properties: { impact: false, jump: false, axial_load: false, overhead_load: false }, basis: 'Supported hip extension, no standing vertical spinal load; knee angle remains unspecified.' },
+  rodaje_z1: { properties: { impact: true, jump: false, overhead_load: false }, basis: 'Unweighted running with repeated footfalls, not a jumping drill or overhead-loaded variant; other properties not certified.' },
+  rodaje_z2: { properties: { impact: true, jump: false, overhead_load: false }, basis: 'Unweighted continuous running with footfalls; no discrete jumps or overhead load.' },
+  rodaje_largo: { properties: { impact: true, jump: false, overhead_load: false }, basis: 'Unweighted long run with footfalls; no discrete jumps or overhead load.' },
+  progresivo: { properties: { impact: true, jump: false, overhead_load: false }, basis: 'Progressive unweighted running; changing pace does not add a jumping exercise or overhead load.' },
+  regenerativo: { properties: { impact: true, jump: false, overhead_load: false }, basis: 'Even a low-impact regenerative run has footfalls; it is not a non-impact substitute. No jumping exercise or overhead load.' },
+};
+
 // ============================================================
 // NIVEL 2 — ESTIMULOS
 // ============================================================

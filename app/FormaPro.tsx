@@ -1038,6 +1038,9 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
         const diaAnterior=idxEnSemana>0?todasLasSesionesOrden[idxEnSemana-1]:null;
         const diaSiguiente=idxEnSemana<todasLasSesionesOrden.length-1?todasLasSesionesOrden[idxEnSemana+1]:null;
         return apiCall({action:"construir_sesion_dia",codigo:codigoUsuario,datos:{
+          generationToken:weeklyGeneration.token,
+          targetWeekStart:weekStartOrchestrator,
+          stimulusId:diaEstructura.stimulusId,
           dia:diaEstructura.dia,
           tipo:diaEstructura.tipo,
           titulo_breve:diaEstructura.titulo_breve,
@@ -1057,6 +1060,11 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
       })
     );
 
+    // A rejected contract is terminal for this proposal; never save a week with missing days.
+    if(resultadosParalelos.some((r:any)=>!r?.ok || !r.sesion)){
+      console.error("SESSION BUILDER: semana detenida", resultadosParalelos.filter((r:any)=>!r?.ok || !r.sesion));
+      return null;
+    }
     const sesionesCompletas:any[]=[
       ...diasYaCompletados,
       ...resultadosParalelos.filter((r:any)=>r?.ok).map((r:any)=>r.sesion),

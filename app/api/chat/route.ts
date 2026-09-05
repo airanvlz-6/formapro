@@ -10,7 +10,9 @@ import { validateExtraction } from "@/lib/validators/extractionRules";
 import { buildCatalogoPrompt, validarCatalogoDisciplina } from "@/lib/sports/disciplineCatalog";
 import { buildExposureReport, exposureReportToPromptText } from "@/lib/sports/exposureEngine";
 import { detectarDebilidadDuplicada } from "@/lib/validators/weaknessDeduplicationValidator";
-import { rankearCandidatos, validarCoherenciaEstimulo, STIMULUS_LIBRARY, getMovimientosPorEstimulo, MOVEMENT_LIBRARY } from "@/lib/sports/movementLibrary";
+import { validarCoherenciaEstimulo, STIMULUS_LIBRARY, getMovimientosPorEstimulo, MOVEMENT_LIBRARY } from "@/lib/sports/movementLibrary";
+import { prepareSessionTrainingContract } from "@/lib/sports/prepareSessionTrainingContract";
+import { validateAllowedTrainingContract } from "@/lib/sports/allowedTrainingContract";
 import { evaluarSustitucion } from "@/lib/sports/substitutionEngine";
 import { aplicarTrainingFrequencySafetyNet, calcularFrecuenciaRealRelativa } from "@/lib/sports/trainingFrequencySafetyNet";
 import { calcularReadiness, scoreAForgeState, combinarConCheckinSubjetivo } from "@/lib/readiness/readinessEngine";
@@ -2411,6 +2413,8 @@ IMPORTANTE: en el campo intensity, escribe el rango como texto simple sin símbo
 
 Responde SOLO con este JSON válido, sin texto adicional ni markdown, incluyendo AMBAS fases:
 {"strategy":{"adaptacion_principal":"frase de la adaptacion principal buscada esta semana","adaptacion_secundaria":"frase de la adaptacion secundaria","riesgo_controlado":"que riesgo/fatiga se esta gestionando activamente esta semana","criterio_general":"regla general que conecta los 7 dias, ej: no juntar dos sesiones neurales maximas consecutivas","cualidades_prioritarias":["cualidad1","cualidad2"],"dias_debilidad_prioritaria":número,"justificacion_debilidad":"por que ese numero de dias tiene sentido"},"sessions":[{"dia":"lunes","tipo":"carrera|box|fuerza|descanso|otro","titulo_breve":"3-5 palabras","focus":"movimiento o cualidad principal","volume":"bajo|medio|alto","intensity":"descripcion breve sin simbolo %","conditioning":"ninguno|corto|largo","relacion_dia_anterior":"que hereda o evita del dia previo","trabaja_debilidad":true_o_false},{"dia":"martes","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"...","relacion_dia_anterior":"...","trabaja_debilidad":true_o_false},{"dia":"miercoles","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"...","relacion_dia_anterior":"...","trabaja_debilidad":true_o_false},{"dia":"jueves","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"...","relacion_dia_anterior":"...","trabaja_debilidad":true_o_false},{"dia":"viernes","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"...","relacion_dia_anterior":"...","trabaja_debilidad":true_o_false},{"dia":"sabado","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"...","relacion_dia_anterior":"...","trabaja_debilidad":true_o_false},{"dia":"domingo","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"...","relacion_dia_anterior":"...","trabaja_debilidad":true_o_false}]}
+Añade a CADA sesión de entrenamiento un campo "stimulusId" con un ID exacto de este catálogo y de su disciplina: ${JSON.stringify(Object.values(STIMULUS_LIBRARY).map(e => ({ id: e.id, discipline: e.discipline })))}.
+No inventes IDs ni utilices el texto focus como sustituto de stimulusId. El servidor comprobará cobertura y compatibilidad antes de construir la sesión.
 Si un dia es descanso, usa tipo "descanso" (los demas campos pueden quedar vacios).`;
 
     try {
@@ -2537,7 +2541,8 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
     // FORGE ORCHESTRATOR — Paso 3: Session Builder. Genera el contenido COMPLETO de UN solo dia.
     console.log(`CHECKPOINT construir_sesion_dia: ENTRA para dia=${datos?.dia}`);
     const { dia, tipo, titulo_breve, analisis: analisisSesion, debilidad_relacionada, focus, volume, intensity, conditioning, diaAnterior: diaAnteriorRecibido, diaSiguiente, trabaja_debilidad } = datos;
-    const { data: usuarioBuilder } = await supabase.from("usuarios").select("especialidad,categoria,perfil,marcas_especificas,athlete_development,datos_entrenamiento").eq("codigo", codigo).single();
+    const { data: usuarioBuilder, error: usuarioBuilderError } = await supabase.from("usuarios").select("modo_entrada,distribucion_semanal,especialidad,categoria,perfil,marcas_especificas,athlete_development,datos_entrenamiento").eq("codigo", codigo).single();
+    if (usuarioBuilderError || !usuarioBuilder) return NextResponse.json({ ok: false, code: "CONTRACT_PROFILE_READ_FAILED" });
     console.log(`CHECKPOINT construir_sesion_dia [${dia}]: usuarioBuilder obtenido`);
 
     // FIX CRITICO: el frontend SIEMPRE envia diaAnterior=null para el lunes (primer dia de la
@@ -2577,6 +2582,19 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
     try { canonicalRestrictions = await getCanonicalRestrictions(supabase, codigo); }
     catch (err: any) { return NextResponse.json({ error: err.message }, { status: 503 }); }
     const hardConstraintsBuilder = [...canonicalRestrictions.restrictions, ...canonicalRestrictions.reassessments];
+    // 2E.1: server ownership and attested calendar, before every Builder LLM call.
+    let targetWeekStart: string;
+    try {
+      const generation = resolveWeeklyGeneration(datos.generationToken, codigo);
+      if (![generation.currentWeek, generation.nextWeek].includes(datos.targetWeekStart)) throw new Error("CONTRACT_TARGET_OUTSIDE_GENERATION");
+      targetWeekStart = datos.targetWeekStart;
+    } catch (err: any) { return NextResponse.json({ ok: false, code: "TRAINING_CONTRACT_INVALID", errors: [err.message] }); }
+    const preparedContract = await prepareSessionTrainingContract(supabase, codigo, usuarioBuilder,
+      { targetWeekStart, day: dia, discipline: tipo, stimulus: datos.stimulusId ?? focus ?? titulo_breve }, canonicalRestrictions);
+    if (!preparedContract.ok) return NextResponse.json({ ok: false, code: "TRAINING_CONTRACT_INVALID", errors: preparedContract.errors });
+    const trainingContract = preparedContract.contract;
+    const contractValidation = validateAllowedTrainingContract(trainingContract);
+    if (!contractValidation.ok) return NextResponse.json({ ok: false, code: "TRAINING_CONTRACT_INVALID", errors: contractValidation.errors });
     const restriccionesHardBuilder = canonicalRestrictions.restrictions;
     const restriccionesReassessmentBuilder = canonicalRestrictions.reassessments;
     const restriccionesBuilderTexto =
@@ -2597,34 +2615,9 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
     }
     console.log(`CHECKPOINT construir_sesion_dia [${dia}]: snapshot listo`);
 
-    // FASE 4 — CANDIDATOS RANKEADOS: el Session Builder recibe movimientos YA priorizados por
-    // el motor (menos expuestos recientemente = mas prioritarios), no elige libremente sobre
-    // toda la libreria. Estimulo objetivo inferido del "focus"/"tipo" que decidio el Week Planner.
-    let candidatosTexto = "";
-    let estimuloObjetivoReal = "";
-    try {
-      const disciplinaSesion = (tipo || "").toLowerCase().includes("carr") ? "carrera" : "box";
-      const estimulosDisciplina = Object.values(STIMULUS_LIBRARY).filter((e: any) => e.discipline === disciplinaSesion);
-      const focusNormalizado = (focus || titulo_breve || "").toLowerCase();
-      const estimuloMatch = estimulosDisciplina.find((e: any) => focusNormalizado.includes(e.id.replace(/_/g, " ")) || focusNormalizado.includes(e.descripcion.toLowerCase().split(" ")[0]));
-      estimuloObjetivoReal = estimuloMatch?.id || "";
-      if (estimuloObjetivoReal) {
-        const { data: planesParaCandidatos } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(4);
-        const exposicionesCandidatos: any[] = [];
-        (planesParaCandidatos || []).forEach((p: any) => {
-          (p.sessions || []).filter((s: any) => s.completada && s.descripcion_real).forEach((s: any) => exposicionesCandidatos.push({ dia: s.dia, tipo: s.tipo, titulo: s.titulo || "", descripcionReal: s.descripcion_real }));
-        });
-        const { buildExposureReport: buildExpReportLocal } = await import("@/lib/sports/exposureEngine");
-        const reportLocal = buildExpReportLocal(exposicionesCandidatos.map((e: any) => ({ fecha: e.dia, tipo: e.tipo, titulo: e.titulo, descripcionReal: e.descripcionReal })), disciplinaSesion);
-        const zonasRestringidasBuilder = canonicalRestrictions.areas;
-        const candidatosRankeados = rankearCandidatos(estimuloObjetivoReal, disciplinaSesion, zonasRestringidasBuilder, reportLocal.exposiciones);
-        if (candidatosRankeados.length > 0) {
-          candidatosTexto = `\n🎯 MOVIMIENTOS CANDIDATOS PARA EL ESTÍMULO "${estimuloObjetivoReal}" (ya priorizados por exposición reciente, los primeros son los MENOS usados recientemente — prioriza estos para dar variedad real): ${candidatosRankeados.slice(0, 5).map((c: any) => `${c.id}${c.vecesExpuestoReciente > 0 ? ` (usado ${c.vecesExpuestoReciente}x recientemente)` : " (sin exposición reciente)"}`).join(", ")}`;
-        }
-      }
-    } catch (errCandidatos) {
-      console.error(`CHECKPOINT construir_sesion_dia [${dia}]: error calculando candidatos rankeados:`, errCandidatos);
-    }
+    const estimuloObjetivoReal = trainingContract.stimulusId;
+    // Full structured pool survives independently of the five ranking hints. Output validation is 2E.2.
+    const candidatosTexto = `CONTRATO DE ENTRENAMIENTO (elige dentro de sus IDs; contexto externo es solo lectura):\n${JSON.stringify(trainingContract)}\nPreferencias de ranking: ${trainingContract.rankedCandidates.slice(0, 5).map(c => c.movementId).join(", ")}`;
 
     // FORGE SESSION ENGINE (v1): el Session Builder ya no inventa la estructura desde cero.
     // Recibe la INTENCION exacta que ya decidio el Week Planner y solo la desarrolla en detalle.
@@ -2725,7 +2718,7 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
         if (builderRetryMatch) {
           const sesionRetry = JSON.parse(builderRetryMatch[0]);
           const descripcionRetryEnsamblada = `**Calentamiento**\n${sesionRetry.calentamiento || ""}\n\n**Bloque principal**\n${sesionRetry.bloque_principal || ""}\n\n**Vuelta a la calma**\n${sesionRetry.vuelta_calma || ""}`;
-          return NextResponse.json({ ok: true, sesion: { dia, tipo, titulo: sesionRetry.titulo, por_que: sesionRetry.por_que, descripcion: descripcionRetryEnsamblada, debilidad_relacionada: debilidadFinal, regenerada_por_duplicado: true } });
+          return NextResponse.json({ ok: true, trainingContract, sesion: { dia, tipo, titulo: sesionRetry.titulo, por_que: sesionRetry.por_que, descripcion: descripcionRetryEnsamblada, debilidad_relacionada: debilidadFinal, regenerada_por_duplicado: true } });
         }
       }
 
@@ -2734,7 +2727,7 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
       // (no bloquea el guardado) por ahora — registra el hallazgo para poder auditar el sistema
       // sin arriesgar romper el flujo mientras se valida en produccion.
       if (estimuloObjetivoReal) {
-        const disciplinaValidacionFinal = (tipo || "").toLowerCase().includes("carr") ? "carrera" : "box";
+        const disciplinaValidacionFinal = trainingContract.discipline;
         const validacionEstimuloFinal = validarCoherenciaEstimulo(estimuloObjetivoReal, disciplinaValidacionFinal, descripcionEnsamblada);
         if (validacionEstimuloFinal.valido) {
           console.log(`✅ COHERENCIA ESTIMULO [${dia}]: sesion coherente con estimulo "${estimuloObjetivoReal}"`);
@@ -2770,7 +2763,7 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
         }
       }
 
-      return NextResponse.json({ ok: true, sesion: { dia, tipo, titulo: sesionCompleta.titulo, por_que: sesionCompleta.por_que, descripcion: descripcionEnsamblada, debilidad_relacionada: debilidadFinal } });
+      return NextResponse.json({ ok: true, trainingContract, sesion: { dia, tipo, titulo: sesionCompleta.titulo, por_que: sesionCompleta.por_que, descripcion: descripcionEnsamblada, debilidad_relacionada: debilidadFinal } });
     } catch (err: any) {
       return NextResponse.json({ error: "Error en Session Builder: " + err.message }, { status: 500 });
     }

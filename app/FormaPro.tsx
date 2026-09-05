@@ -1314,7 +1314,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
   if(!emailInput.trim()) return;
   setMensajeRecuperar("");
   const data=await apiCall({action:"recuperar_por_email",email:emailInput.trim().toLowerCase(),codigo:"",datos:{}});
-  if(data.error||!data.data){setMensajeRecuperar("No encontramos ninguna cuenta con ese email.");return;}
+  if(data.error||!data.data){setMensajeRecuperar("La recuperación por email no está disponible hasta activar el nuevo sistema de acceso.");return;}
   setMensajeRecuperar(`Tu código es: ${data.data.codigo}`);
 };
   const recuperarUsuario=async()=>{
@@ -2218,6 +2218,7 @@ Extrae SOLO lo que puedas determinar con certeza. Responde SOLO con este JSON:
 
   const actualizarPerfil=async()=>{
     setMensajePerfil(""); setErrorPerfil("");
+    if(nuevoCodigo.trim()){setErrorPerfil("El cambio de código requiere activar el nuevo sistema de acceso.");return;}
     if(nuevoCodigo.trim().length>0&&nuevoCodigo.trim().length<5){setErrorPerfil("El código debe tener al menos 5 caracteres.");return;}
     if(nuevoCodigo.trim().length>=5){
       const verify=await apiCall({action:"recuperar_usuario",codigo:nuevoCodigo.trim().toUpperCase()});

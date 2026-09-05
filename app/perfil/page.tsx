@@ -160,6 +160,7 @@ export default function MiPerfil() {
     }else{
       setEliminandoCuenta(false);
       setConfirmandoEliminarCuenta(false);
+      setErrorPerfil(data?.error || "La eliminación requiere activar el nuevo sistema de acceso.");
     }
   };
 

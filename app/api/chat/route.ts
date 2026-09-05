@@ -1,3 +1,4 @@
+import { disabledLegacyOperation, projectLegacyCreate, projectLegacyUpdate } from "@/lib/auth/legacyContainment";
 import { getCanonicalPhysiologyHistory } from "@/lib/physiology/getCanonicalPhysiology";
 import { prepareRecoveryContext, assertRecoveryIdentity, RecoveryReadError, type RecoveryContext } from "@/lib/physiology/recoveryContext";
 import { prepareCanonicalReadiness } from "@/lib/readiness/prepareCanonicalReadiness";
@@ -782,13 +783,16 @@ export async function POST(req: NextRequest) {
 }
 
 async function handlePost(req: NextRequest) {
+  const { messages, system, model, max_tokens, action, codigo, datos, email, codigoConjunto, pendingId } = await req.json();
+  const disabled = disabledLegacyOperation(action);
+  if (disabled) return NextResponse.json(disabled);
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {
     return NextResponse.json({ error: "API key not found" }, { status: 500 });
   }
 
-  const { messages, system, model, max_tokens, action, codigo, datos, email, codigoConjunto, pendingId } = await req.json();
+
 
   // FORGE MOBILE IDENTITY BRIDGE — colocada AQUI AL PRINCIPIO (antes del rate limiting y cualquier
   // otra logica) porque esta accion no envia "codigo" en el nivel raiz del payload (solo authUserId
@@ -822,49 +826,9 @@ async function handlePost(req: NextRequest) {
     }
   }
 
-  if (action === "crear_usuario_desde_registro_movil") {
-    // FORGE MOBILE REGISTRO — FIX CRITICO CONFIRMADO CON EVIDENCIA REAL: el registro movil
-    // (RegistroScreen.tsx) solo creaba la cuenta de Supabase Auth con el codigo deseado guardado
-    // COMO METADATO, nunca creaba el registro real en la tabla usuarios vinculado a auth_user_id.
-    // Resultado: cualquier usuario nuevo registrado desde movil quedaba con auth funcionando pero
-    // SIN perfil de Forge real - obtener_codigo_por_auth_user_id siempre devolvia 404.
-    // Seguridad: Supabase Auth (email+password) es el UNICO mecanismo de autenticacion real, para
-    // web y movil por igual. El "codigo" es solo un identificador de negocio elegido por el
-    // usuario, nunca un mecanismo de acceso — coherente con el diseño ya existente de la web.
-    const { authUserId, codigoDeseado, email } = datos;
-    if (!authUserId || !codigoDeseado) return NextResponse.json({ error: "Faltan datos requeridos" }, { status: 400 });
 
-    const codigoLimpio = codigoDeseado.trim().toUpperCase();
-    const { data: yaExisteCodigo } = await supabase.from("usuarios").select("codigo").eq("codigo", codigoLimpio).maybeSingle();
-    if (yaExisteCodigo) return NextResponse.json({ error: "Ese código ya está en uso, elige otro." }, { status: 409 });
 
-    const { data: yaExisteAuthUser } = await supabase.from("usuarios").select("codigo").eq("auth_user_id", authUserId).maybeSingle();
-    if (yaExisteAuthUser) return NextResponse.json({ ok: true, codigo: yaExisteAuthUser.codigo }); // idempotente, ya existe
 
-    const { error: errorCrearUsuario } = await supabase.from("usuarios").insert({
-      codigo: codigoLimpio,
-      auth_user_id: authUserId,
-      email: email || null,
-      created_at: new Date().toISOString(),
-    });
-    if (errorCrearUsuario) return NextResponse.json({ error: errorCrearUsuario.message }, { status: 500 });
-
-    console.log(`✅ USUARIO CREADO DESDE REGISTRO MOVIL: ${codigoLimpio} (auth_user_id: ${authUserId})`);
-    return NextResponse.json({ ok: true, codigo: codigoLimpio });
-  }
-
-  if (action === "obtener_codigo_por_auth_user_id") {
-    try {
-      const { authUserId } = datos || {};
-      if (!authUserId) return NextResponse.json({ error: "Falta authUserId" }, { status: 400 });
-      const { data: usuarioPorAuth, error: errorPorAuth } = await supabase.from("usuarios").select("codigo").eq("auth_user_id", authUserId).single();
-      if (errorPorAuth || !usuarioPorAuth) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
-      return NextResponse.json({ ok: true, codigo: usuarioPorAuth.codigo });
-    } catch (err: any) {
-      console.error("Error en obtener_codigo_por_auth_user_id:", err);
-      return NextResponse.json({ error: "Error interno: " + err.message }, { status: 500 });
-    }
-  }
 
   // FORGE MOBILE — DIAGNOSTICO TEMPORAL: verifica que getAthleteContext() construye correctamente
   // el contexto antes de conectar nada mas. Se eliminara una vez confirmada la prueba de equivalencia.
@@ -874,85 +838,7 @@ async function handlePost(req: NextRequest) {
     return NextResponse.json({ completado: !!usuarioOnb?.onboarding_completado });
   }
 
-  if (action === "completar_onboarding") {
-    // FORGE MOBILE ONBOARDING V1 — backend-first, idempotente. El movil manda datos minimos
-    // (categoria, objetivo, disponibilidad) y el backend hace TODO el trabajo: validar identidad,
-    // completar el perfil, generar el mensaje de bienvenida (parte LLM/generativa), y persistir.
-    // Idempotencia REAL: si ya existe bienvenida generada, no se repite nada, se devuelve el estado ya completado.
-    try {
-      const { authUserId, categoria, objetivo, disponibilidad, modoEntrada } = datos || {};
-      if (!authUserId || !categoria) {
-        return NextResponse.json({ error: "Faltan datos obligatorios (authUserId, categoria)" }, { status: 400 });
-      }
 
-      // Verificacion de identidad real, mismo patron que enviar_mensaje_coach
-      const { data: usuarioOnboarding, error: errorUsuarioOnboarding } = await supabase.from("usuarios").select("codigo,auth_user_id,onboarding_completado,historial,perfil,categoria").eq("codigo", codigo).single();
-      if (errorUsuarioOnboarding || !usuarioOnboarding) {
-        return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
-      }
-      if (usuarioOnboarding.auth_user_id !== authUserId) {
-        return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-      }
-
-      // IDEMPOTENCIA: si ya se completo el onboarding, no repetir nada — devolver estado ya existente
-      if (usuarioOnboarding.onboarding_completado) {
-        return NextResponse.json({
-          ok: true,
-          yaCompletado: true,
-          codigo,
-          welcomeMessage: (usuarioOnboarding.historial || []).find((m: any) => m.role === "assistant")?.content || ""
-        });
-      }
-
-      // PARTE DETERMINISTA — construir el perfil minimo V1, sin LLM. Reutiliza exactamente las
-      // mismas categorias/valores que la web (funcional/carrera/fuerza/hibrido), sin inventar taxonomia nueva.
-      const perfilMinimo = { objetivo_general: objetivo || "No especificado" };
-      const distribucionMinima = disponibilidad ? JSON.stringify(disponibilidad) : "";
-      const modoEntradaFinal = modoEntrada || "supervision";
-
-      await supabase.from("usuarios").update({
-        categoria,
-        especialidad: categoria,
-        perfil: perfilMinimo,
-        distribucion_semanal: distribucionMinima,
-        modo_entrada: modoEntradaFinal,
-        marcas: [],
-      }).eq("codigo", codigo);
-
-      // PARTE GENERATIVA — mensaje de bienvenida via LLM, EQUIVALENTE a iniciarChat() de la web
-      // pero simplificado (sin distinguir rehab/supervision con prompts extensos por ahora, V1).
-      const catLabel: Record<string, string> = { funcional: "Functional Training (CrossFit/Hyrox/Fitness)", carrera: "Carrera (Running/Trail)", fuerza: "Fuerza (Powerlifting/Halterofilia/Strongman)", hibrido: "Híbrido (Resistencia + Fuerza)" };
-      const catObjOnboarding = { id: categoria, titulo: catLabel[categoria] || categoria };
-
-      const promptBienvenida = modoEntradaFinal === "supervision"
-        ? "¡Hola! Ya tengo mi propia planificación o entrenador — no necesito que Forge me genere un plan. Preséntate brevemente explicando cómo me vas a ayudar en este modo: puedo registrar mis entrenos y métricas para que los organices, preguntarte dudas técnicas, y avisarte si necesito adaptar algo por fatiga o molestias."
-        : "¡Hola! Acabo de completar mi perfil. Preséntate brevemente, demuestra que conoces mi disciplina y objetivo, y pregúntame cómo puedo empezar a contarte sobre mi entrenamiento.";
-
-      const { buildPrompt } = await import("@/lib/mobile/buildPrompt");
-      const systemBienvenida = buildPrompt(catObjOnboarding, perfilMinimo, [], "", undefined, undefined, undefined, false, undefined, undefined, undefined, undefined, distribucionMinima, objetivo ? { descripcion: objetivo } : undefined);
-
-      let textoBienvenida = "¡Bienvenido a Forge! Cuéntame cómo puedo ayudarte.";
-      try {
-        const bienvenidaRes = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-          body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1000, system: systemBienvenida, messages: [{ role: "user", content: promptBienvenida }] }),
-        });
-        const bienvenidaData = await bienvenidaRes.json();
-        textoBienvenida = bienvenidaData.content?.map((b: any) => b.text || "").join("") || textoBienvenida;
-      } catch (err) {
-        console.error("Error generando bienvenida onboarding:", err);
-      }
-
-      const historialInicial = [{ role: "user", content: "[Inicio de conversación]" }, { role: "assistant", content: textoBienvenida }];
-      await supabase.from("usuarios").update({ historial: historialInicial, onboarding_completado: true, updated_at: new Date().toISOString() }).eq("codigo", codigo);
-
-      return NextResponse.json({ ok: true, yaCompletado: false, codigo, welcomeMessage: textoBienvenida });
-    } catch (err: any) {
-      console.error("Error en completar_onboarding:", err);
-      return NextResponse.json({ error: "Error: " + err.message }, { status: 500 });
-    }
-  }
 
   // FORGE ONBOARDING STATE MACHINE — define, por modo, los campos OBLIGATORIOS del nucleo comun
 // + especificos de cada modo. Es la unica fuente de verdad de "que hace falta" — nunca el LLM.
@@ -1169,69 +1055,9 @@ if (action === "verificar_cambio_modo") {
     return NextResponse.json(resultadoCambio);
   }
 
-  if (action === "cambiar_codigo_usuario") {
-    // FORGE — cambio de codigo de acceso. Migra el codigo en TODAS las tablas relacionadas,
-    // mismo patron que eliminar_cuenta pero con UPDATE en vez de DELETE.
-    const { nuevoCodigo } = datos;
-    if (!nuevoCodigo || nuevoCodigo.trim().length < 5) {
-      return NextResponse.json({ error: "El código debe tener al menos 5 caracteres" }, { status: 400 });
-    }
-    const nuevoCodigoLimpio = nuevoCodigo.trim().toUpperCase();
 
-    const { data: usuarioExistenteCheck } = await supabase.from("usuarios").select("codigo").eq("codigo", nuevoCodigoLimpio).maybeSingle();
-    if (usuarioExistenteCheck) {
-      return NextResponse.json({ error: "Este código ya existe, elige otro" }, { status: 400 });
-    }
 
-    const tablasConUserCodigo = [
-      "weekly_plan", "weekly_plan_generation_log", "weekly_plan_events", "pending_actions",
-      "athlete_coaching_notes", "athlete_state_events", "athlete_training_sources",
-      "external_training_records", "physiology_records", "readiness_checkins",
-      "session_modification_events", "onboarding_state", "block_outcomes", "athlete_mode_events"
-    ];
-    await Promise.all(tablasConUserCodigo.map(tabla => supabase.from(tabla).update({ user_codigo: nuevoCodigoLimpio }).eq("user_codigo", codigo)));
 
-    const { error: errorCambioCodigo } = await supabase.from("usuarios").update({ codigo: nuevoCodigoLimpio }).eq("codigo", codigo);
-    if (errorCambioCodigo) return NextResponse.json({ error: errorCambioCodigo.message }, { status: 500 });
-
-    console.log(`🔄 CODIGO CAMBIADO: ${codigo} -> ${nuevoCodigoLimpio}`);
-    return NextResponse.json({ ok: true, nuevoCodigo: nuevoCodigoLimpio });
-  }
-
-  if (action === "eliminar_cuenta") {
-    // FORGE — eliminacion de cuenta con confirmacion ya realizada en el frontend (doble paso).
-    // El email queda registrado como bloqueado para evitar reabrir cuenta nueva y reiniciar el
-    // periodo de prueba gratuita. Elimina datos reales de todas las tablas relacionadas.
-    const { data: usuarioEliminar } = await supabase.from("usuarios").select("email").eq("codigo", codigo).maybeSingle();
-    if (!usuarioEliminar) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
-
-    if (usuarioEliminar.email) {
-      await supabase.from("emails_eliminados").insert({ email: usuarioEliminar.email.toLowerCase().trim(), codigo_original: codigo, motivo: "eliminacion_solicitada_por_usuario" });
-    }
-
-    // Eliminar datos relacionados en orden (tablas con foreign key logica al codigo)
-    await Promise.all([
-      supabase.from("weekly_plan").delete().eq("user_codigo", codigo),
-      supabase.from("weekly_plan_generation_log").delete().eq("user_codigo", codigo),
-      supabase.from("weekly_plan_events").delete().eq("user_codigo", codigo),
-      supabase.from("pending_actions").delete().eq("user_codigo", codigo),
-      supabase.from("athlete_coaching_notes").delete().eq("user_codigo", codigo),
-      supabase.from("athlete_state_events").delete().eq("user_codigo", codigo),
-      supabase.from("athlete_training_sources").delete().eq("user_codigo", codigo),
-      supabase.from("external_training_records").delete().eq("user_codigo", codigo),
-      supabase.from("physiology_records").delete().eq("user_codigo", codigo),
-      supabase.from("readiness_checkins").delete().eq("user_codigo", codigo),
-      supabase.from("session_modification_events").delete().eq("user_codigo", codigo),
-      supabase.from("onboarding_state").delete().eq("user_codigo", codigo),
-      supabase.from("block_outcomes").delete().eq("user_codigo", codigo),
-    ]);
-
-    const { error: errorEliminarUsuario } = await supabase.from("usuarios").delete().eq("codigo", codigo);
-    if (errorEliminarUsuario) return NextResponse.json({ error: errorEliminarUsuario.message }, { status: 500 });
-
-    console.log(`🗑️ CUENTA ELIMINADA: ${codigo}, email bloqueado: ${usuarioEliminar.email || "sin email"}`);
-    return NextResponse.json({ ok: true });
-  }
 
   if (action === "verificar_email_bloqueado") {
     const { email } = datos || {};
@@ -1412,7 +1238,7 @@ if (action === "verificar_cambio_modo") {
   if (action === "guardar_usuario") {
     const { data, error } = await supabase
       .from("usuarios")
-      .insert([datos])
+      .insert([projectLegacyCreate(datos)])
       .select()
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -1436,23 +1262,21 @@ if (action === "verificar_cambio_modo") {
   }
 
   // Actualizar historial y marcas
-  if(action==="recuperar_por_email"){
-  const{data,error}=await supabase.from("usuarios").select("codigo").eq("email",email||"").single();
-  if(error) return NextResponse.json({error:"No encontrado"},{status:404});
-  return NextResponse.json({data});
-}
+
   if (action === "actualizar_usuario") {
+    const profilePatch = projectLegacyUpdate(datos);
+    if (!Object.keys(profilePatch).length) return NextResponse.json({ ok: true, changed: false });
     let physiologyResult: PhysiologyResult | undefined;
-    const physiologyContext = stripGenericPhysiology(datos);
+    const physiologyContext = stripGenericPhysiology(profilePatch);
     if (Object.keys(physiologyContext).length) {
       const read = await supabase.from("usuarios").select("estado_fisiologico").eq("codigo", codigo).single();
       if (read.error || !read.data) return NextResponse.json({ ok: false, error: "db_error" }, { status: 500 });
-      datos.estado_fisiologico = { ...(read.data.estado_fisiologico || {}), ...physiologyContext };
+      profilePatch.estado_fisiologico = { ...(read.data.estado_fisiologico || {}), ...physiologyContext };
     }
     // Limitar historial a máximo 15 mensajes antes de guardar
-    if (datos.historial && Array.isArray(datos.historial)) {
+    if (profilePatch.historial && Array.isArray(profilePatch.historial)) {
       // Eliminar imágenes del historial antes de guardar
-      datos.historial = datos.historial.map((m: any) => {
+      profilePatch.historial = profilePatch.historial.map((m: any) => {
         if (Array.isArray(m.content)) {
           return {
             ...m,
@@ -1465,32 +1289,32 @@ if (action === "verificar_cambio_modo") {
         return m;
       });
       // Limitar a 15 mensajes
-      if (datos.historial.length > 15) {
-        datos.historial = datos.historial.slice(-15);
+      if (profilePatch.historial.length > 15) {
+        profilePatch.historial = profilePatch.historial.slice(-15);
       }
     }
     // Evitar sesiones duplicadas en workout_history
-    if (datos.workout_history && Array.isArray(datos.workout_history)) {
+    if (profilePatch.workout_history && Array.isArray(profilePatch.workout_history)) {
       const {data: usuarioActual} = await supabase.from("usuarios").select("workout_history").eq("codigo", codigo).single();
       const historialActual = usuarioActual?.workout_history || [];
       const ultimaSesion = historialActual[historialActual.length - 1];
       const tiempoUltima = ultimaSesion ? new Date(ultimaSesion.fecha).getTime() : 0;
       if (new Date().getTime() - tiempoUltima < 300000) {
-        delete datos.workout_history;
+        delete profilePatch.workout_history;
       }
     }
     const { error } = await supabase
       .from("usuarios")
-      .update({ ...datos, updated_at: new Date().toISOString() })
+      .update({ ...profilePatch, updated_at: new Date().toISOString() })
       .eq("codigo", codigo);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
     // Extracción automática de memoria en el servidor cuando se guarda historial
-    if (datos.historial && Array.isArray(datos.historial) && datos.historial.length > 0) {
+    if (profilePatch.historial && Array.isArray(profilePatch.historial) && profilePatch.historial.length > 0) {
       try {
         const {data: usuarioData} = await supabase.from("usuarios").select("ciclo_actual,notas_coach,datos_entrenamiento,workout_history,distribucion_semanal,objetivo_principal,historial_marcas,analisis_bloques").eq("codigo", codigo).single();
         const cicloActual = usuarioData?.ciclo_actual || {};
-        const ultimos = datos.historial.slice(-6).map((m: any) => `${m.role === "user" ? "ATLETA" : "COACH"}: ${typeof m.content === "string" ? m.content.substring(0, 1500) : "[archivo]"}`).join("\n\n");
+        const ultimos = profilePatch.historial.slice(-6).map((m: any) => `${m.role === "user" ? "ATLETA" : "COACH"}: ${typeof m.content === "string" ? m.content.substring(0, 1500) : "[archivo]"}`).join("\n\n");
         const extraerTextoContenido = (content: any): string => {
           if (typeof content === "string") return content.substring(0, 1500);
           if (Array.isArray(content)) {
@@ -1501,7 +1325,7 @@ if (action === "verificar_cambio_modo") {
           }
           return "";
         };
-        const ultimoMensajeUsuario = datos.historial.filter((m:any) => m.role === "user").slice(-1)[0];
+        const ultimoMensajeUsuario = profilePatch.historial.filter((m:any) => m.role === "user").slice(-1)[0];
         const textoUltimoMensaje = ultimoMensajeUsuario ? extraerTextoContenido(ultimoMensajeUsuario.content) : "";
         // FORGE EVENT AGGREGATOR — el backend decide a que evento pertenece este mensaje y agrupa correctamente
         const { eventType, mensajesDelEvento } = await forgeEventAggregator(supabase, apiKey!, codigo, textoUltimoMensaje);
@@ -1574,7 +1398,7 @@ ${ultimos}`;
 // FORGE EXTRACTION VALIDATOR — el LLM propone, el backend verifica antes de persistir.
         extracted = validateExtraction(extracted, soloUsuario);
         if (extracted.estado_fisiologico) {
-          const text = latestUserText(datos.historial);
+          const text = latestUserText(profilePatch.historial);
           const patch = conversationalPatch(text, extracted.estado_fisiologico);
           if (Object.keys(patch).length) {
             physiologyResult = await writePhysiology(supabase, { operation: "observe", userCodigo: codigo,
@@ -1595,7 +1419,7 @@ ${ultimos}`;
           // FORGE CANONICAL STATE GUARD — disponibilidad protegida al mismo nivel que ciclo_actual.
           // El extractor conversacional NUNCA puede escribirla por una mencion casual o duda del
           // usuario ("creo que mañana hago box") — exige una CONFIRMACION EXPLICITA real en el mensaje.
-          const ultMensajeUsuarioDisp = datos.historial?.filter((m:any)=>m.role==="user").slice(-1)[0]?.content||"";
+          const ultMensajeUsuarioDisp = profilePatch.historial?.filter((m:any)=>m.role==="user").slice(-1)[0]?.content||"";
           const esConfirmacionExplicitaDisp = typeof ultMensajeUsuarioDisp === "string" &&
             /\b(confirmo|sigue siendo|ha cambiado|cambio de disponibilidad|ahora entreno|mi nueva disponibilidad|actualizo mi disponibilidad)\b/i.test(ultMensajeUsuarioDisp);
 
@@ -1712,7 +1536,7 @@ ${ultimos}`;
           // disponibilidad. Es el dato MAS peligroso de contaminar (Strategy → Blueprint → planificacion
           // completa dependen de el), asi que exige CONFIRMACION EXPLICITA real, nunca una mencion
           // casual, duda o hipotesis ("quizas mi objetivo sea...", "quiero probar...").
-          const ultMensajeUsuario = datos.historial?.filter((m:any)=>m.role==="user").slice(-1)[0]?.content||"";
+          const ultMensajeUsuario = profilePatch.historial?.filter((m:any)=>m.role==="user").slice(-1)[0]?.content||"";
           const esConfirmacionExplicitaObjetivo = typeof ultMensajeUsuario === "string" &&
             /\b(confirmo|mi nuevo objetivo es|cambio (mi )?objetivo|actualizo (mi )?objetivo|quiero cambiar (mi )?objetivo a|a partir de ahora mi objetivo)\b/i.test(ultMensajeUsuario);
           if (!esConfirmacionExplicitaObjetivo) {
@@ -4712,11 +4536,7 @@ Menciona el numero exacto de dias en la frase.`;
     return NextResponse.json({ ok: true });
   }
 
-  if (action === "obtener_event_log") {
-    const { data: eventoActivo } = await supabase.from("active_events").select("*").eq("user_codigo", codigo).single();
-    const { data: eventosLog } = await supabase.from("event_log").select("*").eq("user_codigo", codigo).order("closed_at", { ascending: false }).limit(30);
-    return NextResponse.json({ eventoActivo: eventoActivo || null, historial: eventosLog || [] });
-  }
+
 
   // FORGE ATHLETE KNOWLEDGE — funcion reutilizable, unica fuente de verdad del Nivel de Conocimiento.
 // Cualquier pagina (Hoy, Atleta, futuras) llama a la ACCION "calcular_nivel_conocimiento", nunca
@@ -5554,19 +5374,7 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
     return NextResponse.json({ ok: true, nuevoEstado, progresoNuevo });
   }
 
-  if (action === "establecer_password_auth_admin") {
-    // FORGE MOBILE — accion administrativa temporal para establecer password directamente via
-    // Service Role Key, sin depender del flujo de correo de recovery (que redirige a la landing
-    // web en vez de gestionar el token, problema de configuracion de Site URL/Redirect URLs).
-    const { authUserId, nuevaPassword } = datos;
-    if (!authUserId || !nuevaPassword || nuevaPassword.length < 6) {
-      return NextResponse.json({ error: "authUserId y nuevaPassword (min 6 caracteres) requeridos" }, { status: 400 });
-    }
-    const { data: resultadoAdmin, error: errorAdmin } = await supabase.auth.admin.updateUserById(authUserId, { password: nuevaPassword });
-    if (errorAdmin) return NextResponse.json({ error: errorAdmin.message }, { status: 500 });
-    console.log(`🔑 PASSWORD ESTABLECIDA (admin): usuario ${authUserId}`);
-    return NextResponse.json({ ok: true });
-  }
+
 
   if (action === "verificar_correccion_disponibilidad_deterministico") {
     // FORGE SAFETY NET — segunda capa de respaldo, independiente del tag [DISPONIBILIDAD_ACTUALIZADA:]
@@ -5891,41 +5699,7 @@ Responde SOLO el JSON, sin texto adicional.`;
     return NextResponse.json({ adherencia7, adherencia28, adherenciaBloque, diasSemana });
   }
 
-  if (action === "admin_stats") {
-    const ahora = new Date();
-    const hace7dias = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const hoy = new Date(); hoy.setHours(0,0,0,0);
-    const inicioSemana = new Date(hoy);
-    inicioSemana.setDate(hoy.getDate() - (hoy.getDay()===0?6:hoy.getDay()-1));
 
-    const { data: todos } = await supabase.from("usuarios").select("codigo,categoria,especialidad,premium,admin,created_at,updated_at,consultas_usadas,total_visitas,ultima_visita,primera_sesion_at");
-    if (!todos) return NextResponse.json({ error: "Error" }, { status: 500 });
-
-    const total = todos.length;
-    const premium = todos.filter((u: any) => u.premium).length;
-    const activos = todos.filter((u: any) => u.updated_at && new Date(u.updated_at) > new Date(hace7dias)).length;
-    const inactivos = todos.filter((u: any) => !u.updated_at || new Date(u.updated_at) <= new Date(hace7dias)).length;
-    const enLimite = todos.filter((u: any) => {
-      if(!u.created_at || u.premium || u.admin) return false;
-      const diasUsados = Math.floor((new Date().getTime() - new Date(u.created_at).getTime()) / (1000*60*60*24));
-      return diasUsados >= 10;
-    }).length;
-    const unaVisita = todos.filter((u: any) => !u.total_visitas || u.total_visitas <= 1).length;
-    const recurrentes = todos.filter((u: any) => u.total_visitas > 1).length;
-    const nuevosHoy = todos.filter((u: any) => {
-      if(!u.created_at) return false;
-      const fechaCreacion = new Date(u.created_at);
-      return fechaCreacion.toDateString() === new Date().toDateString();
-    }).length;
-    const nuevosSemana = todos.filter((u: any) => u.created_at && new Date(u.created_at) >= inicioSemana).length;
-    const ultimos = [...todos].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 10);
-
-    // Activación: usuarios que completaron al menos 1 sesión
-    const activados = todos.filter((u: any) => u.primera_sesion_at).length;
-    const tasaActivacion = total > 0 ? Math.round((activados / total) * 100) : 0;
-
-    return NextResponse.json({ total, premium, activos, inactivos, enLimite, nuevosHoy, nuevosSemana, ultimos, unaVisita, recurrentes, activados, tasaActivacion });
-  }
 
   // Llamada normal a la IA con timeout de 120 segundos (aumentado por prompts largos con Estado Canonico + plan semanal completo)
   const controller = new AbortController();

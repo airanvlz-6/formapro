@@ -1,4 +1,5 @@
 import { validatePlanMutation } from './planMutation';
+import { mutatePlanWithCAS, planPersistenceFailure, type PlanDatabase } from './planPersistence';
 import type { PlanCandidate, PlanMutationCommand, PlanMutationContext, PlanChangeSet } from './planMutationTypes';
 
 const normalizeDay = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -41,12 +42,15 @@ export type CompletionResult = {
   corrected?: boolean;
   status: string;
   error?: string;
+  revision?: number;
+  planId?: string;
+  persistenceStatus?: 'committed' | 'conflict' | 'error' | 'unknown';
 };
 
 /** Plan-only adapter. Source selects correction policy; it is not authentication.
  * Evidence, cardinality, rest and repeat policy are checked here, not by the core. */
 export async function recordPlanCompletion(
-  supabase: any,
+  supabase: PlanDatabase,
   evidence: CompletionEvidence,
   validate: typeof validatePlanMutation = validatePlanMutation,
 ): Promise<CompletionResult> {
@@ -86,7 +90,7 @@ export async function recordPlanCompletion(
     const candidate: PlanCandidate = { ...existingPlan,
       sessions: existingPlan.sessions.map((session: any, i: number) => i === index ? replacement : session),
       updated_at: new Date().toISOString() };
-    const command: PlanMutationCommand = { source, operationType: 'record_completion',
+    const command: PlanMutationCommand = { source, operationType: 'record_completion', expectedRevision: existingPlan.revision,
       target: { userCodigo, weekStart: effective.weekStart, day: target.dia }, proposal: { title, description } };
     const context: PlanMutationContext = { existingPlan, normalizedWeekStart: effective.weekStart };
     const changeSet: PlanChangeSet = { operationType: 'record_completion', affectedDays: [target.dia],
@@ -99,12 +103,13 @@ export async function recordPlanCompletion(
       return fail(validationResult.status === 'rejected' ? 'PLAN_MUTATION_REJECTED' : stage);
     }
     stage = 'PLAN_WRITE_FAILED';
-    const { data: saved, error: writeError } = await supabase.from('weekly_plan').update({
-      sessions: validationResult.candidate.sessions, updated_at: validationResult.candidate.updated_at,
-    }).eq('user_codigo', userCodigo).eq('week_start', effective.weekStart).select('user_codigo,week_start').maybeSingle();
-    if (writeError) return fail(stage);
-    if (!saved || saved.user_codigo !== userCodigo || saved.week_start !== effective.weekStart) return fail('PLAN_WRITE_UNCONFIRMED');
+    const persisted = await mutatePlanWithCAS(supabase, validationResult.mutation);
+    if (persisted.status !== 'committed') {
+      const failure = planPersistenceFailure(persisted);
+      return { ...failure, planCompleted: false, status: failure.error };
+    }
     return { ok: true, planCompleted: true, corrected: alreadyCompleted,
+      revision: persisted.revision, planId: persisted.planId, persistenceStatus: 'committed',
       status: alreadyCompleted ? 'explicit_correction' : 'completed' };
   } catch {
     return fail(stage);

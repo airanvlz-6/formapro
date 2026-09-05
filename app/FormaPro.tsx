@@ -927,6 +927,10 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     if(!codigoUsuario) return null;
     console.log("=== FORGE ORCHESTRATOR: INICIO ===");
 
+    const generationResult=await apiCall({action:"preparar_generacion_semana",codigo:codigoUsuario});
+    if(!generationResult?.ok) return null;
+    const weeklyGeneration=generationResult.generation;
+
     // Paso 1: Block Analyzer
     console.log("ORCHESTRATOR Paso 1 — Block Analyzer: iniciando...");
     const analyzerRes=await apiCall({action:"analizar_bloque_semana",codigo:codigoUsuario});
@@ -977,11 +981,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     // se cerro, avanzar a la siguiente") AQUI AL PRINCIPIO — antes se calculaba solo al final,
     // y "dias ya completados" siempre miraba la semana de HOY, arrastrando por error el contenido
     // completo de una semana ya cerrada hacia la nueva semana que se estaba generando.
-    const hoyOrch=new Date();
-    const diaSemOrch=hoyOrch.getDay()||7;
-    const lunesOrch=new Date(hoyOrch);
-    lunesOrch.setDate(hoyOrch.getDate()-diaSemOrch+1);
-    const weekStartSemanaActual=lunesOrch.toISOString().split('T')[0];
+    const weekStartSemanaActual=weeklyGeneration.currentWeek;
 
     // FIX CRITICO: usar la nueva accion check_week_closure (solo lectura) en vez de la antigua
     // verificar_semana_completa_sin_cierre, que dejo de existir en el backend hoy y siempre
@@ -991,14 +991,13 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     const semanaActualYaCerrada=resVerificarCierreActual?.yaCerrada===true;
 
     const weekStartOrchestrator=semanaActualYaCerrada
-      ? (()=>{ const lunesSig=new Date(lunesOrch); lunesSig.setDate(lunesOrch.getDate()+7); return lunesSig.toISOString().split('T')[0]; })()
+      ? weeklyGeneration.nextWeek
       : weekStartSemanaActual;
     console.log("ORCHESTRATOR: semana actual ya cerrada =", semanaActualYaCerrada, "→ weekStart real:", weekStartOrchestrator);
 
     // Preservar dias que YA tienen sesion completada, pero SOLO dentro del weekStart REAL que se
     // esta generando — si es una semana nueva (recien empezada), esto correctamente sera vacio.
-    const resPlanExistente=await apiCall({action:"obtener_plan_semana",codigo:codigoUsuario});
-    const sessionsExistentes=(resPlanExistente?.plan?.week_start===weekStartOrchestrator ? resPlanExistente.plan.sessions : []) || [];
+    const sessionsExistentes=weeklyGeneration.snapshots[weekStartOrchestrator]?.sessions || [];
     const diasYaCompletados=sessionsExistentes.filter((s:any)=>s.completada===true);
     console.log("ORCHESTRATOR: dias ya completados en la semana que se esta generando, se preservan:", JSON.stringify(diasYaCompletados.map((s:any)=>s.dia)));
 
@@ -1150,31 +1149,13 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
 
     // Guardar el plan completo
     console.log("ORCHESTRATOR: guardando plan completo:", JSON.stringify(planCompleto));
-    const resultadoGuardado=await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planCompleto}});
+    const resultadoGuardado=await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planCompleto,generationToken:weeklyGeneration.token}});
     if(resultadoGuardado?.ok!==true){
       cargarPlanSemanal(codigoUsuario);
       return null;
     }
 
-    // FORGE PERSISTENCE VALIDATOR — verificar que realmente se guardo correctamente antes de confirmar exito
-    console.log("ORCHESTRATOR: verificando persistencia para week_start:", planCompleto.week_start);
-    const validacion=await apiCall({action:"verificar_persistencia_plan",codigo:codigoUsuario,datos:{weekStart:planCompleto.week_start}});
-    console.log("ORCHESTRATOR: resultado verificacion persistencia:", JSON.stringify(validacion));
-    if(!validacion?.valido){
-      console.log("ORCHESTRATOR: validacion fallo, motivo:", validacion?.motivo, "— reintentando guardado...");
-      const resultadoReintento=await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planCompleto}});
-      if(resultadoReintento?.ok!==true){
-        cargarPlanSemanal(codigoUsuario);
-        return null;
-      }
-      const segundaValidacion=await apiCall({action:"verificar_persistencia_plan",codigo:codigoUsuario,datos:{weekStart:planCompleto.week_start}});
-      console.log("ORCHESTRATOR: resultado segunda verificacion:", JSON.stringify(segundaValidacion));
-      if(!segundaValidacion?.valido){
-        console.log("=== ORCHESTRATOR: FALLO DEFINITIVO tras reintento ===");
-        cargarPlanSemanal(codigoUsuario);
-        return null;
-      }
-    }
+    // The server receipt confirms persistence. Never replay this proposal after a write.
     console.log("=== FORGE ORCHESTRATOR: EXITO COMPLETO ===");
     cargarPlanSemanal(codigoUsuario);
     return planCompleto;
@@ -1299,12 +1280,16 @@ const [equipoSeleccionado,setEquipoSeleccionado]=useState<any>(null);
   const accentColor=cat?.color||C.accent;
 
 const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
+    const generationResult=!body.action && codigoUsuario
+      ? await apiCall({action:"preparar_generacion_semana",codigo:codigoUsuario}) : null;
+    const weeklyGeneration=generationResult?.ok ? generationResult.generation : undefined;
+    if(weeklyGeneration) body={...body,system:String(body.system||"")+"\nSnapshot semanal del servidor para esta generación (autoridad sobre contexto previo):\n"+JSON.stringify(weeklyGeneration.snapshots)};
     let intentos=0;
     while(intentos<3){
       try{
         const controller=useAbort?abortControllerRef.current:null;
         const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:controller?.signal});
-        if(res.ok) return res.json();
+        if(res.ok) { const result=await res.json(); return weeklyGeneration ? {...result,weeklyGeneration} : result; }
         intentos++;
         await new Promise(r=>setTimeout(r,1000));
       }catch(e:any){
@@ -1521,7 +1506,7 @@ const forgeValidator=(texto:string):string=>{
     return textoCorregido;
   };
 
-  const procesarTags=async(textoOriginal:string, esMensajeDeSueno:boolean=false, mensajeUsuarioOriginal:string=""):Promise<string>=>{
+  const procesarTags=async(textoOriginal:string, esMensajeDeSueno:boolean=false, mensajeUsuarioOriginal:string="", weeklyGeneration?:any):Promise<string>=>{
     // Limpieza de residuos de markdown/JSON que el modelo a veces genera antes del tag real (ej: "```json" suelto)
     let texto=textoOriginal.replace(/\[STATE_UPDATE\][\s\S]*?\[\/STATE_UPDATE\]/g,"").replace(/```json|```/gi,"").trim();
 
@@ -1592,8 +1577,11 @@ const forgeValidator=(texto:string):string=>{
     await procesarTag("[INTERVENTION:",14,async(data)=>{
       await apiCall({action:"guardar_intervention",codigo:codigoUsuario,datos:data});
     });
+    let weeklySaveFailure:string|null=null;
     await procesarTag("[PLAN:",6,async(data)=>{
-      await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:data}});
+      if(weeklySaveFailure) return;
+      const saved=await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:data,generationToken:weeklyGeneration?.token}});
+      if(saved?.ok!==true) weeklySaveFailure=saved?.message || "No se pudo confirmar el guardado del plan. Requiere revisión antes de repetir.";
       cargarPlanSemanal(codigoUsuario);
     });
     await procesarTag("[MODIFICAR_SESION:",18,async(data)=>{
@@ -1689,6 +1677,7 @@ const forgeValidator=(texto:string):string=>{
     // Esto evita que tags inventados (ej: [MODIFICAR_DISPONIBILIDAD:...]) queden visibles como texto roto.
     texto = texto.replace(/\[[A-Z_]+:\s*\{[\s\S]*?\}\s*\]/g, "").trim();
 
+    if(weeklySaveFailure) return weeklySaveFailure;
     if(!texto) texto="✅ Hecho. Puedes ver los detalles en las secciones correspondientes.";
     return texto;
   };
@@ -1716,7 +1705,7 @@ const forgeValidator=(texto:string):string=>{
       if(data.aborted) return;
       const respTextRaw=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.");
       const respTextValidado=forgeValidator(respTextRaw);
-      const respText=await procesarTags(respTextValidado, esSuenoSilencioso, texto.trim());
+      const respText=await procesarTags(respTextValidado, esSuenoSilencioso, texto.trim(), data.weeklyGeneration);
       const histLimpio=[...historial,{role:"user",content:texto.trim()},{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);
       setHistorial(histLimpio);
@@ -2071,7 +2060,7 @@ const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,system:build
         }catch{}
       }
 
-      const respText=await procesarTags(respTextRaw2, esSuenoParaResumen, texto);
+      const respText=await procesarTags(respTextRaw2, esSuenoParaResumen, texto, data.weeklyGeneration);
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);
       // FORGE PROPOSAL PARSER — Nivel 1 deterministico: detecta si el Coach acaba de proponer un

@@ -1,13 +1,18 @@
 import type {
-  PlanMutationValidationResult, PlanMutationValidator, ValidationInput,
+  PlanMutationValidationResult, PlanMutationValidator, ValidationInput, ValidatedPlanMutation,
 } from './planMutationTypes';
 import {
-  candidateStructureValidator, immutableSnapshot, runPlanMutationValidators,
+  immutableSnapshot, prescriptionRevisionValidator,
 } from './planMutationValidators';
+import { hasPrescriptionIdentityProof } from './prescriptionIdentity';
+import { runPlanValidationPipeline as runPipeline } from './planValidationPipeline';
 
-/** Phase 1B: caller supplies the candidate and change set. No legacy merge logic,
- * authentication, revision checks, idempotency, or persistence is implemented here.
- * Source is provenance only. Ready candidates still need authorization and commit.
+const validated = new WeakSet<ValidatedPlanMutation>();
+/** JSON or structurally forged receipts cannot authorize the persistence adapter. */
+export function isValidatedPlanMutation(value: ValidatedPlanMutation): boolean { return validated.has(value); }
+
+/** Strict infrastructure entry: no DB writes, UUID generation, auth or idempotency.
+ * All known sports writers use this entry.
  */
 export async function validatePlanMutation(
   input: ValidationInput,
@@ -18,19 +23,22 @@ export async function validatePlanMutation(
     operationType: input.command.operationType,
   };
   try {
+    const needsProof = ['create_week', 'regenerate_week'].includes(input.command.operationType);
+    const hasProof = !needsProof || hasPrescriptionIdentityProof(input.context.identityProof,
+      input.candidate.sessions, input.context.existingPlan);
     const snapshot = immutableSnapshot(input);
-    const executions = await runPlanMutationValidators(snapshot, [candidateStructureValidator, ...validators]);
-    const issues = executions.flatMap(execution => execution.issues);
-    const violations = issues.filter(issue => issue.severity === 'hard');
-    const warnings = issues.filter(issue => issue.severity === 'warning');
-    const result = { ...base, violations, warnings,
-      metadata: { requestId: snapshot.command.requestId, validatorExecutions: executions } };
-    if (executions.some(execution => execution.status === 'error'
-      && execution.issues.some(issue => issue.severity === 'hard'))) {
-      return { ...result, status: 'failed', valid: false, candidate: null };
-    }
-    if (violations.length) return { ...result, status: 'rejected', valid: false, candidate: null };
-    return { ...result, status: 'ready_for_commit', valid: true, candidate: snapshot.candidate };
+    const authority: PlanMutationValidator = {
+      id: 'prescription_authority', version: '1', critical: true,
+      operationTypes: prescriptionRevisionValidator.operationTypes,
+      validate: () => hasProof ? [] : [{ code: 'UNACCREDITED_PRESCRIPTION_IDENTITY',
+        validatorId: 'prescription_authority', severity: 'hard', message: 'Server identity proof is required.' }],
+    };
+    const result = await runPipeline(snapshot, [prescriptionRevisionValidator, authority, ...validators]);
+    if (result.status !== 'ready_for_commit') return result;
+    const mutation = Object.freeze({ command: snapshot.command, candidate: snapshot.candidate,
+      existingPlan: snapshot.context.existingPlan }) as ValidatedPlanMutation;
+    validated.add(mutation);
+    return { ...result, candidate: snapshot.candidate, mutation };
   } catch {
     return { ...base, status: 'failed', valid: false, candidate: null, warnings: [],
       violations: [{ code: 'PIPELINE_ERROR', validatorId: 'pipeline', severity: 'hard',

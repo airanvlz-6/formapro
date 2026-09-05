@@ -1,4 +1,4 @@
-import type { PlanCandidate } from './planMutationTypes';
+import type { LegacyPlanCandidate as PlanCandidate } from './planMutationTypes';
 
 export const isWeekRest = (tipo: unknown): boolean => typeof tipo === 'string' && /descanso/i.test(tipo);
 const days = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
@@ -14,7 +14,7 @@ export function weeklyFacts(plan: PlanCandidate) {
 
 /** Shared read-only projection for check_week_closure and close_week. Date/day are
  * resolved in Madrid by the caller. No LLM input or persistence belongs here. */
-export function projectWeekClosure(plan: PlanCandidate, today: string) {
+export function projectWeekClosure<T extends PlanCandidate>(plan: T, today: string) {
   if (!Array.isArray(plan.sessions) || plan.sessions.some(s => !s ||
     ['dia', 'tipo', 'titulo', 'descripcion'].some(k => typeof (s as unknown as Record<string, unknown>)[k] !== 'string'))) {
     throw new Error('INVALID_WEEK_SESSIONS');
@@ -32,7 +32,7 @@ export function projectWeekClosure(plan: PlanCandidate, today: string) {
     changedIndices.push(index);
     return { ...s, completada: true };
   });
-  const projectedPlan: PlanCandidate = { ...plan, sessions };
+  const projectedPlan: T = { ...plan, sessions };
   const facts = weeklyFacts(projectedPlan);
   // Legacy product rule: Sunday itself permits closing an incomplete week.
   const eligible = todayIndex === 6 || (facts.required.length > 0 && facts.pending.length === 0);

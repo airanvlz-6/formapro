@@ -18,7 +18,7 @@ export type SessionPrescription = Readonly<{
   debilidad_relacionada?: string | null;
 }>;
 
-export type PlanSession = SessionPrescription & Readonly<{
+export type LegacyPlanSession = SessionPrescription & Readonly<{
   dia: string;
   completada?: boolean;
   titulo_real?: string;
@@ -26,9 +26,8 @@ export type PlanSession = SessionPrescription & Readonly<{
 }>;
 
 /** Existing JSON fields are preserved without granting arbitrary patch authority. */
-export type PlanCandidate = Readonly<{
+type PlanFields = Readonly<{
   week_start: string;
-  sessions: readonly PlanSession[];
   week_number?: number;
   total_weeks_block?: number | null;
   block_name?: string;
@@ -36,6 +35,7 @@ export type PlanCandidate = Readonly<{
   resumen_semana?: string;
   [field: string]: unknown;
 }>;
+export type LegacyPlanCandidate = PlanFields & Readonly<{ sessions: readonly LegacyPlanSession[] }>;
 
 type WeekTarget = Readonly<{ userCodigo: string; weekStart: string }>;
 type SessionTarget = WeekTarget & Readonly<{ day: string }>;
@@ -45,11 +45,11 @@ type CommandBase = Readonly<{
   requestId?: string;
   idempotencyKey?: string;
 }>;
-type ExistingTarget = Readonly<{ expectedRevision?: string }>;
+type ExistingTarget = Readonly<{ expectedRevision?: string | number }>;
 
-export type PlanMutationCommand = CommandBase & (
-  | { operationType: 'create_week'; target: WeekTarget; proposal: PlanCandidate }
-  | (ExistingTarget & { operationType: 'regenerate_week'; target: WeekTarget; proposal: PlanCandidate })
+export type LegacyPlanMutationCommand = CommandBase & (
+  | { operationType: 'create_week'; target: WeekTarget; proposal: LegacyPlanCandidate }
+  | (ExistingTarget & { operationType: 'regenerate_week'; target: WeekTarget; proposal: LegacyPlanCandidate })
   | (ExistingTarget & { operationType: 'patch_session'; target: SessionTarget;
       proposal: { changes: Partial<SessionPrescription>; reason?: string; confidence?: number };
       confirmation?: Confirmation })
@@ -63,8 +63,8 @@ export type PlanMutationCommand = CommandBase & (
       proposal: { summary: string; adherence?: string } })
 );
 
-export type PlanMutationContext = Readonly<{
-  existingPlan?: PlanCandidate | null;
+export type LegacyPlanMutationContext = Readonly<{
+  existingPlan?: LegacyPlanCandidate | null;
   normalizedWeekStart?: string;
   mode?: string;
   cycle?: Readonly<Record<string, unknown>>;
@@ -95,10 +95,10 @@ export interface ValidatorExecution {
   issues: readonly ValidationIssue[];
 }
 
-export type ValidationInput = Readonly<{
-  command: PlanMutationCommand;
-  context: PlanMutationContext;
-  candidate: PlanCandidate;
+export type LegacyValidationInput = Readonly<{
+  command: LegacyPlanMutationCommand;
+  context: LegacyPlanMutationContext;
+  candidate: LegacyPlanCandidate;
   changeSet: PlanChangeSet;
 }>;
 
@@ -106,9 +106,9 @@ export interface PlanMutationValidator {
   readonly id: string;
   readonly version: string;
   readonly operationTypes: readonly OperationType[];
-  readonly requiredContext?: readonly (keyof PlanMutationContext)[];
+  readonly requiredContext?: readonly (keyof LegacyPlanMutationContext)[];
   readonly critical: boolean;
-  validate(input: ValidationInput): readonly ValidationIssue[] | Promise<readonly ValidationIssue[]>;
+  validate(input: LegacyValidationInput): readonly ValidationIssue[] | Promise<readonly ValidationIssue[]>;
 }
 
 interface ResultBase {
@@ -123,7 +123,49 @@ interface ResultBase {
 }
 
 /** Validation is neither authorization nor persistence. */
+export type LegacyPlanMutationValidationResult = ResultBase & (
+  | { status: 'ready_for_commit'; valid: true; candidate: LegacyPlanCandidate }
+  | { status: 'rejected' | 'failed'; valid: false; candidate: null }
+);
+
+/** Persistible contracts. Legacy-named types above describe unadmitted content for the internal validator pipeline; they cannot authorize persistence. */
+export type PlanSession = LegacyPlanSession & Readonly<{ session_id: string }>;
+export type PlanCandidate = PlanFields & Readonly<{
+  sessions: readonly PlanSession[];
+  /** Snapshot revision; the persistence adapter alone computes the next value. */
+  revision: number;
+  id?: string;
+  user_codigo?: string;
+}>;
+export type ExistingPlanSnapshot = PlanCandidate & Readonly<{ id: string; user_codigo: string }>;
+
+type StrictCommand<C> = C extends { operationType: 'create_week' }
+  ? Omit<C, 'proposal'> & { proposal: PlanCandidate; expectedRevision?: never }
+  : C extends { operationType: 'regenerate_week' }
+    ? Omit<C, 'proposal' | 'expectedRevision'> & { proposal: PlanCandidate; expectedRevision: number }
+    : Omit<C, 'expectedRevision'> & { expectedRevision: number };
+export type PlanMutationCommand = StrictCommand<LegacyPlanMutationCommand>;
+export type PlanMutationContext = Omit<LegacyPlanMutationContext, 'existingPlan'> & Readonly<{
+  existingPlan?: ExistingPlanSnapshot | null;
+  /** Opaque process-local attestation, never a field accepted from request JSON. */
+  identityProof?: import('./prescriptionIdentity').PrescriptionIdentityProof;
+}>;
+export type ValidationInput = Readonly<{
+  command: PlanMutationCommand;
+  context: PlanMutationContext;
+  candidate: PlanCandidate;
+  changeSet: PlanChangeSet;
+}>;
+
+declare const validatedPlanMutation: unique symbol;
+/** Also authenticated at runtime: structurally forged/JSON receipts cannot be persisted. */
+export type ValidatedPlanMutation = Readonly<{
+  [validatedPlanMutation]: true;
+  command: PlanMutationCommand;
+  candidate: PlanCandidate;
+  existingPlan?: ExistingPlanSnapshot | null;
+}>;
 export type PlanMutationValidationResult = ResultBase & (
-  | { status: 'ready_for_commit'; valid: true; candidate: PlanCandidate }
+  | { status: 'ready_for_commit'; valid: true; candidate: PlanCandidate; mutation: ValidatedPlanMutation }
   | { status: 'rejected' | 'failed'; valid: false; candidate: null }
 );

@@ -26,10 +26,14 @@ import { sendEmail } from "@/lib/email/sendEmail";
 import FounderEmail from "@/lib/email/templates/FounderEmail";
 import { getCanonicalRestrictions } from "@/lib/athlete/getCanonicalRestrictions";
 import type { CanonicalRestrictions } from "@/lib/athlete/getCanonicalRestrictions";
+import { beginWeeklyGeneration, resolveWeeklyGeneration } from "@/lib/planning/weeklyGeneration";
+import { prepareWeeklyEntries, entrySession, admitWeeklyCandidate } from "@/lib/planning/prepareWeeklyCandidate";
 import { validatePlanMutation } from "@/lib/planning/planMutation";
+import { createPlan, mutatePlanWithCAS, planPersistenceFailure } from "@/lib/planning/planPersistence";
 import { recordPlanCompletion, resolveCompletionDate } from "@/lib/planning/recordCompletion";
 import { projectWeekClosure, weeklyFacts } from "@/lib/planning/weekClosure";
-import type { PlanCandidate, PlanMutationCommand, PlanMutationContext, PlanChangeSet } from "@/lib/planning/planMutationTypes";
+import type { PlanCandidate, PlanMutationCommand, PlanMutationContext, PlanChangeSet,
+  LegacyPlanCandidate } from "@/lib/planning/planMutationTypes";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -2511,18 +2515,6 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
         console.error("REGENERACION FORZADA: violacion de catalogo detectada:", validacionCatalogo.terminosProhibidosEncontrados);
       }
 
-      // NIVEL C — adaptacion automatica del sistema (correccion de disponibilidad durante el Week
-      // Integrity Validator), no cuenta contra el limite de generaciones, es Forge haciendo su trabajo.
-      await supabase.from("weekly_plan_events").insert({
-        user_codigo: codigo,
-        week_start: null,
-        nivel: "C_adaptacion_automatica",
-        accion: "regenerar_sesion_disciplina_forzada",
-        motivo: `Correccion de disponibilidad — disciplina forzada a ${disciplinaForzada}`,
-        dia_afectado: dia,
-        confirmado_por_usuario: false
-      });
-
       return NextResponse.json({
         ok: true,
         sesion: {
@@ -2831,7 +2823,7 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
     let planPersisted = false;
     let restsCompleted = 0;
     if (projection.changedIndices.length) {
-      const command: PlanMutationCommand = { operationType: "complete_past_rest_days", source: "week_close",
+      const command: PlanMutationCommand = { operationType: "complete_past_rest_days", source: "week_close", expectedRevision: planSemana.revision,
         target: { userCodigo: codigo, weekStart: weekStartCierre }, proposal: { asOfDate: hoyCierreStr } };
       const context: PlanMutationContext = { existingPlan: planSemana, normalizedWeekStart: weekStartCierre };
       const changeSet: PlanChangeSet = { operationType: "complete_past_rest_days",
@@ -2839,11 +2831,9 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
         changedFields: projection.changedIndices.map(i => `sessions.${i}.completada`) };
       const validationResult = await validatePlanMutation({ command, context, candidate: projection.projectedPlan, changeSet });
       if (validationResult.status !== "ready_for_commit") return fail(validationResult.status === "rejected" ? "PLAN_MUTATION_REJECTED" : "PLAN_MUTATION_VALIDATION_FAILED", validationResult.status === "rejected" ? 422 : 500);
-      const { data: saved, error: writeError } = await supabase.from("weekly_plan").update({ sessions: validationResult.candidate.sessions })
-        .eq("user_codigo", codigo).eq("week_start", weekStartCierre).select("user_codigo,week_start").maybeSingle();
-      if (writeError) return fail("CLOSURE_PLAN_WRITE_FAILED");
-      if (!saved || saved.user_codigo !== codigo || saved.week_start !== weekStartCierre) return fail("CLOSURE_PLAN_WRITE_UNCONFIRMED", 409);
-      canonicalPlan = validationResult.candidate;
+      const persisted = await mutatePlanWithCAS(supabase, validationResult.mutation);
+      if (persisted.status !== "committed") return NextResponse.json({ ...planPersistenceFailure(persisted), closed: false });
+      canonicalPlan = { ...validationResult.candidate, revision: persisted.revision };
       planPersisted = true;
       restsCompleted = projection.changedIndices.length;
     }
@@ -3278,14 +3268,18 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
     // Sin snapshot suficiente se conserva la admision legacy: NO garantiza vigencia ni sustituye revision/CAS.
     const prescripcion: Extract<PlanMutationCommand, { operationType: "replace_session" }>["proposal"]["session"] = {
       tipo: acc.tipo, titulo: acc.titulo, descripcion: acc.descripcion,
-      por_que: acc.por_que || acc.motivo || (typeof target.por_que === "string" ? target.por_que : undefined),
+      ...((acc.por_que || acc.motivo || typeof target.por_que === "string")
+        ? { por_que: acc.por_que || acc.motivo || target.por_que } : {}),
       debilidad_relacionada: acc.debilidad_relacionada ?? null,
     };
+    if (Object.entries(prescripcion).every(([key, value]) => Object.is(target[key], value))) {
+      return NextResponse.json({ ok: true, ejecutado: false, noOp: true, pendingResolved: false });
+    }
     const sesionModificada = { ...target, ...prescripcion, modificado: true,
       motivo_modificacion: acc.motivo || "", modificado_at: new Date().toISOString() };
     const candidate: PlanCandidate = { ...planActualPending,
       sessions: planActualPending.sessions.map((s: any, i: number) => i === indice ? sesionModificada : s) };
-    const command: PlanMutationCommand = { operationType: "replace_session", source: "pending_confirmation",
+    const command: PlanMutationCommand = { operationType: "replace_session", source: "pending_confirmation", expectedRevision: planActualPending.revision,
       target: { userCodigo: codigo, weekStart: acc.week_start, day: target.dia },
       proposal: { session: prescripcion, ...(acc.motivo !== undefined ? { reason: acc.motivo } : {}) },
       confirmation: { pendingId, confirmed: true } };
@@ -3310,13 +3304,8 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
       return result.data;
     };
     try {
-      const { data: planPersistido, error: errorEscritura } = await supabase.from("weekly_plan").update({
-        sessions: validationResult.candidate.sessions,
-      }).eq("user_codigo", codigo).eq("week_start", acc.week_start).select("user_codigo,week_start").maybeSingle();
-      if (errorEscritura) return fallo("PLAN_WRITE_FAILED", 500);
-      if (!planPersistido || planPersistido.user_codigo !== codigo || planPersistido.week_start !== acc.week_start) {
-        return fallo("PLAN_WRITE_UNCONFIRMED", 409);
-      }
+      const persisted = await mutatePlanWithCAS(supabase, validationResult.mutation);
+      if (persisted.status !== "committed") return NextResponse.json({ ...planPersistenceFailure(persisted), ejecutado: false, pendingResolved: false });
       planGuardado = true;
       // NIVEL B — modificacion de sesion concreta, NO cuenta contra el limite de generaciones de semana,
       // pero queda auditada igual (confirmada explicitamente por el flujo de Pending Actions).
@@ -3448,7 +3437,7 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
         .eq("user_codigo", codigo).eq("id", pendingId).eq("estado", "pendiente")
         .select("id,user_codigo,estado").maybeSingle());
       if (resuelto.id !== pendingId || resuelto.user_codigo !== codigo || resuelto.estado !== "ejecutado") throw new Error("pending_resolution");
-      return NextResponse.json({ ok: true, ejecutado: true, tipo: pendiente.tipo, warnings });
+      return NextResponse.json({ ok: true, ejecutado: true, tipo: pendiente.tipo, warnings, revision: persisted.revision });
     } catch {
       if (!planGuardado) return fallo("PLAN_WRITE_FAILED", 500);
       // HTTP 200 entrega el resultado parcial a apiCall sin reintentar toda la confirmacion.
@@ -4964,18 +4953,16 @@ if (action === "obtener_daily_briefing") {
     if (existingPlan.user_codigo !== codigo || existingPlan.week_start !== week_start) return fail("SUMMARY_PLAN_IDENTITY_MISMATCH", 409);
     if (!Array.isArray(existingPlan.sessions)) return fail("INVALID_WEEK_SESSIONS", 422);
     if (existingPlan.resumen_semana === resumen) return NextResponse.json({ ok: true, summarySaved: true, noOp: true, insightGenerado: false, warnings: [] });
-    // Legacy replacement is allowed; no revision/CAS. Coach adherence is proposal metadata only.
+    // Coach adherence is proposal metadata only; the summary write uses snapshot CAS.
     const candidate: PlanCandidate = { ...existingPlan, resumen_semana: resumen };
-    const command: PlanMutationCommand = { operationType: "set_week_summary", source: "week_summary",
+    const command: PlanMutationCommand = { operationType: "set_week_summary", source: "week_summary", expectedRevision: existingPlan.revision,
       target: { userCodigo: codigo, weekStart: week_start }, proposal: { summary: resumen, ...(adherencia !== undefined ? { adherence: adherencia } : {}) } };
     const context: PlanMutationContext = { existingPlan, normalizedWeekStart: week_start };
     const changeSet: PlanChangeSet = { operationType: "set_week_summary", affectedDays: [], changedFields: ["resumen_semana"] };
     const validationResult = await validatePlanMutation({ command, context, candidate, changeSet });
     if (validationResult.status !== "ready_for_commit") return fail(validationResult.status === "rejected" ? "PLAN_MUTATION_REJECTED" : "PLAN_MUTATION_VALIDATION_FAILED", validationResult.status === "rejected" ? 422 : 500);
-    const { data: saved, error: writeError } = await supabase.from("weekly_plan").update({ resumen_semana: validationResult.candidate.resumen_semana })
-      .eq("user_codigo", codigo).eq("week_start", week_start).select("user_codigo,week_start").maybeSingle();
-    if (writeError) return fail("SUMMARY_PLAN_WRITE_FAILED", 500);
-    if (!saved || saved.user_codigo !== codigo || saved.week_start !== week_start) return fail("SUMMARY_PLAN_WRITE_UNCONFIRMED", 409);
+    const persisted = await mutatePlanWithCAS(supabase, validationResult.mutation);
+    if (persisted.status !== "committed") return NextResponse.json({ ...planPersistenceFailure(persisted), summarySaved: false });
     const warnings: string[] = [];
     let insightGenerado = false;
     let nivelConocimientoActual: number | undefined;
@@ -4999,14 +4986,24 @@ if (action === "obtener_daily_briefing") {
       if (insightError || !insight?.id) throw new Error("SUMMARY_INSIGHT_WRITE_FAILED");
       insightGenerado = true;
     } catch (err: any) { warnings.push(err.message || "SUMMARY_INSIGHT_FAILED"); }
-    return NextResponse.json({ ok: true, summarySaved: true, noOp: false, insightGenerado, nivelConocimientoActual, nivelAnterior, warnings });
+    return NextResponse.json({ ok: true, summarySaved: true, noOp: false, insightGenerado, nivelConocimientoActual, nivelAnterior, warnings, revision: persisted.revision });
+  }
+
+  if (action === "preparar_generacion_semana") {
+    try {
+      return NextResponse.json({ ok: true, generation: await beginWeeklyGeneration(supabase, codigo,
+        new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' })) });
+    } catch (error: any) {
+      return NextResponse.json({ ok: false, error: error.message, retryable: false });
+    }
   }
 
   if (action === "guardar_plan_semana") {
     // FORGE CAPABILITY GUARD — ultima linea de defensa determinista, sin importar quien invoque esta
     // accion (boton, Coach, Orchestrator, futuro flujo). Un usuario en modo_entrada "supervision" o
     // "consulta" NUNCA puede persistir un weekly_plan — el modo determina la capacidad, no la peticion.
-    const { data: usuarioGuardPlan } = await supabase.from("usuarios").select("modo_entrada").eq("codigo", codigo).single();
+    const { data: usuarioGuardPlan, error: errorUsuarioGuardPlan } = await supabase.from("usuarios").select("modo_entrada").eq("codigo", codigo).single();
+    if (errorUsuarioGuardPlan || !usuarioGuardPlan) return NextResponse.json({ ok: false, error: "WEEK_USER_READ_FAILED", retryable: false });
     if (usuarioGuardPlan?.modo_entrada === "supervision" || usuarioGuardPlan?.modo_entrada === "consulta") {
       console.error(`🚨 BLOCKED guardar_plan_semana — usuario ${codigo} en modo_entrada=${usuarioGuardPlan.modo_entrada}, no tiene capacidad can_generate_plan`);
       return NextResponse.json({ error: "Este modo no permite generar planificacion", blocked: true, reason: "SUPERVISION_NO_PLANNING" }, { status: 403 });
@@ -5015,69 +5012,30 @@ if (action === "obtener_daily_briefing") {
     // FORGE WEEK GENERATION GUARD — limite deterministico de 2 generaciones por semana/usuario.
     // Impide que "genera mi semana" repetido cree/regenere indefinidamente la misma semana o avance
     // el tiempo artificialmente. Se cuenta ANTES de ejecutar nada mas costoso.
-    const weekStartParaConteo = datos.plan?.week_start;
-    if (weekStartParaConteo) {
-      const { count: generacionesExistentes } = await supabase.from("weekly_plan_generation_log").select("id", { count: "exact", head: true }).eq("user_codigo", codigo).eq("week_start", weekStartParaConteo);
-      if ((generacionesExistentes || 0) >= 2) {
-        console.error(`🚨 BLOCKED guardar_plan_semana — usuario ${codigo} ya alcanzo el limite de 2 generaciones para week_start=${weekStartParaConteo}`);
-        return NextResponse.json({ error: "Esta semana ya ha sido planificada dos veces. Para evitar alterar continuamente la estructura, no se generan mas versiones automaticas — puedes pedirme modificar sesiones concretas.", blocked: true, reason: "MAX_GENERATIONS_REACHED" }, { status: 403 });
-      }
-    }
-
-    const { plan } = datos;
-    // CORRECCIÓN DE RAÍZ: recalcular week_start correcto en el servidor, ignorando el que envió el modelo si es incorrecto
-    const ahoraServ = new Date();
-    const hoyServStr = ahoraServ.toLocaleDateString('en-CA', {timeZone: 'Europe/Madrid'});
-    const hoyServFecha = new Date(hoyServStr + 'T12:00:00');
-    const diaSemanaServ = hoyServFecha.getDay() || 7;
-    const lunesServ = new Date(hoyServFecha);
-    lunesServ.setDate(hoyServFecha.getDate() - diaSemanaServ + 1);
-    // FIX CRITICO DE RAIZ: aceptar tanto la semana ACTUAL como la SIGUIENTE como validas — el Orchestrator
-    // genera legitimamente la semana siguiente, y forzar siempre "la actual" deshacia ese calculo correcto.
-    const weekStartActual = lunesServ.toISOString().split('T')[0];
-    const lunesSiguiente = new Date(lunesServ);
-    lunesSiguiente.setDate(lunesServ.getDate() + 7);
-    const weekStartSiguiente = lunesSiguiente.toISOString().split('T')[0];
-
-    if (plan.week_start !== weekStartActual && plan.week_start !== weekStartSiguiente) {
-      // Solo corregimos si el valor enviado no es ni la semana actual ni la siguiente (caso realmente erroneo)
-      console.log(`CORRIGIENDO week_start: modelo envió ${plan.week_start}, no coincide con actual (${weekStartActual}) ni siguiente (${weekStartSiguiente}). Usando actual.`);
-      plan.week_start = weekStartActual;
-    }
-    // Preservar sesiones ya completadas SOLO si es la semana ACTUAL real (evita mezclar contenido
-    // entre una semana nueva y un registro parcial/viejo que pudiera existir con el mismo week_start
-    // por un intento anterior fallido del Orchestrator).
-    const hoyGuardadoStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
-    const hoyGuardadoFecha = new Date(hoyGuardadoStr + 'T12:00:00');
-    const diaSemGuardado = hoyGuardadoFecha.getDay() || 7;
-    const lunesGuardado = new Date(hoyGuardadoFecha);
-    lunesGuardado.setDate(hoyGuardadoFecha.getDate() - diaSemGuardado + 1);
-    const weekStartActualReal = lunesGuardado.toISOString().split('T')[0];
-    const esSemanaActual = plan.week_start === weekStartActualReal;
-
-    const { data: planExistente, error: errorPlanExistente } = await supabase.from("weekly_plan").select("*").eq("user_codigo", codigo).eq("week_start", plan.week_start).maybeSingle();
-    if (errorPlanExistente) return NextResponse.json({ error: errorPlanExistente.message }, { status: 500 });
+    if (!datos?.plan || !Array.isArray(datos.plan.sessions))
+      return NextResponse.json({ ok: false, error: "INVALID_WEEK_PROPOSAL", retryable: false });
+    let generation;
+    try { generation = resolveWeeklyGeneration(datos.generationToken, codigo); }
+    catch (error: any) { return NextResponse.json({ ok: false, error: error.message, retryable: false }); }
+    const plan = structuredClone(datos.plan);
+    if (plan.week_start !== generation.currentWeek && plan.week_start !== generation.nextWeek)
+      plan.week_start = generation.currentWeek;
+    const esSemanaActual = plan.week_start === generation.currentWeek;
+    // Exact pre-generation snapshot: never reread a newer revision to admit an old proposal.
+    const planExistente = generation.snapshots[plan.week_start];
     const operationType = planExistente ? "regenerate_week" : "create_week";
-
-    if (esSemanaActual) {
-      if (planExistente?.sessions) {
-        plan.sessions = plan.sessions.map((nuevaSesion: any) => {
-          const sesionExistente = planExistente.sessions.find((s: any) => s.dia === nuevaSesion.dia);
-          if (sesionExistente?.completada) {
-            return sesionExistente;
-          }
-          return nuevaSesion;
-        });
-      }
-    }
+    let weeklyEntries;
+    try { weeklyEntries = prepareWeeklyEntries(plan.sessions, planExistente); }
+    catch (error: any) { return NextResponse.json({ ok: false, error: error.message, retryable: false }); }
+    plan.sessions = weeklyEntries.map(entry => entrySession(entry, planExistente));
     // FORGE CANONICAL STATE — unico punto autorizado para incrementar ciclo_actual.semana: cuando se
     // guarda una semana genuinamente NUEVA (week_start posterior a la actual real), no una regeneracion
     // de la semana en curso. Deterministico, nunca depende de que el LLM lo detecte o recuerde.
     let cicloPreparado: Record<string, unknown> | null = null;
     let outcomePreparado: Record<string, unknown> | null = null;
     let cicloContexto: Record<string, unknown> | undefined;
-    let mensajeExitoCiclo: string | undefined;
-    if (!esSemanaActual) {
+
+    if (!esSemanaActual && !planExistente) {
       try {
         const { data: usuarioCicloIncr } = await supabase.from("usuarios").select("ciclo_actual").eq("codigo", codigo).single();
         const cicloIncr = usuarioCicloIncr?.ciclo_actual;
@@ -5138,7 +5096,6 @@ if (action === "obtener_daily_briefing") {
             ? { ...cicloIncr, bloque: plan.block_name || cicloIncr.bloque, semana: 1, totalSemanas: plan.total_weeks_block || totalSemanasCiclo }
             : { ...cicloIncr, semana: cicloIncr.semana + 1 };
           cicloPreparado = nuevoCiclo;
-          mensajeExitoCiclo = `CICLO ACTUAL: ${superariaLimite ? `TRANSICION DE BLOQUE — nuevo bloque "${nuevoCiclo.bloque}" semana 1` : `semana incrementada de ${cicloIncr.semana} a ${nuevoCiclo.semana}`} al generar nueva semana ${plan.week_start}`;
         }
       } catch (errIncrCiclo) {
         console.error("Error incrementando ciclo_actual.semana:", errIncrCiclo);
@@ -5161,7 +5118,8 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
       focusContextValidator.disciplinasExternas.forEach((d: any) => {
         (d.dias || []).forEach((dia: string) => { mapaDiasExternos[normalizarDiaFocusCompletado(dia)] = d.disciplina; });
       });
-      plan.sessions = plan.sessions.map((s: any) => {
+      plan.sessions = plan.sessions.map((s: any, index: number) => {
+        if (weeklyEntries[index].kind === "survivor") return s;
         const diaNorm = normalizarDiaFocusCompletado(s.dia);
         if (mapaDiasExternos[diaNorm]) {
           return {
@@ -5185,7 +5143,7 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
         (d.dias || []).forEach((dia: string) => diasExternosValidator.add(normalizarDiaFocusValidator(dia)));
       });
       const violacionesFocusValidator = plan.sessions.filter((s: any) =>
-        diasExternosValidator.has(normalizarDiaFocusValidator(s.dia)) && s.tipo !== "descanso" && s.tipo !== "external_blocked"
+        s.completada !== true && diasExternosValidator.has(normalizarDiaFocusValidator(s.dia)) && s.tipo !== "descanso" && s.tipo !== "external_blocked"
       );
       if (violacionesFocusValidator.length > 0) {
         console.error(`🚨 FOCUS GUARD: ${violacionesFocusValidator.length} dia(s) de disciplina externa con sesion prescrita por Forge:`, JSON.stringify(violacionesFocusValidator.map((s: any) => ({ dia: s.dia, titulo: s.titulo }))));
@@ -5275,8 +5233,8 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
       console.log(`✅ CONSTRAINT ENGINE V2: plan verificado contra propiedades [${prohibicionesActivas.join(", ")}], sin violaciones`);
     }
 
-    // Validar exactamente la proyeccion legacy, sin perder metadatos de las sesiones.
-    const candidate: PlanCandidate = {
+    // Final proposal content: admit identity only after all content transformations.
+    const proposal: LegacyPlanCandidate = {
       week_start: plan.week_start,
       week_number: plan.week_number,
       total_weeks_block: plan.total_weeks_block || null,
@@ -5286,20 +5244,32 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
       confidence: plan.confidence || 100,
       sessions: plan.sessions,
     };
-    const command: PlanMutationCommand = {
-      source: "legacy_week_save", operationType,
-      target: { userCodigo: codigo, weekStart: plan.week_start }, proposal: candidate,
-    };
+    let admission;
+    try {
+      admission = admitWeeklyCandidate(proposal, weeklyEntries.map((entry, index) =>
+        entry.kind === "survivor" ? entry : { kind: "new", session: plan.sessions[index] }), planExistente);
+    } catch (error: any) { return NextResponse.json({ ok: false, error: error.message, retryable: false }); }
+    if (admission.noOp) return NextResponse.json({ ok: true, noOp: true, revision: planExistente!.revision });
+    const weekStartParaConteo = plan.week_start;
+    if (weekStartParaConteo) {
+      const { count: generacionesExistentes } = await supabase.from("weekly_plan_generation_log").select("id", { count: "exact", head: true }).eq("user_codigo", codigo).eq("week_start", weekStartParaConteo);
+      if ((generacionesExistentes || 0) >= 2) {
+        console.error(`🚨 BLOCKED guardar_plan_semana — usuario ${codigo} ya alcanzo el limite de 2 generaciones para week_start=${weekStartParaConteo}`);
+        return NextResponse.json({ error: "Esta semana ya ha sido planificada dos veces. Para evitar alterar continuamente la estructura, no se generan mas versiones automaticas — puedes pedirme modificar sesiones concretas.", blocked: true, reason: "MAX_GENERATIONS_REACHED" }, { status: 403 });
+      }
+    }
+
+    const candidate = admission.candidate;
+    const target = { userCodigo: codigo, weekStart: plan.week_start };
+    const command: PlanMutationCommand = planExistente
+      ? { source: "weekly_orchestrator", operationType: "regenerate_week", target, proposal: candidate, expectedRevision: planExistente.revision }
+      : { source: "weekly_orchestrator", operationType: "create_week", target, proposal: candidate };
     const context: PlanMutationContext = {
-      existingPlan: planExistente, normalizedWeekStart: plan.week_start,
+      existingPlan: planExistente, normalizedWeekStart: plan.week_start, identityProof: admission.identityProof,
       mode: usuarioGuardPlan?.modo_entrada, cycle: cicloContexto,
       restrictions: hardConstraintsValidator || undefined, sports: { focus: focusContextValidator },
     };
-    const changeSet: PlanChangeSet = {
-      operationType,
-      affectedDays: Array.isArray(candidate.sessions) ? candidate.sessions.map(s => s.dia) : [],
-      changedFields: Object.keys(candidate),
-    };
+    const changeSet: PlanChangeSet = { operationType, affectedDays: candidate.sessions.map(s => s.dia), changedFields: Object.keys(candidate) };
     const validationResult = await validatePlanMutation({ command, context, candidate, changeSet });
     if (validationResult.status !== "ready_for_commit") {
       return NextResponse.json({
@@ -5310,52 +5280,39 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
       }, { status: validationResult.status === "rejected" ? 422 : 500 });
     }
 
-    const { error } = await supabase.from("weekly_plan").upsert({
-      ...validationResult.candidate,
-      user_codigo: codigo,
-      updated_at: new Date().toISOString()
-    }, { onConflict: "user_codigo,week_start" });
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-    // Efectos legacy diferidos: solo despues de validar y persistir el plan.
-    if (outcomePreparado) {
-      try {
-        await supabase.from("block_outcomes").insert(outcomePreparado);
-        console.log(`✅ BLOCK OUTCOME guardado deterministamente: bloque "${outcomePreparado.tipo_bloque}", adherencia ${outcomePreparado.adherencia}%, ${outcomePreparado.sesiones_completadas} sesiones`);
-      } catch (errBlockOutcome) {
-        console.error("Error guardando block_outcome deterministico:", errBlockOutcome);
-      }
+    const persisted = planExistente
+      ? await mutatePlanWithCAS(supabase, validationResult.mutation)
+      : await createPlan(supabase, validationResult.mutation);
+    if (persisted.status !== "committed") return NextResponse.json(planPersistenceFailure(persisted));
+    const warnings: string[] = [];
+    const recordWeeklyEffect = async (label: string, write: () => PromiseLike<{ error: unknown }>) => {
+      try { if ((await write()).error) warnings.push(label); }
+      catch { warnings.push(label); }
+    };
+    for (const session of validationResult.candidate.sessions) {
+      if ((session as unknown as Record<string, unknown>).origen === "disciplina_forzada" && session.completada !== true)
+        await recordWeeklyEffect("DISCIPLINE_AUDIT_FAILED", () => supabase.from("weekly_plan_events").insert({
+          user_codigo: codigo, week_start: plan.week_start, nivel: "C_adaptacion_automatica",
+          accion: "regenerar_sesion_disciplina_forzada", motivo: "Correccion de disponibilidad confirmada",
+          dia_afectado: session.dia, confirmado_por_usuario: false }));
     }
-    if (cicloPreparado) {
-      try {
-        await supabase.from("usuarios").update({ ciclo_actual: cicloPreparado }).eq("codigo", codigo);
-        console.log(mensajeExitoCiclo);
-      } catch (errIncrCiclo) {
-        console.error("Error incrementando ciclo_actual.semana:", errIncrCiclo);
-      }
-    }
-
-    // FORGE WEEK GENERATION GUARD — registrar esta generacion exitosa en el log de auditoria.
-    if (plan.week_start) {
-      const { count: countActual } = await supabase.from("weekly_plan_generation_log").select("id", { count: "exact", head: true }).eq("user_codigo", codigo).eq("week_start", plan.week_start);
-      await supabase.from("weekly_plan_generation_log").insert({
-        user_codigo: codigo,
-        week_start: plan.week_start,
-        version: (countActual || 0) + 1,
-        generation_reason: esSemanaActual ? "regeneracion_semana_actual" : "nueva_semana"
-      });
-      // NIVEL A — regeneracion/generacion de semana completa, cuenta contra el limite de 2
-      await supabase.from("weekly_plan_events").insert({
-        user_codigo: codigo,
-        week_start: plan.week_start,
-        nivel: "A_regeneracion_completa",
-        accion: esSemanaActual ? "regenerar_semana" : "generar_semana_nueva",
-        motivo: plan.week_objective || null,
-        confirmado_por_usuario: true
-      });
-    }
-
-    return NextResponse.json({ ok: true });
+    if (outcomePreparado)
+      await recordWeeklyEffect("BLOCK_OUTCOME_FAILED", () => supabase.from("block_outcomes").insert(outcomePreparado!));
+    if (cicloPreparado)
+      await recordWeeklyEffect("CYCLE_UPDATE_FAILED", () => supabase.from("usuarios").update({ ciclo_actual: cicloPreparado }).eq("codigo", codigo));
+    try {
+      const { count: countActual, error: countError } = await supabase.from("weekly_plan_generation_log")
+        .select("id", { count: "exact", head: true }).eq("user_codigo", codigo).eq("week_start", plan.week_start);
+      if (countError) warnings.push("GENERATION_LOG_READ_FAILED");
+      else await recordWeeklyEffect("GENERATION_LOG_FAILED", () => supabase.from("weekly_plan_generation_log").insert({
+        user_codigo: codigo, week_start: plan.week_start, version: (countActual || 0) + 1,
+        generation_reason: esSemanaActual ? "regeneracion_semana_actual" : "nueva_semana" }));
+    } catch { warnings.push("GENERATION_LOG_READ_FAILED"); }
+    await recordWeeklyEffect("WEEKLY_AUDIT_FAILED", () => supabase.from("weekly_plan_events").insert({
+      user_codigo: codigo, week_start: plan.week_start, nivel: "A_regeneracion_completa",
+      accion: esSemanaActual ? "regenerar_semana" : "generar_semana_nueva",
+      motivo: plan.week_objective || null, confirmado_por_usuario: true }));
+    return NextResponse.json({ ok: true, persistenceStatus: "committed", revision: persisted.revision, warnings });
   }
 
   if (action === "actualizar_sesion_plan") {
@@ -5418,7 +5375,7 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
       ...(confidenceFinal !== undefined ? { confidence: confidenceFinal } : {}),
     };
     const command: PlanMutationCommand = {
-      source: "direct_session_update", operationType: "patch_session",
+      source: "direct_session_update", operationType: "patch_session", expectedRevision: planActual.revision,
       target: { userCodigo: codigo, weekStart: week_start, day: dia },
       proposal: { changes: cambiosPrescripcion, ...(motivo !== undefined ? { reason: motivo } : {}),
         ...(confidenceFinal !== undefined ? { confidence: confidenceFinal } : {}) },
@@ -5437,17 +5394,9 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
         reason: validationResult.status === "rejected" ? "PLAN_MUTATION_REJECTED" : "PLAN_MUTATION_VALIDATION_FAILED",
         violaciones: validationResult.violations }, { status: validationResult.status === "rejected" ? 422 : 500 });
     }
-    const { data: planPersistido, error: errorEscritura } = await supabase.from("weekly_plan").update({
-      sessions: validationResult.candidate.sessions,
-      updated_at: validationResult.candidate.updated_at,
-      ...(Object.prototype.hasOwnProperty.call(validationResult.candidate, "confidence")
-        ? { confidence: validationResult.candidate.confidence } : {}),
-    }).eq("user_codigo", codigo).eq("week_start", week_start).select("user_codigo,week_start").maybeSingle();
-    if (errorEscritura) return NextResponse.json({ error: errorEscritura.message }, { status: 500 });
-    if (!planPersistido || planPersistido.user_codigo !== codigo || planPersistido.week_start !== week_start) {
-      return NextResponse.json({ error: "No se pudo confirmar la fila actualizada" }, { status: 409 });
-    }
-    return NextResponse.json({ ok: true });
+    const persisted = await mutatePlanWithCAS(supabase, validationResult.mutation);
+    if (persisted.status !== "committed") return NextResponse.json(planPersistenceFailure(persisted));
+    return NextResponse.json({ ok: true, revision: persisted.revision });
   }
 
   if (action === "registrar_aprendizaje") {

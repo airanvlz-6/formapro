@@ -4675,7 +4675,14 @@ Menciona el numero exacto de dias en la frase.`;
     const diaSemana = hoy.getDay() || 7;
     const lunes = new Date(hoy);
     lunes.setDate(hoy.getDate() - diaSemana + 1);
-    const weekStart = lunes.toISOString().split('T')[0];
+    const requestedWeek = datos?.week_start;
+    if (requestedWeek !== undefined && (typeof requestedWeek !== "string"
+      || !/^\d{4}-\d{2}-\d{2}$/.test(requestedWeek)
+      || resolveCompletionDate(requestedWeek)?.weekStart !== requestedWeek)) {
+      return NextResponse.json({ ok: false, error: "INVALID_WEEK_START" }, { status: 400 });
+    }
+    const currentWeekStart = lunes.toISOString().split('T')[0];
+    const weekStart = requestedWeek ?? currentWeekStart;
     const { data: plan } = await supabase.from("weekly_plan").select("*").eq("user_codigo", codigo).eq("week_start", weekStart).single();
 
     // FIX ARQUITECTONICO: cada sesion se marca explicitamente como historica o futura respecto a
@@ -4688,8 +4695,8 @@ Menciona el numero exacto de dias en la frase.`;
       const indiceHoySemantica = DIAS_ORDEN_SEMANTICA.indexOf(normalizarDiaSemantica(hoy.toLocaleDateString("es-ES", { weekday: "long" })));
       plan.sessions = plan.sessions.map((s: any) => {
         const indiceSesion = DIAS_ORDEN_SEMANTICA.indexOf(normalizarDiaSemantica(s.dia));
-        const esHistorica = indiceSesion >= 0 && indiceHoySemantica >= 0 && indiceSesion < indiceHoySemantica;
-        return { ...s, es_historica: esHistorica || !!s.completada, es_futura: !esHistorica && !s.completada && indiceSesion !== indiceHoySemantica };
+        const esHistorica = weekStart < currentWeekStart || (weekStart === currentWeekStart && indiceSesion >= 0 && indiceHoySemantica >= 0 && indiceSesion < indiceHoySemantica);
+        return { ...s, es_historica: esHistorica || !!s.completada, es_futura: !esHistorica && !s.completada && (weekStart > currentWeekStart || indiceSesion !== indiceHoySemantica) };
       });
     }
 

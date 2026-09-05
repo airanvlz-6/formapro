@@ -39,19 +39,19 @@ export default function Plan() {
     const codigoUrl = params.get("codigo");
     if(codigoUrl){
       setCodigo(codigoUrl.toUpperCase());
-      cargarDatos(codigoUrl.toUpperCase());
+      cargarDatos(codigoUrl.toUpperCase(),params.get("week_start") ?? undefined);
     } else {
       setCargando(false);
       setIniciado(true);
     }
   },[]);
 
-  const cargarDatos = async(cod:string)=>{
+  const cargarDatos = async(cod:string,targetWeekStart?:string)=>{
     setCargando(true);
     try{
-      const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"obtener_plan_semana",codigo:cod})});
+      const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"obtener_plan_semana",codigo:cod,...(targetWeekStart !== undefined ? {datos:{week_start:targetWeekStart}} : {})})});
       const data = await res.json();
-      if(data.error){ setError("Código no encontrado"); return; }
+      if(data.error){ setError(data.error==="INVALID_WEEK_START" ? "Semana no válida" : "Código no encontrado"); return; }
       setPlan(data.plan);
       setWeekStart(data.weekStart);
       setAutenticado(true);
@@ -110,8 +110,11 @@ export default function Plan() {
   const confianza = plan?.confidence || 100;
 
   // Calcular día actual
-  const hoy = new Date();
+  const hoyCivil = new Date().toLocaleDateString("en-CA", {timeZone:"Europe/Madrid"});
+  const hoy = new Date(hoyCivil + "T12:00:00");
   const diaHoy = DIAS[hoy.getDay() === 0 ? 6 : hoy.getDay() - 1];
+  const esSemanaActual = !!weekStart && hoyCivil >= weekStart && hoyCivil <= new Date(new Date(weekStart + "T12:00:00Z").getTime()+6*86400000).toISOString().slice(0,10);
+  const indiceDiaInicial = esSemanaActual ? DIAS.findIndex(d=>d===diaHoy) : 0;
 
   return (
     <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'DM Sans',sans-serif",padding:"24px 16px",paddingBottom:90}}>
@@ -203,8 +206,8 @@ export default function Plan() {
             {/* Selector horizontal de dias */}
             <div style={{display:"flex",gap:6,marginBottom:16,overflowX:"auto",paddingBottom:4}}>
               {DIAS.map((dia,idx) => {
-                const esHoyHeader = dia === diaHoy;
-                const idxActivo = diaSeleccionadoIdx !== null ? diaSeleccionadoIdx : DIAS.findIndex(d=>d===diaHoy);
+                const esHoyHeader = esSemanaActual && dia === diaHoy;
+                const idxActivo = diaSeleccionadoIdx !== null ? diaSeleccionadoIdx : indiceDiaInicial;
                 const activo = idx === idxActivo;
                 return (
                   <button key={dia} onClick={()=>setDiaSeleccionadoIdx(idx)}
@@ -221,11 +224,11 @@ export default function Plan() {
 
             {/* Detalle del dia seleccionado */}
             {(()=>{
-              const idxActivo = diaSeleccionadoIdx !== null ? diaSeleccionadoIdx : DIAS.findIndex(d=>d===diaHoy);
+              const idxActivo = diaSeleccionadoIdx !== null ? diaSeleccionadoIdx : indiceDiaInicial;
               const dia = DIAS[idxActivo];
               const normalizar = (s:string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"");
               const sesion = sesiones.find((s:any) => normalizar(s.dia) === normalizar(dia));
-              const esHoy = dia === diaHoy;
+              const esHoy = esSemanaActual && dia === diaHoy;
               const config = sesion ? getTipoConfig(sesion.tipo, sesion.titulo) : {emoji:"—",color:C.muted};
               // FIX: una sesion MODIFICADA (ej: "Descanso completo con movilidad suave", titulo real que
         // contiene contenido de movilidad + descripcion real) NUNCA debe clasificarse como descanso
@@ -365,7 +368,7 @@ export default function Plan() {
         {[
           {href:`/hoy?codigo=${codigo}`,icon:"🏠",label:"Hoy",active:false},
           {href:`/progreso?codigo=${codigo}`,icon:"📈",label:"Progreso",active:false},
-          {href:`/plan?codigo=${codigo}`,icon:"📅",label:"Plan",active:true},
+          {href:`/plan?codigo=${codigo}${weekStart ? `&week_start=${encodeURIComponent(weekStart)}` : ""}`,icon:"📅",label:"Plan",active:true},
           {href:`/atleta?codigo=${codigo}`,icon:"👤",label:"Atleta",active:false},
         ].map(item=>(
           <a key={item.label} href={item.href} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,textDecoration:"none",opacity:item.active?1:0.5}}>

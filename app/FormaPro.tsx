@@ -839,6 +839,7 @@ const [historialFisiologico,setHistorialFisiologico]=useState<{fecha:string;hrv?
 const [distribucionSemanal,setDistribucionSemanal]=useState<string>("");
 const [objetivoPrincipal,setObjetivoPrincipal]=useState<{descripcion?:string;fecha?:string;tipo?:string}>({});
 const [planSemanal,setPlanSemanal]=useState<any>(null);
+const [planWeekStartObjetivo,setPlanWeekStartObjetivo]=useState<string|null>(null);
 const [debilidades,setDebilidades]=useState<{ejercicio:string;descripcion:string;fecha:string}[]>([]);
 const [blockOutcomes,setBlockOutcomes]=useState<any[]>([]);
 const [estadoCanonico,setEstadoCanonico]=useState<any>(null);
@@ -896,8 +897,9 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     if(res?.outcomes) setBlockOutcomes(res.outcomes);
   };
 
-  const cargarPlanSemanal=async(cod:string)=>{
-    const res=await apiCall({action:"obtener_plan_semana",codigo:cod});
+  const cargarPlanSemanal=async(cod:string,targetWeekStart?:string)=>{
+    if(targetWeekStart) setPlanWeekStartObjetivo(targetWeekStart);
+    const res=await apiCall({action:"obtener_plan_semana",codigo:cod,...(targetWeekStart ? {datos:{week_start:targetWeekStart}} : {})});
     if(res?.plan) setPlanSemanal(res.plan);
   };
 
@@ -1157,7 +1159,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
 
     // The server receipt confirms persistence. Never replay this proposal after a write.
     console.log("=== FORGE ORCHESTRATOR: EXITO COMPLETO ===");
-    cargarPlanSemanal(codigoUsuario);
+    await cargarPlanSemanal(codigoUsuario,planCompleto.week_start);
     return planCompleto;
   };
 
@@ -1582,7 +1584,8 @@ const forgeValidator=(texto:string):string=>{
       if(weeklySaveFailure) return;
       const saved=await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:data,generationToken:weeklyGeneration?.token}});
       if(saved?.ok!==true) weeklySaveFailure=saved?.message || "No se pudo confirmar el guardado del plan. Requiere revisión antes de repetir.";
-      cargarPlanSemanal(codigoUsuario);
+      const targetWeekStart=data.week_start===weeklyGeneration?.nextWeek ? weeklyGeneration.nextWeek : weeklyGeneration?.currentWeek;
+      await cargarPlanSemanal(codigoUsuario,saved?.ok===true ? targetWeekStart : undefined);
     });
     await procesarTag("[MODIFICAR_SESION:",18,async(data)=>{
       await apiCall({action:"actualizar_sesion_plan",codigo:codigoUsuario,datos:data});
@@ -3858,7 +3861,7 @@ const esCarrera=/carrera|running|correr|fartlek|intervalos|series|rodaje|tempo|u
             {[
               {href:`/hoy?codigo=${codigoUsuario}`,icon:"🏠",label:"Hoy",active:false},
               {href:`/progreso?codigo=${codigoUsuario}`,icon:"📈",label:"Progreso",active:false},
-              {href:`/plan?codigo=${codigoUsuario}`,icon:"📅",label:"Plan",active:false},
+              {href:`/plan?codigo=${codigoUsuario}${planWeekStartObjetivo ? `&week_start=${encodeURIComponent(planWeekStartObjetivo)}` : ""}`,icon:"📅",label:"Plan",active:false},
               {href:`/atleta?codigo=${codigoUsuario}`,icon:"👤",label:"Atleta",active:false},
             ].map(item=>(
               <a key={item.label} href={item.href} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,textDecoration:"none",opacity:0.5}}>

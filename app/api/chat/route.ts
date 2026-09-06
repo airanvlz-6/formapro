@@ -1,5 +1,6 @@
 import { protectedCalendarSessionIndices } from "@/lib/planning/weeklyCalendar";
 import { planBoundedWeek } from "@/lib/planning/prepareAllowedWeeklyPlanContract";
+import { plannerProviderMetadata } from "@/lib/planning/weeklyPlannerDiagnostics";
 import { assertWeeklyCalendar, assertCalendarMutation } from "@/lib/planning/weeklyCalendarAuthority";
 import { normalizeAvailabilityForStorage } from "@/lib/sports/trainingAvailability";
 import { disabledLegacyOperation, projectLegacyCreate, projectLegacyUpdate } from "@/lib/auth/legacyContainment";
@@ -2195,7 +2196,7 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
         });
         if (!response.ok) throw new Error("LLM_REQUEST_FAILED");
         const output = await response.json();
-        return output.content?.map((b: any) => b.text || "").join("") || "";
+        return { text: output.content?.map((b: any) => b.text || "").join("") || "", metadata: plannerProviderMetadata(output) };
       }, datos.generationToken);
       if (!result.ok) return NextResponse.json({ ...result, retryable: false });
       return NextResponse.json(result);

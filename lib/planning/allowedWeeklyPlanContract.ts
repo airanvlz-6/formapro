@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { emitWeeklyPlannerDiagnostic, type PlannerCompletion, type PlannerMetadata } from './weeklyPlannerDiagnostics';
 import type { ContractInput } from '../sports/allowedTrainingContract';
 import type { PrescriptionScope } from '../sports/prescriptionScope';
 import type { PrescriptionIntent } from '../sports/prescriptionIntent';
@@ -120,7 +121,7 @@ No añadas stimulusId, intent, título, focus ni explicaciones: el servidor resu
 WEEKLY_CONTRACT:\n${JSON.stringify(contract)}`;
 }
 
-export async function composeBoundedWeek(contract: AllowedWeeklyPlanContract, complete: (prompt: string) => Promise<string>) {
+export async function composeBoundedWeek(contract: AllowedWeeklyPlanContract, complete: (prompt: string) => Promise<PlannerCompletion>) {
   const immutable = structuredClone(contract);
   const freeze = (v: any) => { if (v && typeof v === 'object') { Object.freeze(v); Object.values(v).forEach(freeze); } };
   freeze(immutable);
@@ -128,12 +129,20 @@ export async function composeBoundedWeek(contract: AllowedWeeklyPlanContract, co
   let errors: string[] = [];
   for (let attempt = 1; attempt <= 2; attempt++) {
     let raw: string;
-    try { raw = await complete(prompt + (attempt === 2 ? `\nPropuesta rechazada: ${JSON.stringify(errors)}. Selecciona otra vez dentro del MISMO contrato.` : '')); }
-    catch { return failure('WEEKLY_PLANNER_FAILED', ['LLM_REQUEST_FAILED']); }
+    let metadata: PlannerMetadata | undefined;
+    const report = (text: string, parsed: boolean, codes: string[], reason: Parameters<typeof emitWeeklyPlannerDiagnostic>[5]) =>
+      emitWeeklyPlannerDiagnostic(attempt as 1 | 2, text, metadata, parsed, codes, reason);
+    try {
+      const completed = await complete(prompt + (attempt === 2 ? `\nPropuesta rechazada: ${JSON.stringify(errors)}. Selecciona otra vez dentro del MISMO contrato.` : ''));
+      raw = typeof completed === 'string' ? completed : completed.text;
+      metadata = typeof completed === 'string' ? undefined : completed.metadata;
+    }
+    catch { report('', false, ['LLM_REQUEST_FAILED'], 'LLM_REQUEST_FAILED'); return failure('WEEKLY_PLANNER_FAILED', ['LLM_REQUEST_FAILED']); }
     let parsed: unknown;
     try { if (raw.length > 32000) throw new Error(); parsed = JSON.parse(raw); }
-    catch { errors = ['WEEKLY_JSON_INVALID']; continue; }
+    catch { errors = ['WEEKLY_JSON_INVALID']; report(raw, false, errors, raw.length > 32000 ? 'RAW_TOO_LONG' : 'JSON_PARSE_FAILED'); continue; }
     const result = validateWeeklySelection(immutable, parsed);
+    report(raw, true, result.ok ? [] : result.errors, null);
     if (result.ok) return { ok: true as const, contract: immutable, selected: result.selected, attempts: attempt };
     errors = result.errors;
   }

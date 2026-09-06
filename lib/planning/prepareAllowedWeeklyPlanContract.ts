@@ -1,4 +1,5 @@
 import { evaluateTrainingFeasibility } from '../sports/trainingFeasibility';
+import type { PlannerCompletion } from './weeklyPlannerDiagnostics';
 import { loadWeeklyCalendarContext, issueWeeklyCalendar, weeklyDigest } from './weeklyCalendarAuthority';
 import { calendarDays, calendarKey, calendarState, isProtectedCalendarSession } from './weeklyCalendar';
 import { getCanonicalRestrictions } from '../athlete/getCanonicalRestrictions';
@@ -69,7 +70,7 @@ export async function prepareAllowedWeeklyPlanContract(db: any, codigo: string, 
 
 /** Server resolves selections. Model prose never becomes an executable objective. */
 export async function planBoundedWeek(db: any, codigo: string, request: Parameters<typeof prepareAllowedWeeklyPlanContract>[2],
-  complete: (prompt: string) => Promise<string>, generationToken?: string) {
+  complete: (prompt: string) => Promise<PlannerCompletion>, generationToken?: string) {
   const prepared = await prepareAllowedWeeklyPlanContract(db, codigo, request);
   if (!prepared.ok) return prepared;
   const proposal = await composeBoundedWeek(prepared.contract, complete);

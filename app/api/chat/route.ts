@@ -2,6 +2,7 @@ import { protectedCalendarSessionIndices } from "@/lib/planning/weeklyCalendar";
 import { planBoundedWeek } from "@/lib/planning/prepareAllowedWeeklyPlanContract";
 import { plannerProviderMetadata } from "@/lib/planning/weeklyPlannerDiagnostics";
 import { assertWeeklyCalendar, assertCalendarMutation } from "@/lib/planning/weeklyCalendarAuthority";
+import { updateChatAvailability } from "@/lib/sports/chatAvailability";
 import { normalizeAvailabilityForStorage } from "@/lib/sports/trainingAvailability";
 import { disabledLegacyOperation, projectLegacyCreate, projectLegacyUpdate } from "@/lib/auth/legacyContainment";
 import { getCanonicalPhysiologyHistory } from "@/lib/physiology/getCanonicalPhysiology";
@@ -4971,67 +4972,11 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
 
 
   if (action === "verificar_correccion_disponibilidad_deterministico") {
-    // FORGE SAFETY NET — segunda capa de respaldo, independiente del tag [DISPONIBILIDAD_ACTUALIZADA:]
-    // que el Coach puede olvidar generar (mismo patron de fragilidad ya visto varias veces esta
-    // semana). Se dispara SIEMPRE tras la respuesta a "¿sigue igual tu disponibilidad?", sin importar
-    // si el tag aparecio o no — si el tag ya actualizo el dato, esto simplemente confirma lo mismo.
-    const { mensajeUsuario, distribucionActual } = datos;
-    if (!mensajeUsuario) return NextResponse.json({ ok: true, detectado: false });
-
-    const correccionPrompt = `El atleta respondio a la pregunta "¿sigue igual tu disponibilidad?" con este mensaje: "${mensajeUsuario}"
-
-Disponibilidad actual guardada: ${distribucionActual || "no especificada"}
-
-¿El atleta esta pidiendo un CAMBIO real en su disponibilidad (ej: quitar un dia, añadir uno, cambiar duracion)? Si es asi, responde SOLO con este JSON: {"hayCambio":true,"nuevaDescripcion":"descripcion breve y clara de la disponibilidad CORREGIDA, incorporando el cambio pedido"}
-Si el mensaje es solo una confirmacion sin cambios reales, responde: {"hayCambio":false}
-Responde SOLO el JSON, sin texto adicional.`;
-
-    try {
-      const correccionRes = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 300, messages: [{ role: "user", content: correccionPrompt }] }),
-      });
-      const correccionData = await correccionRes.json();
-      const correccionTexto = correccionData.content?.map((b: any) => b.text || "").join("") || "{}";
-      const correccionClean = correccionTexto.replace(/```json|```/g, "").trim();
-      const correccionMatch = correccionClean.match(/\{[\s\S]*\}/);
-      if (!correccionMatch) return NextResponse.json({ ok: true, detectado: false });
-      const extraido = JSON.parse(correccionMatch[0]);
-
-      if (extraido.hayCambio && extraido.nuevaDescripcion) {
-        const availability = normalizeAvailabilityForStorage(extraido.nuevaDescripcion);
-        if (!availability) return NextResponse.json({ ok: false, detectado: true, actualizado: false, code: 'AVAILABILITY_FORMAT_INVALID', retryable: false });
-        const distribucion = JSON.stringify(availability);
-        await supabase.from("usuarios").update({ distribucion_semanal: distribucion }).eq("codigo", codigo);
-        console.log(`🛡️ SAFETY NET DISPONIBILIDAD: ${codigo} — "${extraido.nuevaDescripcion}"`);
-        return NextResponse.json({ ok: true, detectado: true, actualizado: true, nuevaDescripcion: extraido.nuevaDescripcion, distribucion });
-      }
-      return NextResponse.json({ ok: true, detectado: false });
-    } catch (err: any) {
-      console.error("Error en verificar_correccion_disponibilidad_deterministico:", err);
-      return NextResponse.json({ ok: true, detectado: false });
-    }
+    return NextResponse.json(await updateChatAvailability(supabase, codigo, datos.mensajeUsuario));
   }
 
   if (action === "guardar_disponibilidad_actualizada") {
-    // FORGE — el Coach genera el tag [DISPONIBILIDAD_ACTUALIZADA:] cuando detecta que el atleta
-    // corrigio su disponibilidad real (respondiendo a la pregunta determinista "¿sigue igual?" con
-    // un cambio, ej: "no generes el jueves"). Bug real confirmado con evidencia: el Coach entendia
-    // correctamente en la conversacion, pero eso nunca se traducia en actualizar distribucion_semanal,
-    // asi que la semana generada seguia ignorando el cambio pedido.
-    const { descripcion } = datos;
-    if (!descripcion) return NextResponse.json({ error: "Falta descripcion" }, { status: 400 });
-    // FIX: cambio_permanente:true por defecto era enganoso — una peticion puntual ("no generes
-    // el jueves ESTA semana") no deberia asumirse como permanente para siempre. Se elimina el
-    // campo, dejando que la propia pregunta de "¿sigue igual tu disponibilidad?" de cada semana
-    // sea el punto real de confirmacion/correccion, sin arrastrar un cambio antiguo indefinidamente.
-    const availability = normalizeAvailabilityForStorage(descripcion);
-    if (!availability) return NextResponse.json({ ok: false, code: 'AVAILABILITY_FORMAT_INVALID', retryable: false }, { status: 422 });
-    const distribucion = JSON.stringify(availability);
-    await supabase.from("usuarios").update({ distribucion_semanal: distribucion }).eq("codigo", codigo);
-    console.log(`🛡️ DISPONIBILIDAD ACTUALIZADA (via tag del Coach): ${codigo} — "${descripcion}"`);
-    return NextResponse.json({ ok: true, distribucion });
+    return NextResponse.json(await updateChatAvailability(supabase, codigo, datos.mensajeUsuario ?? datos.descripcion));
   }
 
   if (action === "registrar_debilidad_dev") {

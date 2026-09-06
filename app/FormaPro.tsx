@@ -1514,12 +1514,15 @@ const forgeValidator=(texto:string):string=>{
       await apiCall({action:"guardar_block_outcome",codigo:codigoUsuario,datos:data});
       cargarBlockOutcomes(codigoUsuario);
     });
+    let availabilityNotice: string | null = null;
     await procesarTag("[DISPONIBILIDAD_ACTUALIZADA:",29,async(data)=>{
-      const res=await apiCall({action:"guardar_disponibilidad_actualizada",codigo:codigoUsuario,datos:data});
+      const res=await apiCall({action:"guardar_disponibilidad_actualizada",codigo:codigoUsuario,datos:{...data,mensajeUsuario:mensajeUsuarioOriginal}});
       if(res?.ok&&res.distribucion){
         setDistribucionSemanal(res.distribucion);
-      }
+        availabilityNotice = res.partial ? `Disponibilidad actualizada para ${(res.updatedCategories||[]).join(", ")}. No se ha actualizado ${(res.rejectedCategories||[]).join(", ")} porque Forge no tiene esa disciplina configurada.` : "Disponibilidad actualizada y verificada.";
+      } else { availabilityNotice = "No he podido actualizar tu disponibilidad de forma segura."; }
     });
+    if(availabilityNotice) return availabilityNotice;
     await procesarTag("[INTERVENTION:",14,async(data)=>{
       await apiCall({action:"guardar_intervention",codigo:codigoUsuario,datos:data});
     });
@@ -1830,20 +1833,21 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
       const palabrasTexto = texto.trim().split(/\s+/).filter(Boolean);
       const esConfirmacionSimple = palabrasTexto.length>0 && palabrasTexto.length<=8 && CONTIENE_CONFIRMACION.test(texto.trim());
 
-      // FIX: si estamos esperando confirmacion de disponibilidad tras cerrar semana, priorizamos ese
-      // flujo. Confirmacion simple → genera directamente. Cualquier otra cosa → el mensaje probablemente
-      // describe un cambio de disponibilidad, se procesa normalmente (el extractor lo guardara) y
-      // DESPUES generamos con los datos ya actualizados.
+      // Persistir y verificar la disponibilidad antes de confirmar o avanzar a generación.
       if(esperandoConfirmacionDisponibilidad && codigoUsuario){
+        const resCorreccion = await apiCall({action:"verificar_correccion_disponibilidad_deterministico",codigo:codigoUsuario,datos:{mensajeUsuario:texto}});
+        if(resCorreccion?.ok !== true){
+          setMensajes(prev=>[...prev,{role:"assistant",content:"No he podido actualizar tu disponibilidad de forma segura. Indica cada disciplina y sus días exactos, por ejemplo: carrera lunes/miércoles/sábado."}]);
+          setCargando(false);
+          return;
+        }
+        setDistribucionSemanal(resCorreccion.distribucion);
+        if(resCorreccion.partial){
+          setMensajes(prev=>[...prev,{role:"assistant",content:`Disponibilidad actualizada para ${(resCorreccion.updatedCategories||[]).join(", ")}. No se ha actualizado ${(resCorreccion.rejectedCategories||[]).join(", ")} porque Forge no tiene esa disciplina configurada. Confirma si quieres continuar con la disponibilidad guardada.`}]);
+          setCargando(false);
+          return;
+        }
         setEsperandoConfirmacionDisponibilidad(false);
-        // FORGE SAFETY NET — respaldo determinista independiente del tag que el Coach puede olvidar
-        // generar. Se dispara en paralelo, sin bloquear el flujo normal de generacion.
-        apiCall({action:"verificar_correccion_disponibilidad_deterministico",codigo:codigoUsuario,datos:{mensajeUsuario:texto,distribucionActual:distribucionSemanal}}).then((resCorreccion:any)=>{
-          if(resCorreccion?.actualizado){
-            console.log("🛡️ Safety Net disponibilidad: corregida a -",resCorreccion.nuevaDescripcion);
-            setDistribucionSemanal(resCorreccion.distribucion);
-          }
-        });
         // FIX: pregunta EXPLICITA y determinista (nunca inferida por hora ni decidida por el LLM)
         // de si el atleta quiere empezar hoy mismo o desde el proximo dia disponible — evita
         // prescribir una sesion de hoy cuando genera la semana ya entrada la noche.

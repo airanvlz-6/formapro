@@ -7,13 +7,29 @@ export function persistTrainingSources(db: any, rows: Record<string, unknown>[])
   return db.from('athlete_training_sources').upsert(rows, { onConflict: 'user_codigo,disciplina' });
 }
 
-export function parseOwnershipConfirmation(value: unknown, discipline: string): 'forge' | 'external' | null {
-  if (typeof value !== 'string' || !['box', 'carrera', 'fuerza'].includes(discipline)) return null;
-  const text = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[.!]+$/, '').replace(/\s+/g, ' ');
-  const forge = ['si', 'si, programalo tu', `quiero que forge gestione ${discipline}`, `si, quiero que forge gestione ${discipline}`, 'incluyelo en mi planificacion'];
-  const external = [`no, el ${discipline} lo hago por mi cuenta`, `no, ${discipline} lo hago por mi cuenta`,
-    `no, el ${discipline} me lo programa otro entrenador`, 'me lo programa otro entrenador', 'solo tenlo en cuenta', 'no quiero que forge lo programe'];
-  return forge.includes(text) ? 'forge' : external.includes(text) ? 'external' : null;
+/** Interpret only the answer to the pending discipline question, never infer a discipline. */
+export function parseOwnershipConfirmation(value: unknown, discipline: string): 'forge' | 'external' | 'ambiguous' {
+  if (typeof value !== 'string' || value.length > 500 || !['box', 'carrera', 'fuerza'].includes(discipline)) return 'ambiguous';
+  const text = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[¿?¡!.,;:]/g, ' ').trim().replace(/\s+/g, ' ');
+  if (/\b(depende|a veces|quiza|quizas|ya veremos|puede ser|como quieras|no se|pero|algunos|algunas)\b/.test(text)) return 'ambiguous';
+  const forge = /\bforge\b/.test(text);
+  const external = /\b(otra persona|otro entrenador|mi entrenador|por mi cuenta|yo)\b/.test(text);
+  if (forge && external) return 'ambiguous';
+  // Negation is checked before any positive Forge reference.
+  if (/^(?:no forge|forge no|no forge no|no quiero forge|no quiero que (?:(?:lo |las |los )?programe forge|forge (?:lo |las |los )?programe))$/.test(text)) return 'external';
+  if (/\b(no|nunca|tampoco)\b/.test(text) && forge) return 'ambiguous';
+  if (/^(?:otra persona|yo|yo me encargo|solo tenlo en cuenta)$/.test(text)) return 'external';
+  if (new RegExp(`^(?:no )?(?:(?:el )?${discipline} )?(?:(?:me )?lo (?:programa|gestiona) (?:otra persona|otro entrenador|mi entrenador)|lo hago por mi cuenta)$`).test(text)) return 'external';
+  if (forge) {
+    if (/^(?:si )?forge$/.test(text) || /^(?:forge se encarga|que se encargue forge)$/.test(text)) return 'forge';
+    const verb = '(?:programe|programa|gestione|gestiona)';
+    const coordination = '(?: y (?:lo|las|los) coordine con el resto de mi planificacion)?';
+    if (new RegExp(`^(?:si )?(?:quiero que |que )?(?:forge (?:${verb} ${discipline}|(?:lo |las |los )${verb})|(?:lo |las |los )${verb} forge)${coordination}$`).test(text)) return 'forge';
+    return 'ambiguous';
+  }
+  // Short answers already supported by the binary pending question.
+  return /^(?:si|si programalo tu|incluyelo en mi planificacion)$/.test(text) ? 'forge' : 'ambiguous';
 }
 
 /** Separate explicit responsibility confirmation; availability never invokes this writer. */
@@ -24,7 +40,7 @@ export async function confirmCoachOwnership(db: any, codigo: string, request: an
   const days = normalizeAvailabilityDays(request.days);
   if (!days?.length) return failure('AVAILABILITY_FORMAT_INVALID');
   const owner = parseOwnershipConfirmation(request.confirmation, discipline);
-  if (!owner) return failure('OWNERSHIP_CONFIRMATION_REQUIRED');
+  if (owner === 'ambiguous') return failure('OWNERSHIP_CONFIRMATION_REQUIRED');
   try {
     const p = await db.from('usuarios').select('modo_entrada,categoria,especialidad,distribucion_semanal').eq('codigo', codigo).single();
     if (p.error || !p.data) return failure('OWNERSHIP_READ_FAILED');

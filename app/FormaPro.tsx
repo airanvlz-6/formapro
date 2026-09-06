@@ -858,6 +858,15 @@ const [semanaPendienteCompartir,setSemanaPendienteCompartir]=useState<{sesionesC
 const [rachaPendienteCompartir,setRachaPendienteCompartir]=useState<number|null>(null);
 const [modoEntrada,setModoEntrada]=useState<string>("planificacion");
 const [esperandoConfirmacionDisponibilidad,setEsperandoConfirmacionDisponibilidad]=useState(false);
+const [pendingCoachOwnership,setPendingCoachOwnership]=useState<{codigo:string; weekly:boolean; queue:{discipline:string;days:string[]}[]}|null>(null);
+const ownershipQuestion=(discipline:string)=>`${discipline} no está configurado todavía como una disciplina que Forge gestione. ¿Quieres que Forge programe esas sesiones y las coordine con el resto de tu planificación, o te las programa otra persona?`;
+const requestCoachOwnership=(result:any,weekly:boolean)=>{
+  if(!result?.ownershipPending?.length) return null;
+  setPendingCoachOwnership({codigo:codigoUsuario,weekly,queue:result.ownershipPending});
+  const saved=result.ok ? `Disponibilidad actualizada para ${(result.updatedCategories||[]).join(", ")}. ` : "";
+  return saved+ownershipQuestion(result.ownershipPending[0].discipline);
+};
+
 const [mostrarBannerCambioModo,setMostrarBannerCambioModo]=useState(false);
 const [modificacionPendienteConfirmar,setModificacionPendienteConfirmar]=useState<{pendingId:string;dia:string;titulo:string;motivo:string}|null>(null);
 const [estadoAtletaActivo,setEstadoAtletaActivo]=useState<{estado:string;motivo:string;desde:string}|null>(null);
@@ -1517,7 +1526,11 @@ const forgeValidator=(texto:string):string=>{
     let availabilityNotice: string | null = null;
     await procesarTag("[DISPONIBILIDAD_ACTUALIZADA:",29,async(data)=>{
       const res=await apiCall({action:"guardar_disponibilidad_actualizada",codigo:codigoUsuario,datos:{...data,mensajeUsuario:mensajeUsuarioOriginal}});
-      if(res?.ok&&res.distribucion){
+      const ownershipPrompt=requestCoachOwnership(res,false);
+      if(ownershipPrompt){
+        if(res.ok&&res.distribucion) setDistribucionSemanal(res.distribucion);
+        availabilityNotice=ownershipPrompt;
+      } else if(res?.ok&&res.distribucion){
         setDistribucionSemanal(res.distribucion);
         availabilityNotice = res.partial ? `Disponibilidad actualizada para ${(res.updatedCategories||[]).join(", ")}. No se ha actualizado ${(res.rejectedCategories||[]).join(", ")} porque Forge no tiene esa disciplina configurada.` : "Disponibilidad actualizada y verificada.";
       } else { availabilityNotice = "No he podido actualizar tu disponibilidad de forma segura."; }
@@ -1679,6 +1692,41 @@ const forgeValidator=(texto:string):string=>{
   const enviar=async(texto:string=input)=>{
     console.log("=== ENTRA A FUNCION enviar() ===");
     if((!texto.trim()&&imagenesAdjuntas.length===0)||cargando||bloqueado) return;
+    if(pendingCoachOwnership){
+      if(pendingCoachOwnership.codigo!==codigoUsuario){
+        setPendingCoachOwnership(null);
+        setMensajes(prev=>[...prev,{role:"assistant",content:"La confirmación pendiente ya no corresponde a esta sesión. Indica de nuevo la disponibilidad."}]);
+        return;
+      }
+      setCargando(true);setInput("");
+      setMensajes(prev=>[...prev,{role:"user",content:texto}]);
+      try {
+        const pending=pendingCoachOwnership.queue[0];
+        const result=await apiCall({action:"confirmar_ownership_coach",codigo:codigoUsuario,datos:{...pending,confirmation:texto}});
+        if(result?.ok!==true){
+          setMensajes(prev=>[...prev,{role:"assistant",content:result?.code==="OWNERSHIP_CONFIRMATION_REQUIRED"
+            ? `Necesito una confirmación clara: ¿quieres que Forge programe ${pending.discipline}, o lo gestiona otra persona?`
+            : "No he podido confirmar la configuración y disponibilidad. No continuaré con la generación hasta verificarlas."}]);
+          return;
+        }
+        setDistribucionSemanal(result.distribucion);
+        const remaining=pendingCoachOwnership.queue.slice(1);
+        const confirmed=result.owner==="forge" ? `${pending.discipline}: Forge gestionará las sesiones. Disponibilidad guardada y verificada.`
+          : `${pending.discipline}: registrado como entrenamiento externo. Disponibilidad guardada y verificada.`;
+        if(remaining.length){
+          setPendingCoachOwnership({...pendingCoachOwnership,queue:remaining});
+          setMensajes(prev=>[...prev,{role:"assistant",content:confirmed+" "+ownershipQuestion(remaining[0].discipline)}]);
+        } else {
+          setPendingCoachOwnership(null);
+          if(pendingCoachOwnership.weekly){
+            setEsperandoConfirmacionDisponibilidad(false);setEsperandoConfirmacionEmpezarHoy(true);
+            setMensajes(prev=>[...prev,{role:"assistant",content:confirmed+" ¿Quieres empezar hoy o desde el próximo día disponible?"}]);
+          } else setMensajes(prev=>[...prev,{role:"assistant",content:confirmed}]);
+        }
+      } finally {setCargando(false);}
+      return;
+    }
+
     const fechaHoyStr=new Date().toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"Europe/Madrid"});
     const textoLower=texto.toLowerCase();
     const esMensajeSueno=/métricas de sueño|dormí|puntuación de sueño|durante la noche|sueño profundo|sueño rem/i.test(textoLower) && !/entren|wod|sesion realizada|serie|repeticion/i.test(textoLower);
@@ -1836,6 +1884,13 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
       // Persistir y verificar la disponibilidad antes de confirmar o avanzar a generación.
       if(esperandoConfirmacionDisponibilidad && codigoUsuario){
         const resCorreccion = await apiCall({action:"verificar_correccion_disponibilidad_deterministico",codigo:codigoUsuario,datos:{mensajeUsuario:texto}});
+        const ownershipPrompt=requestCoachOwnership(resCorreccion,true);
+        if(ownershipPrompt){
+          if(resCorreccion.ok&&resCorreccion.distribucion) setDistribucionSemanal(resCorreccion.distribucion);
+          setMensajes(prev=>[...prev,{role:"assistant",content:ownershipPrompt}]);
+          setCargando(false);
+          return;
+        }
         if(resCorreccion?.ok !== true){
           setMensajes(prev=>[...prev,{role:"assistant",content:"No he podido actualizar tu disponibilidad de forma segura. Indica cada disciplina y sus días exactos, por ejemplo: carrera lunes/miércoles/sábado."}]);
           setCargando(false);

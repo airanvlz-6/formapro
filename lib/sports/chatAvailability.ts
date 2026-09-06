@@ -7,7 +7,13 @@ const fail = (code: string) => ({ ok: false as const, actualizado: false, code, 
 export function parseChatAvailability(value: unknown): Record<string, string[]> | null {
   if (typeof value !== 'string' || value.length > 2000) return null;
   const text = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/^no\s*,\s*/, '');
-  const tokens = text.replace(/[:,/.;\n]/g, ' ').split(/\s+/).filter(Boolean);
+  const counts: Record<string, number> = {};
+  const counted = text.replace(/\b([0-9]+) dias? ([a-z_]+)\b/g, (_match, number, category) => {
+    if (Object.hasOwn(counts, category)) counts[category] = -1;
+    else counts[category] = Number(number);
+    return category;
+  });
+  const tokens = counted.replace(/[:,/.;\n]/g, ' ').split(/\s+/).filter(Boolean);
   const categories = new Set(['box', 'crossfit', 'carrera', 'running', 'pista', 'carrera_larga', 'carrera_series', 'fuerza']);
   const result: Record<string, string[]> = {};
   let category = '', needDay = false;
@@ -22,6 +28,7 @@ export function parseChatAvailability(value: unknown): Record<string, string[]> 
     if (!day?.length) return null;
     result[category].push(day[0]); needDay = false;
   }
+  if (Object.entries(counts).some(([key, n]) => !result[key] || new Set(result[key]).size !== n)) return null;
   return category && !needDay ? normalizeAvailabilityForStorage(result) as Record<string, string[]> : null;
 }
 
@@ -49,7 +56,10 @@ export async function updateChatAvailability(db: any, codigo: string, input: unk
     const authorized = [...before.scope.managedDisciplines, ...before.scope.externalDisciplines];
     const categories = requested.filter(k => authorized.includes(canonicalDiscipline(k)));
     const rejectedCategories = requested.filter(k => !categories.includes(k));
-    if (!categories.length) return fail('AVAILABILITY_SCOPE_CHANGE_REQUIRED');
+    const ownershipPending = before.scope.mode === 'coach' ? [...new Set(rejectedCategories.map(canonicalDiscipline))]
+      .filter(discipline => !t.data.some((s: any) => canonicalDiscipline(s.disciplina) === discipline))
+      .map(discipline => ({ discipline, days: [...new Set(rejectedCategories.filter(k => canonicalDiscipline(k) === discipline).flatMap(k => update![k] as string[]))] })) : [];
+    if (!categories.length) return { ...fail('AVAILABILITY_SCOPE_CHANGE_REQUIRED'), ownershipPending };
     const mentioned = new Set(categories.map(canonicalDiscipline));
     // Replace all aliases of an explicitly updated capability; retain unrelated categories.
     const merged = normalizeAvailabilityForStorage({ ...Object.fromEntries(Object.entries(previous).filter(([k]) => !mentioned.has(canonicalDiscipline(k)))),
@@ -83,6 +93,6 @@ export async function updateChatAvailability(db: any, codigo: string, input: unk
       if (JSON.stringify([...new Set(actual)].sort()) !== JSON.stringify(expected)) return fail('AVAILABILITY_READBACK_FAILED');
     }
     return { ok: true as const, actualizado: true, distribucion, partial: rejectedCategories.length > 0, rejectedCategories,
-      updatedCategories: categories };
+      updatedCategories: categories, ownershipPending };
   } catch { return fail('AVAILABILITY_READBACK_FAILED'); }
 }

@@ -3,6 +3,7 @@ import { planBoundedWeek } from "@/lib/planning/prepareAllowedWeeklyPlanContract
 import { plannerProviderMetadata } from "@/lib/planning/weeklyPlannerDiagnostics";
 import { assertWeeklyCalendar, assertCalendarMutation } from "@/lib/planning/weeklyCalendarAuthority";
 import { updateChatAvailability } from "@/lib/sports/chatAvailability";
+import { confirmCoachOwnership, persistTrainingSources } from "@/lib/sports/coachOwnership";
 import { normalizeAvailabilityForStorage } from "@/lib/sports/trainingAvailability";
 import { disabledLegacyOperation, projectLegacyCreate, projectLegacyUpdate } from "@/lib/auth/legacyContainment";
 import { getCanonicalPhysiologyHistory } from "@/lib/physiology/getCanonicalPhysiology";
@@ -1136,8 +1137,7 @@ if (action === "verificar_cambio_modo") {
       activo: true,
     }));
 
-    const { error: errorGuardarFuentes } = await supabase.from("athlete_training_sources")
-      .upsert(filasParaGuardar, { onConflict: "user_codigo,disciplina" });
+    const { error: errorGuardarFuentes } = await persistTrainingSources(supabase, filasParaGuardar);
     if (errorGuardarFuentes) return NextResponse.json({ error: errorGuardarFuentes.message }, { status: 500 });
 
     return NextResponse.json({ ok: true, guardadas: filasParaGuardar.length });
@@ -4973,6 +4973,10 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
 
   if (action === "verificar_correccion_disponibilidad_deterministico") {
     return NextResponse.json(await updateChatAvailability(supabase, codigo, datos.mensajeUsuario));
+  }
+
+  if (action === "confirmar_ownership_coach") {
+    return NextResponse.json(await confirmCoachOwnership(supabase, codigo, datos));
   }
 
   if (action === "guardar_disponibilidad_actualizada") {

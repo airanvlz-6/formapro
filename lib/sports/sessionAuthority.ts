@@ -1,4 +1,5 @@
 import { calendarState } from '../planning/weeklyCalendar';
+import { samePlanData } from '../planning/planMutationValidators';
 import { assertFreshWeeklyAuthority, resolveWeeklySlot, verifyWeeklyCalendarReceipt, weeklyDigest } from '../planning/weeklyCalendarAuthority';
 import type { PrescriptionIntent } from './prescriptionIntent';
 import { createHmac, timingSafeEqual } from 'node:crypto';
@@ -90,6 +91,10 @@ export function verifySessionReceipt(receipt: unknown, session: Record<string, a
   }
   const rendered = renderContractSession(evidence.contract, evidence.proposal);
   if (fields.some(k => !Object.is(session[k] ?? (k === 'debilidad_relacionada' ? null : undefined), rendered[k]))) throw new Error('SESSION_CONTENT_MISMATCH');
+  for (const field of ['stimulusId', 'intent'] as const) {
+    if (Object.hasOwn(rendered, field) && (!Object.hasOwn(session, field) || !samePlanData(session[field], rendered[field])))
+      throw new Error('SESSION_CONTENT_MISMATCH');
+  }
   return rendered;
 }
 

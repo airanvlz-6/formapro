@@ -1,4 +1,5 @@
 import { intentMatchingMovementIds } from './prescriptionIntent';
+import { calendarState } from '../planning/weeklyCalendar';
 import { validateStructureSemantics } from './structureSemantics';
 import { validateAllowedTrainingContract, type AllowedTrainingContract } from './allowedTrainingContract';
 import { MOVEMENT_LIBRARY } from './movementLibrary';
@@ -113,6 +114,10 @@ export function renderContractSession(contract: AllowedTrainingContract, proposa
   const headings = { warmup: 'Calentamiento', main: 'Bloque principal', cooldown: 'Vuelta a la calma' };
   const units: Record<string, string> = { sets: 'series', reps: 'repeticiones', durationSeconds: 'segundos', distanceMeters: 'metros', restSeconds: 'segundos de descanso' };
   return { dia: contract.targetDay, tipo: contract.discipline, titulo: `${label(proposal.stimulusId)} · ${label(proposal.structureId)}`,
+    // Pending RECOVERY is reconstructed on replan. Preserve its verified v2 identity,
+    // without changing TRAIN or inventing canonical intent for legacy v1 contracts.
+    ...(contract.contractVersion === 2 && calendarState({ tipo: contract.discipline, stimulusId: contract.stimulusId }) === 'RECOVERY'
+      ? { stimulusId: contract.stimulusId, intent: structuredClone(contract.intent!) } : {}),
     por_que: `Estímulo programado: ${label(contract.stimulusId)}.`, debilidad_relacionada: null,
     descripcion: `Estructura: ${label(proposal.structureId)}\n\n` + proposal.blocks.map(b => `**${headings[b.blockType]}**\n` + b.movements.map(m =>
       `- ${label(m.movementId)}: ${doseKeys.filter(k => Object.hasOwn(m.prescription, k)).map(k => `${m.prescription[k as keyof MovementDose]} ${units[k]}`).join(', ')}`).join('\n')).join('\n\n') };

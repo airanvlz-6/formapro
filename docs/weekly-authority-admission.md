@@ -72,3 +72,19 @@ Production fixture: week 2026-09-07; box Tuesday/Thursday/Saturday; running Mond
 Tampering/replay tests cover option, day, date, week, state, discipline, stimulus, intent, contract/context digest, generation token, user, raw HMAC payload, supported UI fields, expiry, protocol/policy version, changed restrictions/scope/availability/revision/protected state, alternative-receipt mixing and legacy evidence. All Builder rejections assert zero LLM calls. Save rejection tests assert zero writes. Actual route tests for every catalog stimulus now obtain a real weekly receipt first.
 
 Validation on this change: targeted receipt/Builder integration 113/113; calendar/availability/diagnostics 50/50; planning 377/377; sports 268/268; full lib 829/829. `npx tsc --noEmit --incremental false` and `git diff --check` pass. The new binding suite adds 44 tests. No production access, database migration or push.
+
+## 2E.3A.4.1 — RECOVERY persistence identity
+
+The final certification found a representation loss: the verified session contract contains `stimulusId` and explicit v2 `intent`, but `renderContractSession` previously emitted only `dia`, `tipo`, `titulo`, `por_que`, `debilidad_relacionada` and `descripcion`. `verifySessionReceipt`/`admitSessionContent` return that rendered representation, and the save path persists it. Pending protected RECOVERY is recognized by `calendarState`, but subsequent weekly preparation requires `before.stimulusId`; a newly saved RECOVERY therefore failed with `PROTECTED_RECOVERY_UNRESOLVED`.
+
+The same renderer also omits these fields for TRAIN. That broader representation issue was reported before implementation. This patch deliberately changes **only RECOVERY from a verified contract v2**; TRAIN output and legacy v1 output remain unchanged. It does not claim to solve TRAIN metadata persistence.
+
+The renderer now copies the RECOVERY `stimulusId` and a detached structured `intent` from the validated contract. The discipline already survives as `tipo`; the existing calendar predicate resolves state from the canonical stimulus, so neither a duplicate discipline nor a state field is added. No value is inferred from title/focus/description or manufactured for v1.
+
+The existing session receipt already authenticates the contract. Verification now also compares the two added rendered fields against the incoming session using structural equality. Substitution or deletion fails `SESSION_CONTENT_MISMATCH`; save still returns canonical server rendering. There is no new receipt, HMAC domain, protocol, TTL, CAS change or migration. An in-flight old v2 RECOVERY response missing these fields requires regeneration instead of silently gaining metadata acceptance.
+
+The weekly reader and weekly contract are unchanged: missing stimulus metadata remains `PROTECTED_RECOVERY_UNRESOLVED`; malformed explicit intent remains `PROTECTED_RECOVERY_INFEASIBLE`. Its pre-existing legacy handling of absent intent when an explicit stimulus exists is not changed or expanded here.
+
+Fourteen new regressions cover the actual weekly Planner/calendar v2/Builder/save/reload/preparation round trip; canonical stimulus and stimulus_only equality; a valid `main_pattern: run` round trip through the existing session v2 admission and protected reader (weekly enumeration remains generic); four metadata tampering/deletion cases with zero writes; five malformed persisted intents; unresolved legacy RECOVERY; unchanged TRAIN representation; and unchanged legacy v1 RECOVERY. The weekly round trip preserves session identity and successfully prepares the protected RECOVERY after JSON storage/reload.
+
+Validation for 2E.3A.4.1: targeted 190/190; planning 391/391; sports 268/268; full lib 843/843; TypeScript (`--noEmit --incremental false`) and diff-check pass.

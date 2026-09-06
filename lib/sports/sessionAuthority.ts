@@ -1,8 +1,10 @@
 import { calendarState } from '../planning/weeklyCalendar';
+import { assertFreshWeeklyAuthority, resolveWeeklySlot, verifyWeeklyCalendarReceipt, weeklyDigest } from '../planning/weeklyCalendarAuthority';
 import type { PrescriptionIntent } from './prescriptionIntent';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { getCanonicalRestrictions } from '../athlete/getCanonicalRestrictions';
 import { prepareSessionTrainingContract } from './prepareSessionTrainingContract';
+import { buildAllowedTrainingContract } from './allowedTrainingContract';
 import { generateContractSession } from './sessionGeneration';
 import { renderContractSession } from './structuredSession';
 import { canonicalDiscipline, normalizeTrainingKey, buildPrescriptionScope, resolveProfileDisciplines } from './prescriptionScope';
@@ -14,11 +16,24 @@ function signature(payload: string) {
   if (!secret) throw new Error('SESSION_AUTHORITY_UNAVAILABLE');
   return createHmac('sha256', secret).update(domain + payload).digest('base64url');
 }
-type Request = { targetWeekStart: string; day: string; discipline: string; stimulus: unknown; intent?: PrescriptionIntent; state?: 'TRAIN' | 'RECOVERY' };
+type Request = { targetWeekStart: string; day: string; discipline: string; stimulus: unknown; intent?: PrescriptionIntent; state?: 'TRAIN' | 'RECOVERY';
+  weekly?: { receipt: unknown; generationToken: unknown; optionId: unknown; claims?: Record<string, any> } };
 /** Only this server adapter issues receipts, after both sports and duplication checks. */
 export async function generateTrainingSession(db: any, userCodigo: string, request: Request,
   complete: (prompt: string) => Promise<string>, context = '') {
   try {
+    let weekly: { calendarReceipt: string; optionId: string } | undefined;
+    let weeklyContext: any;
+    if (Object.hasOwn(request, 'weekly')) {
+      const proof = request.weekly!;
+      const fresh = await assertFreshWeeklyAuthority(db, userCodigo, request.targetWeekStart, proof.receipt, proof.generationToken);
+      const slot = resolveWeeklySlot(fresh.evidence, { ...request, optionId: proof.optionId });
+      if (proof.claims) resolveWeeklySlot(fresh.evidence, { ...proof.claims, day: request.day, optionId: proof.optionId });
+      weekly = { calendarReceipt: proof.receipt as string, optionId: slot.optionId };
+      weeklyContext = fresh.contexts[slot.discipline];
+      request = { targetWeekStart: fresh.evidence.week, day: slot.day, discipline: slot.discipline,
+        stimulus: slot.stimulusId, intent: slot.intent, state: slot.state };
+    }
     if (Object.hasOwn(request, 'state') && (!['TRAIN', 'RECOVERY'].includes(request.state!)
       || request.state !== calendarState({ tipo: canonicalDiscipline(request.discipline), stimulusId: request.stimulus })))
       return { ok: false as const, code: 'TRAINING_CONTRACT_INVALID', errors: ['SESSION_STATE_MISMATCH'] };
@@ -26,8 +41,15 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
       .select(`${PROFILE},perfil,marcas_especificas,ciclo_actual,athlete_development,datos_entrenamiento`).eq('codigo', userCodigo).single();
     if (error || !profile) return { ok: false as const, code: 'CONTRACT_PROFILE_READ_FAILED' };
     const restrictions = await getCanonicalRestrictions(db, userCodigo);
-    const prepared = await prepareSessionTrainingContract(db, userCodigo, profile, request, restrictions);
+    // Reuse the freshly loaded weekly context; only restrictions are reread at the existing session boundary.
+    const prepared = weeklyContext ? buildAllowedTrainingContract({ ...weeklyContext, targetDay: request.day,
+      stimulus: request.stimulus, intent: request.intent, restrictionsSnapshot: restrictions })
+      : await prepareSessionTrainingContract(db, userCodigo, profile, request, restrictions);
     if (!prepared.ok) return { ok: false as const, code: 'TRAINING_CONTRACT_INVALID', errors: prepared.errors };
+    if (weekly && (weeklyDigest(prepared.contract.restrictionsSnapshot) !== weeklyDigest(weeklyContext.restrictionsSnapshot)
+      || weeklyDigest(prepared.contract.prescriptionScope) !== weeklyDigest(weeklyContext.prescriptionScope)
+      || weeklyDigest(prepared.contract.availableDays) !== weeklyDigest(weeklyContext.availableDays)))
+      throw new Error('WEEKLY_CONTEXT_STALE');
     const history = await db.from('weekly_plan').select('sessions').eq('user_codigo', userCodigo).order('week_start', { ascending: false }).limit(2);
     if (history.error || !Array.isArray(history.data)) return { ok: false as const, code: 'SESSION_HISTORY_READ_FAILED' };
     const recent = history.data.flatMap((p: any) => Array.isArray(p.sessions) ? p.sessions.filter((s: any) => s.completada && s.descripcion_real)
@@ -36,15 +58,16 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
       JSON.stringify({ serverProfile: profile, requestContext: context }));
     if (!result.ok) return result;
     const payload = Buffer.from(JSON.stringify({ userCodigo, expiresAt: Date.now() + 30 * 60_000,
-      contract: result.contract, proposal: result.proposal })).toString('base64url');
+      contract: result.contract, proposal: result.proposal, ...(weekly ? { weekly } : {}) })).toString('base64url');
     const sessionReceipt = `${payload}.${signature(payload)}`;
     return { ok: true as const, trainingContract: result.contract, sesion: { ...result.session, sessionReceipt }, attempts: result.attempts };
-  } catch (error: any) { return { ok: false as const, code: 'SESSION_AUTHORITY_FAILED', errors: [error.message] }; }
+  } catch (error: any) { return { ok: false as const, code: error.message?.startsWith('WEEKLY_') || error.message?.startsWith('CALENDAR_')
+    ? error.message : 'SESSION_AUTHORITY_FAILED', errors: [error.message], retryable: false }; }
 }
 
 const fields = ['dia', 'tipo', 'titulo', 'por_que', 'descripcion', 'debilidad_relacionada'] as const;
 /** Returned pools are never authoritative. Authenticate original A, then revalidate and rerender A. */
-export function verifySessionReceipt(receipt: unknown, session: Record<string, any>, userCodigo: string, weekStart: string) {
+export function verifySessionReceipt(receipt: unknown, session: Record<string, any>, userCodigo: string, weekStart: string, expectedWeeklyReceipt?: string) {
   if (typeof receipt !== 'string' || receipt.length > 200_000) throw new Error('SESSION_RECEIPT_REQUIRED');
   const [payload, mac, extra] = receipt.split('.');
   if (!payload || !mac || extra !== undefined) throw new Error('SESSION_RECEIPT_INVALID');
@@ -54,6 +77,17 @@ export function verifySessionReceipt(receipt: unknown, session: Record<string, a
   const evidence = JSON.parse(Buffer.from(payload, 'base64url').toString());
   if (evidence.userCodigo !== userCodigo || !Number.isFinite(evidence.expiresAt) || Date.now() > evidence.expiresAt
     || evidence.contract?.targetWeekStart !== weekStart) throw new Error('SESSION_RECEIPT_CONTEXT_MISMATCH');
+  if (expectedWeeklyReceipt !== undefined && evidence.weekly?.calendarReceipt !== expectedWeeklyReceipt)
+    throw new Error('WEEKLY_SESSION_CHAIN_MISMATCH');
+  if (evidence.weekly) {
+    const weekly = verifyWeeklyCalendarReceipt(evidence.weekly.calendarReceipt, userCodigo, weekStart, true);
+    const c = evidence.contract;
+    resolveWeeklySlot(weekly, { day: c.targetDay, optionId: evidence.weekly.optionId, targetWeekStart: c.targetWeekStart,
+      discipline: c.discipline, stimulus: c.stimulusId, intent: c.intent,
+      state: calendarState({ tipo: c.discipline, stimulusId: c.stimulusId }) });
+    if (c.contractVersion !== 2 || weeklyDigest(c.prescriptionScope) !== weeklyDigest(weekly.prescriptionScope))
+      throw new Error('WEEKLY_SESSION_CHAIN_MISMATCH');
+  }
   const rendered = renderContractSession(evidence.contract, evidence.proposal);
   if (fields.some(k => !Object.is(session[k] ?? (k === 'debilidad_relacionada' ? null : undefined), rendered[k]))) throw new Error('SESSION_CONTENT_MISMATCH');
   return rendered;

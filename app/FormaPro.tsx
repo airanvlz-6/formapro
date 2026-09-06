@@ -1006,6 +1006,11 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
         const diaSiguiente=idxEnSemana<todasLasSesionesOrden.length-1?todasLasSesionesOrden[idxEnSemana+1]:null;
         return apiCall({action:"construir_sesion_dia",codigo:codigoUsuario,datos:{
           generationToken:weeklyGeneration.token,
+          calendarReceipt:estructura.calendarReceipt,
+          optionId:diaEstructura.optionId,
+          contractDigest:estructura.contractDigest,
+          contextDigest:estructura.contextDigest,
+          targetDate:diaEstructura.targetDate,
           targetWeekStart:weekStartOrchestrator,
           stimulusId:diaEstructura.stimulusId,
           intent:diaEstructura.intent,
@@ -1024,7 +1029,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
           diaAnterior,
           diaSiguiente
         }}).then((res:any)=>{
-          console.log(`ORCHESTRATOR Paso 3 — ${diaEstructura.dia}: resultado:`, JSON.stringify(res));
+          console.log(`ORCHESTRATOR Paso 3 — ${diaEstructura.dia}: resultado:`, {ok:res?.ok,code:res?.code});
           return res;
         });
       })

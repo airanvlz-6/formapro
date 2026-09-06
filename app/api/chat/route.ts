@@ -1,6 +1,6 @@
 import { protectedCalendarSessionIndices } from "@/lib/planning/weeklyCalendar";
 import { planBoundedWeek } from "@/lib/planning/prepareAllowedWeeklyPlanContract";
-import { issueWeeklyCalendar, assertWeeklyCalendar, assertCalendarMutation } from "@/lib/planning/weeklyCalendarAuthority";
+import { assertWeeklyCalendar, assertCalendarMutation } from "@/lib/planning/weeklyCalendarAuthority";
 import { normalizeAvailabilityForStorage } from "@/lib/sports/trainingAvailability";
 import { disabledLegacyOperation, projectLegacyCreate, projectLegacyUpdate } from "@/lib/auth/legacyContainment";
 import { getCanonicalPhysiologyHistory } from "@/lib/physiology/getCanonicalPhysiology";
@@ -2196,10 +2196,9 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
         if (!response.ok) throw new Error("LLM_REQUEST_FAILED");
         const output = await response.json();
         return output.content?.map((b: any) => b.text || "").join("") || "";
-      });
+      }, datos.generationToken);
       if (!result.ok) return NextResponse.json({ ...result, retryable: false });
-      const calendarReceipt = await issueWeeklyCalendar(supabase, codigo, datos.targetWeekStart, result.estructura.sessions);
-      return NextResponse.json({ ...result, estructura: { ...result.estructura, calendarReceipt } });
+      return NextResponse.json(result);
     } catch (err: any) {
       return NextResponse.json({ ok: false, error: "Error en Week Planner: " + err.message, code: err.message, retryable: false,
         ...(err.message === 'CALENDAR_AVAILABILITY_UNRESOLVED' && err.availabilityDiagnostic
@@ -2238,6 +2237,7 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
         return NextResponse.json({ ok: false, code: "TRAINING_CONTRACT_INVALID", errors: ["CONTRACT_TARGET_OUTSIDE_GENERATION"] });
       const generated = await generateTrainingSession(supabase, codigo,
         { targetWeekStart: datos.targetWeekStart, day: datos.dia, discipline: datos.tipo, stimulus: datos.stimulusId,
+          weekly: { receipt: datos.calendarReceipt, generationToken: datos.generationToken, optionId: datos.optionId, claims: datos },
           ...(Object.hasOwn(datos, 'intent') ? { intent: datos.intent } : {}),
           ...(Object.hasOwn(datos, 'state') ? { state: datos.state } : {}) },
         async (prompt: string) => {
@@ -2252,7 +2252,7 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
           previousDay: datos.diaAnterior, nextDay: datos.diaSiguiente }));
       return NextResponse.json(generated);
     } catch (error: any) {
-      return NextResponse.json({ ok: false, code: "TRAINING_CONTRACT_INVALID", errors: [error.message] });
+      return NextResponse.json({ ok: false, code: "TRAINING_CONTRACT_INVALID", errors: [error.message], retryable: false });
     }
   }
 
@@ -4467,7 +4467,7 @@ if (action === "obtener_daily_briefing") {
     catch (error: any) { return NextResponse.json({ ok: false, error: error.message, retryable: false }); }
     const plan = structuredClone(datos.plan);
     if (plan.week_start !== generation.currentWeek && plan.week_start !== generation.nextWeek)
-      plan.week_start = generation.currentWeek;
+      return NextResponse.json({ ok: false, code: "CALENDAR_TARGET_INVALID", retryable: false });
     const esSemanaActual = plan.week_start === generation.currentWeek;
     // Exact pre-generation snapshot: never reread a newer revision to admit an old proposal.
     const planExistente = generation.snapshots[plan.week_start];
@@ -4632,7 +4632,8 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
       }
     } catch (error: any) { return NextResponse.json({ ok: false, code: error.message, retryable: false }); }
 
-    try { await assertWeeklyCalendar(supabase, codigo, plan.week_start, plan.sessions, datos.calendarReceipt); }
+    try { await assertWeeklyCalendar(supabase, codigo, plan.week_start, plan.sessions, datos.calendarReceipt,
+      { requireV2: true, generationToken: datos.generationToken, sessionEvidence: newlyPrescribedSessions }); }
     catch (error: any) { return NextResponse.json({ ok: false, code: error.message, retryable: false }); }
 
     // Final proposal content: admit identity only after all content transformations.

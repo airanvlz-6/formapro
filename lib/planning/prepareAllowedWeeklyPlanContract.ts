@@ -1,5 +1,5 @@
 import { evaluateTrainingFeasibility } from '../sports/trainingFeasibility';
-import { loadWeeklyCalendarContext } from './weeklyCalendarAuthority';
+import { loadWeeklyCalendarContext, issueWeeklyCalendar, weeklyDigest } from './weeklyCalendarAuthority';
 import { calendarDays, calendarKey, calendarState, isProtectedCalendarSession } from './weeklyCalendar';
 import { getCanonicalRestrictions } from '../athlete/getCanonicalRestrictions';
 import { prepareSessionTrainingContext } from '../sports/prepareSessionTrainingContract';
@@ -8,7 +8,7 @@ import { buildAllowedWeeklyPlanContract, composeBoundedWeek, type WeeklyContract
 import { admitSessionContent } from '../sports/sessionAuthority';
 
 /** Read-only preparation, before any Planner call. Bounded reads per discipline, never per option. */
-export async function prepareAllowedWeeklyPlanContract(db: any, codigo: string, request: {
+export async function loadWeeklyPlanningContext(db: any, codigo: string, request: {
   targetWeekStart: string; today: string; empezarHoy: boolean; snapshot: { sessions: readonly any[] } | null;
 }) {
   const c = await loadWeeklyCalendarContext(db, codigo);
@@ -55,14 +55,21 @@ export async function prepareAllowedWeeklyPlanContract(db: any, codigo: string, 
       fixed[day] = { state: calendarState(s), ...(['box', 'carrera'].includes(s.tipo) ? { discipline: s.tipo } : {}) };
     }
   }
-  const built = buildAllowedWeeklyPlanContract({ targetWeekStart: request.targetWeekStart, prescriptionScope: c.scope,
-    maxExecutableDays: c.max, completeNewWeek: !request.snapshot && !hasPast, allowed: c.allowed, contexts, fixed });
-  return built.ok ? { ...built, fixedSessions: structuredClone(fixedSessions) } : built;
+  return { ok: true as const, input: { targetWeekStart: request.targetWeekStart, prescriptionScope: c.scope,
+    maxExecutableDays: c.max, completeNewWeek: !request.snapshot && !hasPast, allowed: c.allowed, contexts, fixed },
+    fixedSessions: structuredClone(fixedSessions) };
+}
+
+export async function prepareAllowedWeeklyPlanContract(db: any, codigo: string, request: Parameters<typeof loadWeeklyPlanningContext>[2]) {
+  const context = await loadWeeklyPlanningContext(db, codigo, request);
+  if (!context.ok) return context;
+  const built = buildAllowedWeeklyPlanContract(context.input);
+  return built.ok ? { ...built, fixedSessions: context.fixedSessions } : built;
 }
 
 /** Server resolves selections. Model prose never becomes an executable objective. */
 export async function planBoundedWeek(db: any, codigo: string, request: Parameters<typeof prepareAllowedWeeklyPlanContract>[2],
-  complete: (prompt: string) => Promise<string>) {
+  complete: (prompt: string) => Promise<string>, generationToken?: string) {
   const prepared = await prepareAllowedWeeklyPlanContract(db, codigo, request);
   if (!prepared.ok) return prepared;
   const proposal = await composeBoundedWeek(prepared.contract, complete);
@@ -76,6 +83,12 @@ export async function planBoundedWeek(db: any, codigo: string, request: Paramete
       stimulusId: option.stimulusId, intent: option.intent, titulo_breve: option.stimulusId!.replaceAll('_', ' '), focus: option.stimulusId,
       trabaja_debilidad: false };
   });
-  return { ok: true as const, estructura: { weeklyContractVersion: 1, contextDigest: proposal.contract.contextDigest,
-    strategy: { adaptacion_principal: 'Estímulos genéricos seleccionados dentro del contrato autorizado.' }, sessions }, attempts: proposal.attempts };
+  const contractDigest = weeklyDigest(proposal.contract);
+  const calendarReceipt = generationToken === undefined ? undefined : await issueWeeklyCalendar(db, codigo, request.targetWeekStart, sessions,
+    { contract: proposal.contract, selections: calendarDays.map(day => ({ day, optionId: proposal.selected[day].optionId })), request, generationToken });
+  return { ok: true as const, estructura: { weeklyContractVersion: 1, calendarProtocolVersion: 2, contractDigest, calendarReceipt,
+    contextDigest: proposal.contract.contextDigest,
+    strategy: { adaptacion_principal: 'Estímulos genéricos seleccionados dentro del contrato autorizado.' },
+    sessions: sessions.map((s, i) => ('weeklyProtected' in s && s.weeklyProtected) ? s : ({ ...s, optionId: proposal.selected[calendarDays[i]].optionId,
+      targetDate: new Date(new Date(request.targetWeekStart + 'T12:00:00Z').getTime() + i * 86400000).toISOString().slice(0, 10) })) }, attempts: proposal.attempts };
 }

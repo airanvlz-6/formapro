@@ -1446,7 +1446,7 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
       let distribucionAutoFocus="";
       const diasDisponiblesGenerales=(perfil.dias_disponibles as string[])||[];
       if(modoEntrada!=="focus"&&diasDisponiblesGenerales.length>0){
-        distribucionAutoFocus=JSON.stringify({ disponibilidad: diasDisponiblesGenerales.join(", ") });
+        distribucionAutoFocus=JSON.stringify({ disponibilidad: diasDisponiblesGenerales });
       }
       if(modoEntrada==="focus"&&focusDiasExternos.length>0){
         // FIX ARQUITECTONICO: eliminada toda inferencia numerica ("3 dias" -> deducir cuales).
@@ -1455,9 +1455,9 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
         // sin interpretacion de texto, sin LLM, sin ambiguedad posible.
         const diasDisponiblesReales=(perfil.dias_disponibles as string[])||[];
         const diasForgeReales=diasDisponiblesReales.filter(d=>!focusDiasExternos.includes(d));
-        const distribucionObj:Record<string,string>={
-          [focusDisciplinaForge]: diasForgeReales.length>0?diasForgeReales.join(", "):"sin días asignados aún",
-          [focusDisciplinaExterna]: focusDiasExternos.join(", ")+" (entrenador externo, Forge NUNCA prescribe estos días)",
+        const distribucionObj:Record<string,string|string[]>={
+          [focusDisciplinaForge]: diasForgeReales,
+          [focusDisciplinaExterna]: focusDiasExternos,
           observaciones: `Días exactos seleccionados por el atleta para ${focusDisciplinaForge}: ${diasForgeReales.join(", ")||"ninguno"}. Estos son los ÚNICOS días donde Forge puede prescribir contenido — cualquier otro día (incluidos los de ${focusDisciplinaExterna}) debe quedar sin sesión de Forge.`
         };
         distribucionAutoFocus=JSON.stringify(distribucionObj);
@@ -1579,8 +1579,8 @@ const forgeValidator=(texto:string):string=>{
     });
     await procesarTag("[DISPONIBILIDAD_ACTUALIZADA:",29,async(data)=>{
       const res=await apiCall({action:"guardar_disponibilidad_actualizada",codigo:codigoUsuario,datos:data});
-      if(res?.ok&&data.descripcion){
-        setDistribucionSemanal(JSON.stringify({descripcion:data.descripcion}));
+      if(res?.ok&&res.distribucion){
+        setDistribucionSemanal(res.distribucion);
       }
     });
     await procesarTag("[INTERVENTION:",14,async(data)=>{
@@ -1904,7 +1904,7 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
         apiCall({action:"verificar_correccion_disponibilidad_deterministico",codigo:codigoUsuario,datos:{mensajeUsuario:texto,distribucionActual:distribucionSemanal}}).then((resCorreccion:any)=>{
           if(resCorreccion?.actualizado){
             console.log("🛡️ Safety Net disponibilidad: corregida a -",resCorreccion.nuevaDescripcion);
-            setDistribucionSemanal(JSON.stringify({descripcion:resCorreccion.nuevaDescripcion}));
+            setDistribucionSemanal(resCorreccion.distribucion);
           }
         });
         // FIX: pregunta EXPLICITA y determinista (nunca inferida por hora ni decidida por el LLM)

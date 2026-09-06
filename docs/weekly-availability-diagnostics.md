@@ -15,6 +15,10 @@ unsupported discipline, so the logger does not invent `unsupported_category` or 
 The planner response adds only `reason`, `discipline`, and `resolvedType` alongside the existing
 code and `retryable:false`. No acceptance rules or source precedence change.
 
+The legacy day-format boundary now recognizes weekday-only comma strings before
+the strict calendar predicate. Unsupported strings still produce this event with
+their original runtime shape (never their text). See `legacy-training-availability-audit.md`.
+
 ## Confirmed independent debt
 
 The Week Planner interpolates `usuarioPlanner.distribucion_semanal` directly into its prompt.

@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { canonicalAvailability } from '../sports/trainingAvailability';
+import { normalizeTrainingAvailability } from '../sports/trainingAvailability';
 import { weeklyAvailabilityFailure } from './weeklyAvailabilityDiagnostics';
 import { buildPrescriptionScope, canonicalDiscipline, resolveProfileDisciplines } from '../sports/prescriptionScope';
 import { aplicarTrainingFrequencySafetyNet, calcularFrecuenciaRealRelativa } from '../sports/trainingFrequencySafetyNet';
@@ -21,11 +21,12 @@ async function context(db: any, codigo: string) {
   try { dist = typeof profile.distribucion_semanal === 'string' ? JSON.parse(profile.distribucion_semanal) : profile.distribucion_semanal; }
   catch { throw new Error('CALENDAR_AVAILABILITY_INVALID'); }
   if (!dist || typeof dist !== 'object' || Array.isArray(dist)) throw new Error('CALENDAR_AVAILABILITY_REQUIRED');
-  const allowed: Record<string, string[] | null> = {};
+  const allowed: Record<string, string[]> = {};
   for (const discipline of scope.scope.managedDisciplines) {
     const sources = t.data.filter((s: any) => s.owner === 'forge' && canonicalDiscipline(s.disciplina) === discipline && s.dias != null);
-    const value = sources.length ? sources.flatMap((s: any) => s.dias) : canonicalAvailability(dist, discipline,
-      value => Array.isArray(value) && value.every(v => typeof v === 'string') ? value.map(calendarKey) : null).days;
+    const normalized = sources.length ? null : normalizeTrainingAvailability(dist, [discipline]);
+    const value = sources.length ? sources.flatMap((s: any) => s.dias)
+      : normalized?.ok ? normalized.availability[discipline] : null;
     if (!Array.isArray(value) || value.some(v => typeof v !== 'string')) throw weeklyAvailabilityFailure(dist, discipline, scope.scope, sources, value);
     allowed[discipline] = value.map(calendarKey);
   }

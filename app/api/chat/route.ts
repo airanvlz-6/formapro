@@ -1,4 +1,5 @@
 import { issueWeeklyCalendar, assertWeeklyCalendar, assertCalendarMutation } from "@/lib/planning/weeklyCalendarAuthority";
+import { normalizeAvailabilityForStorage } from "@/lib/sports/trainingAvailability";
 import { disabledLegacyOperation, projectLegacyCreate, projectLegacyUpdate } from "@/lib/auth/legacyContainment";
 import { getCanonicalPhysiologyHistory } from "@/lib/physiology/getCanonicalPhysiology";
 import { prepareRecoveryContext, assertRecoveryIdentity, RecoveryReadError, type RecoveryContext } from "@/lib/physiology/recoveryContext";
@@ -912,7 +913,8 @@ Extrae SOLO datos que el mensaje contenga explicitamente, nunca inventes valores
 
       // Guardar lo que se haya capturado, de forma incremental (nunca sobrescribe con vacio lo que ya existia)
       if (extraido.dias_disponibles?.length > 0) {
-        await supabase.from("usuarios").update({ distribucion_semanal: JSON.stringify({ disponibilidad: extraido.dias_disponibles.join(", ") }) }).eq("codigo", codigo);
+        const availability = normalizeAvailabilityForStorage({ disponibilidad: extraido.dias_disponibles });
+        if (availability) await supabase.from("usuarios").update({ distribucion_semanal: JSON.stringify(availability) }).eq("codigo", codigo);
       }
       if (extraido.disciplina_externa && extraido.dias_externos?.length > 0) {
         await supabase.from("athlete_training_sources").upsert({
@@ -990,8 +992,9 @@ if (action === "verificar_cambio_modo") {
       const perfilActualizado = { ...(usuarioParaCampo?.perfil || {}), [definicionCampo.storageKey]: value };
       await supabase.from("usuarios").update({ perfil: perfilActualizado }).eq("codigo", codigo);
     } else if (definicionCampo.storageTarget === "distribucion") {
-      const diasTexto = Array.isArray(value) ? value.join(", ") : value;
-      await supabase.from("usuarios").update({ distribucion_semanal: JSON.stringify({ disponibilidad: diasTexto }) }).eq("codigo", codigo);
+      const availability = normalizeAvailabilityForStorage({ disponibilidad: value });
+      if (!availability) return NextResponse.json({ ok: false, code: 'AVAILABILITY_FORMAT_INVALID', retryable: false }, { status: 422 });
+      await supabase.from("usuarios").update({ distribucion_semanal: JSON.stringify(availability) }).eq("codigo", codigo);
     } else if (definicionCampo.storageTarget === "training_source_forge") {
       // disciplina_forge y dias_forge se acumulan en la MISMA fila (upsert incremental)
       const { data: fuenteForgeExistente } = await supabase.from("athlete_training_sources").select("*").eq("user_codigo", codigo).eq("owner", "forge").order("created_at", { ascending: false }).limit(1).maybeSingle();
@@ -1427,14 +1430,9 @@ ${ultimos}`;
             // de "metadatos del cambio" ({cambio, anterior, actual}) en vez de la distribucion real
             // ({box:[...], pista:[...]}). Guardar el formato incorrecto rompe silenciosamente todo el
             // Blueprint Acceptance Validator, que no puede extraer ningun dia de una estructura invalida.
-            let distParaValidar = extracted.distribucion_semanal;
-            try {
-              if (typeof distParaValidar === "string") distParaValidar = JSON.parse(distParaValidar);
-            } catch { distParaValidar = null; }
-            const tieneFormatoValido = distParaValidar && typeof distParaValidar === "object" &&
-              Object.entries(distParaValidar).some(([k, v]) => k !== "observaciones" && k !== "cambio" && k !== "anterior" && k !== "actual" && Array.isArray(v));
-            if (tieneFormatoValido) {
-              updates.distribucion_semanal = extracted.distribucion_semanal;
+            const distParaValidar = normalizeAvailabilityForStorage(extracted.distribucion_semanal);
+            if (distParaValidar) {
+              updates.distribucion_semanal = JSON.stringify(distParaValidar);
             } else {
               console.error("🚨 RECHAZADO distribucion_semanal con formato invalido (no es {clave:[dias]}):", JSON.stringify(extracted.distribucion_semanal));
             }
@@ -5069,9 +5067,12 @@ Responde SOLO el JSON, sin texto adicional.`;
       const extraido = JSON.parse(correccionMatch[0]);
 
       if (extraido.hayCambio && extraido.nuevaDescripcion) {
-        await supabase.from("usuarios").update({ distribucion_semanal: JSON.stringify({ descripcion: extraido.nuevaDescripcion }) }).eq("codigo", codigo);
+        const availability = normalizeAvailabilityForStorage(extraido.nuevaDescripcion);
+        if (!availability) return NextResponse.json({ ok: false, detectado: true, actualizado: false, code: 'AVAILABILITY_FORMAT_INVALID', retryable: false });
+        const distribucion = JSON.stringify(availability);
+        await supabase.from("usuarios").update({ distribucion_semanal: distribucion }).eq("codigo", codigo);
         console.log(`🛡️ SAFETY NET DISPONIBILIDAD: ${codigo} — "${extraido.nuevaDescripcion}"`);
-        return NextResponse.json({ ok: true, detectado: true, actualizado: true, nuevaDescripcion: extraido.nuevaDescripcion });
+        return NextResponse.json({ ok: true, detectado: true, actualizado: true, nuevaDescripcion: extraido.nuevaDescripcion, distribucion });
       }
       return NextResponse.json({ ok: true, detectado: false });
     } catch (err: any) {
@@ -5092,9 +5093,12 @@ Responde SOLO el JSON, sin texto adicional.`;
     // el jueves ESTA semana") no deberia asumirse como permanente para siempre. Se elimina el
     // campo, dejando que la propia pregunta de "¿sigue igual tu disponibilidad?" de cada semana
     // sea el punto real de confirmacion/correccion, sin arrastrar un cambio antiguo indefinidamente.
-    await supabase.from("usuarios").update({ distribucion_semanal: JSON.stringify({ descripcion }) }).eq("codigo", codigo);
+    const availability = normalizeAvailabilityForStorage(descripcion);
+    if (!availability) return NextResponse.json({ ok: false, code: 'AVAILABILITY_FORMAT_INVALID', retryable: false }, { status: 422 });
+    const distribucion = JSON.stringify(availability);
+    await supabase.from("usuarios").update({ distribucion_semanal: distribucion }).eq("codigo", codigo);
     console.log(`🛡️ DISPONIBILIDAD ACTUALIZADA (via tag del Coach): ${codigo} — "${descripcion}"`);
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, distribucion });
   }
 
   if (action === "registrar_debilidad_dev") {

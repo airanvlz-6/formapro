@@ -2,7 +2,7 @@ import type { CanonicalRestrictions } from '../athlete/getCanonicalRestrictions'
 import { buildPrescriptionScope, canonicalDiscipline, normalizeTrainingKey, resolveProfileDisciplines, type TrainingSource } from './prescriptionScope';
 import { buildAllowedTrainingContract, EXPOSURE_LIMITATIONS, type ContractResult, type ExternalLoadContext } from './allowedTrainingContract';
 import { buildExposureReport } from './exposureEngine';
-import { canonicalAvailability } from './trainingAvailability';
+import { normalizeTrainingAvailability } from './trainingAvailability';
 
 type StoredProfile = { modo_entrada?: string; especialidad?: string; categoria?: string; distribucion_semanal?: unknown };
 function distribution(value: unknown): Record<string, unknown> {
@@ -34,11 +34,9 @@ export async function prepareSessionTrainingContract(db: any, userCodigo: string
     if (!scope.scope.managedDisciplines.includes(discipline)) return { ok: false, errors: ['DISCIPLINE_OUTSIDE_MANAGED_SCOPE'] };
     const own = sources.filter(s => s.activo && s.owner === 'forge' && canonicalDiscipline(s.disciplina) === discipline);
     const ownDays = own.flatMap(s => s.dias == null ? [] : days(s.dias) || []);
-    const distAvailability = canonicalAvailability(dist, discipline, value => {
-      const list = typeof value === 'string' ? value.split(',') : value;
-      return Array.isArray(list) && list.every(d => typeof d === 'string') ? list.map(normalizeTrainingKey) : null;
-    });
-    const availableDays = own.some(s => s.dias != null) ? ownDays : distAvailability.found ? distAvailability.days ?? []
+    const distAvailability = normalizeTrainingAvailability(dist, [discipline]);
+    const availableDays = own.some(s => s.dias != null) ? ownDays : distAvailability.ok ? distAvailability.availability[discipline]
+      : distAvailability.reason !== 'missing' ? []
       : scope.scope.mode === 'coach' ? days(dist.dias ?? dist.disponibilidad) : null;
     // Focus never guesses its delegated calendar when it has not been recorded.
     if (scope.scope.mode === 'focus' && availableDays === null) return { ok: false, errors: ['FOCUS_AVAILABILITY_UNRESOLVED'] };

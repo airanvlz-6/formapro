@@ -1,3 +1,4 @@
+import { validateStructureSemantics } from './structureSemantics';
 import { validateAllowedTrainingContract, type AllowedTrainingContract } from './allowedTrainingContract';
 import { MOVEMENT_LIBRARY } from './movementLibrary';
 import { WORKOUT_STRUCTURE_LIBRARY } from './workoutStructureLibrary';
@@ -86,11 +87,7 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
   const structure = Object.hasOwn(WORKOUT_STRUCTURE_LIBRARY, p.structureId) ? WORKOUT_STRUCTURE_LIBRARY[p.structureId] : undefined;
   if (!structure || !contract.allowedStructureIds.includes(p.structureId) || structure.discipline !== contract.discipline) violations.push('STRUCTURE_NOT_ALLOWED');
   const main = p.blocks[1].movements;
-  // SPORT_PRESCRIPTION_RULE: only constraints proven by canonical format semantics.
-  if (structure?.formato === 'couplet' && main.length !== 2) violations.push('STRUCTURE_REQUIRES_TWO_MOVEMENTS');
-  if (structure?.formato === 'triplet' && main.length !== 3) violations.push('STRUCTURE_REQUIRES_THREE_MOVEMENTS');
-  if (structure && (structure.formato === 'continuous' || structure.id === 'continuo_carrera')
-    && main.some(m => (m.prescription.sets ?? 1) > 1 || (m.prescription.restSeconds ?? 0) > 0)) violations.push('STRUCTURE_CONTINUOUS_INTERRUPTED');
+  violations.push(...validateStructureSemantics(structure, main));
   const restrictions = contract.restrictionsSnapshot;
   const notes = [...restrictions.restrictions, ...restrictions.reassessments];
   const flags = activeRestrictionFlags(notes);

@@ -1,6 +1,6 @@
 import type { CanonicalRestrictions } from '../athlete/getCanonicalRestrictions';
 import { buildPrescriptionScope, canonicalDiscipline, normalizeTrainingKey, resolveProfileDisciplines, type TrainingSource } from './prescriptionScope';
-import { buildAllowedTrainingContract, EXPOSURE_LIMITATIONS, type ContractResult, type ExternalLoadContext } from './allowedTrainingContract';
+import { buildAllowedTrainingContract, EXPOSURE_LIMITATIONS, type ContractInput, type ContractResult, type ExternalLoadContext } from './allowedTrainingContract';
 import { buildExposureReport } from './exposureEngine';
 import { normalizeTrainingAvailability } from './trainingAvailability';
 
@@ -18,9 +18,9 @@ function days(value: unknown): string[] | null {
 /** Read-only server adapter. Request fields express intent, never mode or ownership.
  * buildFocusContext remains presentation context and is deliberately not called here.
  */
-export async function prepareSessionTrainingContract(db: any, userCodigo: string, profile: StoredProfile,
+export async function prepareSessionTrainingContext(db: any, userCodigo: string, profile: StoredProfile,
   request: { targetWeekStart: string; day: string; discipline: string; stimulus: unknown },
-  restrictions: CanonicalRestrictions): Promise<ContractResult> {
+  restrictions: CanonicalRestrictions): Promise<{ ok: true; input: ContractInput } | { ok: false; errors: string[] }> {
   try {
     const sourceRead = await db.from('athlete_training_sources').select('disciplina,owner,activo,dias').eq('user_codigo', userCodigo).eq('activo', true);
     if (sourceRead.error || !Array.isArray(sourceRead.data)) return { ok: false, errors: ['SCOPE_SOURCES_READ_FAILED'] };
@@ -55,9 +55,17 @@ export async function prepareSessionTrainingContract(db: any, userCodigo: string
     const completed = history.data.flatMap((p: { sessions?: any[] }) => (p.sessions || []).filter(s => s.completada && s.descripcion_real)
       .map(s => ({ fecha: s.dia, tipo: s.tipo, titulo: s.titulo || '', descripcionReal: s.descripcion_real })));
     const report = buildExposureReport(completed, discipline);
-    return buildAllowedTrainingContract({ prescriptionScope: scope.scope, targetWeekStart: request.targetWeekStart,
+    return { ok: true, input: { prescriptionScope: scope.scope, targetWeekStart: request.targetWeekStart,
       targetDay: normalizeTrainingKey(request.day), discipline, stimulus: request.stimulus,
       restrictionsSnapshot: restrictions, externalLoadContext, exposureContext: { source: 'legacy_completed_weekly_rows', report, limitations: EXPOSURE_LIMITATIONS },
-      availableDays, source: 'weekly_session_builder' });
+      availableDays, source: 'weekly_session_builder' } };
   } catch { return { ok: false, errors: ['CONTRACT_CONTEXT_READ_FAILED'] }; }
+}
+
+/** Existing session entry point; context loading and pure feasibility can also be used separately. */
+export async function prepareSessionTrainingContract(db: any, userCodigo: string, profile: StoredProfile,
+  request: { targetWeekStart: string; day: string; discipline: string; stimulus: unknown },
+  restrictions: CanonicalRestrictions): Promise<ContractResult> {
+  const context = await prepareSessionTrainingContext(db, userCodigo, profile, request, restrictions);
+  return context.ok ? buildAllowedTrainingContract(context.input) : context;
 }

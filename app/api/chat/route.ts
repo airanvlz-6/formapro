@@ -2275,6 +2275,9 @@ Si un dia es descanso, usa tipo "descanso" (los demas campos pueden quedar vacio
         code: 'CALENDAR_DAY_UNAVAILABLE', violations: err.availabilityViolations,
       });
       return NextResponse.json({ ok: false, error: "Error en Week Planner: " + err.message, code: err.message, retryable: false,
+        ...(err.message === 'CALENDAR_AVAILABILITY_UNRESOLVED' && err.availabilityDiagnostic
+          ? { reason: err.availabilityDiagnostic.reason, discipline: err.availabilityDiagnostic.discipline,
+            resolvedType: err.availabilityDiagnostic.resolvedType } : {}),
         ...(err.availabilityViolations?.length ? { availabilityViolations: err.availabilityViolations } : {}) });
     }
   }

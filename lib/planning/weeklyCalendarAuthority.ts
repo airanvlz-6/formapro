@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { canonicalAvailability } from '../sports/trainingAvailability';
+import { weeklyAvailabilityFailure } from './weeklyAvailabilityDiagnostics';
 import { buildPrescriptionScope, canonicalDiscipline, resolveProfileDisciplines } from '../sports/prescriptionScope';
 import { aplicarTrainingFrequencySafetyNet, calcularFrecuenciaRealRelativa } from '../sports/trainingFrequencySafetyNet';
 import { calendarKey, calendarState, validateWeeklyCalendar } from './weeklyCalendar';
@@ -25,7 +26,7 @@ async function context(db: any, codigo: string) {
     const sources = t.data.filter((s: any) => s.owner === 'forge' && canonicalDiscipline(s.disciplina) === discipline && s.dias != null);
     const value = sources.length ? sources.flatMap((s: any) => s.dias) : canonicalAvailability(dist, discipline,
       value => Array.isArray(value) && value.every(v => typeof v === 'string') ? value.map(calendarKey) : null).days;
-    if (!Array.isArray(value) || value.some(v => typeof v !== 'string')) throw new Error('CALENDAR_AVAILABILITY_UNRESOLVED');
+    if (!Array.isArray(value) || value.some(v => typeof v !== 'string')) throw weeklyAvailabilityFailure(dist, discipline, scope.scope, sources, value);
     allowed[discipline] = value.map(calendarKey);
   }
   const frequency = calcularFrecuenciaRealRelativa(profile.workout_history || [], Number.parseInt(profile.perfil?.dias || '0'));

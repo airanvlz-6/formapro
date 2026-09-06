@@ -1,3 +1,4 @@
+import { intentMatchingMovementIds } from './prescriptionIntent';
 import { validateAllowedTrainingContract, type AllowedTrainingContract } from './allowedTrainingContract';
 import { parseStructuredSession, validateSessionAgainstTrainingContract, renderContractSession, STRUCTURED_SESSION_INSTRUCTIONS } from './structuredSession';
 import { detectarSesionDuplicada, type SesionParaComparar } from '../validators/sessionDuplicationValidator';
@@ -13,7 +14,9 @@ export async function generateContractSession(contract: AllowedTrainingContract,
   const preflight = validateAllowedTrainingContract(authority);
   if (!preflight.ok) return { ok: false as const, code: 'TRAINING_CONTRACT_INVALID', violations: preflight.errors };
   const recent = structuredClone(history);
-  const prompt = `${STRUCTURED_SESSION_INSTRUCTIONS}\nCONTRACT:\n${JSON.stringify(authority)}\nContexto no autoritativo:\n${context}\nHistorial para evitar duplicación:\n${JSON.stringify(recent)}`;
+  const intentInstruction = authority.intent?.kind === 'main_pattern'
+    ? `\nIntent canónico: el bloque main debe incluir al menos un ID de ${JSON.stringify(intentMatchingMovementIds(authority.intent, authority.allowedMovementIds))}. Otros IDs permitidos pueden acompañarlo. Un movimiento solo en warmup/cooldown no satisface el intent.` : '';
+  const prompt = `${STRUCTURED_SESSION_INSTRUCTIONS}\nCONTRACT:\n${JSON.stringify(authority)}${intentInstruction}\nContexto no autoritativo:\n${context}\nHistorial para evitar duplicación:\n${JSON.stringify(recent)}`;
   for (let attempt = 0; attempt < 2; attempt++) {
     let raw;
     try { raw = await complete(prompt + (attempt ? '\nLa primera propuesta fue rechazada por dosis, estructura o duplicación. Devuelve una composición válida dentro del MISMO contrato; no repitas la propuesta rechazada.' : '')); }

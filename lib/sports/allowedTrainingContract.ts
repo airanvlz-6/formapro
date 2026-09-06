@@ -1,3 +1,4 @@
+import type { PrescriptionIntent } from './prescriptionIntent';
 import type { CanonicalRestrictions } from '../athlete/getCanonicalRestrictions';
 import { MOVEMENT_LIBRARY } from './movementLibrary';
 import { WORKOUT_STRUCTURE_LIBRARY } from './workoutStructureLibrary';
@@ -20,6 +21,8 @@ export type ContractInput = {
   targetDay: string;
   discipline: string;
   stimulus: unknown;
+  /** Server-owned canonical input only; never inferred from title/focus. */
+  intent?: PrescriptionIntent;
   restrictionsSnapshot: CanonicalRestrictions;
   externalLoadContext: ExternalLoadContext;
   exposureContext: { source: 'legacy_completed_weekly_rows'; report: ExposureReport; limitations: readonly string[] };
@@ -27,7 +30,7 @@ export type ContractInput = {
   source: 'weekly_session_builder';
 };
 export type AllowedTrainingContract = Omit<ContractInput, 'stimulus'> & {
-  contractVersion: 1;
+  contractVersion: 1 | 2;
   stimulusId: string;
   allowedMovementIds: string[];
   allowedStructureIds: string[];
@@ -45,7 +48,7 @@ function buildContract(input: ContractInput): ContractResult {
   const pool = evaluateTrainingFeasibility(input);
   if (!pool.resolved || !pool.feasible) return { ok: false, errors: pool.errors };
   const { stimulus: _intent, ...context } = input;
-  const contract: AllowedTrainingContract = structuredClone({ ...context, contractVersion: 1, stimulusId: pool.stimulusId,
+  const contract: AllowedTrainingContract = structuredClone({ ...context, contractVersion: Object.hasOwn(input, 'intent') ? 2 : 1, stimulusId: pool.stimulusId,
     allowedMovementIds: pool.allowedMovementIds, allowedStructureIds: pool.allowedStructureIds,
     rankedCandidates: pool.rankedCandidates,
     restrictionFiltering: pool.restrictionFiltering,
@@ -58,7 +61,9 @@ export function validateAllowedTrainingContract(contract: AllowedTrainingContrac
   try {
     const input: ContractInput = { ...contract, stimulus: contract.stimulusId };
     const errors = feasibilityInputErrors(input);
-    if (contract.contractVersion !== 1) errors.push('CONTRACT_VERSION_INVALID');
+    if (contract.contractVersion !== 1 && contract.contractVersion !== 2) errors.push('CONTRACT_VERSION_INVALID');
+    if (contract.contractVersion === 1 && Object.hasOwn(contract, 'intent')) errors.push('INTENT_VERSION_MISMATCH');
+    if (contract.contractVersion === 2 && !Object.hasOwn(contract, 'intent')) errors.push('INTENT_REQUIRED');
     const stimulus = resolveTrainingStimulus(contract.discipline, contract.stimulusId);
     if (stimulus.status !== 'resolved') errors.push(stimulus.reason);
     for (const [ids, library, kind] of [[contract.allowedMovementIds, MOVEMENT_LIBRARY, 'MOVEMENT'], [contract.allowedStructureIds, WORKOUT_STRUCTURE_LIBRARY, 'STRUCTURE']] as const) {

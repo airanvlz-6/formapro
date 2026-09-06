@@ -1,3 +1,4 @@
+import { resolvePrescriptionIntent, intentMatchingMovementIds, type PrescriptionIntent } from './prescriptionIntent';
 import type { ContractInput } from './allowedTrainingContract';
 import { MOVEMENT_LIBRARY, STIMULUS_LIBRARY, rankearCandidatos } from './movementLibrary';
 import { WORKOUT_STRUCTURE_LIBRARY, STRUCTURES_BY_STIMULUS } from './workoutStructureLibrary';
@@ -42,6 +43,10 @@ export function feasibilityInputErrors(input: ContractInput): string[] {
   const exposure = input.exposureContext;
   if (!exposure || exposure.source !== 'legacy_completed_weekly_rows' || exposure.report?.disciplina !== input.discipline || !Array.isArray(exposure.report?.exposiciones)
     || exposure.report.exposiciones.some(e => !Object.hasOwn(MOVEMENT_LIBRARY, e.movementId) || !Number.isSafeInteger(e.vecesUltimas4Semanas) || e.vecesUltimas4Semanas < 0)) errors.push('EXPOSURE_INVALID');
+  if (Object.hasOwn(input, 'intent')) {
+    const intent = resolvePrescriptionIntent(input.intent);
+    if (!intent.ok) errors.push(...intent.errors);
+  }
   if (input.source !== 'weekly_session_builder') errors.push('CONTRACT_SOURCE_INVALID');
   return [...new Set(errors)];
 }
@@ -59,7 +64,7 @@ function evaluatePools(input: ContractInput, stimulusId: string) {
 export type TrainingFeasibility =
   | { resolved: false; feasible: false; errors: string[] }
   | ({ resolved: true; feasible: boolean; errors: string[]; discipline: string; stimulusId: string;
-      allowedMovementIds: string[]; allowedStructureIds: string[]; satisfiableStructureIds: string[];
+      intent: PrescriptionIntent; intentMovementIds: string[]; allowedMovementIds: string[]; allowedStructureIds: string[]; satisfiableStructureIds: string[];
       rankedCandidates: { movementId: string; recentExposures: number }[] } & ReturnType<typeof evaluatePools>);
 
 /** Pure evaluation of already loaded canonical context. No clock, IO, session or policy decisions.
@@ -72,15 +77,22 @@ export function evaluateTrainingFeasibility(input: ContractInput): TrainingFeasi
     const stimulus = resolveTrainingStimulus(input.discipline, input.stimulus);
     if (stimulus.status === 'unresolved') errors.push(stimulus.reason);
     if (errors.length || stimulus.status !== 'resolved') return { resolved: false, feasible: false, errors: [...new Set(errors)] };
+    const admittedIntent = resolvePrescriptionIntent(Object.hasOwn(input, 'intent') ? input.intent : { kind: 'stimulus_only' });
+    if (!admittedIntent.ok) return { resolved: false, feasible: false, errors: admittedIntent.errors };
+    const intent = admittedIntent.intent;
     const pool = evaluatePools(input, stimulus.stimulusId);
     const allowedMovementIds = pool.movements.map(m => m.id).sort();
     const allowedStructureIds = [...pool.structures].sort();
-    const satisfiableStructureIds = allowedStructureIds.filter(id => isStructureSatisfiable(WORKOUT_STRUCTURE_LIBRARY[id], allowedMovementIds));
+    const intentMovementIds = intentMatchingMovementIds(intent, allowedMovementIds);
+    // Any matching ID can occupy a main slot; the remaining distinct slots may be accessories.
+    const satisfiableStructureIds = allowedStructureIds.filter(id => intentMovementIds.length > 0
+      && isStructureSatisfiable(WORKOUT_STRUCTURE_LIBRARY[id], allowedMovementIds));
     if (!allowedMovementIds.length) errors.push('MOVEMENT_POOL_EMPTY');
+    else if (!intentMovementIds.length) errors.push('INTENT_POOL_EMPTY');
     if (!allowedStructureIds.length) errors.push('STRUCTURE_POOL_EMPTY');
-    else if (allowedMovementIds.length && !satisfiableStructureIds.length) errors.push('STRUCTURE_SPACE_UNSATISFIABLE');
+    else if (intentMovementIds.length && !satisfiableStructureIds.length) errors.push('STRUCTURE_SPACE_UNSATISFIABLE');
     return { resolved: true, feasible: !errors.length, errors, discipline: input.discipline, stimulusId: stimulus.stimulusId,
-      ...pool, allowedMovementIds, allowedStructureIds, satisfiableStructureIds,
+      ...pool, intent, intentMovementIds, allowedMovementIds, allowedStructureIds, satisfiableStructureIds,
       rankedCandidates: pool.movements.map(m => ({ movementId: m.id, recentExposures: m.vecesExpuestoReciente })) };
   } catch { return { resolved: false, feasible: false, errors: ['CONTRACT_INPUT_MALFORMED'] }; }
 }

@@ -1,3 +1,4 @@
+import { intentMatchingMovementIds } from './prescriptionIntent';
 import { validateStructureSemantics } from './structureSemantics';
 import { validateAllowedTrainingContract, type AllowedTrainingContract } from './allowedTrainingContract';
 import { MOVEMENT_LIBRARY } from './movementLibrary';
@@ -88,6 +89,8 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
   if (!structure || !contract.allowedStructureIds.includes(p.structureId) || structure.discipline !== contract.discipline) violations.push('STRUCTURE_NOT_ALLOWED');
   const main = p.blocks[1].movements;
   violations.push(...validateStructureSemantics(structure, main));
+  if (contract.intent?.kind === 'main_pattern' && !intentMatchingMovementIds(contract.intent,
+    main.map(m => m.movementId).filter(id => contract.allowedMovementIds.includes(id))).length) violations.push('INTENT_NOT_SATISFIED');
   const restrictions = contract.restrictionsSnapshot;
   const notes = [...restrictions.restrictions, ...restrictions.reassessments];
   const flags = activeRestrictionFlags(notes);

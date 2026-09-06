@@ -1,3 +1,5 @@
+import { protectedCalendarSessionIndices } from "@/lib/planning/weeklyCalendar";
+import { planBoundedWeek } from "@/lib/planning/prepareAllowedWeeklyPlanContract";
 import { issueWeeklyCalendar, assertWeeklyCalendar, assertCalendarMutation } from "@/lib/planning/weeklyCalendarAuthority";
 import { normalizeAvailabilityForStorage } from "@/lib/sports/trainingAvailability";
 import { disabledLegacyOperation, projectLegacyCreate, projectLegacyUpdate } from "@/lib/auth/legacyContainment";
@@ -2179,104 +2181,30 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
   }
 
   if (action === "planificar_semana") {
-    // FORGE ORCHESTRATOR — Paso 2: Week Planner. Recibe el analisis del Block Analyzer y decide QUE TIPO de sesion va cada dia, sin detalle.
-    const { analisis: analisisRecibido } = datos;
-    const { data: usuarioPlanner } = await supabase.from("usuarios").select("distribucion_semanal,especialidad,categoria").eq("codigo", codigo).single();
-
-    // FORGE BLOCK MEMORY — el resumen estructurado de la semana ANTERIOR del mismo bloque, para que
-    // la Strategy pueda razonar progresion real en vez de partir de cero cada semana. Solo la mas reciente.
-    const { data: blockMemoryReciente } = await supabase.from("block_week_summary").select("*").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(1).single();
-    const sesionesNoCompletadasAnterior = blockMemoryReciente?.sesiones_no_completadas || [];
-    const blockMemoryTexto = blockMemoryReciente
-      ? `MEMORIA DEL BLOQUE (resultado de la semana anterior, semana ${blockMemoryReciente.semana_del_bloque}/${blockMemoryReciente.total_semanas_bloque} de ${blockMemoryReciente.bloque}):
-Objetivo que perseguia: ${blockMemoryReciente.objetivo_semanal}
-Resultado: ${blockMemoryReciente.resultado}
-Adherencia real: ${blockMemoryReciente.adherencia_real ?? 100}%
-${sesionesNoCompletadasAnterior.length > 0 ? `Sesiones que NO se completaron: ${sesionesNoCompletadasAnterior.map((s: any) => `${s.dia} (${s.titulo})`).join(", ")} — considera si alguna de estas debe recuperarse o compensarse esta semana, sin forzar sobrecarga.` : "Semana completada al 100%."}
-Fatiga acumulada: ${blockMemoryReciente.fatiga}
-Recuperacion: ${blockMemoryReciente.recuperacion}
-Adaptaciones ya conseguidas: ${(blockMemoryReciente.adaptaciones_conseguidas || []).join(", ") || "ninguna registrada"}
-Pendiente de trabajar: ${(blockMemoryReciente.pendiente || []).join(", ") || "nada especifico"}
-USA ESTO para decidir si progresar (subir carga/intensidad) o consolidar (mantener) esta semana — no repitas la semana anterior desde cero.`
-      : "Sin memoria de semana anterior en este bloque (primera semana o sin datos previos) — diseña la estrategia desde el objetivo general.";
-
-    // FORGE WEEKLY STRATEGY + BLUEPRINT (v2) — el modelo primero razona la ESTRATEGIA pura (sin ejercicios,
-    // sin dias), y solo despues traduce esa estrategia a un Blueprint dia por dia. Esto refleja como
-    // planifica un entrenador real: primero decide la curva de carga y las prioridades, despues asigna dias.
-    const plannerPrompt = `Eres un entrenador experto de ${usuarioPlanner?.especialidad || usuarioPlanner?.categoria} diseñando la estrategia de una semana completa de entrenamiento.
-
-${blockMemoryTexto}
-
-ANÁLISIS DEL BLOQUE:
-${JSON.stringify(analisisRecibido)}
-
-DISPONIBILIDAD DEL ATLETA (respetar exactamente, nunca reinterpretar):
-${usuarioPlanner?.distribucion_semanal || "sin restricciones especificadas, asume disponibilidad flexible"}
-
-PROCESO EN DOS FASES:
-
-FASE 1 — ESTRATEGIA (razona esto PRIMERO, antes de pensar en dias concretos):
-- ¿Qué adaptación quieres producir en el atleta durante estos 7 dias?
-- ¿Qué cualidades hay que desarrollar y en qué proporción (potencia, motor/cardio, técnica, fuerza, resistencia)?
-- ¿Qué curva de carga tiene sentido (alta-media-alta-baja-media-alta-baja, o la que decidas)?
-- ¿Cuántos días merece la debilidad prioritaria según su naturaleza e impacto real — usa tu criterio,
-  nunca un número fijo predeterminado? ¿Cómo se integra sin monopolizar la semana?
-- ¿Qué restricciones de recuperación hay que respetar (no repetir el mismo tipo de fatiga en días consecutivos)?
-
-FASE 2 — BLUEPRINT (traduce la estrategia de la Fase 1 a cada día concreto):
-- Asigna cada día según la disponibilidad real del atleta.
-- Cada día debe indicar explícitamente su relación con el día anterior y siguiente (qué fatiga hereda, qué debe evitar).
-- La disciplina propia de la especialidad debe ocupar la mayor parte del volumen — las debilidades son complemento.
-
-IMPORTANTE: en el campo intensity, escribe el rango como texto simple sin símbolo % literal (ej: "75 a 80 por ciento RM").
-
-Responde SOLO con este JSON válido, sin texto adicional ni markdown, incluyendo AMBAS fases:
-{"strategy":{"adaptacion_principal":"frase de la adaptacion principal buscada esta semana","adaptacion_secundaria":"frase de la adaptacion secundaria","riesgo_controlado":"que riesgo/fatiga se esta gestionando activamente esta semana","criterio_general":"regla general que conecta los 7 dias, ej: no juntar dos sesiones neurales maximas consecutivas","cualidades_prioritarias":["cualidad1","cualidad2"],"dias_debilidad_prioritaria":número,"justificacion_debilidad":"por que ese numero de dias tiene sentido"},"sessions":[{"dia":"lunes","tipo":"carrera|box|fuerza|descanso|otro","titulo_breve":"3-5 palabras","focus":"movimiento o cualidad principal","volume":"bajo|medio|alto","intensity":"descripcion breve sin simbolo %","conditioning":"ninguno|corto|largo","relacion_dia_anterior":"que hereda o evita del dia previo","trabaja_debilidad":true_o_false},{"dia":"martes","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"...","relacion_dia_anterior":"...","trabaja_debilidad":true_o_false},{"dia":"miercoles","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"...","relacion_dia_anterior":"...","trabaja_debilidad":true_o_false},{"dia":"jueves","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"...","relacion_dia_anterior":"...","trabaja_debilidad":true_o_false},{"dia":"viernes","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"...","relacion_dia_anterior":"...","trabaja_debilidad":true_o_false},{"dia":"sabado","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"...","relacion_dia_anterior":"...","trabaja_debilidad":true_o_false},{"dia":"domingo","tipo":"...","titulo_breve":"...","focus":"...","volume":"...","intensity":"...","conditioning":"...","relacion_dia_anterior":"...","trabaja_debilidad":true_o_false}]}
-Añade a CADA sesión de entrenamiento un campo "stimulusId" con un ID exacto de este catálogo y de su disciplina: ${JSON.stringify(Object.values(STIMULUS_LIBRARY).map(e => ({ id: e.id, discipline: e.discipline })))}.
-No inventes IDs ni utilices el texto focus como sustituto de stimulusId. El servidor comprobará cobertura y compatibilidad antes de construir la sesión.
-Si un dia es descanso, usa tipo "descanso" (los demas campos pueden quedar vacios).`;
-
     try {
-      const plannerRes = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1800, messages: [{ role: "user", content: plannerPrompt }] }),
-      });
-      const plannerData = await plannerRes.json();
-      const plannerTexto = plannerData.content?.map((b: any) => b.text || "").join("") || "{}";
-      const plannerClean = plannerTexto.replace(/```json|```/g, "").trim();
-      // Parsing robusto: extraer solo el bloque JSON aunque venga rodeado de texto conversacional
-      const plannerMatch = plannerClean.match(/\{[\s\S]*\}/);
-      if (!plannerMatch) throw new Error("Week Planner no devolvio JSON valido");
-      const estructuraSemana = JSON.parse(plannerMatch[0]);
-
+      if (datos.weeklyContractVersion !== 1) throw new Error("WEEKLY_CLIENT_UPGRADE_REQUIRED");
       const generation = resolveWeeklyGeneration(datos.generationToken, codigo);
       if (![generation.currentWeek, generation.nextWeek].includes(datos.targetWeekStart)) throw new Error("CALENDAR_TARGET_INVALID");
-      const focus = await buildFocusContext(supabase, codigo);
-      const today = resolveCompletionDate(new Date().toISOString())!.date;
-      const order = ['lunes','martes','miercoles','jueves','viernes','sabado','domingo'];
-      estructuraSemana.sessions = estructuraSemana.sessions.map((session: any) => {
-        const day = (session.dia || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-        const completed = generation.snapshots[datos.targetWeekStart]?.sessions.find((s: any) => s.completada && s.dia.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === day);
-        if (completed) return completed;
-        const date = new Date(datos.targetWeekStart + 'T12:00:00Z'); date.setUTCDate(date.getUTCDate() + order.indexOf(day));
-        if (date.toISOString().slice(0,10) < today || (date.toISOString().slice(0,10) === today && datos.empezarHoy === false)) return { dia: day, tipo: 'sin_registrar', titulo: 'Sin registrar', descripcion: 'No aplica — esta planificación comienza a partir de hoy.' };
-        const external = focus.esModoFocus && focus.disciplinasExternas.find((d: any) => (d.dias || []).some((v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === day));
-        if (external) return admitSessionContent(session, codigo, datos.targetWeekStart, { externalDiscipline: external.disciplina });
-        return session; // Availability never converts REST into delegated training.
+      const result = await planBoundedWeek(supabase, codigo, {
+        targetWeekStart: datos.targetWeekStart, today: resolveCompletionDate(new Date().toISOString())!.date,
+        empezarHoy: datos.empezarHoy !== false, snapshot: generation.snapshots[datos.targetWeekStart],
+      }, async (prompt: string) => {
+        const response = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+          body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1800, messages: [{ role: "user", content: prompt }] }),
+        });
+        if (!response.ok) throw new Error("LLM_REQUEST_FAILED");
+        const output = await response.json();
+        return output.content?.map((b: any) => b.text || "").join("") || "";
       });
-      estructuraSemana.calendarReceipt = await issueWeeklyCalendar(supabase, codigo, datos.targetWeekStart, estructuraSemana.sessions);
-      console.log("🔍 DEBUG estructuraSemana.sessions DESPUES de correccion:", JSON.stringify(estructuraSemana.sessions?.map((s: any) => ({ dia: s.dia, tipo: s.tipo }))));
-      return NextResponse.json({ ok: true, estructura: estructuraSemana });
+      if (!result.ok) return NextResponse.json({ ...result, retryable: false });
+      const calendarReceipt = await issueWeeklyCalendar(supabase, codigo, datos.targetWeekStart, result.estructura.sessions);
+      return NextResponse.json({ ...result, estructura: { ...result.estructura, calendarReceipt } });
     } catch (err: any) {
-      if (err.availabilityViolations?.length) console.warn('Week Planner calendar rejection', {
-        code: 'CALENDAR_DAY_UNAVAILABLE', violations: err.availabilityViolations,
-      });
       return NextResponse.json({ ok: false, error: "Error en Week Planner: " + err.message, code: err.message, retryable: false,
         ...(err.message === 'CALENDAR_AVAILABILITY_UNRESOLVED' && err.availabilityDiagnostic
           ? { reason: err.availabilityDiagnostic.reason, discipline: err.availabilityDiagnostic.discipline,
-            resolvedType: err.availabilityDiagnostic.resolvedType } : {}),
-        ...(err.availabilityViolations?.length ? { availabilityViolations: err.availabilityViolations } : {}) });
+            resolvedType: err.availabilityDiagnostic.resolvedType } : {}) });
     }
   }
 
@@ -2309,7 +2237,9 @@ Si un dia es descanso, usa tipo "descanso" (los demas campos pueden quedar vacio
       if (![generation.currentWeek, generation.nextWeek].includes(datos.targetWeekStart))
         return NextResponse.json({ ok: false, code: "TRAINING_CONTRACT_INVALID", errors: ["CONTRACT_TARGET_OUTSIDE_GENERATION"] });
       const generated = await generateTrainingSession(supabase, codigo,
-        { targetWeekStart: datos.targetWeekStart, day: datos.dia, discipline: datos.tipo, stimulus: datos.stimulusId },
+        { targetWeekStart: datos.targetWeekStart, day: datos.dia, discipline: datos.tipo, stimulus: datos.stimulusId,
+          ...(Object.hasOwn(datos, 'intent') ? { intent: datos.intent } : {}),
+          ...(Object.hasOwn(datos, 'state') ? { state: datos.state } : {}) },
         async (prompt: string) => {
           const response = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
@@ -4543,7 +4473,8 @@ if (action === "obtener_daily_briefing") {
     const planExistente = generation.snapshots[plan.week_start];
     const operationType = planExistente ? "regenerate_week" : "create_week";
     let weeklyEntries;
-    try { weeklyEntries = prepareWeeklyEntries(plan.sessions, planExistente); }
+    try { weeklyEntries = prepareWeeklyEntries(plan.sessions, planExistente,
+      datos.weeklyContractVersion === 1 ? protectedCalendarSessionIndices(planExistente?.sessions || []) : []); }
     catch (error: any) { return NextResponse.json({ ok: false, error: error.message, retryable: false }); }
     plan.sessions = weeklyEntries.map(entry => entrySession(entry, planExistente));
     // FORGE CANONICAL STATE — unico punto autorizado para incrementar ciclo_actual.semana: cuando se

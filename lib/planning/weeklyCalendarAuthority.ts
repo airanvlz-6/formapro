@@ -10,7 +10,7 @@ function mac(payload: string) {
   if (!key) throw new Error('CALENDAR_AUTHORITY_UNAVAILABLE');
   return createHmac('sha256', key).update('forge-week-calendar-v1:' + payload).digest('base64url');
 }
-async function context(db: any, codigo: string) {
+export async function loadWeeklyCalendarContext(db: any, codigo: string) {
   const p = await db.from('usuarios').select('modo_entrada,perfil,workout_history,distribucion_semanal,especialidad,categoria').eq('codigo', codigo).single();
   const t = await db.from('athlete_training_sources').select('disciplina,owner,activo,dias').eq('user_codigo', codigo).eq('activo', true);
   if (p.error || !p.data || t.error || !Array.isArray(t.data)) throw new Error('CALENDAR_CONTEXT_READ_FAILED');
@@ -31,10 +31,10 @@ async function context(db: any, codigo: string) {
     allowed[discipline] = value.map(calendarKey);
   }
   const frequency = calcularFrecuenciaRealRelativa(profile.workout_history || [], Number.parseInt(profile.perfil?.dias || '0'));
-  return { allowed, max: aplicarTrainingFrequencySafetyNet(7, frequency).diasEntrenoSugeridos };
+  return { profile, sources: t.data, scope: scope.scope, allowed, max: aplicarTrainingFrequencySafetyNet(7, frequency).diasEntrenoSugeridos };
 }
 export async function issueWeeklyCalendar(db: any, codigo: string, week: string, sessions: any[]) {
-  const c = await context(db, codigo);
+  const c = await loadWeeklyCalendarContext(db, codigo);
   const result = validateWeeklyCalendar(sessions, c.max, c.allowed);
   if (!result.ok) throw Object.assign(new Error(result.errors.join(',')), { availabilityViolations: result.availabilityViolations });
   const payload = Buffer.from(JSON.stringify({ codigo, week, slots: result.slots, expires: Date.now() + 30 * 60_000 })).toString('base64url');
@@ -48,14 +48,14 @@ export async function assertWeeklyCalendar(db: any, codigo: string, week: string
   if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) throw new Error('CALENDAR_RECEIPT_INVALID');
   const evidence = JSON.parse(Buffer.from(payload, 'base64url').toString());
   if (evidence.codigo !== codigo || evidence.week !== week || !Number.isFinite(evidence.expires) || Date.now() > evidence.expires) throw new Error('CALENDAR_RECEIPT_EXPIRED');
-  const c = await context(db, codigo);
+  const c = await loadWeeklyCalendarContext(db, codigo);
   const result = validateWeeklyCalendar(sessions, c.max, c.allowed, evidence.slots);
   if (!result.ok) throw new Error(result.errors.join(','));
 }
 
 /** Session edits cannot evade whole-week safety or erase an existing protected day. */
 export async function assertCalendarMutation(db: any, codigo: string, before: readonly any[], after: readonly any[]) {
-  const c = await context(db, codigo);
+  const c = await loadWeeklyCalendarContext(db, codigo);
   const protectedSlots = before.map(s => ({ day: calendarKey(s.dia), state: calendarState(s), type: s.tipo }));
   const result = validateWeeklyCalendar(after, c.max, c.allowed, protectedSlots);
   if (!result.ok) throw new Error(result.errors.join(','));

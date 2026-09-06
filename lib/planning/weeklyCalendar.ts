@@ -1,6 +1,7 @@
 /** Calendar safety, not a physiological load prescription. Availability is permission. */
 export const calendarDays = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 export type CalendarState = 'TRAIN' | 'RECOVERY' | 'REST' | 'UNAVAILABLE';
+export const isExecutableCalendarState = (state: string) => state === 'TRAIN' || state === 'RECOVERY';
 export const calendarKey = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 export function calendarState(s: Record<string, any>): CalendarState {
   if (s.tipo === 'descanso') return 'REST';
@@ -8,6 +9,10 @@ export function calendarState(s: Record<string, any>): CalendarState {
   if (s.stimulusId === 'recuperacion_activa' || (s.tipo === 'carrera' && s.titulo?.startsWith('recuperacion activa · '))) return 'RECOVERY';
   return 'TRAIN';
 }
+export const isProtectedCalendarSession = (s: Record<string, any>) => s.completada === true || ['REST', 'RECOVERY', 'UNAVAILABLE'].includes(calendarState(s));
+/** Existing identity admission accepts server-selected indices; never take these from the client. */
+export const protectedCalendarSessionIndices = (sessions: readonly Record<string, any>[]) =>
+  sessions.flatMap((session, index) => isProtectedCalendarSession(session) ? [index] : []);
 export function validateWeeklyCalendar(sessions: readonly Record<string, any>[], maxTrainingDays: number,
   allowed: Record<string, string[] | null>, protectedSlots?: { day: string; state: CalendarState; type: string }[]) {
   const errors: string[] = [];
@@ -16,7 +21,7 @@ export function validateWeeklyCalendar(sessions: readonly Record<string, any>[],
   const slots = sessions.map(s => ({ day: typeof s.dia === 'string' ? calendarKey(s.dia) : '', state: calendarState(s), type: s.tipo }));
   if (new Set(slots.map(s => s.day)).size !== 7 || slots.some(s => !calendarDays.includes(s.day))) errors.push('CALENDAR_DAYS_INVALID');
   if (!Number.isInteger(maxTrainingDays) || maxTrainingDays < 0 || maxTrainingDays > 6) errors.push('CALENDAR_LIMIT_INVALID');
-  if (slots.filter(s => s.state === 'TRAIN').length > maxTrainingDays) errors.push('CALENDAR_TRAINING_LIMIT');
+  if (slots.filter(s => isExecutableCalendarState(s.state)).length > maxTrainingDays) errors.push('CALENDAR_TRAINING_LIMIT');
   sessions.forEach((s, i) => {
     const slot = slots[i];
     if (slot.state === 'TRAIN' || slot.state === 'RECOVERY') {

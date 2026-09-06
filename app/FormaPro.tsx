@@ -955,37 +955,10 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     if(!analyzerRes?.ok) { console.log("ORCHESTRATOR: FALLO en Block Analyzer, abortando"); return null; }
     const analisis=analyzerRes.analisis;
 
-    // Paso 2: Week Planner — genera Strategy + Blueprint. Si el Blueprint Acceptance Validator lo
-    // rechaza, se REGENERA COMPLETO (no se parchean dias sueltos) — maximo 2 reintentos.
-    const distribucionParaValidar=(()=>{
-      try{ return typeof distribucionSemanal==="string"?JSON.parse(distribucionSemanal):distribucionSemanal; }
-      catch{ return null; }
-    })();
-
-    let estructura:any=null;
-    let intentosBlueprint=0;
-    const MAX_INTENTOS_BLUEPRINT=2;
-    while(intentosBlueprint<MAX_INTENTOS_BLUEPRINT){
-      intentosBlueprint++;
-      console.log(`ORCHESTRATOR Paso 2 — Week Planner: intento ${intentosBlueprint} de generar Blueprint...`);
-      const plannerRes=await apiCall({action:"planificar_semana",codigo:codigoUsuario,datos:{analisis,generationToken:weeklyGeneration.token,targetWeekStart:weekStartOrchestrator,empezarHoy}});
-      console.log("ORCHESTRATOR Paso 2 — Week Planner: resultado:", JSON.stringify(plannerRes));
-      if(!plannerRes?.ok) { console.log("ORCHESTRATOR: FALLO en Week Planner, abortando"); return null; }
-
-      const candidato=plannerRes.estructura;
-      // FORGE BLUEPRINT ACCEPTANCE VALIDATOR — evalua el Blueprint COMPLETO antes de construir nada
-      const aceptacion=validateBlueprint(candidato.sessions||[], candidato.strategy||null, distribucionParaValidar);
-      console.log("BLUEPRINT ACCEPTANCE:", JSON.stringify(aceptacion));
-
-      if(aceptacion.aceptado){
-        estructura=candidato;
-        break;
-      }
-      console.log(`BLUEPRINT RECHAZADO (intento ${intentosBlueprint}):`, aceptacion.motivos.join(" | "));
-      if(intentosBlueprint>=MAX_INTENTOS_BLUEPRINT){
-        return null; // Known-invalid blueprint is terminal; never mutate day types.
-      }
-    }
+    // The server owns the two-proposal budget; client never multiplies Planner retries.
+    const plannerRes=await apiCall({action:"planificar_semana",codigo:codigoUsuario,datos:{weeklyContractVersion:1,analisis,generationToken:weeklyGeneration.token,targetWeekStart:weekStartOrchestrator,empezarHoy}});
+    if(!plannerRes?.ok || plannerRes.estructura?.weeklyContractVersion!==1) return null;
+    const estructura=plannerRes.estructura;
 
     // FIX CRITICO DE RAIZ: calcular el weekStart REAL (con la logica de "si la semana actual ya
     // se cerro, avanzar a la siguiente") AQUI AL PRINCIPIO — antes se calculaba solo al final,
@@ -994,7 +967,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     // Preservar dias que YA tienen sesion completada, pero SOLO dentro del weekStart REAL que se
     // esta generando — si es una semana nueva (recien empezada), esto correctamente sera vacio.
     const sessionsExistentes=weeklyGeneration.snapshots[weekStartOrchestrator]?.sessions || [];
-    const diasYaCompletados=sessionsExistentes.filter((s:any)=>s.completada===true);
+    const diasYaCompletados=sessionsExistentes.filter((s:any)=>s.completada===true || estructura.sessions.some((d:any)=>d.weeklyProtected && d.dia===s.dia));
     console.log("ORCHESTRATOR: dias ya completados en la semana que se esta generando, se preservan:", JSON.stringify(diasYaCompletados.map((s:any)=>s.dia)));
 
     // Paso 3: Session Builder, TODAS las llamadas en PARALELO (Promise.all) en vez de secuencial.
@@ -1035,6 +1008,9 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
           generationToken:weeklyGeneration.token,
           targetWeekStart:weekStartOrchestrator,
           stimulusId:diaEstructura.stimulusId,
+          intent:diaEstructura.intent,
+          state:diaEstructura.state,
+          discipline:diaEstructura.discipline,
           dia:diaEstructura.dia,
           tipo:diaEstructura.tipo,
           titulo_breve:diaEstructura.titulo_breve,
@@ -1087,58 +1063,13 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     });
 
     // FORGE WEEK INTEGRITY VALIDATOR — verifica disponibilidad y variedad segun FORGE_SEMANA_CANONICA.md.
-    // Si detecta violaciones, regenera los dias problematicos con instruccion explicita de corregirlas.
+    // A detected discrepancy stops this proposal without changing its canonical selections.
     console.log("WEEK INTEGRITY: verificando disponibilidad y variedad...");
     const resultadoIntegridad=validarIntegridadSemana(sesionesCompletas, distribucionSemanal);
     console.log("WEEK INTEGRITY: resultado:", JSON.stringify(resultadoIntegridad));
 
-    if(!resultadoIntegridad.valido && resultadoIntegridad.diasCorregir.length>0){
-      console.log("WEEK INTEGRITY: regenerando dias con violaciones:", resultadoIntegridad.diasCorregir);
-      const diasARegenerar=resultadoIntegridad.diasCorregir.filter((diaCorregir:string)=>
-        !diasYaCompletados.some((dc:any)=>dc.dia===diaCorregir)
-      );
-      const regeneraciones=await Promise.all(
-        diasARegenerar.map(async(diaCorregir:string)=>{
-          const estructuraDia=(estructura.sessions||[]).find((d:any)=>d.dia===diaCorregir);
-          if(!estructuraDia) return null;
-          // Determinar el tipo correcto segun distribucion_semanal para forzar la correccion
-          let tipoForzado=estructuraDia.tipo;
-          try{
-            const distParsed=typeof distribucionSemanal==="string"?JSON.parse(distribucionSemanal):distribucionSemanal;
-            const normalizar=(d:string)=>(d||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
-            Object.entries(distParsed||{}).forEach(([clave,dias]:[string,any])=>{
-              if(clave==="observaciones"||!Array.isArray(dias)) return;
-              if(dias.some((d:string)=>normalizar(d)===normalizar(diaCorregir))){
-                tipoForzado=clave==="box"?"box":clave==="pista"?"carrera":clave;
-              }
-            });
-          }catch{}
-          // FORGE RECOVERY PIPELINE — accion especializada con contexto aislado del analisis contaminado
-          const idxEnSemanaCorregir=(estructura.sessions||[]).findIndex((d:any)=>d.dia===diaCorregir);
-          const diaAnteriorCorregir=idxEnSemanaCorregir>0?(estructura.sessions||[])[idxEnSemanaCorregir-1]:null;
-          const diaSiguienteCorregir=idxEnSemanaCorregir<(estructura.sessions||[]).length-1?(estructura.sessions||[])[idxEnSemanaCorregir+1]:null;
-          const res=await apiCall({action:"regenerar_sesion_disciplina_forzada",codigo:codigoUsuario,datos:{
-            dia:diaCorregir,
-            disciplinaForzada:tipoForzado,
-            stimulusId:estructuraDia.stimulusId,
-            targetWeekStart:weekStartOrchestrator,
-            generationToken:weeklyGeneration.token,
-            tituloBreve:estructuraDia.titulo_breve,
-            cicloActual,
-            diaAnterior:diaAnteriorCorregir,
-            diaSiguiente:diaSiguienteCorregir
-          }});
-          return res?.ok ? res.sesion : null;
-        })
-      );
-      if(regeneraciones.some((s:any)=>!s)) return null;
-      regeneraciones.forEach((sesionRegenerada:any)=>{
-        if(!sesionRegenerada) return;
-        const idx=sesionesCompletas.findIndex((s:any)=>s.dia===sesionRegenerada.dia);
-        if(idx>=0) sesionesCompletas[idx]=sesionRegenerada;
-      });
-      console.log("WEEK INTEGRITY: dias regenerados:", regeneraciones.filter(Boolean).length);
-    }
+    // A discrepancy is terminal: never replace a contract selection from client availability.
+    if(!resultadoIntegridad.valido && resultadoIntegridad.diasCorregir.length>0) return null;
 
     // weekStart ya se calculo al principio de la funcion (weekStartOrchestrator) — se reutiliza aqui.
     const weekStart=weekStartOrchestrator;
@@ -1152,13 +1083,13 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
       week_number:cicloActual.semana||1,
       total_weeks_block:cicloActual.totalSemanas||null,
       block_name:cicloActual.bloque||analisis.tipo_semana,
-      week_objective:analisis.objetivo,
+      week_objective:estructura.strategy.adaptacion_principal,
       sessions:sesionesCompletas
     };
 
     // Guardar el plan completo
     console.log("ORCHESTRATOR: guardando plan completo:", JSON.stringify(planCompleto));
-    const resultadoGuardado=await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planCompleto,generationToken:weeklyGeneration.token,calendarReceipt:estructura.calendarReceipt}});
+    const resultadoGuardado=await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planCompleto,generationToken:weeklyGeneration.token,calendarReceipt:estructura.calendarReceipt,weeklyContractVersion:estructura.weeklyContractVersion}});
     if(resultadoGuardado?.ok!==true){
       cargarPlanSemanal(codigoUsuario);
       return null;
@@ -1294,7 +1225,8 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     const weeklyGeneration=generationResult?.ok ? generationResult.generation : undefined;
     if(weeklyGeneration) body={...body,system:String(body.system||"")+"\nSnapshot semanal del servidor para esta generación (autoridad sobre contexto previo):\n"+JSON.stringify(weeklyGeneration.snapshots)};
     let intentos=0;
-    while(intentos<3){
+    const maxIntentos=body.action==="planificar_semana"?1:3;
+    while(intentos<maxIntentos){
       try{
         const controller=useAbort?abortControllerRef.current:null;
         const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:controller?.signal});

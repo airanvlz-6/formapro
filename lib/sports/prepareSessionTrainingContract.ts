@@ -1,3 +1,4 @@
+import type { PrescriptionIntent } from './prescriptionIntent';
 import type { CanonicalRestrictions } from '../athlete/getCanonicalRestrictions';
 import { buildPrescriptionScope, canonicalDiscipline, normalizeTrainingKey, resolveProfileDisciplines, type TrainingSource } from './prescriptionScope';
 import { buildAllowedTrainingContract, EXPOSURE_LIMITATIONS, type ContractInput, type ContractResult, type ExternalLoadContext } from './allowedTrainingContract';
@@ -19,7 +20,7 @@ function days(value: unknown): string[] | null {
  * buildFocusContext remains presentation context and is deliberately not called here.
  */
 export async function prepareSessionTrainingContext(db: any, userCodigo: string, profile: StoredProfile,
-  request: { targetWeekStart: string; day: string; discipline: string; stimulus: unknown },
+  request: { targetWeekStart: string; day: string; discipline: string; stimulus: unknown; intent?: PrescriptionIntent },
   restrictions: CanonicalRestrictions): Promise<{ ok: true; input: ContractInput } | { ok: false; errors: string[] }> {
   try {
     const sourceRead = await db.from('athlete_training_sources').select('disciplina,owner,activo,dias').eq('user_codigo', userCodigo).eq('activo', true);
@@ -58,13 +59,14 @@ export async function prepareSessionTrainingContext(db: any, userCodigo: string,
     return { ok: true, input: { prescriptionScope: scope.scope, targetWeekStart: request.targetWeekStart,
       targetDay: normalizeTrainingKey(request.day), discipline, stimulus: request.stimulus,
       restrictionsSnapshot: restrictions, externalLoadContext, exposureContext: { source: 'legacy_completed_weekly_rows', report, limitations: EXPOSURE_LIMITATIONS },
+      ...(Object.hasOwn(request, 'intent') ? { intent: request.intent } : {}),
       availableDays, source: 'weekly_session_builder' } };
   } catch { return { ok: false, errors: ['CONTRACT_CONTEXT_READ_FAILED'] }; }
 }
 
 /** Existing session entry point; context loading and pure feasibility can also be used separately. */
 export async function prepareSessionTrainingContract(db: any, userCodigo: string, profile: StoredProfile,
-  request: { targetWeekStart: string; day: string; discipline: string; stimulus: unknown },
+  request: { targetWeekStart: string; day: string; discipline: string; stimulus: unknown; intent?: PrescriptionIntent },
   restrictions: CanonicalRestrictions): Promise<ContractResult> {
   const context = await prepareSessionTrainingContext(db, userCodigo, profile, request, restrictions);
   return context.ok ? buildAllowedTrainingContract(context.input) : context;

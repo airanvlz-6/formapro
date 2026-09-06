@@ -1,3 +1,5 @@
+import { calendarState } from '../planning/weeklyCalendar';
+import type { PrescriptionIntent } from './prescriptionIntent';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { getCanonicalRestrictions } from '../athlete/getCanonicalRestrictions';
 import { prepareSessionTrainingContract } from './prepareSessionTrainingContract';
@@ -12,11 +14,14 @@ function signature(payload: string) {
   if (!secret) throw new Error('SESSION_AUTHORITY_UNAVAILABLE');
   return createHmac('sha256', secret).update(domain + payload).digest('base64url');
 }
-type Request = { targetWeekStart: string; day: string; discipline: string; stimulus: unknown };
+type Request = { targetWeekStart: string; day: string; discipline: string; stimulus: unknown; intent?: PrescriptionIntent; state?: 'TRAIN' | 'RECOVERY' };
 /** Only this server adapter issues receipts, after both sports and duplication checks. */
 export async function generateTrainingSession(db: any, userCodigo: string, request: Request,
   complete: (prompt: string) => Promise<string>, context = '') {
   try {
+    if (Object.hasOwn(request, 'state') && (!['TRAIN', 'RECOVERY'].includes(request.state!)
+      || request.state !== calendarState({ tipo: canonicalDiscipline(request.discipline), stimulusId: request.stimulus })))
+      return { ok: false as const, code: 'TRAINING_CONTRACT_INVALID', errors: ['SESSION_STATE_MISMATCH'] };
     const { data: profile, error } = await db.from('usuarios')
       .select(`${PROFILE},perfil,marcas_especificas,ciclo_actual,athlete_development,datos_entrenamiento`).eq('codigo', userCodigo).single();
     if (error || !profile) return { ok: false as const, code: 'CONTRACT_PROFILE_READ_FAILED' };

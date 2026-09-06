@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { normalizeWeeklyPlannerTransport } from './weeklyPlannerTransport';
 import { emitWeeklyPlannerDiagnostic, type PlannerCompletion, type PlannerMetadata } from './weeklyPlannerDiagnostics';
 import type { ContractInput } from '../sports/allowedTrainingContract';
 import type { PrescriptionScope } from '../sports/prescriptionScope';
@@ -135,8 +136,9 @@ export async function composeBoundedWeek(contract: AllowedWeeklyPlanContract, co
   for (let attempt = 1; attempt <= 2; attempt++) {
     let raw: string;
     let metadata: PlannerMetadata | undefined;
+    let normalizedMarkdownFence = false;
     const report = (text: string, parsed: boolean, codes: string[], reason: Parameters<typeof emitWeeklyPlannerDiagnostic>[5]) =>
-      emitWeeklyPlannerDiagnostic(attempt as 1 | 2, text, metadata, parsed, codes, reason);
+      emitWeeklyPlannerDiagnostic(attempt as 1 | 2, text, metadata, parsed, codes, reason, normalizedMarkdownFence);
     try {
       const completed = await complete(prompt + (attempt === 2 ? `\nPropuesta rechazada: ${JSON.stringify(errors)}. Selecciona otra vez dentro del MISMO contrato.`
         + (errors.includes('WEEKLY_JSON_INVALID') ? '\nLa respuesta anterior fue rechazada en la lectura del JSON RAW. Devuelve el objeto directamente, sin fences Markdown ni prosa. El primer carácter DEBE ser { y el último DEBE ser }. No añadas explicaciones ni comentarios.' : '') : ''));
@@ -145,7 +147,12 @@ export async function composeBoundedWeek(contract: AllowedWeeklyPlanContract, co
     }
     catch { report('', false, ['LLM_REQUEST_FAILED'], 'LLM_REQUEST_FAILED'); return failure('WEEKLY_PLANNER_FAILED', ['LLM_REQUEST_FAILED']); }
     let parsed: unknown;
-    try { if (raw.length > 32000) throw new Error(); parsed = JSON.parse(raw); }
+    try {
+      if (raw.length > 32000) throw new Error();
+      const normalized = normalizeWeeklyPlannerTransport(raw);
+      normalizedMarkdownFence = normalized.normalizedFence;
+      parsed = JSON.parse(normalized.text);
+    }
     catch { errors = ['WEEKLY_JSON_INVALID']; report(raw, false, errors, raw.length > 32000 ? 'RAW_TOO_LONG' : 'JSON_PARSE_FAILED'); continue; }
     const result = validateWeeklySelection(immutable, parsed);
     report(raw, true, result.ok ? [] : result.errors, null);

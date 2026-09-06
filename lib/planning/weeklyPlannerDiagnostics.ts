@@ -24,12 +24,13 @@ const errorCodes = ['LLM_REQUEST_FAILED', 'WEEKLY_JSON_INVALID', 'WEEKLY_SCHEMA_
   'WEEKLY_NO_EXECUTABLE_SELECTION', 'WEEKLY_REST_REQUIRED'];
 
 export function emitWeeklyPlannerDiagnostic(attempt: 1 | 2, raw: string, metadata: PlannerMetadata | undefined,
-  parseOk: boolean, validationErrors: string[], reason: 'RAW_TOO_LONG' | 'JSON_PARSE_FAILED' | 'LLM_REQUEST_FAILED' | null) {
+  parseOk: boolean, validationErrors: string[], reason: 'RAW_TOO_LONG' | 'JSON_PARSE_FAILED' | 'LLM_REQUEST_FAILED' | null,
+  normalizedMarkdownFence = false) {
   // Diagnostics must never change an admission decision, even if the logging sink fails.
   try {
     console.info('WEEKLY_PLANNER_DIAGNOSTIC', {
       attempt, rawLength: raw.length, overLengthLimit: raw.length > 32000, emptyText: raw.trim().length === 0,
-      hasMarkdownFence: raw.includes('```'), parseOk, reason,
+      hasMarkdownFence: raw.includes('```'), normalizedMarkdownFence, parseOk, reason,
       validationErrors: [...new Set(validationErrors.filter(e => errorCodes.includes(e)))],
       stopReason: metadata?.stopReason == null ? null : label(metadata.stopReason, stopReasons),
       outputTokens: count(metadata?.outputTokens), contentBlockCount: count(metadata?.contentBlockCount),

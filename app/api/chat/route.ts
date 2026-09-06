@@ -1,3 +1,4 @@
+import { issueWeeklyCalendar, assertWeeklyCalendar, assertCalendarMutation } from "@/lib/planning/weeklyCalendarAuthority";
 import { disabledLegacyOperation, projectLegacyCreate, projectLegacyUpdate } from "@/lib/auth/legacyContainment";
 import { getCanonicalPhysiologyHistory } from "@/lib/physiology/getCanonicalPhysiology";
 import { prepareRecoveryContext, assertRecoveryIdentity, RecoveryReadError, type RecoveryContext } from "@/lib/physiology/recoveryContext";
@@ -8,21 +9,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { render } from "@react-email/render";
 import { validateExtraction } from "@/lib/validators/extractionRules";
-import { buildCatalogoPrompt, validarCatalogoDisciplina } from "@/lib/sports/disciplineCatalog";
 import { buildExposureReport, exposureReportToPromptText } from "@/lib/sports/exposureEngine";
 import { detectarDebilidadDuplicada } from "@/lib/validators/weaknessDeduplicationValidator";
-import { validarCoherenciaEstimulo, STIMULUS_LIBRARY, getMovimientosPorEstimulo, MOVEMENT_LIBRARY } from "@/lib/sports/movementLibrary";
-import { prepareSessionTrainingContract } from "@/lib/sports/prepareSessionTrainingContract";
-import { validateAllowedTrainingContract } from "@/lib/sports/allowedTrainingContract";
-import { evaluarSustitucion } from "@/lib/sports/substitutionEngine";
+import { STIMULUS_LIBRARY } from "@/lib/sports/movementLibrary";
+import { generateTrainingSession, assertFreshSessionRestrictions, verifySessionReceipt, admitSessionContent, assertCurrentPrescriptionScope } from "@/lib/sports/sessionAuthority";
+import { canonicalDiscipline } from "@/lib/sports/prescriptionScope";
 import { aplicarTrainingFrequencySafetyNet, calcularFrecuenciaRealRelativa } from "@/lib/sports/trainingFrequencySafetyNet";
 import { calcularReadiness, scoreAForgeState, combinarConCheckinSubjetivo } from "@/lib/readiness/readinessEngine";
 import { evaluarRelevanciaContextual } from "@/lib/readiness/decisionLayer";
 import { agregarExposicionPorPatron, agregarExposicionPorModalidad } from "@/lib/sports/workoutStructureLibrary";
 import { parseStrengthRecord } from "@/lib/sports/strengthRecordParser";
 import { parseSleepMetrics } from "@/lib/sports/sleepMetricsParser";
-import { parseSessionProposal } from "@/lib/sports/proposalParser";
-import { detectarSesionDuplicada } from "@/lib/validators/sessionDuplicationValidator";
 import { buildAthleteKnowledge, knowledgeRouter, getObjectiveProgress } from "@/lib/knowledge/athleteKnowledge";
 import { getResponseMode, buildStaticResponse, getCapabilities, buildCapabilityInstruction } from "@/lib/response/responseEngine";
 import { sendEmail } from "@/lib/email/sendEmail";
@@ -72,7 +69,7 @@ async function buildBlockNarrative(supabase: any, codigo: string): Promise<strin
 async function generarEstadoCanonico(supabase: any, codigo: string, restrictions?: CanonicalRestrictions, recoveryContext?: RecoveryContext) {
   const DIAS_MAP = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
   const ahora = new Date();
-  const hoyStr = ahora.toLocaleDateString('en-CA', {timeZone: 'Europe/Madrid'});
+  const hoyStr = ahora.toLocaleDateString('en-CA', {timeZone: 'Atlantic/Canary'});
   const hoyFecha = new Date(hoyStr + 'T12:00:00');
   const diaSemanaHoy = DIAS_MAP[hoyFecha.getDay()];
   const mananaFecha = new Date(hoyFecha); mananaFecha.setDate(mananaFecha.getDate()+1);
@@ -2255,341 +2252,72 @@ Si un dia es descanso, usa tipo "descanso" (los demas campos pueden quedar vacio
       if (!plannerMatch) throw new Error("Week Planner no devolvio JSON valido");
       const estructuraSemana = JSON.parse(plannerMatch[0]);
 
-      // FORGE FOCUS — CORRECCION DETERMINISTA REAL (causa raiz confirmada con evidencia de logs):
-      // el Week Planner directamente NUNCA generaba tipo="carrera" (o el tipo de la disciplina
-      // Forge) para ningun dia — dejaba los dias de Forge como "descanso" sin mas. El problema
-      // nunca fue el DIA asignado, fue que el TIPO correcto nunca se generaba en absoluto.
-      const focusContextPlanner = await buildFocusContext(supabase, codigo);
-      if (focusContextPlanner.esModoFocus && Array.isArray(estructuraSemana.sessions)) {
-        const normalizarDiaPlanner = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-        const disciplinaForgeReal = focusContextPlanner.disciplinasForge[0];
-        const diasForgePermitidos = (disciplinaForgeReal?.dias || []).map(normalizarDiaPlanner);
-        const tipoForgeReal = normalizarDiaPlanner(disciplinaForgeReal?.disciplina || "").includes("carr") ? "carrera" : normalizarDiaPlanner(disciplinaForgeReal?.disciplina || "");
-
-        estructuraSemana.sessions = estructuraSemana.sessions.map((s: any) => {
-          const diaNorm = normalizarDiaPlanner(s.dia);
-          if (diasForgePermitidos.includes(diaNorm) && s.tipo !== tipoForgeReal && s.tipo !== "external_blocked") {
-            console.log(`🔧 CORRECCION DETERMINISTA: dia "${s.dia}" forzado de tipo "${s.tipo}" a tipo "${tipoForgeReal}" (disciplina Forge)`);
-            return { ...s, tipo: tipoForgeReal, titulo_breve: s.titulo_breve || disciplinaForgeReal?.disciplina };
-          }
-          return s;
-        });
-      }
-
+      const generation = resolveWeeklyGeneration(datos.generationToken, codigo);
+      if (![generation.currentWeek, generation.nextWeek].includes(datos.targetWeekStart)) throw new Error("CALENDAR_TARGET_INVALID");
+      const focus = await buildFocusContext(supabase, codigo);
+      const today = resolveCompletionDate(new Date().toISOString())!.date;
+      const order = ['lunes','martes','miercoles','jueves','viernes','sabado','domingo'];
+      estructuraSemana.sessions = estructuraSemana.sessions.map((session: any) => {
+        const day = (session.dia || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        const completed = generation.snapshots[datos.targetWeekStart]?.sessions.find((s: any) => s.completada && s.dia.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === day);
+        if (completed) return completed;
+        const date = new Date(datos.targetWeekStart + 'T12:00:00Z'); date.setUTCDate(date.getUTCDate() + order.indexOf(day));
+        if (date.toISOString().slice(0,10) < today || (date.toISOString().slice(0,10) === today && datos.empezarHoy === false)) return { dia: day, tipo: 'sin_registrar', titulo: 'Sin registrar', descripcion: 'No aplica — esta planificación comienza a partir de hoy.' };
+        const external = focus.esModoFocus && focus.disciplinasExternas.find((d: any) => (d.dias || []).some((v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === day));
+        if (external) return admitSessionContent(session, codigo, datos.targetWeekStart, { externalDiscipline: external.disciplina });
+        return session; // Availability never converts REST into delegated training.
+      });
+      estructuraSemana.calendarReceipt = await issueWeeklyCalendar(supabase, codigo, datos.targetWeekStart, estructuraSemana.sessions);
       console.log("🔍 DEBUG estructuraSemana.sessions DESPUES de correccion:", JSON.stringify(estructuraSemana.sessions?.map((s: any) => ({ dia: s.dia, tipo: s.tipo }))));
       return NextResponse.json({ ok: true, estructura: estructuraSemana });
     } catch (err: any) {
-      return NextResponse.json({ error: "Error en Week Planner: " + err.message }, { status: 500 });
+      return NextResponse.json({ ok: false, error: "Error en Week Planner: " + err.message, code: err.message, retryable: false });
     }
   }
 
   if (action === "regenerar_sesion_disciplina_forzada") {
-    // FORGE RECOVERY PIPELINE — accion EXCEPCIONAL, no parte del flujo normal. Su mision unica es
-    // recuperar una sesion que viola una restriccion canonica (disponibilidad). Ignora las debilidades
-    // detectadas en el analisis semanal (que pueden estar contaminando la generacion), pero SI mantiene
-    // fase/bloque/intensidad del ciclo, porque la sesion sigue perteneciendo al mismo bloque de entrenamiento.
-    const { dia, disciplinaForzada, tituloBreve, cicloActual: cicloRecibido, diaAnterior, diaSiguiente } = datos;
-    const { data: usuarioBuilder2 } = await supabase.from("usuarios").select("especialidad,categoria,marcas_especificas,ciclo_actual").eq("codigo", codigo).single();
-    const cicloParaContexto = cicloRecibido || usuarioBuilder2?.ciclo_actual || {};
-    const snapshotForzado = await buildAthleteSnapshot(supabase, codigo);
-    console.log(`REGENERACION FORZADA INPUT [${dia}] — Snapshot:`, JSON.stringify(snapshotForzado), "Dia anterior:", JSON.stringify(diaAnterior), "Dia siguiente:", JSON.stringify(diaSiguiente));
-
-    const catalogoPrompt = buildCatalogoPrompt(disciplinaForzada);
-
-    const forcedPrompt = `Eres un constructor de sesiones especializado EXCLUSIVAMENTE en la disciplina: ${disciplinaForzada.toUpperCase()}.
-
-DÍA: ${dia}
-IDEA GENERAL: ${tituloBreve || disciplinaForzada}
-ESPECIALIDAD DEL ATLETA: ${usuarioBuilder2?.especialidad || usuarioBuilder2?.categoria}
-MARCAS: ${JSON.stringify(usuarioBuilder2?.marcas_especificas || {})}
-FASE/BLOQUE ACTUAL (mantener coherencia con esto): ${JSON.stringify(cicloParaContexto)}
-
-ESTADO REAL RECIENTE DEL ATLETA: ${JSON.stringify(snapshotForzado)}
-
-CONTEXTO DE DIAS ADYACENTES (evita repetir el mismo estimulo/intensidad):
-${diaAnterior ? `Dia anterior (${diaAnterior.dia}): ${diaAnterior.focus || diaAnterior.titulo_breve}, intensidad ${diaAnterior.intensity || "no especificada"}` : "Sin dato"}
-${diaSiguiente ? `Dia siguiente (${diaSiguiente.dia}): ${diaSiguiente.focus || diaSiguiente.titulo_breve}, intensidad ${diaSiguiente.intensity || "no especificada"}` : "Sin dato"}
-Si el dia anterior/siguiente tiene contenido similar, AJUSTA para dar variedad real.
-
-${catalogoPrompt}
-
-IGNORA COMPLETAMENTE las debilidades detectadas en el analisis semanal previo. Mantén únicamente la
-disciplina obligatoria, la fase del bloque, y la intensidad correspondiente. No conviertas esta sesión
-en trabajo específico de ninguna debilidad — es una sesión pura de ${disciplinaForzada} dentro del bloque actual.
-
-Si usas un formato de WOD con nombre conocido (Death By, EMOM, AMRAP, For Time, Chipper), especifica
-SIEMPRE de forma inequivoca las reglas exactas: que se hace cada minuto/ronda, que pasa si no completas
-a tiempo, cuando termina. Un atleta debe poder ejecutar la sesion sin dudas sobre el formato.
-
-Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARADOS para cada bloque:
-{"titulo":"título breve y claro de ${disciplinaForzada}","por_que":"UNA frase corta","calentamiento":"contenido del calentamiento, conciso","bloque_principal":"contenido del bloque principal, sin ambiguedad en el formato","vuelta_calma":"contenido de vuelta a la calma, conciso","debilidad_relacionada":null}`;
-
     try {
-      const forcedRes = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 800, messages: [{ role: "user", content: forcedPrompt }] }),
-      });
-      const forcedData = await forcedRes.json();
-      const forcedTexto = forcedData.content?.map((b: any) => b.text || "").join("") || "{}";
-      const forcedClean = forcedTexto.replace(/```json|```/g, "").trim();
-      const forcedMatch = forcedClean.match(/\{[\s\S]*\}/);
-      if (!forcedMatch) throw new Error("Regeneracion forzada no devolvio JSON valido");
-      let sesionForzada = JSON.parse(forcedMatch[0]);
-      const descripcionEnsambladaForzada = `**Calentamiento**\n${sesionForzada.calentamiento || ""}\n\n**Bloque principal**\n${sesionForzada.bloque_principal || ""}\n\n**Vuelta a la calma**\n${sesionForzada.vuelta_calma || ""}`;
-
-      const validacionCatalogo = validarCatalogoDisciplina(disciplinaForzada, descripcionEnsambladaForzada);
-      if (!validacionCatalogo.valido) {
-        console.error("REGENERACION FORZADA: violacion de catalogo detectada:", validacionCatalogo.terminosProhibidosEncontrados);
-      }
-
-      return NextResponse.json({
-        ok: true,
-        sesion: {
-          dia,
-          tipo: disciplinaForzada,
-          titulo: sesionForzada.titulo,
-          por_que: sesionForzada.por_que,
-          descripcion: descripcionEnsambladaForzada,
-          debilidad_relacionada: null,
-          origen: "disciplina_forzada",
-          disciplina_verificada: validacionCatalogo.valido
-        }
-      });
-    } catch (err: any) {
-      return NextResponse.json({ error: "Error en regeneracion forzada: " + err.message }, { status: 500 });
+      const generation = resolveWeeklyGeneration(datos.generationToken, codigo);
+      if (![generation.currentWeek, generation.nextWeek].includes(datos.targetWeekStart))
+        return NextResponse.json({ ok: false, code: "TRAINING_CONTRACT_INVALID", errors: ["CONTRACT_TARGET_OUTSIDE_GENERATION"] });
+      const generated = await generateTrainingSession(supabase, codigo,
+        { targetWeekStart: datos.targetWeekStart, day: datos.dia, discipline: datos.disciplinaForzada, stimulus: datos.stimulusId },
+        async (prompt: string) => {
+          const response = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 2400, messages: [{ role: "user", content: prompt }] }),
+          });
+          if (!response.ok) throw new Error("LLM_REQUEST_FAILED");
+          const output = await response.json();
+          return output.content?.map((b: any) => b.text || "").join("") || "";
+        }, JSON.stringify({ intent: datos.titulo_breve ?? datos.tituloBreve, analysis: datos.analisis,
+          previousDay: datos.diaAnterior, nextDay: datos.diaSiguiente }));
+      return NextResponse.json(generated);
+    } catch (error: any) {
+      return NextResponse.json({ ok: false, code: "TRAINING_CONTRACT_INVALID", errors: [error.message] });
     }
   }
 
   if (action === "construir_sesion_dia") {
-    // FORGE ORCHESTRATOR — Paso 3: Session Builder. Genera el contenido COMPLETO de UN solo dia.
-    console.log(`CHECKPOINT construir_sesion_dia: ENTRA para dia=${datos?.dia}`);
-    const { dia, tipo, titulo_breve, analisis: analisisSesion, debilidad_relacionada, focus, volume, intensity, conditioning, diaAnterior: diaAnteriorRecibido, diaSiguiente, trabaja_debilidad } = datos;
-    const { data: usuarioBuilder, error: usuarioBuilderError } = await supabase.from("usuarios").select("modo_entrada,distribucion_semanal,especialidad,categoria,perfil,marcas_especificas,athlete_development,datos_entrenamiento").eq("codigo", codigo).single();
-    if (usuarioBuilderError || !usuarioBuilder) return NextResponse.json({ ok: false, code: "CONTRACT_PROFILE_READ_FAILED" });
-    console.log(`CHECKPOINT construir_sesion_dia [${dia}]: usuarioBuilder obtenido`);
-
-    // FIX CRITICO: el frontend SIEMPRE envia diaAnterior=null para el lunes (primer dia de la
-    // semana que se esta generando), aunque el dato real existe en la semana PREVIA ya guardada.
-    // Bug real confirmado: el LLM, al recibir null, INVENTABA una referencia plausible al dia
-    // anterior ("sesion box previa" cuando en realidad fue carrera) en vez de omitir la mencion.
-    // Ahora: si es lunes y no llega diaAnterior, consultamos el domingo real de la semana anterior.
-    const normalizarDiaBuilder = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-    let diaAnterior = diaAnteriorRecibido;
-    if (!diaAnterior && normalizarDiaBuilder(dia) === "lunes") {
-      try {
-        const hoyParaAnteriorBuilder = new Date();
-        const diaSemHoyBuilder = hoyParaAnteriorBuilder.getDay() || 7;
-        const lunesEstaSemanaBuilder = new Date(hoyParaAnteriorBuilder);
-        lunesEstaSemanaBuilder.setDate(hoyParaAnteriorBuilder.getDate() - diaSemHoyBuilder + 1);
-        const lunesSemanaAnteriorBuilder = new Date(lunesEstaSemanaBuilder);
-        lunesSemanaAnteriorBuilder.setDate(lunesEstaSemanaBuilder.getDate() - 7);
-        const weekStartAnteriorBuilder = lunesSemanaAnteriorBuilder.toISOString().split('T')[0];
-        const { data: planSemanaAnteriorBuilder } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).eq("week_start", weekStartAnteriorBuilder).maybeSingle();
-        const domingoAnteriorReal = planSemanaAnteriorBuilder?.sessions?.find((s: any) => normalizarDiaBuilder(s.dia) === "domingo");
-        if (domingoAnteriorReal) {
-          diaAnterior = { dia: "domingo", titulo_breve: domingoAnteriorReal.titulo, focus: domingoAnteriorReal.tipo, intensity: null };
-          console.log(`CHECKPOINT construir_sesion_dia [lunes]: dia anterior real recuperado de semana previa — "${domingoAnteriorReal.titulo}"`);
-        }
-      } catch (errDiaAnteriorBuilder) {
-        console.error("Error recuperando dia anterior real para lunes:", errDiaAnteriorBuilder);
-      }
-    }
-
-    const debilidadInfo = (usuarioBuilder?.athlete_development || []).find((d: any) => d.nombre_visible === debilidad_relacionada);
-
-    // FORGE CONSTRAINT ENGINE — segunda defensa en el punto donde se materializa CADA sesion
-    // individual, nunca sustituto del Deterministic Plan Validator final. El Block Analyzer ya
-    // decidio la estructura semanal respetando restricciones, pero el Session Builder tambien
-    // debe recibirlas directamente — no confiamos en que la intencion heredada sea suficiente.
-    let canonicalRestrictions: CanonicalRestrictions;
-    try { canonicalRestrictions = await getCanonicalRestrictions(supabase, codigo); }
-    catch (err: any) { return NextResponse.json({ error: err.message }, { status: 503 }); }
-    const hardConstraintsBuilder = [...canonicalRestrictions.restrictions, ...canonicalRestrictions.reassessments];
-    // 2E.1: server ownership and attested calendar, before every Builder LLM call.
-    let targetWeekStart: string;
     try {
       const generation = resolveWeeklyGeneration(datos.generationToken, codigo);
-      if (![generation.currentWeek, generation.nextWeek].includes(datos.targetWeekStart)) throw new Error("CONTRACT_TARGET_OUTSIDE_GENERATION");
-      targetWeekStart = datos.targetWeekStart;
-    } catch (err: any) { return NextResponse.json({ ok: false, code: "TRAINING_CONTRACT_INVALID", errors: [err.message] }); }
-    const preparedContract = await prepareSessionTrainingContract(supabase, codigo, usuarioBuilder,
-      { targetWeekStart, day: dia, discipline: tipo, stimulus: datos.stimulusId ?? focus ?? titulo_breve }, canonicalRestrictions);
-    if (!preparedContract.ok) return NextResponse.json({ ok: false, code: "TRAINING_CONTRACT_INVALID", errors: preparedContract.errors });
-    const trainingContract = preparedContract.contract;
-    const contractValidation = validateAllowedTrainingContract(trainingContract);
-    if (!contractValidation.ok) return NextResponse.json({ ok: false, code: "TRAINING_CONTRACT_INVALID", errors: contractValidation.errors });
-    const restriccionesHardBuilder = canonicalRestrictions.restrictions;
-    const restriccionesReassessmentBuilder = canonicalRestrictions.reassessments;
-    const restriccionesBuilderTexto =
-      (restriccionesHardBuilder.length > 0
-        ? `\n🚫 RESTRICCIONES ACTIVAS DEL ATLETA — OBLIGATORIO RESPETAR, NO SON SUGERENCIAS:\n${restriccionesHardBuilder.map((c: any) => `- Evitar "${c.movement}": ${c.issue}`).join("\n")}\nEstas restricciones vienen de una molestia/lesion real confirmada. La sesion que generes NO puede incluir estos movimientos ni cargas que los agraven, sin excepcion.`
-        : "") +
-      (restriccionesReassessmentBuilder.length > 0
-        ? `\n🟡 ZONA EN REEVALUACION — PROGRESION CONTROLADA, NUNCA VUELTA COMPLETA A LA CARGA HABITUAL:\n${restriccionesReassessmentBuilder.map((c: any) => `- "${c.movement}": ${c.issue}`).join("\n")}\nEl atleta confirmo que la molestia se resolvio, pero esto significa "en reevaluacion", NUNCA "sin restriccion". Para estas zonas: usa SOLO intensidad baja-moderada, evita impacto alto o volumen alto en el primer contacto, introduce el estimulo de forma progresiva y conservadora. NO generes series de alta intensidad, sprints, ni cargas maximas en esta zona todavia — eso requiere varias sesiones de tolerancia confirmada primero.`
-        : "");
-
-    // FORGE ATHLETE SNAPSHOT — contexto real y auditable del atleta, elimina la duda de "¿usa mis datos?"
-    // COLD-START SAFE: envuelto en try/catch propio, un usuario nuevo sin historial no debe bloquear el flujo.
-    let snapshot: any = { ultimas_5_sesiones: [], sesiones_ultimos_7_dias: 0, volumen_carrera_7dias: 0, volumen_box_7dias: 0, marcas: {}, fatiga_actual: null };
-    try {
-      snapshot = await buildAthleteSnapshot(supabase, codigo);
-    } catch (errSnapshot) {
-      console.error(`CHECKPOINT construir_sesion_dia [${dia}]: ERROR en snapshot, usando snapshot vacio:`, errSnapshot);
-    }
-    console.log(`CHECKPOINT construir_sesion_dia [${dia}]: snapshot listo`);
-
-    const estimuloObjetivoReal = trainingContract.stimulusId;
-    // Full structured pool survives independently of the five ranking hints. Output validation is 2E.2.
-    const candidatosTexto = `CONTRATO DE ENTRENAMIENTO (elige dentro de sus IDs; contexto externo es solo lectura):\n${JSON.stringify(trainingContract)}\nPreferencias de ranking: ${trainingContract.rankedCandidates.slice(0, 5).map(c => c.movementId).join(", ")}`;
-
-    // FORGE SESSION ENGINE (v1): el Session Builder ya no inventa la estructura desde cero.
-    // Recibe la INTENCION exacta que ya decidio el Week Planner y solo la desarrolla en detalle.
-    const builderPrompt = `Eres un constructor de sesiones de entrenamiento. Tu ÚNICA tarea es DESARROLLAR EN DETALLE
-la sesion segun la intencion ya decidida — NO inventes una estructura distinta, solo redacta el contenido
-especifico (ejercicios, series, reps, cargas) que cumpla exactamente esta intencion.
-
-DÍA: ${dia}
-TIPO DE SESIÓN: ${tipo}
-IDEA GENERAL: ${titulo_breve}
-${candidatosTexto}
-INTENCION YA DECIDIDA (respeta esto, no la cambies):
-- Foco/movimiento principal: ${focus || "no especificado"}
-- Volumen: ${volume || "medio"}
-- Intensidad: ${intensity || "no especificada"}
-- Condicionamiento metabolico: ${conditioning || "ninguno"}
-CONTEXTO DEL BLOQUE: ${JSON.stringify(analisisSesion)}
-ESPECIALIDAD: ${usuarioBuilder?.especialidad || usuarioBuilder?.categoria}
-MARCAS DEL ATLETA: ${JSON.stringify(usuarioBuilder?.marcas_especificas || {})}
-${debilidadInfo ? `DEBILIDAD A TRABAJAR HOY: ${debilidadInfo.nombre_visible} — ${debilidadInfo.diagnostico}` : ""}
-${restriccionesBuilderTexto}
-${hardConstraintsBuilder && hardConstraintsBuilder.length > 0 ? `\n🚨 REGLA CRÍTICA DE TÍTULO: NUNCA incluyas en el "titulo" de la sesión el nombre del movimiento/zona restringida como referencia al estímulo original que sustituyes (ej: NO titules "Carrera larga adaptada (bici)" — en su lugar usa el nombre de la modalidad real que SÍ vas a usar, ej: "Bici estática Z2 60min"). El título debe describir fielmente lo que el atleta va a hacer, nunca lo que está evitando.` : ""}
-
-ZONAS DE FRECUENCIA CARDIACA REALES DEL ATLETA (usar SIEMPRE estos rangos de pulsaciones exactas, NUNCA
-uses porcentajes de FCmax genericos como "70-80% FCmax" — el atleta necesita el rango de ppm directo):
-${JSON.stringify({z1: usuarioBuilder?.datos_entrenamiento?.z1_fc, z2: usuarioBuilder?.datos_entrenamiento?.z2_fc, z3: usuarioBuilder?.datos_entrenamiento?.z3_fc, z4: usuarioBuilder?.datos_entrenamiento?.z4_fc, z5: usuarioBuilder?.datos_entrenamiento?.z5_fc, fc_reposo: usuarioBuilder?.datos_entrenamiento?.fc_reposo, fc_maxima: usuarioBuilder?.datos_entrenamiento?.fc_maxima})}
-Si no hay dato para una zona especifica, no la menciones con numero — usa descripcion cualitativa (ej: "ritmo conversacional") en su lugar.
-
-ESTADO REAL RECIENTE DEL ATLETA (usar para evitar repetir estimulos o sobrecargar):
-Ultimas 5 sesiones: ${JSON.stringify(snapshot.ultimas_5_sesiones)}
-Sesiones en los ultimos 7 dias: ${snapshot.sesiones_ultimos_7_dias}
-Volumen carrera ultimos 7 dias: ${snapshot.volumen_carrera_7dias} sesiones
-Volumen box ultimos 7 dias: ${snapshot.volumen_box_7dias} sesiones
-
-CONTEXTO DE DIAS ADYACENTES (evita repetir el mismo estimulo/intensidad en dias consecutivos):
-${diaAnterior ? `Dia anterior (${diaAnterior.dia}): ${diaAnterior.focus || diaAnterior.titulo_breve}, intensidad ${diaAnterior.intensity || "no especificada"}${diaAnterior.relacion_dia_anterior ? `
-
-RELACIÓN ENTRE DÍAS — DECISIÓN DEL WEEK PLANNER:
-${diaAnterior.relacion_dia_anterior}
-Esta relación es una decisión estructural YA TOMADA por el planificador. Debes ejecutarla al construir esta sesión — no la reinterpretes ni la sustituyas por otra relación, ni inventes una relación diferente basándote en el contenido que estés generando.` : ""}` : "Sin dato de dia anterior — NO menciones ni inventes referencia alguna a una sesion anterior en el campo por_que, simplemente omite esa mencion."}
-${diaSiguiente ? `Dia siguiente (${diaSiguiente.dia}): ${diaSiguiente.focus || diaSiguiente.titulo_breve}, intensidad ${diaSiguiente.intensity || "no especificada"}` : "Sin dato de dia siguiente"}
-Si el dia anterior o siguiente tiene el mismo foco/intensidad que hoy, AJUSTA para dar variedad real
-(diferente ritmo, diferente distancia, diferente enfoque) — nunca generes dos dias casi identicos seguidos.
-
-IMPORTANTE — FORMATO VISUAL Y CLARIDAD EJECUTABLE:
-- Cada bloque va en su PROPIO campo del JSON, nunca mezclados en un solo texto.
-- Empieza cada campo indicando la duracion estimada entre parentesis, ej: "(12 min)" al inicio del contenido.
-- Usa bullets con guion "-" para cada ejercicio o paso, uno por linea (usa \\n entre bullets).
-- Si el bloque principal tiene sub-partes (ej: fuerza + WOD), separalas claramente con "A)" y "B)" en
-  lineas distintas, cada una con su propio titulo breve.
-- Si usas un formato de WOD con nombre conocido (Death By, EMOM, AMRAP, For Time, Chipper), especifica
-  SIEMPRE de forma inequivoca las reglas exactas: que se hace cada minuto/ronda, que pasa si no completas
-  a tiempo, cuando termina. Un atleta debe poder ejecutar la sesion sin dudas sobre el formato.
-- Se CONCISO en cada bullet, pero manten la estructura visual clara — prioriza claridad sobre brevedad extrema.
-
-Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARADOS para cada bloque:
-{"titulo":"título breve y claro","por_que":"UNA frase corta explicando el propósito de esta sesión concreta","calentamiento":"(X min)\\n- bullet 1\\n- bullet 2","bloque_principal":"(X min)\\nA) [subtitulo]\\n- bullets\\n\\nB) [subtitulo]\\n- bullets (solo si hay sub-partes, si no una sola lista de bullets)","vuelta_calma":"(X min)\\n- bullet 1\\n- bullet 2","debilidad_relacionada":${debilidadInfo ? `"${debilidadInfo.nombre_visible}"` : "null"}}`;
-
-    try {
-      const builderRes = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 900, messages: [{ role: "user", content: builderPrompt }] }),
-      });
-      const builderData = await builderRes.json();
-      const builderTexto = builderData.content?.map((b: any) => b.text || "").join("") || "{}";
-      const builderClean = builderTexto.replace(/```json|```/g, "").trim();
-      console.log("SESSION BUILDER RAW COMPLETO:", builderClean);
-      const builderMatch = builderClean.match(/\{[\s\S]*\}/);
-      if (!builderMatch) throw new Error("Session Builder no devolvio JSON valido. RAW: " + builderClean.substring(0, 300));
-      const sesionCompleta = JSON.parse(builderMatch[0]);
-      // Ensamblar los campos separados en la descripcion final con separacion clara de bloques
-      const descripcionEnsamblada = `**Calentamiento**\n${sesionCompleta.calentamiento || ""}\n\n**Bloque principal**\n${sesionCompleta.bloque_principal || ""}\n\n**Vuelta a la calma**\n${sesionCompleta.vuelta_calma || ""}`;
-      // FIX DETERMINISTICO: el campo debilidad_relacionada NUNCA lo decide el LLM. Se deriva
-      // exclusivamente de "trabaja_debilidad" que ya decidio el Blueprint — nunca del criterio libre
-      // del Session Builder, evitando incoherencias semanticas para Discovery/Analytics futuros.
-      const debilidadFinal = trabaja_debilidad === true ? (debilidad_relacionada || null) : null;
-
-      // FORGE SESSION DUPLICATION VALIDATOR — capa determinista POST-generacion. El LLM propone,
-      // el backend decide: si la sesion generada es sospechosamente identica a una pasada real,
-      // se rechaza y se regenera UNA vez con instruccion explicita, en vez de aceptarla silenciosamente.
-      const resultadoDuplicacion = detectarSesionDuplicada(
-        { titulo: sesionCompleta.titulo, descripcion: descripcionEnsamblada },
-        snapshot.ultimas_5_sesiones || []
-      );
-      if (resultadoDuplicacion.esDuplicado) {
-        console.error(`🚨 SESSION DUPLICATION DETECTADA [${dia}]: similitud=${resultadoDuplicacion.similitudMaxima} con "${resultadoDuplicacion.sesionParecida}" — regenerando una vez con instruccion explicita`);
-        const builderPromptRetry = builderPrompt + `\n\n🚨 INTENTO ANTERIOR RECHAZADO: generaste una sesion casi identica a "${resultadoDuplicacion.sesionParecida}" (similitud ${Math.round(resultadoDuplicacion.similitudMaxima*100)}%). DEBES generar contenido genuinamente DISTINTO — diferentes ejercicios, diferente estructura, aunque el tipo/foco sea el mismo.`;
-        const builderRetryRes = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-          body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 900, messages: [{ role: "user", content: builderPromptRetry }] }),
-        });
-        const builderRetryData = await builderRetryRes.json();
-        const builderRetryTexto = builderRetryData.content?.map((b: any) => b.text || "").join("") || "{}";
-        const builderRetryClean = builderRetryTexto.replace(/```json|```/g, "").trim();
-        const builderRetryMatch = builderRetryClean.match(/\{[\s\S]*\}/);
-        if (builderRetryMatch) {
-          const sesionRetry = JSON.parse(builderRetryMatch[0]);
-          const descripcionRetryEnsamblada = `**Calentamiento**\n${sesionRetry.calentamiento || ""}\n\n**Bloque principal**\n${sesionRetry.bloque_principal || ""}\n\n**Vuelta a la calma**\n${sesionRetry.vuelta_calma || ""}`;
-          return NextResponse.json({ ok: true, trainingContract, sesion: { dia, tipo, titulo: sesionRetry.titulo, por_que: sesionRetry.por_que, descripcion: descripcionRetryEnsamblada, debilidad_relacionada: debilidadFinal, regenerada_por_duplicado: true } });
-        }
-      }
-
-      // FASE 5 — VALIDADOR DE COHERENCIA ESTIMULO-SESION: no basta con "pertenece a la disciplina
-      // correcta", debe servir realmente al estimulo que el Week Planner decidio. Solo verifica
-      // (no bloquea el guardado) por ahora — registra el hallazgo para poder auditar el sistema
-      // sin arriesgar romper el flujo mientras se valida en produccion.
-      if (estimuloObjetivoReal) {
-        const disciplinaValidacionFinal = trainingContract.discipline;
-        const validacionEstimuloFinal = validarCoherenciaEstimulo(estimuloObjetivoReal, disciplinaValidacionFinal, descripcionEnsamblada);
-        if (validacionEstimuloFinal.valido) {
-          console.log(`✅ COHERENCIA ESTIMULO [${dia}]: sesion coherente con estimulo "${estimuloObjetivoReal}"`);
-        } else {
-          // FORGE SUBSTITUTION ENGINE — antes de marcar como incoherente, verificar si el
-          // contenido corresponde a una SUSTITUCION VALIDA (ej: bici por rodaje_largo cuando
-          // hay restriccion de rodilla activa), en vez de una incoherencia real.
-          const movimientoPrimarioEsperado = getMovimientosPorEstimulo(estimuloObjetivoReal, disciplinaValidacionFinal)[0]?.id || "";
-          const zonasRestringidasValidacion = canonicalRestrictions.areas;
-          const evaluacionSust = movimientoPrimarioEsperado ? evaluarSustitucion(movimientoPrimarioEsperado, descripcionEnsamblada, zonasRestringidasValidacion) : null;
-          if (evaluacionSust?.resultado === "sustitucion_valida") {
-            console.log(`✅ SUSTITUCION VALIDA [${dia}]: ${evaluacionSust.explicacion}`);
-          } else if (evaluacionSust?.resultado === "sustitucion_no_registrada") {
-            console.log(`ℹ️ SUSTITUCION NO REGISTRADA [${dia}]: ${evaluacionSust.explicacion} — revisar manualmente si es un caso nuevo a añadir a SUBSTITUTION_MAP.`);
-          } else {
-            console.error(`⚠️ COHERENCIA ESTIMULO [${dia}]: ${validacionEstimuloFinal.motivo}${evaluacionSust ? ` | Sustitucion: ${evaluacionSust.explicacion}` : ""}`);
-          }
-        }
-      }
-
-      // FORGE REASSESSMENT SAFETY CHECK — determinista, no depende de que el LLM respete la instruccion.
-      // Bug real confirmado con evidencia: una zona en reevaluacion de rodilla (prohibits_impact=true)
-      // recibio una sesion de 400m Z3 (alto impacto) el mismo dia que empezo la reevaluacion.
-      const restriccionesReassessmentCheck = canonicalRestrictions.reassessments;
-      if (restriccionesReassessmentCheck.length > 0) {
-        const requierePrudenciaImpacto = restriccionesReassessmentCheck.some((c: any) => c.prohibits_impact || c.prohibits_jump);
-        const movimientosAltoImpactoEnSesion = Object.values(MOVEMENT_LIBRARY).filter((m: any) => m.impact === "alto").some((m: any) => {
-          const textoNorm = descripcionEnsamblada.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-          return textoNorm.includes(m.id.replace(/_/g, " "));
-        });
-        if (requierePrudenciaImpacto && movimientosAltoImpactoEnSesion) {
-          console.error(`⚠️ REASSESSMENT SAFETY: sesion [${dia}] contiene movimiento de ALTO IMPACTO mientras hay zona en reevaluacion con prohibits_impact/jump activo — revisar manualmente. Restricciones: ${restriccionesReassessmentCheck.map((c: any) => c.movement).join(", ")}`);
-        }
-      }
-
-      return NextResponse.json({ ok: true, trainingContract, sesion: { dia, tipo, titulo: sesionCompleta.titulo, por_que: sesionCompleta.por_que, descripcion: descripcionEnsamblada, debilidad_relacionada: debilidadFinal } });
-    } catch (err: any) {
-      return NextResponse.json({ error: "Error en Session Builder: " + err.message }, { status: 500 });
+      if (![generation.currentWeek, generation.nextWeek].includes(datos.targetWeekStart))
+        return NextResponse.json({ ok: false, code: "TRAINING_CONTRACT_INVALID", errors: ["CONTRACT_TARGET_OUTSIDE_GENERATION"] });
+      const generated = await generateTrainingSession(supabase, codigo,
+        { targetWeekStart: datos.targetWeekStart, day: datos.dia, discipline: datos.tipo, stimulus: datos.stimulusId },
+        async (prompt: string) => {
+          const response = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 2400, messages: [{ role: "user", content: prompt }] }),
+          });
+          if (!response.ok) throw new Error("LLM_REQUEST_FAILED");
+          const output = await response.json();
+          return output.content?.map((b: any) => b.text || "").join("") || "";
+        }, JSON.stringify({ intent: datos.titulo_breve ?? datos.tituloBreve, analysis: datos.analisis,
+          previousDay: datos.diaAnterior, nextDay: datos.diaSiguiente }));
+      return NextResponse.json(generated);
+    } catch (error: any) {
+      return NextResponse.json({ ok: false, code: "TRAINING_CONTRACT_INVALID", errors: [error.message] });
     }
   }
 
@@ -2602,7 +2330,7 @@ Responde SOLO con este JSON, sin texto adicional ni markdown. Usa campos SEPARAD
       if (logError) return NextResponse.json({ ok: false, ready: false, error: "CLOSURE_LOG_READ_FAILED" }, { status: 500 });
       const { data: usuario, error: userError } = await supabase.from("usuarios").select("modo_entrada").eq("codigo", codigo).single();
       if (userError || !usuario) return NextResponse.json({ ok: false, ready: false, error: "CLOSURE_USER_READ_FAILED" }, { status: 500 });
-      const canGenerateNextWeek = usuario.modo_entrada === "planificacion";
+      const canGenerateNextWeek = ["planificacion", "coach", "focus"].includes(usuario.modo_entrada);
       if (closure) return NextResponse.json({ ok: true, ready: true, yaCerrada: true, alreadyClosed: true, weekStart: effective.weekStart, canGenerateNextWeek });
       const { data: plan, error: planError } = await supabase.from("weekly_plan").select("*")
         .eq("user_codigo", codigo).eq("week_start", effective.weekStart).maybeSingle();
@@ -2958,6 +2686,12 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
     // sin session_modification_events) — una bifurcacion arquitectonica que dejaba una ruta de
     // modificacion sin ningun control determinista. Ahora AMBOS caminos convergen aqui.
     const { tipo, accion } = datos;
+    if (tipo === "modificar_sesion") {
+      try {
+        verifySessionReceipt(accion?.sessionReceipt, accion, codigo, accion?.week_start);
+        await assertCurrentPrescriptionScope(supabase, codigo, accion.tipo);
+      } catch (error: any) { return NextResponse.json({ ok: false, code: error.message }); }
+    }
 
     // Expirar automaticamente cualquier pending anterior del mismo tipo/dia sin resolver
     await supabase.from("pending_actions").update({ estado: "expirado" }).eq("user_codigo", codigo).eq("tipo", tipo).eq("estado", "pendiente");
@@ -2995,49 +2729,8 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
   }
 
   if (action === "detectar_propuesta_sesion") {
-    // FORGE PROPOSAL PARSER — Nivel 1 (deterministico) detecta SI hay propuesta. Si la hay,
-    // Nivel 2 (extraccion ligera) saca los detalles estructurados de esa propuesta especifica.
-    // El LLM nunca decide si guardar — solo el parser decide, el LLM solo ayuda a extraer datos.
-    const { mensajeUsuario, respuestaCoach } = datos;
-    const parsed = parseSessionProposal(respuestaCoach, mensajeUsuario);
-    if (!parsed.detected || !parsed.dia) {
-      return NextResponse.json({ ok: true, propuestaDetectada: false });
-    }
-
-    // Calcular week_start de la semana actual
-    const hoyProp = new Date();
-    const diaSemProp = hoyProp.getDay() || 7;
-    const lunesProp = new Date(hoyProp);
-    lunesProp.setDate(hoyProp.getDate() - diaSemProp + 1);
-    const weekStartProp = lunesProp.toISOString().split('T')[0];
-
-    const extractPrompt = `Extrae los detalles de esta propuesta de cambio de sesion de entrenamiento.
-RESPUESTA DEL COACH: ${respuestaCoach}
-
-Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, carrera, box)","titulo":"titulo breve de la sesion propuesta","descripcion":"descripcion completa de la sesion propuesta tal como la explico el coach, conciso"}`;
-
-    try {
-      const extractRes = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 400, messages: [{ role: "user", content: extractPrompt }] }),
-      });
-      const extractData = await extractRes.json();
-      const extractTexto = extractData.content?.map((b: any) => b.text || "").join("") || "{}";
-      const extractClean = extractTexto.replace(/```json|```/g, "").trim();
-      const extractMatch = extractClean.match(/\{[\s\S]*\}/);
-      if (!extractMatch) return NextResponse.json({ ok: true, propuestaDetectada: false });
-      const detalles = JSON.parse(extractMatch[0]);
-
-      const accionCompleta = { week_start: weekStartProp, dia: parsed.dia, tipo: detalles.tipo, titulo: detalles.titulo, descripcion: detalles.descripcion, motivo: parsed.motivo };
-      await supabase.from("pending_actions").update({ estado: "expirado" }).eq("user_codigo", codigo).eq("tipo", "modificar_sesion").eq("estado", "pendiente");
-      const { data: propuestaCreada, error: errorPropuesta } = await supabase.from("pending_actions").insert({ user_codigo: codigo, tipo: "modificar_sesion", accion: accionCompleta, estado: "pendiente" }).select("id").single();
-      if (errorPropuesta || !propuestaCreada?.id) return NextResponse.json({ ok: false, error: "PENDING_CREATE_FAILED" }, { status: 500 });
-
-      return NextResponse.json({ ok: true, propuestaDetectada: true, pendingId: propuestaCreada.id, dia: accionCompleta.dia, titulo: accionCompleta.titulo, motivo: accionCompleta.motivo });
-    } catch {
-      return NextResponse.json({ ok: true, propuestaDetectada: false });
-    }
+    // Legacy extraction of prose cannot create a validated prescription or pending action.
+    return NextResponse.json({ ok: false, propuestaDetectada: false, code: "STRUCTURED_SESSION_REQUIRED" });
   }
 
   if (action === "confirmar_pending_action") {
@@ -3092,6 +2785,11 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
     if (Object.entries(prescripcion).every(([key, value]) => Object.is(target[key], value))) {
       return NextResponse.json({ ok: true, ejecutado: false, noOp: true, pendingResolved: false });
     }
+    try {
+      verifySessionReceipt(acc.sessionReceipt, { dia: target.dia, ...prescripcion }, codigo, acc.week_start);
+      await assertCurrentPrescriptionScope(supabase, codigo, prescripcion.tipo);
+      await assertFreshSessionRestrictions(supabase, codigo, acc.week_start, { dia: target.dia, ...prescripcion, sessionReceipt: acc.sessionReceipt });
+    } catch (error: any) { return NextResponse.json({ ok: false, ejecutado: false, code: error.message }); }
     const sesionModificada = { ...target, ...prescripcion, modificado: true,
       motivo_modificacion: acc.motivo || "", modificado_at: new Date().toISOString() };
     const candidate: PlanCandidate = { ...planActualPending,
@@ -3121,6 +2819,8 @@ Responde SOLO con este JSON: {"tipo":"tipo de sesion propuesta (ej: descanso, ca
       return result.data;
     };
     try {
+      try { await assertCalendarMutation(supabase, codigo, planActualPending.sessions, validationResult.candidate.sessions); }
+      catch (error: any) { return NextResponse.json({ ok: false, code: error.message, retryable: false }); }
       const persisted = await mutatePlanWithCAS(supabase, validationResult.mutation);
       if (persisted.status !== "committed") return NextResponse.json({ ...planPersistenceFailure(persisted), ejecutado: false, pendingResolved: false });
       planGuardado = true;
@@ -3557,6 +3257,7 @@ Responde con este formato exacto:
 {"trigger":"injury|fatigue_severe|availability|equipment|user_request|performance_feedback|coaching_note|none","confidence":0.0-1.0}`;
 
     let triggerAutorizado = false;
+    let triggerTipo = "none";
     try {
       const triggerRes = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -3570,6 +3271,7 @@ Responde con este formato exacto:
       if (triggerMatch) {
         const triggerExtraido = JSON.parse(triggerMatch[0]);
         const TRIGGERS_AUTORIZADOS = ["injury", "fatigue_severe", "availability", "equipment", "user_request"];
+        triggerTipo = triggerExtraido.trigger;
         triggerAutorizado = TRIGGERS_AUTORIZADOS.includes(triggerExtraido.trigger) && (triggerExtraido.confidence ?? 0) >= 0.6;
         console.log("🛡️ SAFETY NET v2: trigger clasificado =", triggerExtraido.trigger, "confidence =", triggerExtraido.confidence, "autorizado =", triggerAutorizado);
       }
@@ -3583,13 +3285,19 @@ Responde con este formato exacto:
       return NextResponse.json({ ok: true, detectado: false, motivo: "sin_trigger_autorizado" });
     }
 
+    // New injury/equipment/fatigue constraints are not represented by free-text intent.
+    // Never claim to have adapted to them without a quantitative/canonical contract extension.
+    if (["injury", "fatigue_severe", "equipment"].includes(triggerTipo))
+      return NextResponse.json({ ok: false, code: "MODIFICATION_CONSTRAINT_UNREPRESENTED" });
+
     // PASO 2 — extraer SOLO la intencion/motivo de la propuesta (no el contenido tecnico detallado,
     // que ahora se genera aparte con un Session Builder real, igual que hace el Orchestrator).
     const intencionPrompt = `Analiza esta respuesta de un coach de entrenamiento a su atleta. El atleta ya reporto una causa operativa real que justifica revisar una sesion futura. Extrae la INTENCION de la modificacion (que dia, que tipo de sesion nueva, por que).
 
 Responde SOLO con este JSON, sin texto adicional ni markdown:
-{"anuncia_modificacion":true_o_false,"dia":"hoy|mañana|nombre del dia en minusculas sin tildes, o null","tipo_nuevo":"tipo de sesion nueva propuesta (ej: movilidad, tren_superior, descanso, carrera_suave) o null","titulo_breve":"titulo breve de la nueva sesion o null","reason_code":"codigo breve de la causa real en snake_case (ej: rodilla_dolor, disponibilidad_viaje, material_no_disponible) o null","body_area":"zona corporal afectada en su forma mas simple, SOLO si la causa es una molestia/lesion fisica (ej: rodilla, hombro, lumbar), o null si no aplica","affected_exercise":"nombre del ejercicio/movimiento ESPECIFICO que causo el problema, SOLO si el atleta lo menciono explicitamente (ej: snatch_balance), o null","que_evitar":"lista breve y ESPECIFICA de tipos de movimiento/carga a evitar mientras la restriccion este activa (ej: 'carrera, saltos, sentadillas con peso' para una molestia de rodilla), distinta de la explicacion general, o null si no hay suficiente informacion para ser especifico"}
+{"anuncia_modificacion":true_o_false,"dia":"hoy|mañana|nombre del dia en minusculas sin tildes, o null","stimulusId":"ID exacto del estímulo propuesto, o null si no se puede resolver", "tipo_nuevo":"disciplina propuesta o null","titulo_breve":"titulo breve de la nueva sesion o null","reason_code":"codigo breve de la causa real en snake_case (ej: rodilla_dolor, disponibilidad_viaje, material_no_disponible) o null","body_area":"zona corporal afectada en su forma mas simple, SOLO si la causa es una molestia/lesion fisica (ej: rodilla, hombro, lumbar), o null si no aplica","affected_exercise":"nombre del ejercicio/movimiento ESPECIFICO que causo el problema, SOLO si el atleta lo menciono explicitamente (ej: snatch_balance), o null","que_evitar":"lista breve y ESPECIFICA de tipos de movimiento/carga a evitar mientras la restriccion este activa (ej: 'carrera, saltos, sentadillas con peso' para una molestia de rodilla), distinta de la explicacion general, o null si no hay suficiente informacion para ser especifico"}
 
+IDs de estímulo disponibles (su disciplina se verificará contra la sesión original): ${JSON.stringify(STIMULUS_LIBRARY)}
 Respuesta del coach: "${respuestaCoach}"
 
 IMPORTANTE sobre "dia": si el coach esta claramente adaptando la sesion de HOY (respondiendo a un problema actual del atleta, sin mencionar explicitamente otro dia como "mañana" o el nombre de un dia futuro), asume "dia":"hoy" por defecto — NO devuelvas null solo porque el coach no repitio la palabra "hoy" literalmente en su respuesta. Solo usa un dia distinto a "hoy" si el coach lo menciona explicitamente (ej: "mañana", "el sábado").`;
@@ -3647,38 +3355,22 @@ IMPORTANTE sobre "dia": si el coach esta claramente adaptando la sesion de HOY (
         return NextResponse.json({ ok: true, detectado: false, motivo: "sesion_no_existe_aun" });
       }
 
-      // PASO 3 — generar la sesion nueva con un SESSION BUILDER real (misma calidad que el
-      // Orchestrator), no un resumen extraido de la conversacion. Esto corrige el hallazgo de que
-      // las sesiones modificadas quedaban como "resumen" en vez de prescripcion tecnica completa.
-      const { data: usuarioParaBuilder } = await supabase.from("usuarios").select("categoria,especialidad").eq("codigo", codigo).single();
-      const builderPrompt = `Eres el Session Builder de Forge. Genera una sesion de entrenamiento COMPLETA y tecnica (con series, repeticiones, pesos/intensidad cuando aplique, tiempos), estructurada en Calentamiento/Bloque principal/Vuelta a la calma.
-
-CONTEXTO:
-Disciplina del atleta: ${usuarioParaBuilder?.especialidad || usuarioParaBuilder?.categoria || "general"}
-Tipo de sesion requerido: ${intencion.tipo_nuevo || "adaptada"}
-Motivo del cambio: ${intencion.reason_code || "no especificado"}
-${intencion.affected_exercise ? `Ejercicio a EVITAR (causo el problema): ${intencion.affected_exercise}` : ""}
-Sesion original que se sustituye: ${sesionOriginal?.titulo || "no disponible"} — ${(sesionOriginal?.descripcion || "").substring(0, 200)}
-
-Responde SOLO con este JSON, sin texto adicional ni markdown:
-{"titulo":"titulo breve de la sesion","calentamiento":"contenido tecnico completo del calentamiento","bloque_principal":"contenido tecnico completo con series/reps/pesos o intensidad","vuelta_calma":"contenido tecnico completo de vuelta a la calma","por_que":"una frase tecnica explicando por que esta sesion concreta tiene sentido ahora"}`;
-
-      const builderRes = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 900, messages: [{ role: "user", content: builderPrompt }] }),
-      });
-      const builderData = await builderRes.json();
-      const builderTexto = builderData.content?.map((b: any) => b.text || "").join("") || "{}";
-      const builderClean = builderTexto.replace(/```json|```/g, "").trim();
-      const builderMatch = builderClean.match(/\{[\s\S]*\}/);
-      const sesionConstruida = builderMatch ? JSON.parse(builderMatch[0]) : null;
-
-      const descripcionEstructurada = sesionConstruida ? [
-        sesionConstruida.calentamiento ? `**Calentamiento**\n${sesionConstruida.calentamiento}` : "",
-        sesionConstruida.bloque_principal ? `**Bloque principal**\n${sesionConstruida.bloque_principal}` : "",
-        sesionConstruida.vuelta_calma ? `**Vuelta a la calma**\n${sesionConstruida.vuelta_calma}` : ""
-      ].filter(Boolean).join("\n\n") : "";
+      // Same sports authority as weekly generation. Existing session determines discipline.
+      if (sesionOriginal.completada === true) return NextResponse.json({ ok: false, code: "SESSION_COMPLETED" });
+      const generated = await generateTrainingSession(supabase, codigo,
+        { targetWeekStart: weekStartDetector, day: normalizarDiaLedger(diaRealDetectado),
+          discipline: canonicalDiscipline(sesionOriginal.tipo), stimulus: intencion.stimulusId },
+        async (prompt: string) => {
+          const response = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 2400, messages: [{ role: "user", content: prompt }] }),
+          });
+          if (!response.ok) throw new Error("LLM_REQUEST_FAILED");
+          const output = await response.json();
+          return output.content?.map((b: any) => b.text || "").join("") || "";
+        }, JSON.stringify({ userRequest: mensajeUsuario, reason: intencion.reason_code }));
+      if (!generated.ok) return NextResponse.json(generated);
+      const sesionConstruida = generated.sesion;
 
       // Expirar pending anteriores sin resolver para el mismo dia (fix ya existente, se mantiene)
       const { data: pendingsAnteriores } = await supabase.from("pending_actions").select("id").eq("user_codigo", codigo).eq("estado", "pendiente").eq("accion->>dia", diaRealDetectado);
@@ -3692,11 +3384,12 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
         accion: {
           week_start: weekStartDetector,
           dia: diaRealDetectado,
-          tipo: intencion.tipo_nuevo || "modificado",
+          tipo: sesionConstruida.tipo,
           titulo: sesionConstruida?.titulo || intencion.titulo_breve || "Sesión modificada",
           motivo: intencion.reason_code || "Modificación detectada automáticamente",
           por_que: sesionConstruida?.por_que || "",
-          descripcion: descripcionEstructurada || "Sesión adaptada — consulta con tu Coach los detalles.",
+          descripcion: sesionConstruida.descripcion,
+          sessionReceipt: sesionConstruida.sessionReceipt,
           debilidad_relacionada: null,
           // Referencia al evento del ledger, para que confirmar_pending_action pueda completarlo
           modification_event_pendiente: {
@@ -3718,7 +3411,7 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
       return NextResponse.json({ ok: true, detectado: true, pendingId: nuevaPendingDet.id, dia: diaRealDetectado, titulo: sesionConstruida?.titulo || intencion.titulo_breve, motivo: intencion.reason_code });
     } catch (err: any) {
       console.error("Error en verificar_modificacion_sesion_deterministico:", err);
-      return NextResponse.json({ ok: true, detectado: false });
+      return NextResponse.json({ ok: false, detectado: false, code: "COACH_MODIFICATION_FAILED" });
     }
   }
 
@@ -4487,7 +4180,7 @@ Menciona el numero exacto de dias en la frase.`;
   if (action === "obtener_plan_semana") {
     // FIX CRITICO: usar timeZone explicito (igual que el resto del sistema), sin esto el servidor
     // calcula en UTC, causando desfase con usuarios en Canarias/Madrid cerca de medianoche.
-    const hoyStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+    const hoyStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Atlantic/Canary' });
     const hoy = new Date(hoyStr + 'T12:00:00');
     const diaSemana = hoy.getDay() || 7;
     const lunes = new Date(hoy);
@@ -4812,7 +4505,7 @@ if (action === "obtener_daily_briefing") {
   if (action === "preparar_generacion_semana") {
     try {
       return NextResponse.json({ ok: true, generation: await beginWeeklyGeneration(supabase, codigo,
-        new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' })) });
+        new Date().toLocaleDateString('en-CA', { timeZone: 'Atlantic/Canary' })) });
     } catch (error: any) {
       return NextResponse.json({ ok: false, error: error.message, retryable: false });
     }
@@ -4981,77 +4674,30 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
     try { hardConstraintsValidator = (await getCanonicalRestrictions(supabase, codigo)).restrictions; }
     catch (err: any) { return NextResponse.json({ error: err.message }, { status: 503 }); }
 
-    if (hardConstraintsValidator && hardConstraintsValidator.length > 0 && Array.isArray(plan.sessions)) {
-      // FORGE CONSTRAINT ENGINE V2 — MOVEMENT CLASSIFIER. Sustituye por completo el matching de
-      // listas de palabras (deuda tecnica confirmada: cada nueva palabra generaba nuevos falsos
-      // positivos/negativos sin escalar). Ahora: un clasificador LLM dedicado analiza CADA sesion
-      // y devuelve sus propiedades biomecanicas REALES (impact, jump, axial_load, deep_flexion,
-      // overhead_load) como salida estructurada — el CODIGO compara esas propiedades contra lo que
-      // la restriccion prohibe, nunca el LLM decide si bloquea. Principio: LLM clasifica atributos
-      // objetivos observables, el codigo aplica la regla de compatibilidad.
-      const combinedProhibitions = {
-        impact: hardConstraintsValidator.some((c: any) => c.prohibits_impact),
-        jump: hardConstraintsValidator.some((c: any) => c.prohibits_jump),
-        axial_load: hardConstraintsValidator.some((c: any) => c.prohibits_axial_load),
-        deep_flexion: hardConstraintsValidator.some((c: any) => c.prohibits_deep_flexion),
-        overhead_load: hardConstraintsValidator.some((c: any) => c.prohibits_overhead_load),
-      };
-      const prohibicionesActivas = Object.entries(combinedProhibitions).filter(([, v]) => v).map(([k]) => k);
-
-      const violaciones: { dia: string; movement: string; propiedad: string }[] = [];
-      if (prohibicionesActivas.length > 0) {
-        const classifierPrompt = `Eres un clasificador biomecanico de sesiones de entrenamiento. Para CADA sesion de la siguiente lista, determina si su bloque_principal contiene alguna de estas caracteristicas de movimiento: ${prohibicionesActivas.join(", ")}.
-
-Definiciones:
-- impact: aterrizaje repetido con impacto real (correr, saltar repetidamente, aterrizajes de salto)
-- jump: salto vertical/horizontal real con despegue del suelo (NO cuenta variantes explicitamente "sin salto"/"step back"/"step in")
-- axial_load: carga vertical significativa sobre la columna en posicion de pie (peso muerto pesado, sentadilla con barra cargada)
-- deep_flexion: flexion profunda de rodilla bajo carga (sentadilla profunda cargada, no aplica a movilidad sin carga)
-- overhead_load: carga significativa sostenida por encima de la cabeza (press militar, push press, snatch, jerk)
-
-Sesiones a analizar:
-${plan.sessions.map((s: any, i: number) => `[${i}] Dia: ${s.dia} — Titulo: ${s.titulo} — Contenido: ${(s.descripcion || "").substring(0, 500)}`).join("\n\n")}
-
-Responde SOLO con este JSON, sin texto adicional ni markdown — un array con una entrada por sesion analizada:
-[{"dia":"nombre del dia","impact":true_o_false,"jump":true_o_false,"axial_load":true_o_false,"deep_flexion":true_o_false,"overhead_load":true_o_false}]
-
-Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impacto" o "sin carga axial", esa propiedad especifica es false aunque el nombre del ejercicio la sugiera.`;
-
-        try {
-          const classifierRes = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1500, messages: [{ role: "user", content: classifierPrompt }] }),
-          });
-          const classifierData = await classifierRes.json();
-          const classifierTexto = classifierData.content?.map((b: any) => b.text || "").join("") || "[]";
-          const classifierClean = classifierTexto.replace(/```json|```/g, "").trim();
-          const classifierMatch = classifierClean.match(/\[[\s\S]*\]/);
-          const clasificaciones = classifierMatch ? JSON.parse(classifierMatch[0]) : [];
-
-          clasificaciones.forEach((clas: any) => {
-            prohibicionesActivas.forEach((prop) => {
-              if (clas[prop] === true && (combinedProhibitions as any)[prop]) {
-                violaciones.push({ dia: clas.dia, movement: prop, propiedad: prop });
-              }
-            });
-          });
-        } catch (errClassifier) {
-          console.error("Error en Movement Classifier — no se bloquea por fallo del clasificador:", errClassifier);
+    const newlyPrescribedSessions: any[] = [];
+    // Sports admission is independent of persistence/identity admission below.
+    try {
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Atlantic/Canary' });
+      const days = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
+      for (let i = 0; i < plan.sessions.length; i++) {
+        if (weeklyEntries[i].kind === "survivor") continue;
+        const session = plan.sessions[i];
+        const day = (session.dia || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        const external = focusContextValidator.esModoFocus ? focusContextValidator.disciplinasExternas.find((d: any) =>
+          (d.dias || []).some((v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === day)) : undefined;
+        const date = new Date(plan.week_start + 'T12:00:00Z'); date.setUTCDate(date.getUTCDate() + days.indexOf(day));
+        plan.sessions[i] = admitSessionContent(session, codigo, plan.week_start,
+          { externalDiscipline: external?.disciplina, pastDay: date.toISOString().slice(0, 10) <= today });
+        if (!['descanso', 'external_blocked', 'sin_registrar'].includes(plan.sessions[i].tipo))
+        {
+          await assertCurrentPrescriptionScope(supabase, codigo, plan.sessions[i].tipo);
+          newlyPrescribedSessions.push(session);
         }
       }
+    } catch (error: any) { return NextResponse.json({ ok: false, code: error.message, retryable: false }); }
 
-      if (violaciones.length > 0) {
-        console.error(`🚨 CONSTRAINT ENGINE V2: ${violaciones.length} violacion(es) de propiedad biomecanica detectada(s):`, JSON.stringify(violaciones));
-        return NextResponse.json({
-          error: "El plan generado viola restricciones activas del atleta",
-          blocked: true,
-          reason: "HARD_CONSTRAINT_VIOLATION",
-          violaciones
-        }, { status: 422 });
-      }
-      console.log(`✅ CONSTRAINT ENGINE V2: plan verificado contra propiedades [${prohibicionesActivas.join(", ")}], sin violaciones`);
-    }
+    try { await assertWeeklyCalendar(supabase, codigo, plan.week_start, plan.sessions, datos.calendarReceipt); }
+    catch (error: any) { return NextResponse.json({ ok: false, code: error.message, retryable: false }); }
 
     // Final proposal content: admit identity only after all content transformations.
     const proposal: LegacyPlanCandidate = {
@@ -5100,6 +4746,9 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
       }, { status: validationResult.status === "rejected" ? 422 : 500 });
     }
 
+    try {
+      for (const session of newlyPrescribedSessions) await assertFreshSessionRestrictions(supabase, codigo, plan.week_start, session);
+    } catch (error: any) { return NextResponse.json({ ok: false, code: error.message, retryable: false }); }
     const persisted = planExistente
       ? await mutatePlanWithCAS(supabase, validationResult.mutation)
       : await createPlan(supabase, validationResult.mutation);
@@ -5184,6 +4833,11 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
     const camposEfectivos = clavesCambios.filter(campo => !Object.is(sesionDestino[campo], cambios[campo]));
     if (!camposEfectivos.length) return NextResponse.json({ error: "El patch no cambia la prescripcion" }, { status: 400 });
 
+    try {
+      verifySessionReceipt(datos.sessionReceipt, { ...sesionDestino, ...cambiosPrescripcion }, codigo, week_start);
+      await assertCurrentPrescriptionScope(supabase, codigo, cambiosPrescripcion.tipo ?? sesionDestino.tipo);
+      await assertFreshSessionRestrictions(supabase, codigo, week_start, { ...sesionDestino, ...cambiosPrescripcion, sessionReceipt: datos.sessionReceipt });
+    } catch (error: any) { return NextResponse.json({ ok: false, code: error.message }); }
     const modificadoAt = new Date().toISOString();
     const sesionModificada = { ...sesionDestino, ...cambiosPrescripcion,
       modificado: true, motivo_modificacion: motivo || "", modificado_at: modificadoAt };
@@ -5214,7 +4868,9 @@ Se ESTRICTO y literal: si la sesion dice explicitamente "sin salto" o "sin impac
         reason: validationResult.status === "rejected" ? "PLAN_MUTATION_REJECTED" : "PLAN_MUTATION_VALIDATION_FAILED",
         violaciones: validationResult.violations }, { status: validationResult.status === "rejected" ? 422 : 500 });
     }
-    const persisted = await mutatePlanWithCAS(supabase, validationResult.mutation);
+    try { await assertCalendarMutation(supabase, codigo, planActual.sessions, validationResult.candidate.sessions); }
+      catch (error: any) { return NextResponse.json({ ok: false, code: error.message, retryable: false }); }
+      const persisted = await mutatePlanWithCAS(supabase, validationResult.mutation);
     if (persisted.status !== "committed") return NextResponse.json(planPersistenceFailure(persisted));
     return NextResponse.json({ ok: true, revision: persisted.revision });
   }

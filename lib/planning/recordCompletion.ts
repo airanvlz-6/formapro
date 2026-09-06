@@ -4,7 +4,7 @@ import type { PlanCandidate, PlanMutationCommand, PlanMutationContext, PlanChang
 
 const normalizeDay = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
-/** Date-only means a Madrid civil date; timestamps must carry an explicit offset.
+/** Date-only means a Canary civil date; timestamps must carry an explicit offset.
  * UTC arithmetic below is calendar arithmetic, never the process timezone. */
 export function resolveCompletionDate(value: unknown): { date: string; weekStart: string; day: string } | null {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2}))?$/.test(value)) return null;
@@ -15,7 +15,7 @@ export function resolveCompletionDate(value: unknown): { date: string; weekStart
   if (value.length > 10) {
     const instant = new Date(value);
     if (!Number.isFinite(instant.getTime()) || Number(value.slice(11, 13)) > 23) return null;
-    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(instant);
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Atlantic/Canary', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(instant);
     const part = (type: string) => parts.find(p => p.type === type)!.value;
     date = `${part('year')}-${part('month')}-${part('day')}`;
   }

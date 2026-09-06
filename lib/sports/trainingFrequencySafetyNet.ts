@@ -26,7 +26,7 @@ export function aplicarTrainingFrequencySafetyNet(
   frecuenciaRealRelativa: number | null = null
 ): ResultadoTrainingFrequencySafetyNet {
   // Regla absoluta: nunca 7/7 dias
-  if (diasEntrenoSugeridos >= 7) {
+  if (diasEntrenoSugeridos >= 7 && !(frecuenciaRealRelativa !== null && frecuenciaRealRelativa >= 0.85)) {
     return {
       diasEntrenoSugeridos: 6,
       corregido: true,

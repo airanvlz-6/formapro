@@ -933,6 +933,21 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     if(!generationResult?.ok) return null;
     const weeklyGeneration=generationResult.generation;
 
+    const weekStartSemanaActual=weeklyGeneration.currentWeek;
+
+    // FIX CRITICO: usar la nueva accion check_week_closure (solo lectura) en vez de la antigua
+    // verificar_semana_completa_sin_cierre, que dejo de existir en el backend hoy y siempre
+    // devolvia undefined — causando que el Orchestrator SIEMPRE creyera que la semana seguia
+    // abierta y regenerara la semana actual en vez de avanzar a la siguiente.
+    const resVerificarCierreActual=await apiCall({action:"check_week_closure",codigo:codigoUsuario});
+    const semanaActualYaCerrada=resVerificarCierreActual?.yaCerrada===true;
+
+    const weekStartOrchestrator=semanaActualYaCerrada
+      ? weeklyGeneration.nextWeek
+      : weekStartSemanaActual;
+    console.log("ORCHESTRATOR: semana actual ya cerrada =", semanaActualYaCerrada, "→ weekStart real:", weekStartOrchestrator);
+
+
     // Paso 1: Block Analyzer
     console.log("ORCHESTRATOR Paso 1 — Block Analyzer: iniciando...");
     const analyzerRes=await apiCall({action:"analizar_bloque_semana",codigo:codigoUsuario});
@@ -953,7 +968,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     while(intentosBlueprint<MAX_INTENTOS_BLUEPRINT){
       intentosBlueprint++;
       console.log(`ORCHESTRATOR Paso 2 — Week Planner: intento ${intentosBlueprint} de generar Blueprint...`);
-      const plannerRes=await apiCall({action:"planificar_semana",codigo:codigoUsuario,datos:{analisis}});
+      const plannerRes=await apiCall({action:"planificar_semana",codigo:codigoUsuario,datos:{analisis,generationToken:weeklyGeneration.token,targetWeekStart:weekStartOrchestrator,empezarHoy}});
       console.log("ORCHESTRATOR Paso 2 — Week Planner: resultado:", JSON.stringify(plannerRes));
       if(!plannerRes?.ok) { console.log("ORCHESTRATOR: FALLO en Week Planner, abortando"); return null; }
 
@@ -968,14 +983,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
       }
       console.log(`BLUEPRINT RECHAZADO (intento ${intentosBlueprint}):`, aceptacion.motivos.join(" | "));
       if(intentosBlueprint>=MAX_INTENTOS_BLUEPRINT){
-        // Ultimo recurso: usar el candidato de todos modos pero corrigiendo disponibilidad puntualmente
-        console.log("BLUEPRINT: maximo de reintentos alcanzado, usando ultimo candidato con correccion de disponibilidad");
-        const validacionDisp=validarBlueprintDisponibilidad(candidato.sessions||[], distribucionParaValidar);
-        validacionDisp.correcciones.forEach(({dia, tipoCorrecto}:{dia:string,tipoCorrecto:string})=>{
-          const diaEnEstructura=(candidato.sessions||[]).find((d:any)=>d.dia===dia);
-          if(diaEnEstructura) diaEnEstructura.tipo=tipoCorrecto;
-        });
-        estructura=candidato;
+        return null; // Known-invalid blueprint is terminal; never mutate day types.
       }
     }
 
@@ -983,20 +991,6 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     // se cerro, avanzar a la siguiente") AQUI AL PRINCIPIO — antes se calculaba solo al final,
     // y "dias ya completados" siempre miraba la semana de HOY, arrastrando por error el contenido
     // completo de una semana ya cerrada hacia la nueva semana que se estaba generando.
-    const weekStartSemanaActual=weeklyGeneration.currentWeek;
-
-    // FIX CRITICO: usar la nueva accion check_week_closure (solo lectura) en vez de la antigua
-    // verificar_semana_completa_sin_cierre, que dejo de existir en el backend hoy y siempre
-    // devolvia undefined — causando que el Orchestrator SIEMPRE creyera que la semana seguia
-    // abierta y regenerara la semana actual en vez de avanzar a la siguiente.
-    const resVerificarCierreActual=await apiCall({action:"check_week_closure",codigo:codigoUsuario});
-    const semanaActualYaCerrada=resVerificarCierreActual?.yaCerrada===true;
-
-    const weekStartOrchestrator=semanaActualYaCerrada
-      ? weeklyGeneration.nextWeek
-      : weekStartSemanaActual;
-    console.log("ORCHESTRATOR: semana actual ya cerrada =", semanaActualYaCerrada, "→ weekStart real:", weekStartOrchestrator);
-
     // Preservar dias que YA tienen sesion completada, pero SOLO dentro del weekStart REAL que se
     // esta generando — si es una semana nueva (recien empezada), esto correctamente sera vacio.
     const sessionsExistentes=weeklyGeneration.snapshots[weekStartOrchestrator]?.sessions || [];
@@ -1016,15 +1010,15 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     // FIX: si el atleta eligio NO empezar hoy (pregunta explicita, nunca inferida), el indice de
     // corte avanza 1 dia, excluyendo "hoy" del rango de dias a construir — sin depender de la hora
     // ni de que el LLM decida esto, es una decision determinista basada en la respuesta real del usuario.
-    const hoyOrchIdx=esSemanaActualReal?((new Date()).getDay()||7)-1+(empezarHoy?0:1):-1;
+    const hoyOrchIdx=esSemanaActualReal?(new Date(new Date().toLocaleDateString("en-CA",{timeZone:"Atlantic/Canary"})+"T12:00:00Z").getUTCDay()||7)-1+(empezarHoy?0:1):-1;
     const diasPasadosSinReportar=esSemanaActualReal?(estructura.sessions||[]).filter((d:any)=>{
       const idxDia=ORDEN_DIAS.indexOf(normalizarDiaOrch(d.dia));
-      return idxDia<hoyOrchIdx && !diasYaCompletados.some((dc:any)=>normalizarDiaOrch(dc.dia)===normalizarDiaOrch(d.dia));
+      return d.tipo!=="sin_registrar" && idxDia<hoyOrchIdx && !diasYaCompletados.some((dc:any)=>normalizarDiaOrch(dc.dia)===normalizarDiaOrch(d.dia));
     }):[];
     console.log("ORCHESTRATOR Paso 3 — Session Builder: construyendo", (estructura.sessions||[]).length, "dias EN PARALELO. esSemanaActualReal=", esSemanaActualReal);
     const diasAConstruir=(estructura.sessions||[]).filter((d:any)=>{
       const idxDia=ORDEN_DIAS.indexOf(normalizarDiaOrch(d.dia));
-      return d.tipo!=="descanso" && idxDia>=hoyOrchIdx && !diasYaCompletados.some((dc:any)=>normalizarDiaOrch(dc.dia)===normalizarDiaOrch(d.dia));
+      return !["descanso","external_blocked","sin_registrar"].includes(d.tipo) && idxDia>=hoyOrchIdx && !diasYaCompletados.some((dc:any)=>normalizarDiaOrch(dc.dia)===normalizarDiaOrch(d.dia));
     });
     const diasDescanso=(estructura.sessions||[]).filter((d:any)=>{
       const idxDia=ORDEN_DIAS.indexOf(normalizarDiaOrch(d.dia));
@@ -1067,6 +1061,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     }
     const sesionesCompletas:any[]=[
       ...diasYaCompletados,
+      ...(estructura.sessions||[]).filter((d:any)=>["external_blocked","sin_registrar"].includes(d.tipo) && !diasYaCompletados.some((s:any)=>normalizarDiaOrch(s.dia)===normalizarDiaOrch(d.dia))),
       ...resultadosParalelos.filter((r:any)=>r?.ok).map((r:any)=>r.sesion),
       ...diasDescanso.map((d:any)=>({dia:d.dia,tipo:"descanso",titulo:"Descanso",por_que:"Recuperación programada",descripcion:"Día de descanso — prioriza sueño, hidratación y nutrición."})),
       // Dias pasados de esta semana sin reportar (ej: usuario nuevo que se registra un miercoles):
@@ -1075,12 +1070,12 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     ];
     console.log("ORCHESTRATOR: sesiones completas construidas:", sesionesCompletas.length, "de 7 esperadas");
 
-    // FORGE SCIENTIFIC VALIDATOR — biblioteca de 10 reglas deterministas, corrige sesiones antes de guardar
+    // Diagnostic rules cannot mutate a prescription validated by the server.
     const esDeload=analisis.tipo_semana==="deload";
     const hayLesionLumbarActiva=/lumbar/i.test(memoriaCoach.lesiones||"") || debilidades.some(d=>/lumbar/i.test(d.descripcion||""));
 
     aplicarTodasLasReglas({
-      sesiones:sesionesCompletas,
+      sesiones:structuredClone(sesionesCompletas),
       analisis,
       estructura,
       esDeload,
@@ -1125,6 +1120,9 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
           const res=await apiCall({action:"regenerar_sesion_disciplina_forzada",codigo:codigoUsuario,datos:{
             dia:diaCorregir,
             disciplinaForzada:tipoForzado,
+            stimulusId:estructuraDia.stimulusId,
+            targetWeekStart:weekStartOrchestrator,
+            generationToken:weeklyGeneration.token,
             tituloBreve:estructuraDia.titulo_breve,
             cicloActual,
             diaAnterior:diaAnteriorCorregir,
@@ -1133,6 +1131,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
           return res?.ok ? res.sesion : null;
         })
       );
+      if(regeneraciones.some((s:any)=>!s)) return null;
       regeneraciones.forEach((sesionRegenerada:any)=>{
         if(!sesionRegenerada) return;
         const idx=sesionesCompletas.findIndex((s:any)=>s.dia===sesionRegenerada.dia);
@@ -1159,7 +1158,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
 
     // Guardar el plan completo
     console.log("ORCHESTRATOR: guardando plan completo:", JSON.stringify(planCompleto));
-    const resultadoGuardado=await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planCompleto,generationToken:weeklyGeneration.token}});
+    const resultadoGuardado=await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planCompleto,generationToken:weeklyGeneration.token,calendarReceipt:estructura.calendarReceipt}});
     if(resultadoGuardado?.ok!==true){
       cargarPlanSemanal(codigoUsuario);
       return null;
@@ -1911,7 +1910,7 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
         // FIX: pregunta EXPLICITA y determinista (nunca inferida por hora ni decidida por el LLM)
         // de si el atleta quiere empezar hoy mismo o desde el proximo dia disponible — evita
         // prescribir una sesion de hoy cuando genera la semana ya entrada la noche.
-        const hoyEmpezarStr=new Date().toLocaleDateString("es-ES",{weekday:"long",timeZone:"Europe/Madrid"});
+        const hoyEmpezarStr=new Date().toLocaleDateString("es-ES",{weekday:"long",timeZone:"Atlantic/Canary"});
         setMensajes(prev=>[...prev,{role:"assistant",content:`Perfecto. Una última cosa: hoy es ${hoyEmpezarStr} — ¿quieres empezar tu planificación hoy mismo, o prefieres arrancar desde el próximo día disponible?`}]);
         setEsperandoConfirmacionEmpezarHoy(true);
         setCargando(false);

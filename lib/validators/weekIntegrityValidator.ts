@@ -49,6 +49,7 @@ function verificarDisponibilidad(sesiones: SesionSemana[], distribucion: Distrib
       if (!sesionDelDia) return;
       if (sesionDelDia.completada) return; // dias ya completados no se corrigen, se preservan
       const tipoReal = (sesionDelDia.tipo || "").toLowerCase();
+      if (["descanso", "external_blocked", "sin_registrar"].includes(tipoReal) || sesionDelDia.stimulusId === "recuperacion_activa" || sesionDelDia.titulo?.startsWith("recuperacion activa · ")) return;
       const cumple = tiposEsperados.some(t => tipoReal.includes(t) || t.includes(tipoReal));
       if (!cumple) {
         violaciones.push(`Disponibilidad: ${diaEsperado} debia ser tipo "${clave}" pero se genero tipo "${sesionDelDia.tipo}"`);
@@ -109,6 +110,7 @@ export function validarBlueprintDisponibilidad(blueprint: { dia: string; tipo: s
       if (!diaBlueprint) return;
       const tiposEsperados = MAPEO_TIPO[clave.toLowerCase()] || [clave.toLowerCase()];
       const tipoReal = (diaBlueprint.tipo || "").toLowerCase();
+      if (["descanso", "external_blocked", "sin_registrar"].includes(tipoReal) || diaBlueprint.stimulusId === "recuperacion_activa") return;
       const cumple = tiposEsperados.some(t => tipoReal.includes(t) || t.includes(tipoReal));
       if (!cumple) {
         correcciones.push({ dia: diaBlueprint.dia, tipoCorrecto });

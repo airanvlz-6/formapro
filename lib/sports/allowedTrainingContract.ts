@@ -100,7 +100,7 @@ function buildContract(input: ContractInput): ContractResult {
     allowedMovementIds: pool.movements.map(m => m.id).sort(), allowedStructureIds: [...pool.structures].sort(),
     rankedCandidates: pool.movements.map(m => ({ movementId: m.id, recentExposures: m.vecesExpuestoReciente })),
     restrictionFiltering: pool.restrictionFiltering,
-    gaps: ['generated_session_not_validated_until_2E2', 'external_load_context_only_no_physiological_rule', 'equipment_skill_and_dose_not_enforced'] });
+    gaps: ['external_load_context_only_no_physiological_rule', 'equipment_skill_and_dose_not_enforced'] });
   const validation = validateAllowedTrainingContract(contract);
   return validation.ok ? { ok: true, contract } : validation;
 }

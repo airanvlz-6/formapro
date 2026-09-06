@@ -44,7 +44,7 @@ export function resolveWeeklyGeneration(token: unknown, userCodigo: string): Wee
   const context: WeeklyGenerationContext = JSON.parse(Buffer.from(parts[0], 'base64url').toString());
   if (context.userCodigo !== userCodigo) throw new Error('GENERATION_USER_MISMATCH');
   // A captured week must still be the current week; never silently retarget an old proposal.
-  const today = new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' }) + 'T12:00:00Z');
+  const today = new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'Atlantic/Canary' }) + 'T12:00:00Z');
   today.setUTCDate(today.getUTCDate() - (today.getUTCDay() || 7) + 1);
   if (context.currentWeek !== today.toISOString().slice(0, 10)) throw new Error('WEEK_GENERATION_CONTEXT_EXPIRED');
   return context;

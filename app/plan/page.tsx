@@ -110,7 +110,7 @@ export default function Plan() {
   const confianza = plan?.confidence || 100;
 
   // Calcular día actual
-  const hoyCivil = new Date().toLocaleDateString("en-CA", {timeZone:"Europe/Madrid"});
+  const hoyCivil = new Date().toLocaleDateString("en-CA", {timeZone:"Atlantic/Canary"});
   const hoy = new Date(hoyCivil + "T12:00:00");
   const diaHoy = DIAS[hoy.getDay() === 0 ? 6 : hoy.getDay() - 1];
   const esSemanaActual = !!weekStart && hoyCivil >= weekStart && hoyCivil <= new Date(new Date(weekStart + "T12:00:00Z").getTime()+6*86400000).toISOString().slice(0,10);

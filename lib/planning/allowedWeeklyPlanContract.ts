@@ -116,7 +116,12 @@ export function validateWeeklySelection(contract: AllowedWeeklyPlanContract, pro
 export function weeklyPlannerPrompt(contract: AllowedWeeklyPlanContract) {
   return `Selecciona una semana exclusivamente entre las opciones del contrato JSON. Disponibilidad es permiso, no obligación.
 TRAIN y RECOVERY cuentan hacia maxExecutableDays. RECOVERY no sustituye REST. No inventes movimientos ni objetivos específicos.
-Devuelve SOLO JSON: {"contractVersion":1,"contextDigest":"el digest exacto","selections":[{"day":"lunes","optionId":"ID exacto"},...los siete días]}.
+Devuelve exclusivamente JSON RAW: el objeto directamente. El primer carácter de la respuesta DEBE ser { y el último carácter DEBE ser }.
+NO uses Markdown. NO uses \`\`\`json ni fences \`\`\` de ningún tipo. NO añadas prosa antes ni después del JSON, explicaciones ni comentarios.
+Usa exactamente el esquema del ejemplo completo siguiente. Sustituye REEMPLAZAR_DIGEST por el contextDigest exacto del contrato y cada REEMPLAZAR_OPTION_ID por un optionId exacto permitido para ese día; los placeholders NO son opciones autorizadas.
+EJEMPLO_JSON:
+{"contractVersion":1,"contextDigest":"REEMPLAZAR_DIGEST","selections":[{"day":"lunes","optionId":"REEMPLAZAR_OPTION_ID"},{"day":"martes","optionId":"REEMPLAZAR_OPTION_ID"},{"day":"miercoles","optionId":"REEMPLAZAR_OPTION_ID"},{"day":"jueves","optionId":"REEMPLAZAR_OPTION_ID"},{"day":"viernes","optionId":"REEMPLAZAR_OPTION_ID"},{"day":"sabado","optionId":"REEMPLAZAR_OPTION_ID"},{"day":"domingo","optionId":"REEMPLAZAR_OPTION_ID"}]}
+FIN_EJEMPLO_JSON
 No añadas stimulusId, intent, título, focus ni explicaciones: el servidor resuelve los IDs.
 WEEKLY_CONTRACT:\n${JSON.stringify(contract)}`;
 }
@@ -133,7 +138,8 @@ export async function composeBoundedWeek(contract: AllowedWeeklyPlanContract, co
     const report = (text: string, parsed: boolean, codes: string[], reason: Parameters<typeof emitWeeklyPlannerDiagnostic>[5]) =>
       emitWeeklyPlannerDiagnostic(attempt as 1 | 2, text, metadata, parsed, codes, reason);
     try {
-      const completed = await complete(prompt + (attempt === 2 ? `\nPropuesta rechazada: ${JSON.stringify(errors)}. Selecciona otra vez dentro del MISMO contrato.` : ''));
+      const completed = await complete(prompt + (attempt === 2 ? `\nPropuesta rechazada: ${JSON.stringify(errors)}. Selecciona otra vez dentro del MISMO contrato.`
+        + (errors.includes('WEEKLY_JSON_INVALID') ? '\nLa respuesta anterior fue rechazada en la lectura del JSON RAW. Devuelve el objeto directamente, sin fences Markdown ni prosa. El primer carácter DEBE ser { y el último DEBE ser }. No añadas explicaciones ni comentarios.' : '') : ''));
       raw = typeof completed === 'string' ? completed : completed.text;
       metadata = typeof completed === 'string' ? undefined : completed.metadata;
     }

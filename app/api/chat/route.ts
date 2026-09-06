@@ -2271,7 +2271,11 @@ Si un dia es descanso, usa tipo "descanso" (los demas campos pueden quedar vacio
       console.log("🔍 DEBUG estructuraSemana.sessions DESPUES de correccion:", JSON.stringify(estructuraSemana.sessions?.map((s: any) => ({ dia: s.dia, tipo: s.tipo }))));
       return NextResponse.json({ ok: true, estructura: estructuraSemana });
     } catch (err: any) {
-      return NextResponse.json({ ok: false, error: "Error en Week Planner: " + err.message, code: err.message, retryable: false });
+      if (err.availabilityViolations?.length) console.warn('Week Planner calendar rejection', {
+        code: 'CALENDAR_DAY_UNAVAILABLE', violations: err.availabilityViolations,
+      });
+      return NextResponse.json({ ok: false, error: "Error en Week Planner: " + err.message, code: err.message, retryable: false,
+        ...(err.availabilityViolations?.length ? { availabilityViolations: err.availabilityViolations } : {}) });
     }
   }
 

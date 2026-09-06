@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { canonicalAvailability } from '../sports/trainingAvailability';
 import { buildPrescriptionScope, canonicalDiscipline, resolveProfileDisciplines } from '../sports/prescriptionScope';
 import { aplicarTrainingFrequencySafetyNet, calcularFrecuenciaRealRelativa } from '../sports/trainingFrequencySafetyNet';
 import { calendarKey, calendarState, validateWeeklyCalendar } from './weeklyCalendar';
@@ -22,7 +23,8 @@ async function context(db: any, codigo: string) {
   const allowed: Record<string, string[] | null> = {};
   for (const discipline of scope.scope.managedDisciplines) {
     const sources = t.data.filter((s: any) => s.owner === 'forge' && canonicalDiscipline(s.disciplina) === discipline && s.dias != null);
-    const value = sources.length ? sources.flatMap((s: any) => s.dias) : Object.entries(dist).find(([k]) => canonicalDiscipline(k) === discipline)?.[1];
+    const value = sources.length ? sources.flatMap((s: any) => s.dias) : canonicalAvailability(dist, discipline,
+      value => Array.isArray(value) && value.every(v => typeof v === 'string') ? value.map(calendarKey) : null).days;
     if (!Array.isArray(value) || value.some(v => typeof v !== 'string')) throw new Error('CALENDAR_AVAILABILITY_UNRESOLVED');
     allowed[discipline] = value.map(calendarKey);
   }
@@ -32,7 +34,7 @@ async function context(db: any, codigo: string) {
 export async function issueWeeklyCalendar(db: any, codigo: string, week: string, sessions: any[]) {
   const c = await context(db, codigo);
   const result = validateWeeklyCalendar(sessions, c.max, c.allowed);
-  if (!result.ok) throw new Error(result.errors.join(','));
+  if (!result.ok) throw Object.assign(new Error(result.errors.join(',')), { availabilityViolations: result.availabilityViolations });
   const payload = Buffer.from(JSON.stringify({ codigo, week, slots: result.slots, expires: Date.now() + 30 * 60_000 })).toString('base64url');
   return payload + '.' + mac(payload);
 }

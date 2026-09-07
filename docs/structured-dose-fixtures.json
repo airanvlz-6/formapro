@@ -1,0 +1,920 @@
+{
+  "notice": "Fixtures de validación, no recomendaciones individuales ni optimización de dosis.",
+  "examples": {
+    "strength": {
+      "dia": "martes",
+      "tipo": "box",
+      "titulo": "fuerza maxima · strength sets",
+      "stimulusId": "fuerza_maxima",
+      "intent": {
+        "kind": "main_pattern",
+        "pattern": "squat"
+      },
+      "structuredPrescription": {
+        "schemaVersion": 2,
+        "proposal": {
+          "schemaVersion": 2,
+          "stimulusId": "fuerza_maxima",
+          "structureId": "strength_sets",
+          "blocks": [
+            {
+              "blockType": "warmup",
+              "movements": [
+                {
+                  "movementId": "back_squat",
+                  "prescription": {
+                    "durationSeconds": 120,
+                    "intensity": {
+                      "kind": "rpe",
+                      "value": 3
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "blockType": "main",
+              "movements": [
+                {
+                  "movementId": "back_squat",
+                  "prescription": {
+                    "sets": 4,
+                    "reps": 5,
+                    "intensity": {
+                      "kind": "percent_1rm",
+                      "referenceId": "1rm:back_squat",
+                      "value": 75
+                    },
+                    "restSeconds": 180
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "objective": {
+          "intent": {
+            "kind": "main_pattern",
+            "pattern": "squat"
+          },
+          "weekObjective": null,
+          "neighbours": []
+        },
+        "sessionRole": null,
+        "weakness": null,
+        "references": [
+          {
+            "id": "1rm:back_squat",
+            "kind": "1rm",
+            "movementId": "back_squat",
+            "value": 150,
+            "unit": "kg",
+            "source": "usuarios.test_atleta.back_squat",
+            "observedAt": null
+          }
+        ],
+        "calculatedLoads": [
+          {
+            "blockType": "main",
+            "movementId": "back_squat",
+            "referenceId": "1rm:back_squat",
+            "minimumKg": 112.5,
+            "maximumKg": 112.5,
+            "rounding": "mathematical_0.01kg_no_plate_increment"
+          }
+        ],
+        "duration": {
+          "minimumSeconds": 700,
+          "maximumSeconds": 900,
+          "parts": [
+            {
+              "blockType": "warmup",
+              "minimumSeconds": 120,
+              "maximumSeconds": 120
+            },
+            {
+              "blockType": "main",
+              "minimumSeconds": 580,
+              "maximumSeconds": 660
+            }
+          ],
+          "transitionMaximumSeconds": 120,
+          "policy": "operational_estimate_2_to_6s_per_rep_0_to_120s_per_transition_v1"
+        },
+        "timeBudget": {
+          "maximumSeconds": 3600,
+          "minimumSeconds": null,
+          "status": "resolved",
+          "source": "usuarios.perfil.duracion"
+        },
+        "contextEvidenceDigest": "3513cfac8223b84042066f0dd39f79792e967351c17bad378b30087f7c47bfec",
+        "diagnostics": [
+          {
+            "code": "BENCHMARK_RESOLUTION",
+            "reason": "resolved_references_only_no_nrm_conversion"
+          },
+          {
+            "code": "SESSION_DOSE_RESOLUTION",
+            "reason": "equipment_inventory_and_increments_unknown"
+          },
+          {
+            "code": "SESSION_DURATION_ESTIMATE",
+            "reason": "operational_estimate_2_to_6s_per_rep_0_to_120s_per_transition_v1"
+          },
+          {
+            "code": "PROFESSIONAL_RENDER",
+            "reason": "structured_facts_only"
+          }
+        ]
+      },
+      "por_que": "El contrato autorizado prescribe fuerza maxima. La estrategia disponible no permite afirmar un objetivo o una relación con otras sesiones más específicos.",
+      "debilidad_relacionada": null,
+      "descripcion": "**OBJETIVO**\nTrabajar fuerza maxima con patrón squat. Objetivo deportivo sin resolver en el intent disponible.\n\n**DURACIÓN**\n11 min 40 s–15 min (estimación con descansos y transiciones)\n\n**CALENTAMIENTO**\n- **back squat**\n  2 min @ RPE 3\n\n**BLOQUE PRINCIPAL**\nSeries de fuerza\n- **back squat**\n  4 × 5 @ 112.5 kg (75% 1RM)\n  Descanso: 3 min"
+    },
+    "running": {
+      "dia": "martes",
+      "tipo": "carrera",
+      "titulo": "base aerobica · continuo carrera",
+      "stimulusId": "base_aerobica",
+      "intent": {
+        "kind": "main_pattern",
+        "pattern": "run"
+      },
+      "structuredPrescription": {
+        "schemaVersion": 2,
+        "proposal": {
+          "schemaVersion": 2,
+          "stimulusId": "base_aerobica",
+          "structureId": "continuo_carrera",
+          "blocks": [
+            {
+              "blockType": "warmup",
+              "movements": [
+                {
+                  "movementId": "rodaje_z2",
+                  "prescription": {
+                    "durationSeconds": 120,
+                    "intensity": {
+                      "kind": "rpe",
+                      "value": 3
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "blockType": "main",
+              "movements": [
+                {
+                  "movementId": "rodaje_z2",
+                  "prescription": {
+                    "durationSeconds": 2700,
+                    "intensity": {
+                      "kind": "reference",
+                      "referenceId": "running:z2"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "objective": {
+          "intent": {
+            "kind": "main_pattern",
+            "pattern": "run"
+          },
+          "weekObjective": null,
+          "neighbours": []
+        },
+        "sessionRole": null,
+        "weakness": null,
+        "references": [
+          {
+            "id": "running:z2",
+            "kind": "running",
+            "metric": "z2",
+            "value": {
+              "min": 130,
+              "max": 145
+            },
+            "unit": "bpm",
+            "source": "usuarios.datos_entrenamiento.z2_fc",
+            "observedAt": null
+          }
+        ],
+        "calculatedLoads": [],
+        "duration": {
+          "minimumSeconds": 2820,
+          "maximumSeconds": 2940,
+          "parts": [
+            {
+              "blockType": "warmup",
+              "minimumSeconds": 120,
+              "maximumSeconds": 120
+            },
+            {
+              "blockType": "main",
+              "minimumSeconds": 2700,
+              "maximumSeconds": 2700
+            }
+          ],
+          "transitionMaximumSeconds": 120,
+          "policy": "operational_estimate_2_to_6s_per_rep_0_to_120s_per_transition_v1"
+        },
+        "timeBudget": {
+          "maximumSeconds": 3600,
+          "minimumSeconds": null,
+          "status": "resolved",
+          "source": "usuarios.perfil.duracion"
+        },
+        "contextEvidenceDigest": "e997db1666e81209805eb9e1a9ae419568a5542b402ffd1994341be4b9ed658e",
+        "diagnostics": [
+          {
+            "code": "BENCHMARK_RESOLUTION",
+            "reason": "resolved_references_only_no_nrm_conversion"
+          },
+          {
+            "code": "SESSION_DOSE_RESOLUTION",
+            "reason": "equipment_inventory_and_increments_unknown"
+          },
+          {
+            "code": "SESSION_DURATION_ESTIMATE",
+            "reason": "operational_estimate_2_to_6s_per_rep_0_to_120s_per_transition_v1"
+          },
+          {
+            "code": "PROFESSIONAL_RENDER",
+            "reason": "structured_facts_only"
+          }
+        ]
+      },
+      "por_que": "El contrato autorizado prescribe base aerobica. La estrategia disponible no permite afirmar un objetivo o una relación con otras sesiones más específicos.",
+      "debilidad_relacionada": null,
+      "descripcion": "**OBJETIVO**\nTrabajar base aerobica con patrón run. Objetivo deportivo sin resolver en el intent disponible.\n\n**DURACIÓN**\n47 min–49 min (estimación con descansos y transiciones)\n\n**CALENTAMIENTO**\n- **rodaje z2**\n  2 min @ RPE 3\n\n**BLOQUE PRINCIPAL**\nFor Time\n- **rodaje z2**\n  45 min @ Z2 · 130–145 ppm"
+    },
+    "amrap": {
+      "dia": "martes",
+      "tipo": "box",
+      "titulo": "capacidad glucolitica · amrap corto",
+      "stimulusId": "capacidad_glucolitica",
+      "intent": {
+        "kind": "stimulus_only"
+      },
+      "structuredPrescription": {
+        "schemaVersion": 2,
+        "proposal": {
+          "schemaVersion": 2,
+          "stimulusId": "capacidad_glucolitica",
+          "structureId": "amrap_corto",
+          "blocks": [
+            {
+              "blockType": "warmup",
+              "movements": [
+                {
+                  "movementId": "wall_ball",
+                  "prescription": {
+                    "durationSeconds": 120,
+                    "intensity": {
+                      "kind": "rpe",
+                      "value": 3
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "blockType": "main",
+              "formatDose": {
+                "durationSeconds": 720
+              },
+              "movements": [
+                {
+                  "movementId": "wall_ball",
+                  "prescription": {
+                    "reps": 10,
+                    "intensity": {
+                      "kind": "rpe",
+                      "value": 7
+                    }
+                  }
+                },
+                {
+                  "movementId": "box_jump",
+                  "prescription": {
+                    "reps": 6,
+                    "intensity": {
+                      "kind": "rpe",
+                      "value": 7
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "objective": {
+          "intent": {
+            "kind": "stimulus_only"
+          },
+          "weekObjective": null,
+          "neighbours": []
+        },
+        "sessionRole": null,
+        "weakness": null,
+        "references": [],
+        "calculatedLoads": [],
+        "duration": {
+          "minimumSeconds": 840,
+          "maximumSeconds": 960,
+          "parts": [
+            {
+              "blockType": "warmup",
+              "minimumSeconds": 120,
+              "maximumSeconds": 120
+            },
+            {
+              "blockType": "main",
+              "minimumSeconds": 720,
+              "maximumSeconds": 720
+            }
+          ],
+          "transitionMaximumSeconds": 120,
+          "policy": "operational_estimate_2_to_6s_per_rep_0_to_120s_per_transition_v1"
+        },
+        "timeBudget": {
+          "maximumSeconds": null,
+          "minimumSeconds": null,
+          "status": "unknown",
+          "source": null
+        },
+        "contextEvidenceDigest": "efa985b279fd582dd9af9191f1acdc63f49eb4e398473bcabbcef7426ac32abb",
+        "diagnostics": [
+          {
+            "code": "BENCHMARK_RESOLUTION",
+            "reason": "resolved_references_only_no_nrm_conversion"
+          },
+          {
+            "code": "SESSION_DOSE_RESOLUTION",
+            "reason": "equipment_inventory_and_increments_unknown"
+          },
+          {
+            "code": "SESSION_DURATION_ESTIMATE",
+            "reason": "operational_estimate_2_to_6s_per_rep_0_to_120s_per_transition_v1"
+          },
+          {
+            "code": "PROFESSIONAL_RENDER",
+            "reason": "structured_facts_only"
+          }
+        ]
+      },
+      "por_que": "El contrato autorizado prescribe capacidad glucolitica. La estrategia disponible no permite afirmar un objetivo o una relación con otras sesiones más específicos.",
+      "debilidad_relacionada": null,
+      "descripcion": "**OBJETIVO**\nTrabajar capacidad glucolitica. Objetivo deportivo sin resolver en el intent disponible.\n\n**DURACIÓN**\n14 min–16 min (estimación con descansos y transiciones)\n\n**CALENTAMIENTO**\n- **wall ball**\n  2 min @ RPE 3\n\n**BLOQUE PRINCIPAL**\nAMRAP 12 min\n- **wall ball**\n  10 @ RPE 7\n- **box jump**\n  6 @ RPE 7"
+    }
+  },
+  "hybrid": [
+    {
+      "dia": "lunes",
+      "tipo": "carrera",
+      "titulo": "base aerobica · continuo carrera",
+      "stimulusId": "base_aerobica",
+      "intent": {
+        "kind": "adaptation",
+        "goalId": "half_marathon",
+        "adaptationId": "base_aerobica",
+        "methodId": "running_base",
+        "role": "PRIMARY",
+        "pattern": "run",
+        "blockPhase": "accumulation",
+        "blockWeek": 2,
+        "weaknessId": null
+      },
+      "structuredPrescription": {
+        "schemaVersion": 2,
+        "proposal": {
+          "stimulusId": "base_aerobica",
+          "structureId": "continuo_carrera",
+          "blocks": [
+            {
+              "blockType": "warmup",
+              "movements": [
+                {
+                  "movementId": "progresivo",
+                  "prescription": {
+                    "durationSeconds": 120,
+                    "intensity": {
+                      "kind": "rpe",
+                      "value": 3
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "blockType": "main",
+              "movements": [
+                {
+                  "movementId": "progresivo",
+                  "prescription": {
+                    "durationSeconds": 600,
+                    "intensity": {
+                      "kind": "rpe",
+                      "value": 4
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "schemaVersion": 2
+        },
+        "objective": {
+          "intent": {
+            "kind": "adaptation",
+            "goalId": "half_marathon",
+            "adaptationId": "base_aerobica",
+            "methodId": "running_base",
+            "role": "PRIMARY",
+            "pattern": "run",
+            "blockPhase": "accumulation",
+            "blockWeek": 2,
+            "weaknessId": null
+          },
+          "weekObjective": "half marathon · accumulation: base aerobica (primary); umbral (primary); resistencia especifica (primary); fuerza general (supporting).",
+          "neighbours": [
+            {
+              "day": "martes",
+              "adaptationId": null,
+              "state": "REST"
+            }
+          ]
+        },
+        "sessionRole": "PRIMARY",
+        "weakness": null,
+        "references": [],
+        "calculatedLoads": [],
+        "duration": {
+          "minimumSeconds": 720,
+          "maximumSeconds": 840,
+          "parts": [
+            {
+              "blockType": "warmup",
+              "minimumSeconds": 120,
+              "maximumSeconds": 120
+            },
+            {
+              "blockType": "main",
+              "minimumSeconds": 600,
+              "maximumSeconds": 600
+            }
+          ],
+          "transitionMaximumSeconds": 120,
+          "policy": "operational_estimate_2_to_6s_per_rep_0_to_120s_per_transition_v1"
+        },
+        "timeBudget": {
+          "maximumSeconds": 3600,
+          "minimumSeconds": null,
+          "status": "resolved",
+          "source": "usuarios.perfil.duracion"
+        },
+        "contextEvidenceDigest": "680c7e80fc590f18af763c634c32f02388557301e506a8e5d769a7feb48bf5bb",
+        "diagnostics": [
+          {
+            "code": "BENCHMARK_RESOLUTION",
+            "reason": "resolved_references_only_no_nrm_conversion"
+          },
+          {
+            "code": "SESSION_DOSE_RESOLUTION",
+            "reason": "equipment_inventory_and_increments_unknown"
+          },
+          {
+            "code": "SESSION_DURATION_ESTIMATE",
+            "reason": "operational_estimate_2_to_6s_per_rep_0_to_120s_per_transition_v1"
+          },
+          {
+            "code": "PROFESSIONAL_RENDER",
+            "reason": "structured_facts_only"
+          }
+        ]
+      },
+      "por_que": "Esta sesión aporta base aerobica al objetivo de media maratón, en el bloque acumulación, semana 2. Objetivo semanal: half marathon · accumulation: base aerobica (primary); umbral (primary); resistencia especifica (primary); fuerza general (supporting). Contexto del calendario: martes: rest.",
+      "debilidad_relacionada": null,
+      "descripcion": "**OBJETIVO**\nbase aerobica como trabajo principal para media maratón.\n\n**DURACIÓN**\n12 min–14 min (estimación con descansos y transiciones)\n\n**CALENTAMIENTO**\n- **progresivo**\n  2 min @ RPE 3\n\n**BLOQUE PRINCIPAL**\nFor Time\n- **progresivo**\n  10 min @ RPE 4"
+    },
+    {
+      "day": "martes",
+      "state": "REST"
+    },
+    {
+      "dia": "miercoles",
+      "tipo": "carrera",
+      "titulo": "umbral · intervalos carrera",
+      "stimulusId": "umbral",
+      "intent": {
+        "kind": "adaptation",
+        "goalId": "half_marathon",
+        "adaptationId": "umbral",
+        "methodId": "running_threshold",
+        "role": "PRIMARY",
+        "pattern": "run",
+        "blockPhase": "accumulation",
+        "blockWeek": 2,
+        "weaknessId": null
+      },
+      "structuredPrescription": {
+        "schemaVersion": 2,
+        "proposal": {
+          "stimulusId": "umbral",
+          "structureId": "intervalos_carrera",
+          "blocks": [
+            {
+              "blockType": "warmup",
+              "movements": [
+                {
+                  "movementId": "fartlek",
+                  "prescription": {
+                    "durationSeconds": 120,
+                    "intensity": {
+                      "kind": "rpe",
+                      "value": 3
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "blockType": "main",
+              "movements": [
+                {
+                  "movementId": "fartlek",
+                  "prescription": {
+                    "durationSeconds": 600,
+                    "intensity": {
+                      "kind": "rpe",
+                      "value": 4
+                    },
+                    "sets": 3,
+                    "restSeconds": 120
+                  }
+                }
+              ]
+            }
+          ],
+          "schemaVersion": 2
+        },
+        "objective": {
+          "intent": {
+            "kind": "adaptation",
+            "goalId": "half_marathon",
+            "adaptationId": "umbral",
+            "methodId": "running_threshold",
+            "role": "PRIMARY",
+            "pattern": "run",
+            "blockPhase": "accumulation",
+            "blockWeek": 2,
+            "weaknessId": null
+          },
+          "weekObjective": "half marathon · accumulation: base aerobica (primary); umbral (primary); resistencia especifica (primary); fuerza general (supporting).",
+          "neighbours": [
+            {
+              "day": "martes",
+              "adaptationId": null,
+              "state": "REST"
+            },
+            {
+              "day": "jueves",
+              "adaptationId": "fuerza_general",
+              "state": "TRAIN"
+            }
+          ]
+        },
+        "sessionRole": "PRIMARY",
+        "weakness": null,
+        "references": [],
+        "calculatedLoads": [],
+        "duration": {
+          "minimumSeconds": 2160,
+          "maximumSeconds": 2280,
+          "parts": [
+            {
+              "blockType": "warmup",
+              "minimumSeconds": 120,
+              "maximumSeconds": 120
+            },
+            {
+              "blockType": "main",
+              "minimumSeconds": 2040,
+              "maximumSeconds": 2040
+            }
+          ],
+          "transitionMaximumSeconds": 120,
+          "policy": "operational_estimate_2_to_6s_per_rep_0_to_120s_per_transition_v1"
+        },
+        "timeBudget": {
+          "maximumSeconds": 3600,
+          "minimumSeconds": null,
+          "status": "resolved",
+          "source": "usuarios.perfil.duracion"
+        },
+        "contextEvidenceDigest": "680c7e80fc590f18af763c634c32f02388557301e506a8e5d769a7feb48bf5bb",
+        "diagnostics": [
+          {
+            "code": "BENCHMARK_RESOLUTION",
+            "reason": "resolved_references_only_no_nrm_conversion"
+          },
+          {
+            "code": "SESSION_DOSE_RESOLUTION",
+            "reason": "equipment_inventory_and_increments_unknown"
+          },
+          {
+            "code": "SESSION_DURATION_ESTIMATE",
+            "reason": "operational_estimate_2_to_6s_per_rep_0_to_120s_per_transition_v1"
+          },
+          {
+            "code": "PROFESSIONAL_RENDER",
+            "reason": "structured_facts_only"
+          }
+        ]
+      },
+      "por_que": "Esta sesión aporta umbral al objetivo de media maratón, en el bloque acumulación, semana 2. Objetivo semanal: half marathon · accumulation: base aerobica (primary); umbral (primary); resistencia especifica (primary); fuerza general (supporting). Contexto del calendario: martes: rest; jueves: fuerza general.",
+      "debilidad_relacionada": null,
+      "descripcion": "**OBJETIVO**\numbral como trabajo principal para media maratón.\n\n**DURACIÓN**\n36 min–38 min (estimación con descansos y transiciones)\n\n**CALENTAMIENTO**\n- **fartlek**\n  2 min @ RPE 3\n\n**BLOQUE PRINCIPAL**\nIntervalos\n- **fartlek**\n  3 × 10 min @ RPE 4\n  Descanso: 2 min"
+    },
+    {
+      "dia": "jueves",
+      "tipo": "box",
+      "titulo": "fuerza general · strength sets",
+      "stimulusId": "fuerza_general",
+      "intent": {
+        "kind": "adaptation",
+        "goalId": "half_marathon",
+        "adaptationId": "fuerza_general",
+        "methodId": "box_support_strength",
+        "role": "SUPPORTING",
+        "pattern": "squat",
+        "blockPhase": "accumulation",
+        "blockWeek": 2,
+        "weaknessId": null
+      },
+      "structuredPrescription": {
+        "schemaVersion": 2,
+        "proposal": {
+          "stimulusId": "fuerza_general",
+          "structureId": "strength_sets",
+          "blocks": [
+            {
+              "blockType": "warmup",
+              "movements": [
+                {
+                  "movementId": "goblet_squat",
+                  "prescription": {
+                    "durationSeconds": 120,
+                    "intensity": {
+                      "kind": "rpe",
+                      "value": 3
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "blockType": "main",
+              "movements": [
+                {
+                  "movementId": "goblet_squat",
+                  "prescription": {
+                    "sets": 4,
+                    "reps": 5,
+                    "intensity": {
+                      "kind": "rpe",
+                      "value": 7
+                    },
+                    "restSeconds": 120
+                  }
+                }
+              ]
+            }
+          ],
+          "schemaVersion": 2
+        },
+        "objective": {
+          "intent": {
+            "kind": "adaptation",
+            "goalId": "half_marathon",
+            "adaptationId": "fuerza_general",
+            "methodId": "box_support_strength",
+            "role": "SUPPORTING",
+            "pattern": "squat",
+            "blockPhase": "accumulation",
+            "blockWeek": 2,
+            "weaknessId": null
+          },
+          "weekObjective": "half marathon · accumulation: base aerobica (primary); umbral (primary); resistencia especifica (primary); fuerza general (supporting).",
+          "neighbours": [
+            {
+              "day": "miercoles",
+              "adaptationId": "umbral",
+              "state": "TRAIN"
+            },
+            {
+              "day": "viernes",
+              "adaptationId": null,
+              "state": "REST"
+            }
+          ]
+        },
+        "sessionRole": "SUPPORTING",
+        "weakness": null,
+        "references": [],
+        "calculatedLoads": [],
+        "duration": {
+          "minimumSeconds": 520,
+          "maximumSeconds": 720,
+          "parts": [
+            {
+              "blockType": "warmup",
+              "minimumSeconds": 120,
+              "maximumSeconds": 120
+            },
+            {
+              "blockType": "main",
+              "minimumSeconds": 400,
+              "maximumSeconds": 480
+            }
+          ],
+          "transitionMaximumSeconds": 120,
+          "policy": "operational_estimate_2_to_6s_per_rep_0_to_120s_per_transition_v1"
+        },
+        "timeBudget": {
+          "maximumSeconds": 3600,
+          "minimumSeconds": null,
+          "status": "resolved",
+          "source": "usuarios.perfil.duracion"
+        },
+        "contextEvidenceDigest": "680c7e80fc590f18af763c634c32f02388557301e506a8e5d769a7feb48bf5bb",
+        "diagnostics": [
+          {
+            "code": "BENCHMARK_RESOLUTION",
+            "reason": "resolved_references_only_no_nrm_conversion"
+          },
+          {
+            "code": "SESSION_DOSE_RESOLUTION",
+            "reason": "equipment_inventory_and_increments_unknown"
+          },
+          {
+            "code": "SESSION_DURATION_ESTIMATE",
+            "reason": "operational_estimate_2_to_6s_per_rep_0_to_120s_per_transition_v1"
+          },
+          {
+            "code": "PROFESSIONAL_RENDER",
+            "reason": "structured_facts_only"
+          }
+        ]
+      },
+      "por_que": "Esta sesión aporta fuerza general al objetivo de media maratón, en el bloque acumulación, semana 2. Objetivo semanal: half marathon · accumulation: base aerobica (primary); umbral (primary); resistencia especifica (primary); fuerza general (supporting). Contexto del calendario: miercoles: umbral; viernes: rest.",
+      "debilidad_relacionada": null,
+      "descripcion": "**OBJETIVO**\nfuerza general como trabajo de apoyo para media maratón.\n\n**DURACIÓN**\n8 min 40 s–12 min (estimación con descansos y transiciones)\n\n**CALENTAMIENTO**\n- **goblet squat**\n  2 min @ RPE 3\n\n**BLOQUE PRINCIPAL**\nSeries de fuerza\n- **goblet squat**\n  4 × 5 @ RPE 7\n  Descanso: 2 min"
+    },
+    {
+      "day": "viernes",
+      "state": "REST"
+    },
+    {
+      "dia": "sabado",
+      "tipo": "carrera",
+      "titulo": "resistencia especifica · continuo carrera",
+      "stimulusId": "resistencia_especifica",
+      "intent": {
+        "kind": "adaptation",
+        "goalId": "half_marathon",
+        "adaptationId": "resistencia_especifica",
+        "methodId": "running_specific",
+        "role": "PRIMARY",
+        "pattern": "run",
+        "blockPhase": "accumulation",
+        "blockWeek": 2,
+        "weaknessId": null
+      },
+      "structuredPrescription": {
+        "schemaVersion": 2,
+        "proposal": {
+          "stimulusId": "resistencia_especifica",
+          "structureId": "continuo_carrera",
+          "blocks": [
+            {
+              "blockType": "warmup",
+              "movements": [
+                {
+                  "movementId": "rodaje_largo",
+                  "prescription": {
+                    "durationSeconds": 120,
+                    "intensity": {
+                      "kind": "rpe",
+                      "value": 3
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "blockType": "main",
+              "movements": [
+                {
+                  "movementId": "rodaje_largo",
+                  "prescription": {
+                    "durationSeconds": 600,
+                    "intensity": {
+                      "kind": "rpe",
+                      "value": 4
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "schemaVersion": 2
+        },
+        "objective": {
+          "intent": {
+            "kind": "adaptation",
+            "goalId": "half_marathon",
+            "adaptationId": "resistencia_especifica",
+            "methodId": "running_specific",
+            "role": "PRIMARY",
+            "pattern": "run",
+            "blockPhase": "accumulation",
+            "blockWeek": 2,
+            "weaknessId": null
+          },
+          "weekObjective": "half marathon · accumulation: base aerobica (primary); umbral (primary); resistencia especifica (primary); fuerza general (supporting).",
+          "neighbours": [
+            {
+              "day": "viernes",
+              "adaptationId": null,
+              "state": "REST"
+            },
+            {
+              "day": "domingo",
+              "adaptationId": null,
+              "state": "REST"
+            }
+          ]
+        },
+        "sessionRole": "PRIMARY",
+        "weakness": null,
+        "references": [],
+        "calculatedLoads": [],
+        "duration": {
+          "minimumSeconds": 720,
+          "maximumSeconds": 840,
+          "parts": [
+            {
+              "blockType": "warmup",
+              "minimumSeconds": 120,
+              "maximumSeconds": 120
+            },
+            {
+              "blockType": "main",
+              "minimumSeconds": 600,
+              "maximumSeconds": 600
+            }
+          ],
+          "transitionMaximumSeconds": 120,
+          "policy": "operational_estimate_2_to_6s_per_rep_0_to_120s_per_transition_v1"
+        },
+        "timeBudget": {
+          "maximumSeconds": 3600,
+          "minimumSeconds": null,
+          "status": "resolved",
+          "source": "usuarios.perfil.duracion"
+        },
+        "contextEvidenceDigest": "680c7e80fc590f18af763c634c32f02388557301e506a8e5d769a7feb48bf5bb",
+        "diagnostics": [
+          {
+            "code": "BENCHMARK_RESOLUTION",
+            "reason": "resolved_references_only_no_nrm_conversion"
+          },
+          {
+            "code": "SESSION_DOSE_RESOLUTION",
+            "reason": "equipment_inventory_and_increments_unknown"
+          },
+          {
+            "code": "SESSION_DURATION_ESTIMATE",
+            "reason": "operational_estimate_2_to_6s_per_rep_0_to_120s_per_transition_v1"
+          },
+          {
+            "code": "PROFESSIONAL_RENDER",
+            "reason": "structured_facts_only"
+          }
+        ]
+      },
+      "por_que": "Esta sesión aporta resistencia especifica al objetivo de media maratón, en el bloque acumulación, semana 2. Objetivo semanal: half marathon · accumulation: base aerobica (primary); umbral (primary); resistencia especifica (primary); fuerza general (supporting). Contexto del calendario: viernes: rest; domingo: rest.",
+      "debilidad_relacionada": null,
+      "descripcion": "**OBJETIVO**\nresistencia especifica como trabajo principal para media maratón.\n\n**DURACIÓN**\n12 min–14 min (estimación con descansos y transiciones)\n\n**CALENTAMIENTO**\n- **rodaje largo**\n  2 min @ RPE 3\n\n**BLOQUE PRINCIPAL**\nFor Time\n- **rodaje largo**\n  10 min @ RPE 4"
+    },
+    {
+      "day": "domingo",
+      "state": "REST"
+    }
+  ]
+}

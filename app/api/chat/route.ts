@@ -2530,7 +2530,7 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
     }
 
     for (const [weaknessNombre, exposicion] of Object.entries(exposicionPorDebilidad)) {
-      const debilidadActualObj = desarrolloActual.find((d: any) => d.nombre_visible === weaknessNombre);
+      const debilidadActualObj = desarrolloActual.find((d: any) => d.nombre_visible === weaknessNombre || d.id === weaknessNombre);
       const progresoActual = debilidadActualObj?.progreso ?? null;
 
       const { data: exposicionSemanaAnterior, error: exposureReadError } = await supabase.from("weakness_exposure").select("progreso_al_cierre").eq("user_codigo", codigo).eq("weakness_id", weaknessNombre).order("week_start", { ascending: false }).limit(1).maybeSingle();
@@ -2735,7 +2735,12 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
       return NextResponse.json({ ok: true, ejecutado: false, noOp: true, pendingResolved: false });
     }
     try {
-      verifySessionReceipt(acc.sessionReceipt, { dia: target.dia, ...prescripcion }, codigo, acc.week_start);
+      const verified = verifySessionReceipt(acc.sessionReceipt, { dia: target.dia, ...prescripcion,
+        ...Object.fromEntries(['stimulusId', 'intent', 'structuredPrescription'].filter(k => Object.hasOwn(acc, k)).map(k => [k, acc[k]])) }, codigo, acc.week_start, undefined, true);
+      Object.assign(prescripcion, verified);
+      if (verified) for (const key of ['stimulusId', 'intent', 'structuredPrescription']) {
+        if (Object.hasOwn(target, key) && !Object.hasOwn(verified, key)) Object.assign(prescripcion, { [key]: null });
+      }
       await assertCurrentPrescriptionScope(supabase, codigo, prescripcion.tipo);
       await assertFreshSessionRestrictions(supabase, codigo, acc.week_start, { dia: target.dia, ...prescripcion, sessionReceipt: acc.sessionReceipt });
     } catch (error: any) { return NextResponse.json({ ok: false, ejecutado: false, code: error.message }); }
@@ -3308,7 +3313,8 @@ IMPORTANTE sobre "dia": si el coach esta claramente adaptando la sesion de HOY (
       if (sesionOriginal.completada === true) return NextResponse.json({ ok: false, code: "SESSION_COMPLETED" });
       const generated = await generateTrainingSession(supabase, codigo,
         { targetWeekStart: weekStartDetector, day: normalizarDiaLedger(diaRealDetectado),
-          discipline: canonicalDiscipline(sesionOriginal.tipo), stimulus: intencion.stimulusId },
+          discipline: canonicalDiscipline(sesionOriginal.tipo), stimulus: intencion.stimulusId,
+          ...(sesionOriginal.intent ? { intent: sesionOriginal.intent } : {}) },
         async (prompt: string) => {
           const response = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
@@ -3339,7 +3345,10 @@ IMPORTANTE sobre "dia": si el coach esta claramente adaptando la sesion de HOY (
           por_que: sesionConstruida?.por_que || "",
           descripcion: sesionConstruida.descripcion,
           sessionReceipt: sesionConstruida.sessionReceipt,
-          debilidad_relacionada: null,
+          debilidad_relacionada: sesionConstruida.debilidad_relacionada,
+          stimulusId: sesionConstruida.stimulusId,
+          intent: sesionConstruida.intent,
+          ...('structuredPrescription' in sesionConstruida ? { structuredPrescription: sesionConstruida.structuredPrescription } : {}),
           // Referencia al evento del ledger, para que confirmar_pending_action pueda completarlo
           modification_event_pendiente: {
             trigger_type: intencion.reason_code ? "authorized" : "unknown",
@@ -4785,7 +4794,12 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
     if (!camposEfectivos.length) return NextResponse.json({ error: "El patch no cambia la prescripcion" }, { status: 400 });
 
     try {
-      verifySessionReceipt(datos.sessionReceipt, { ...sesionDestino, ...cambiosPrescripcion }, codigo, week_start);
+      const verified = verifySessionReceipt(datos.sessionReceipt, { dia: sesionDestino.dia,
+        ...Object.fromEntries(camposPrescripcion.map(k => [k, Object.hasOwn(cambiosPrescripcion, k) ? (cambiosPrescripcion as Record<string, unknown>)[k] : sesionDestino[k]])) }, codigo, week_start, undefined, true);
+      Object.assign(cambiosPrescripcion, verified);
+      if (verified) for (const key of ['stimulusId', 'intent', 'structuredPrescription']) {
+        if (Object.hasOwn(sesionDestino, key) && !Object.hasOwn(verified, key)) Object.assign(cambiosPrescripcion, { [key]: null });
+      }
       await assertCurrentPrescriptionScope(supabase, codigo, cambiosPrescripcion.tipo ?? sesionDestino.tipo);
       await assertFreshSessionRestrictions(supabase, codigo, week_start, { ...sesionDestino, ...cambiosPrescripcion, sessionReceipt: datos.sessionReceipt });
     } catch (error: any) { return NextResponse.json({ ok: false, code: error.message }); }
@@ -4806,7 +4820,7 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
         ...(confidenceFinal !== undefined ? { confidence: confidenceFinal } : {}) },
     };
     const context: PlanMutationContext = { existingPlan: planActual, normalizedWeekStart: week_start };
-    const camposSesionCambiados = [...camposEfectivos, ...["modificado", "motivo_modificacion", "modificado_at"]
+    const camposSesionCambiados = [...new Set([...camposEfectivos, ...Object.keys(cambiosPrescripcion).filter(k => !Object.is(sesionDestino[k], (cambiosPrescripcion as Record<string, unknown>)[k]))]), ...["modificado", "motivo_modificacion", "modificado_at"]
       .filter(campo => !Object.is(sesionDestino[campo], sesionModificada[campo]))];
     const changeSet: PlanChangeSet = {
       operationType: "patch_session", affectedDays: [dia],

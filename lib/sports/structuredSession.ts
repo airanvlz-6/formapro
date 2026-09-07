@@ -6,12 +6,16 @@ import { MOVEMENT_LIBRARY } from './movementLibrary';
 import { WORKOUT_STRUCTURE_LIBRARY } from './workoutStructureLibrary';
 import { activeRestrictionFlags, evaluateMovementRestrictions } from './movementRestrictionPolicy';
 import { normalizeTrainingKey } from './prescriptionScope';
+import { checkDoseExtension, checkFormatDose, validateSessionDose, type DoseIntensity, type FormatDose } from './sessionDose';
+import { renderProfessionalSession } from './sessionProfessionalRenderer';
 
-export type MovementDose = { sets?: number; reps?: number; durationSeconds?: number; distanceMeters?: number; restSeconds?: number };
+export type MovementDose = { sets?: number; reps?: number; durationSeconds?: number; distanceMeters?: number; restSeconds?: number;
+  intensity?: DoseIntensity; tempo?: [number, number, number, number]; perSide?: boolean };
 export type StructuredSessionProposal = {
+  schemaVersion?: 2;
   stimulusId: string;
   structureId: string;
-  blocks: { blockType: 'warmup' | 'main' | 'cooldown'; movements: { movementId: string; prescription: MovementDose }[] }[];
+  blocks: { blockType: 'warmup' | 'main' | 'cooldown'; formatDose?: FormatDose; movements: { movementId: string; prescription: MovementDose }[] }[];
   explanation?: string;
 };
 export type SessionValidation = { ok: true; proposal: StructuredSessionProposal } | { ok: false; violations: string[] };
@@ -27,28 +31,32 @@ export const GENERATION_SAFETY_BOUNDS: Record<string, number> = {
 /** No extraction from prose, ID repair, aliases, fuzzy matching or extra executable fields. */
 export function checkSessionShape(value: unknown): SessionValidation {
   const violations: string[] = [];
-  if (!object(value) || !keys(value, ['stimulusId', 'structureId', 'blocks', 'explanation'])
+  const modern = object(value) && value.schemaVersion === 2;
+  if (!object(value) || !keys(value, ['stimulusId', 'structureId', 'blocks', ...(modern ? ['schemaVersion'] : ['explanation'])])
     || !['stimulusId', 'structureId', 'blocks'].every(k => Object.hasOwn(value, k))
     || typeof value.stimulusId !== 'string' || !value.stimulusId || typeof value.structureId !== 'string' || !value.structureId
     || (value.explanation !== undefined && (typeof value.explanation !== 'string' || value.explanation.length > 2000))
-    || !Array.isArray(value.blocks) || value.blocks.length !== 3) return { ok: false, violations: ['PROPOSAL_SHAPE_INVALID'] };
+    || !Array.isArray(value.blocks) || (modern ? ![2, 3].includes(value.blocks.length) : value.blocks.length !== 3)) return { ok: false, violations: ['PROPOSAL_SHAPE_INVALID'] };
   const blockTypes = ['warmup', 'main', 'cooldown'];
   value.blocks.forEach((block: unknown, index: number) => {
-    if (!object(block) || !keys(block, ['blockType', 'movements']) || block.blockType !== blockTypes[index]
+    if (!object(block) || !keys(block, ['blockType', 'movements', ...(modern ? ['formatDose'] : [])]) || block.blockType !== blockTypes[index]
       || !['blockType', 'movements'].every(k => Object.hasOwn(block, k))
       || !Array.isArray(block.movements) || !block.movements.length || block.movements.length > 30) {
       violations.push(`BLOCK_INVALID:${index}`); return;
     }
+    if (Object.hasOwn(block, 'formatDose') && !checkFormatDose(block.formatDose)) violations.push('DOSE_FORMAT_INVALID');
     const seen = new Set<string>();
     block.movements.forEach((entry: unknown) => {
       if (!object(entry) || !keys(entry, ['movementId', 'prescription']) || typeof entry.movementId !== 'string' || !entry.movementId
         || !['movementId', 'prescription'].every(k => Object.hasOwn(entry, k))
-        || !object(entry.prescription) || !keys(entry.prescription, doseKeys)) { violations.push(`MOVEMENT_SHAPE_INVALID:${index}`); return; }
+        || !object(entry.prescription) || (!modern && !keys(entry.prescription, doseKeys))) { violations.push(`MOVEMENT_SHAPE_INVALID:${index}`); return; }
       if (seen.has(entry.movementId)) violations.push(`DUPLICATE_MOVEMENT:${index}:${entry.movementId}`);
       seen.add(entry.movementId);
       const dose = entry.prescription;
+      if (modern) violations.push(...checkDoseExtension(dose));
       if (!['reps', 'durationSeconds', 'distanceMeters'].some(k => Object.hasOwn(dose, k))) violations.push('DOSE_REQUIRED');
       for (const [k, n] of Object.entries(dose)) {
+        if (modern && ['intensity', 'tempo', 'perSide'].includes(k)) continue;
         if (typeof n !== 'number' || !Number.isFinite(n) || (k === 'restSeconds' ? n < 0 : n <= 0)
           || (['sets', 'reps'].includes(k) && !Number.isSafeInteger(n))) violations.push(`DOSE_INVALID:${k}`);
         else if (n > GENERATION_SAFETY_BOUNDS[k]) violations.push(`DOSE_SAFETY_BOUND:${k}`);
@@ -103,6 +111,7 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
     if (!evaluateMovementRestrictions(m, flags).allowed || restrictions.areas.some(a => m.avoid_with?.includes(a))
       || notes.some(n => normalizeTrainingKey(n.movement) === m.id)) violations.push(`MOVEMENT_RESTRICTED:${m.id}`);
   }
+  if (!violations.length) violations.push(...validateSessionDose(contract, p));
   return violations.length ? { ok: false, violations } : checked;
 }
 
@@ -111,6 +120,7 @@ const label = (id: string) => id.replaceAll('_', ' ');
 export function renderContractSession(contract: AllowedTrainingContract, proposal: StructuredSessionProposal) {
   const validation = validateSessionAgainstTrainingContract(contract, proposal);
   if (!validation.ok) throw new Error(`SESSION_CONTRACT_INVALID:${validation.violations.join(',')}`);
+  if (contract.contractVersion === 3) return renderProfessionalSession(contract, proposal);
   const headings = { warmup: 'Calentamiento', main: 'Bloque principal', cooldown: 'Vuelta a la calma' };
   const units: Record<string, string> = { sets: 'series', reps: 'repeticiones', durationSeconds: 'segundos', distanceMeters: 'metros', restSeconds: 'segundos de descanso' };
   return { dia: contract.targetDay, tipo: contract.discipline, titulo: `${label(proposal.stimulusId)} · ${label(proposal.structureId)}`,

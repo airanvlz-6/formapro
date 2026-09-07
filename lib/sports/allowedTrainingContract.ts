@@ -6,6 +6,7 @@ import type { ExposureReport } from './exposureEngine';
 import type { PrescriptionScope } from './prescriptionScope';
 import type { RestrictionFlag } from './movementRestrictionPolicy';
 import { evaluateTrainingFeasibility, feasibilityInputErrors, resolveTrainingStimulus } from './trainingFeasibility';
+import { validateDoseContext, type SessionDoseContext } from './sessionDoseContext';
 
 export { STRUCTURES_BY_STIMULUS } from './workoutStructureLibrary';
 export { resolveTrainingStimulus, type StimulusResolution } from './trainingFeasibility';
@@ -23,6 +24,7 @@ export type ContractInput = {
   stimulus: unknown;
   /** Server-owned canonical input only; never inferred from title/focus. */
   intent?: PrescriptionIntent;
+  doseContext?: SessionDoseContext;
   restrictionsSnapshot: CanonicalRestrictions;
   externalLoadContext: ExternalLoadContext;
   exposureContext: { source: 'legacy_completed_weekly_rows'; report: ExposureReport; limitations: readonly string[] };
@@ -30,7 +32,7 @@ export type ContractInput = {
   source: 'weekly_session_builder';
 };
 export type AllowedTrainingContract = Omit<ContractInput, 'stimulus'> & {
-  contractVersion: 1 | 2;
+  contractVersion: 1 | 2 | 3;
   stimulusId: string;
   allowedMovementIds: string[];
   allowedStructureIds: string[];
@@ -48,11 +50,11 @@ function buildContract(input: ContractInput): ContractResult {
   const pool = evaluateTrainingFeasibility(input);
   if (!pool.resolved || !pool.feasible) return { ok: false, errors: pool.errors };
   const { stimulus: _intent, ...context } = input;
-  const contract: AllowedTrainingContract = structuredClone({ ...context, contractVersion: Object.hasOwn(input, 'intent') ? 2 : 1, stimulusId: pool.stimulusId,
+  const contract: AllowedTrainingContract = structuredClone({ ...context, contractVersion: input.doseContext ? 3 : Object.hasOwn(input, 'intent') ? 2 : 1, stimulusId: pool.stimulusId,
     allowedMovementIds: pool.allowedMovementIds, allowedStructureIds: pool.allowedStructureIds,
     rankedCandidates: pool.rankedCandidates,
     restrictionFiltering: pool.restrictionFiltering,
-    gaps: ['external_load_context_only_no_physiological_rule', 'equipment_skill_and_dose_not_enforced'] });
+    gaps: ['external_load_context_only_no_physiological_rule', input.doseContext ? 'equipment_inventory_and_skill_not_enforced' : 'equipment_skill_and_dose_not_enforced'] });
   const validation = validateAllowedTrainingContract(contract);
   return validation.ok ? { ok: true, contract } : validation;
 }
@@ -61,7 +63,8 @@ export function validateAllowedTrainingContract(contract: AllowedTrainingContrac
   try {
     const input: ContractInput = { ...contract, stimulus: contract.stimulusId };
     const errors = feasibilityInputErrors(input);
-    if (contract.contractVersion !== 1 && contract.contractVersion !== 2) errors.push('CONTRACT_VERSION_INVALID');
+    if (![1, 2, 3].includes(contract.contractVersion)) errors.push('CONTRACT_VERSION_INVALID');
+    if (contract.contractVersion === 3 ? !validateDoseContext(contract.doseContext!) : Object.hasOwn(contract, 'doseContext')) errors.push('DOSE_CONTEXT_VERSION_INVALID');
     if (contract.contractVersion === 1 && Object.hasOwn(contract, 'intent')) errors.push('INTENT_VERSION_MISMATCH');
     if (contract.contractVersion === 2 && !Object.hasOwn(contract, 'intent')) errors.push('INTENT_REQUIRED');
     const stimulus = resolveTrainingStimulus(contract.discipline, contract.stimulusId);

@@ -9,6 +9,8 @@ import { buildAllowedTrainingContract } from './allowedTrainingContract';
 import { generateContractSession } from './sessionGeneration';
 import { renderContractSession } from './structuredSession';
 import { canonicalDiscipline, normalizeTrainingKey, buildPrescriptionScope, resolveProfileDisciplines } from './prescriptionScope';
+import { loadAthletePrescriptionContext } from '../athlete/loadAthletePrescriptionContext';
+import { buildSessionDoseContext } from './sessionDoseContext';
 
 const PROFILE = 'modo_entrada,distribucion_semanal,especialidad,categoria';
 const domain = 'forge-session-contract-v1:';
@@ -25,6 +27,7 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
   try {
     let weekly: { calendarReceipt: string; optionId: string } | undefined;
     let weeklyContext: any;
+    let strategicWeek: any = null, neighbours: any[] = [];
     if (Object.hasOwn(request, 'weekly')) {
       const proof = request.weekly!;
       const fresh = await assertFreshWeeklyAuthority(db, userCodigo, request.targetWeekStart, proof.receipt, proof.generationToken);
@@ -32,6 +35,10 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
       if (proof.claims) resolveWeeklySlot(fresh.evidence, { ...proof.claims, day: request.day, optionId: proof.optionId });
       weekly = { calendarReceipt: proof.receipt as string, optionId: slot.optionId };
       weeklyContext = fresh.contexts[slot.discipline];
+      strategicWeek = fresh.evidence.strategy || null;
+      const ordered = fresh.evidence.admittedSlots, index = ordered.findIndex((s: any) => s.day === slot.day);
+      neighbours = [ordered[index - 1], ordered[index + 1]].filter(Boolean).map((s: any) => ({ day: s.day,
+        adaptationId: s.intent?.kind === 'adaptation' ? s.intent.adaptationId : null, state: s.state }));
       request = { targetWeekStart: fresh.evidence.week, day: slot.day, discipline: slot.discipline,
         stimulus: slot.stimulusId, intent: slot.intent, state: slot.state };
     }
@@ -43,9 +50,13 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
     if (error || !profile) return { ok: false as const, code: 'CONTRACT_PROFILE_READ_FAILED' };
     const restrictions = await getCanonicalRestrictions(db, userCodigo);
     // Reuse the freshly loaded weekly context; only restrictions are reread at the existing session boundary.
-    const prepared = weeklyContext ? buildAllowedTrainingContract({ ...weeklyContext, targetDay: request.day,
+    const base = weeklyContext ? buildAllowedTrainingContract({ ...weeklyContext, targetDay: request.day,
       stimulus: request.stimulus, intent: request.intent, restrictionsSnapshot: restrictions })
       : await prepareSessionTrainingContract(db, userCodigo, profile, request, restrictions);
+    if (!base.ok) return { ok: false as const, code: 'TRAINING_CONTRACT_INVALID', errors: base.errors };
+    const canonical = await loadAthletePrescriptionContext(db, userCodigo, { asOfDate: restrictions.asOfDate });
+    const prepared = buildAllowedTrainingContract({ ...base.contract, stimulus: base.contract.stimulusId,
+      doseContext: buildSessionDoseContext(canonical, base.contract.intent, strategicWeek, neighbours) });
     if (!prepared.ok) return { ok: false as const, code: 'TRAINING_CONTRACT_INVALID', errors: prepared.errors };
     if (weekly && (weeklyDigest(prepared.contract.restrictionsSnapshot) !== weeklyDigest(weeklyContext.restrictionsSnapshot)
       || weeklyDigest(prepared.contract.prescriptionScope) !== weeklyDigest(weeklyContext.prescriptionScope)
@@ -68,7 +79,7 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
 
 const fields = ['dia', 'tipo', 'titulo', 'por_que', 'descripcion', 'debilidad_relacionada'] as const;
 /** Returned pools are never authoritative. Authenticate original A, then revalidate and rerender A. */
-export function verifySessionReceipt(receipt: unknown, session: Record<string, any>, userCodigo: string, weekStart: string, expectedWeeklyReceipt?: string) {
+export function verifySessionReceipt(receipt: unknown, session: Record<string, any>, userCodigo: string, weekStart: string, expectedWeeklyReceipt?: string, restoreMissingMetadata = false) {
   if (typeof receipt !== 'string' || receipt.length > 200_000) throw new Error('SESSION_RECEIPT_REQUIRED');
   const [payload, mac, extra] = receipt.split('.');
   if (!payload || !mac || extra !== undefined) throw new Error('SESSION_RECEIPT_INVALID');
@@ -86,13 +97,15 @@ export function verifySessionReceipt(receipt: unknown, session: Record<string, a
     resolveWeeklySlot(weekly, { day: c.targetDay, optionId: evidence.weekly.optionId, targetWeekStart: c.targetWeekStart,
       discipline: c.discipline, stimulus: c.stimulusId, intent: c.intent,
       state: calendarState({ tipo: c.discipline, stimulusId: c.stimulusId }) });
-    if (c.contractVersion !== 2 || weeklyDigest(c.prescriptionScope) !== weeklyDigest(weekly.prescriptionScope))
+    if (![2, 3].includes(c.contractVersion) || weeklyDigest(c.prescriptionScope) !== weeklyDigest(weekly.prescriptionScope))
       throw new Error('WEEKLY_SESSION_CHAIN_MISMATCH');
   }
   const rendered = renderContractSession(evidence.contract, evidence.proposal);
   if (fields.some(k => !Object.is(session[k] ?? (k === 'debilidad_relacionada' ? null : undefined), rendered[k]))) throw new Error('SESSION_CONTENT_MISMATCH');
-  for (const field of ['stimulusId', 'intent'] as const) {
-    if (Object.hasOwn(rendered, field) && (!Object.hasOwn(session, field) || !samePlanData(session[field], rendered[field])))
+  for (const field of ['stimulusId', 'intent', 'structuredPrescription'] as const) {
+    // Scalar-only mutation transports may restore absent metadata from verified evidence, never from prose.
+    if (restoreMissingMetadata && !Object.hasOwn(session, field)) continue;
+    if (Object.hasOwn(rendered, field) && (!Object.hasOwn(session, field) || !samePlanData(session[field], (rendered as Record<string, unknown>)[field])))
       throw new Error('SESSION_CONTENT_MISMATCH');
   }
   return rendered;
@@ -106,6 +119,12 @@ export async function assertFreshSessionRestrictions(db: any, userCodigo: string
   const current = await getCanonicalRestrictions(db, userCodigo);
   const material = (r: any) => JSON.stringify({ state: r.state, areas: r.areas, restrictions: r.restrictions, reassessments: r.reassessments, active: r.active });
   if (material(original) !== material(current)) throw new Error('SESSION_RESTRICTIONS_CHANGED_REGENERATE');
+  const contract = JSON.parse(Buffer.from(session.sessionReceipt.split('.')[0], 'base64url').toString()).contract;
+  if (contract.contractVersion === 3) {
+    const canonical = await loadAthletePrescriptionContext(db, userCodigo, { asOfDate: current.asOfDate });
+    const now = buildSessionDoseContext(canonical, contract.intent, contract.doseContext.weekStrategy, contract.doseContext.neighbours);
+    if (now.evidenceDigest !== contract.doseContext.evidenceDigest) throw new Error('SESSION_DOSE_CONTEXT_CHANGED_REGENERATE');
+  }
 }
 
 /** Current ownership may revoke an old receipt; this does not recalculate contract A. */

@@ -3,6 +3,7 @@ import { normalizeAvailabilityDays } from './trainingAvailability';
 const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
   .replace(/[¡!¿?,.;:]/g, ' ').replace(/\s+/g, ' ').trim();
 const confirmations = new Set(['si','si sigue igual','si sigue siendo asi','si sigue siendo correcto','correcto','es correcto',
+  'si es correcta','si correcto','es correcta','si todo correcto','todo correcto',
   'igual','igual que antes','sigue igual','sigue siendo asi','no ha cambiado','sin cambios','manten lo mismo','manten esos dias',
   'manten esos mismos dias','si esos mismos dias','si esos dias','no sigue igual','confirmo']);
 export function isExistingAvailabilityConfirmation(value: unknown): boolean {

@@ -1273,7 +1273,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
           if(result.goalRequirement?.questionToken && result.goalRequirement.question?.text){
             const empezarHoy=(body.datos as any)?.empezarHoy ?? pendingGoalQuestion?.empezarHoy ?? true;
             setPendingGoalQuestion({codigo:codigoUsuario,token:result.goalRequirement.questionToken,empezarHoy});
-            setMensajes(prev=>[...prev,{role:"assistant",content:(result.code==='GOAL_ANSWER_UNSUPPORTED' ? 'Esa respuesta no corresponde a un objetivo modelado. ' : '')+result.goalRequirement.question.text}]);
+            setMensajes(prev=>[...prev,{role:"assistant",content:(result.code==='GOAL_SELECTION_AMBIGUOUS' ? '«Mantener mi objetivo» es ambiguo: hay varias declaraciones principales. Elige una. ' : result.code==='GOAL_DECLARATION_REQUIRED' ? 'Elige una declaración o usa «Mi objetivo es: ...». ' : '')+result.goalRequirement.question.text}]);
           }
           if(result.questionToken && result.question?.text){
             setPendingPrescriptionQuestion({codigo:codigoUsuario,token:result.questionToken});
@@ -1742,7 +1742,8 @@ const forgeValidator=(texto:string):string=>{
             : "No se ha confirmado una semana nueva. Puedes volver a solicitarla para comprobar el contexto actual."}]);
         }else if(!result.goalRequirement){
           setPendingGoalQuestion(null);
-          setMensajes(prev=>[...prev,{role:"assistant",content:result.cancelled
+          if(result.saved){setObjetivoPrincipal(result.primaryGoal);setRespuestas(result.profile);}
+          setMensajes(prev=>[...prev,{role:"assistant",content:result.saved ? result.message : result.cancelled
             ? "Conservo tu objetivo. La planificación orientada a él queda pendiente de resolución."
             : "No se ha confirmado el objetivo. Solicita de nuevo la semana para comprobar los datos actuales."}]);
         }

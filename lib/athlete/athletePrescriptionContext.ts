@@ -111,7 +111,7 @@ export function projectAthletePrescriptionProfile(user: Row, asOfDate?: string) 
   const goal = record(user.objetivo_principal);
   for (const [source, raw, when] of [
     ['usuarios.objetivo_principal', user.objetivo_principal, goal.updated_at ?? goal.fecha_inicio],
-    ...['objetivo_general', 'objetivo_detalle', 'objetivo_principal'].map(k => [`usuarios.perfil.${k}`, profile[k], record(profile[k]).updated_at]),
+    ...['objetivo_general', 'objetivo_principal'].map(k => [`usuarios.perfil.${k}`, profile[k], record(profile[k]).updated_at]),
   ]) {
     const value = text(record(raw).descripcion ?? raw);
     if (value) primary.push(evidence(value, String(source), raw, when));
@@ -203,7 +203,8 @@ export function projectAthletePrescriptionProfile(user: Row, asOfDate?: string) 
   return structuredClone({ version: 1 as const,
     prescriptionSignals: projectPrescriptionSignals(profile, asOfDate),
     athlete: Object.fromEntries(['modo_entrada', 'categoria', 'especialidad'].map(k => [k, evidence(user[k] ?? null, `usuarios.${k}`, user[k] ?? null)])),
-    goals: { primary: resolveEvidence(primary), secondary, disciplineSpecific, competition },
+    goals: { primary: resolveEvidence(primary), secondary, disciplineSpecific, competition,
+      detail: profile.objetivo_detalle == null ? [] : [evidence(profile.objetivo_detalle, 'usuarios.perfil.objetivo_detalle', profile.objetivo_detalle, record(profile.objetivo_detalle).updated_at)] },
     sessionTimeBudget: resolveEvidence(times), strength: { references: strength, byMovement: strengthByMovement },
     running: { references: running, byMetric: runningByMetric }, development,
     declaredLimitations: evidence(profile.lesiones ?? null, 'usuarios.perfil.lesiones', profile.lesiones ?? null),

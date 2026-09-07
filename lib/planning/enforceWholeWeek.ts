@@ -1,33 +1,48 @@
 import { validateAdmittedWholeWeek } from './wholeWeekAdapter';
-import { repairSessionWithinReceipt } from '../sports/sessionAuthority';
+import { repairSessionWithinReceipt, verifiedRepairContract } from '../sports/sessionAuthority';
 import { calendarKey } from './weeklyCalendar';
+import { resolveWeekRepairPlan, MAX_WEEK_REPAIR_TARGETS, type RepairCandidate } from './wholeWeekRepairPlan';
 
-/** Batch barrier after every proposal exists. At most one changed session and one model call. No writes. */
+/** Two finite stages, a shared distinct-target budget, and no provisional writes. */
 export async function enforceWholeWeek(codigo:string,week:string,rows:any[],sourceSessions:any[],calendarReceipt:string,
   authority:{evidence:any;contexts:Record<string,any>},complete:(prompt:string)=>Promise<string>) {
-  let finalRows = structuredClone(rows), finalSources = [...sourceSessions];
-  const initial = validateAdmittedWholeWeek(week,finalRows,authority.evidence,authority.contexts);
-  let repairCount = 0;
-  if (initial.status === 'repair_required') {
-    const targetIds = [...new Set(initial.repairHints.flatMap(h=>h.sessionIds))].reverse();
-    const target = targetIds.map(id=>Number(id.split(':')[1])).find(index=> {
-      const slot=authority.evidence.admittedSlots.find((s:any)=>s.day===calendarKey(finalRows[index].dia));
-      return !slot?.protected && finalSources.some(s=>calendarKey(s.dia)===calendarKey(finalRows[index].dia));
-    });
-    if (target !== undefined) {
-      const source=finalSources.find(s=>calendarKey(s.dia)===calendarKey(finalRows[target].dia))!;
-      repairCount=1;
-      try {
-        const replacement=await repairSessionWithinReceipt(source,codigo,week,calendarReceipt,initial.diagnostics,
-          finalRows.map(s=>s.structuredPrescription?.proposal || null),complete);
+  const finalRows=structuredClone(rows),finalSources=structuredClone(sourceSessions);
+  const validate=()=>validateAdmittedWholeWeek(week,finalRows,authority.evidence,authority.contexts);
+  const initial=validate();let result=initial,repairCount=0;
+  const orchestration={version:1,maxDistinctTargets:MAX_WEEK_REPAIR_TARGETS,maxModelCalls:MAX_WEEK_REPAIR_TARGETS*2,
+    localRepairCount:0,targetedRegenerationCount:0,targetedSessionCount:0,affectedSessionIds:[] as string[],
+    stages:[] as {stage:string;targetIds:string[];failedIds:string[];limitExceeded:boolean;nonRepairableCodes:string[]}[],finalStatus:initial.status};
+  const candidates:RepairCandidate[]=rows.map((row,index)=>{
+    const day=calendarKey(row.dia),slot=authority.evidence.admittedSlots.find((s:any)=>s.day===day);
+    const source=sourceSessions.find(s=>calendarKey(s.dia)===day);
+    let contract:any;
+    if(source&&!slot?.protected)try{contract=verifiedRepairContract(source,codigo,week,calendarReceipt);}catch{/* No authority, no target. */}
+    return {id:`${day}:${index}`,index,role:contract?.intent?.role||null,protected:!!slot?.protected,authorized:!!contract,
+      intent:contract?.intent||{kind:'unknown'},discipline:contract?.discipline||''};
+  });
+  for(const stage of ['local','targeted'] as const){
+    if(result.status==='pass')break;
+    const plan=resolveWeekRepairPlan(result.diagnostics,candidates,orchestration.affectedSessionIds);
+    const trace={stage,targetIds:plan.affectedSessionIds,failedIds:[] as string[],limitExceeded:plan.limitExceeded,
+      nonRepairableCodes:plan.nonRepairableDiagnostics.map(d=>d.code)};
+    orchestration.stages.push(trace);
+    if(plan.limitExceeded||plan.nonRepairableDiagnostics.length||!plan.repairGroups.length)break;
+    if(stage==='targeted')orchestration.targetedRegenerationCount=1;
+    for(const group of plan.repairGroups){
+      const {target}=group,sourceIndex=finalSources.findIndex(s=>calendarKey(s.dia)===calendarKey(finalRows[target.index].dia));
+      if(!orchestration.affectedSessionIds.includes(target.id))orchestration.affectedSessionIds.push(target.id);
+      repairCount++;if(stage==='local')orchestration.localRepairCount++;else orchestration.targetedSessionCount++;
+      try{
+        const replacement=await repairSessionWithinReceipt(finalSources[sourceIndex],codigo,week,calendarReceipt,group.diagnostics,
+          finalRows.map(s=>({day:s.dia,intent:s.structuredPrescription?.objective?.intent||null,role:s.structuredPrescription?.sessionRole||null,
+            proposal:s.structuredPrescription?.proposal||null})),complete,stage);
         const {sessionReceipt:_receipt,...content}=replacement;
-        finalRows[target]=content;finalSources=finalSources.map(s=>s===source?replacement:s);
-      } catch (error:any) {
-        return {ok:false as const,code:'WEEK_REPAIR_FAILED',result:initial,repairCount,reason:error.message};
-      }
+        finalRows[target.index]=content;finalSources[sourceIndex]=replacement;
+      }catch{trace.failedIds.push(target.id);}
     }
+    result=validate();
   }
-  const result=validateAdmittedWholeWeek(week,finalRows,authority.evidence,authority.contexts);
-  if(result.status !== 'pass')return {ok:false as const,code:repairCount?'WEEK_REPAIR_FAILED':'WEEK_COHERENCE_INVALID',result,repairCount};
-  return {ok:true as const,sessions:finalRows,sessionEvidence:finalSources,result,initial,repairCount};
+  result=validate();orchestration.finalStatus=result.status;
+  if(result.status!=='pass')return {ok:false as const,code:repairCount?'WEEK_REPAIR_FAILED':'WEEK_COHERENCE_INVALID',result,repairCount,orchestration};
+  return {ok:true as const,sessions:finalRows,sessionEvidence:finalSources,result,initial,repairCount,orchestration};
 }

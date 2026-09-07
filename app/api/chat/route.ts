@@ -4,6 +4,7 @@ import { admittedWeekObjective } from "@/lib/planning/weeklyCalendarAuthority";
 import { issueWholeWeekReceipt } from "@/lib/planning/weeklyCalendarAuthority";
 import { enforceWholeWeek } from "@/lib/planning/enforceWholeWeek";
 import { validateAdmittedWholeWeek } from "@/lib/planning/wholeWeekAdapter";
+import { wholeWeekFailure } from "@/lib/planning/wholeWeekFailure";
 import { loadAthletePrescriptionContext } from "@/lib/athlete/loadAthletePrescriptionContext";
 import { strategyDemandIds, normalizeStrategyProposal } from "@/lib/planning/canonicalWeekStrategy";
 import { plannerProviderMetadata } from "@/lib/planning/weeklyPlannerDiagnostics";
@@ -4685,7 +4686,7 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
           const output = await response.json();
           return output.content?.map((b: any) => b.text || "").join("") || "";
         });
-      if (!wholeWeek.ok) return NextResponse.json({ ...wholeWeek, retryable: false }, { status: 422 });
+      if (!wholeWeek.ok) return NextResponse.json(wholeWeekFailure(wholeWeek.code));
       plan.sessions = wholeWeek.sessions;
       newlyPrescribedSessions = wholeWeek.sessionEvidence;
       if (wholeWeek.repairCount) await assertWeeklyCalendar(supabase, codigo, plan.week_start, plan.sessions, datos.calendarReceipt,
@@ -4745,9 +4746,9 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
     } catch (error: any) { return NextResponse.json({ ok: false, code: error.message, retryable: false }); }
     const finalWeekValidation = validateAdmittedWholeWeek(plan.week_start, validationResult.candidate.sessions,
       wholeWeekAuthority!.evidence, wholeWeekAuthority!.contexts);
-    if (finalWeekValidation.status !== "pass") return NextResponse.json({ ok: false, code: "WEEK_FINAL_VALIDATION_FAILED", result: finalWeekValidation, retryable: false }, { status: 422 });
+    if (finalWeekValidation.status !== "pass") return NextResponse.json(wholeWeekFailure("WEEK_FINAL_VALIDATION_FAILED"));
     const wholeWeekReceipt = issueWholeWeekReceipt(codigo, plan.week_start, datos.calendarReceipt,
-      validationResult.candidate.sessions, finalWeekValidation, wholeWeek.repairCount);
+      validationResult.candidate.sessions, finalWeekValidation, wholeWeek.repairCount, wholeWeek.orchestration);
     const persisted = planExistente
       ? await mutatePlanWithCAS(supabase, validationResult.mutation)
       : await createPlan(supabase, validationResult.mutation);
@@ -4781,7 +4782,7 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
       accion: esSemanaActual ? "regenerar_semana" : "generar_semana_nueva",
       motivo: JSON.stringify({ weekObjective: plan.week_objective || null, wholeWeekReceipt }), confirmado_por_usuario: true }));
     return NextResponse.json({ ok: true, persistenceStatus: "committed", revision: persisted.revision, warnings,
-      wholeWeekValidation: finalWeekValidation, wholeWeekReceipt, sessions: validationResult.candidate.sessions });
+      wholeWeekValidation: finalWeekValidation, wholeWeekReceipt, repairOrchestration: wholeWeek.orchestration, sessions: validationResult.candidate.sessions });
   }
 
   if (action === "actualizar_sesion_plan") {

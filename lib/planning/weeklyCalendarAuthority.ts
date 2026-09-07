@@ -157,10 +157,13 @@ export async function assertWeeklyCalendar(db: any, codigo: string, week: string
 }
 
 /** Reuses the calendar HMAC infrastructure; summary is evidence, never a bypass of final validation. */
-export function issueWholeWeekReceipt(codigo:string,week:string,calendarReceipt:string,sessions:readonly any[],result:any,repairCount:number) {
+export function issueWholeWeekReceipt(codigo:string,week:string,calendarReceipt:string,sessions:readonly any[],result:any,repairCount:number,
+  orchestration?: {localRepairCount:number;targetedRegenerationCount:number;affectedSessionIds:string[];finalStatus:string}) {
   const payload = Buffer.from(JSON.stringify({kind:'whole-week-validation',version:1,codigo,week,
     calendarDigest:weeklyDigest(calendarReceipt),contentDigest:weeklyDigest(sessions),status:result.status,
-    diagnosticCodes:result.diagnostics.map((d:any)=>d.code),repairCount})).toString('base64url');
+    diagnosticCodes:result.diagnostics.map((d:any)=>d.code),repairCount,
+    ...(orchestration?{orchestration:{localRepairCount:orchestration.localRepairCount,targetedRegenerationCount:orchestration.targetedRegenerationCount,
+      affectedSessionIds:orchestration.affectedSessionIds,finalStatus:result.status}}:{})})).toString('base64url');
   return payload + '.' + mac(payload);
 }
 

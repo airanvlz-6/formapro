@@ -28,11 +28,16 @@ type Request = { targetWeekStart: string; day: string; discipline: string; stimu
   weekly?: { receipt: unknown; generationToken: unknown; optionId: unknown; claims?: Record<string, any> } };
 
 /** One repair proposal under the original authenticated authority; never widen pools or replace intent. */
+export function verifiedRepairContract(session:Record<string,any>,codigo:string,week:string,calendarReceipt:string){
+  verifySessionReceipt(session.sessionReceipt,session,codigo,week,calendarReceipt);
+  return JSON.parse(Buffer.from(session.sessionReceipt.split('.')[0],'base64url').toString()).contract;
+}
 export async function repairSessionWithinReceipt(session: Record<string, any>, codigo: string, week: string, calendarReceipt: string,
-  diagnostics: unknown, siblings: unknown, complete: (prompt: string) => Promise<string>) {
+  diagnostics: unknown, siblings: unknown, complete: (prompt: string) => Promise<string>, stage:'local'|'targeted'='local') {
   verifySessionReceipt(session.sessionReceipt, session, codigo, week, calendarReceipt);
   const evidence = JSON.parse(Buffer.from(session.sessionReceipt.split('.')[0], 'base64url').toString());
-  const raw = await complete(`Repair one structured proposal within this unchanged signed contract. Return only proposal JSON. No titles or authority changes.\nCONTRACT:\n${JSON.stringify(evidence.contract)}\nREJECTED_PROPOSAL:\n${JSON.stringify(evidence.proposal)}\nWHOLE_WEEK_DIAGNOSTICS:\n${JSON.stringify(diagnostics)}\nSIBLING_PROPOSALS:\n${JSON.stringify(siblings)}`);
+  const weekly=verifyWeeklyCalendarReceipt(calendarReceipt,codigo,week,true);
+  const raw = await complete(`${stage==='local'?'Repair the implicated composition locally.':'Targeted regeneration: compose a fresh alternative; the local pass was insufficient.'} Return only proposal JSON inside the UNCHANGED signed contract. No titles or authority changes.\nSTAGE:${stage}\nCONTRACT:\n${JSON.stringify(evidence.contract)}\nWEEK_STRATEGY:\n${JSON.stringify(weekly.strategy||null)}\nREJECTED_PROPOSAL:\n${JSON.stringify(evidence.proposal)}\nWHOLE_WEEK_DIAGNOSTICS:\n${JSON.stringify(diagnostics)}\nSIBLING_PROPOSALS:\n${JSON.stringify(siblings)}`);
   const parsed = parseStructuredSession(raw);
   if (!parsed.ok) throw new Error('WEEK_REPAIR_PROPOSAL_INVALID');
   const checked = validateSessionAgainstTrainingContract(evidence.contract, parsed.proposal);

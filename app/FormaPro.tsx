@@ -641,7 +641,7 @@ export default function Forge() {
         const planFocusInicial=await orquestarGeneracionSemana(true);
         const respuestaFocusInicial=planFocusInicial
           ? `✅ **Semana generada y guardada.**\n\nBloque: ${planFocusInicial.block_name} — ${planFocusInicial.week_objective}\n\nRevisa el detalle completo en **Mi Plan**. ¿Alguna duda?`
-          : "⚠️ Hubo un problema generando la semana. Puedes pedírmelo directamente en el chat: \"genera mi semana\".";
+          : "No se ha confirmado una semana nueva. El plan guardado, si existe, sigue disponible; revisemos lo ocurrido antes de intentar otra generación.";
         setMensajes(prev=>[...prev,{role:"assistant",content:respuestaFocusInicial}]);
         setGenerandoSemana(false);
       })();
@@ -1240,7 +1240,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     const weeklyGeneration=generationResult?.ok ? generationResult.generation : undefined;
     if(weeklyGeneration) body={...body,system:String(body.system||"")+"\nSnapshot semanal del servidor para esta generación (autoridad sobre contexto previo):\n"+JSON.stringify(weeklyGeneration.snapshots)};
     let intentos=0;
-    const maxIntentos=body.action==="planificar_semana"?1:3;
+    const maxIntentos=body.action==="planificar_semana"||body.action==="guardar_plan_semana"?1:3;
     while(intentos<maxIntentos){
       try{
         const controller=useAbort?abortControllerRef.current:null;
@@ -1946,7 +1946,7 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
           const plan=await orquestarGeneracionSemana(empezarHoyReal);
           const respuestaFinalGen=plan
             ? `✅ **Semana generada y guardada.**\n\nBloque: ${plan.block_name} — ${plan.week_objective}\n\nRevisa el detalle completo en **Mi Plan**. ¿Alguna duda?`
-            : "⚠️ Hubo un problema generando la semana. Inténtalo de nuevo o dímelo directamente en el chat.";
+            : "No se ha confirmado una semana nueva. El plan guardado, si existe, sigue disponible; revisemos lo ocurrido antes de intentar otra generación.";
           setMensajes(prev=>[...prev,{role:"assistant",content:respuestaFinalGen}]);
           setGenerandoSemana(false);
           // FIX: persistir el mensaje final en el historial real, no solo en el estado visual —

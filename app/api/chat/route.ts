@@ -28,6 +28,7 @@ import { STIMULUS_LIBRARY } from "@/lib/sports/movementLibrary";
 import { generateTrainingSession, assertFreshSessionRestrictions, verifySessionReceipt, admitSessionContent, assertCurrentPrescriptionScope } from "@/lib/sports/sessionAuthority";
 import { savePrescriptionAnswer } from "@/lib/athlete/prescriptionAnswers";
 import { saveGoalAnswer } from "@/lib/athlete/goalAnswers";
+import { resolveWeeklyGenerationPreflight } from "@/lib/planning/weeklyGenerationPreflight";
 import { loadTrainingLoad } from "@/lib/trainingLoad/loadTrainingLoad";
 import { canonicalDiscipline } from "@/lib/sports/prescriptionScope";
 import { aplicarTrainingFrequencySafetyNet, calcularFrecuenciaRealRelativa } from "@/lib/sports/trainingFrequencySafetyNet";
@@ -5052,6 +5053,17 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
   if (action === "responder_dato_prescripcion") {
     try { return NextResponse.json(await savePrescriptionAnswer(supabase, codigo, datos.questionToken, datos.answer)); }
     catch (error: any) { return NextResponse.json({ ok: false, code: error.message }); }
+  }
+
+  if (action === "preflight_generacion_semana") {
+    try {
+      const generation = resolveWeeklyGeneration(datos.generationToken, codigo);
+      if (![generation.currentWeek, generation.nextWeek].includes(datos.targetWeekStart)) throw new Error('CALENDAR_TARGET_INVALID');
+      return NextResponse.json(await resolveWeeklyGenerationPreflight(supabase, codigo, {
+        targetWeekStart: datos.targetWeekStart, today: new Date().toLocaleDateString('en-CA', { timeZone: 'Atlantic/Canary' }),
+        snapshot: generation.snapshots[datos.targetWeekStart], temporalIntent: datos.temporalIntent, temporalReply: datos.temporalReply === true, planningRunId: generation.planningRunId,
+      }));
+    } catch { return NextResponse.json({ ok: false, canContinue: false, code: 'PREFLIGHT_CONTEXT_INVALID' }); }
   }
 
   if (action === "responder_objetivo_principal") {

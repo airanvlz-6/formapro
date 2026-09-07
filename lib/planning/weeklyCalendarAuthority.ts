@@ -34,7 +34,8 @@ export async function loadWeeklyCalendarContext(db: any, codigo: string) {
   let dist: Record<string, unknown>;
   try { dist = typeof profile.distribucion_semanal === 'string' ? JSON.parse(profile.distribucion_semanal) : profile.distribucion_semanal; }
   catch { throw new Error('CALENDAR_AVAILABILITY_INVALID'); }
-  if (!dist || typeof dist !== 'object' || Array.isArray(dist)) throw new Error('CALENDAR_AVAILABILITY_REQUIRED');
+  if (dist == null) throw new Error('CALENDAR_AVAILABILITY_REQUIRED');
+  if (typeof dist !== 'object' || Array.isArray(dist)) throw new Error('CALENDAR_AVAILABILITY_INVALID');
   const allowed: Record<string, string[]> = {};
   for (const discipline of scope.scope.managedDisciplines) {
     const sources = t.data.filter((s: any) => s.owner === 'forge' && canonicalDiscipline(s.disciplina) === discipline && s.dias != null);

@@ -638,8 +638,8 @@ export default function Forge() {
         setMensajes([{role:"assistant",content:"¡Bienvenido a tu nuevo modo! Ya tengo todos tus datos — voy a construir tu primera semana ahora mismo."}]);
         setGenerandoSemana(true);
         setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu primera semana paso a paso — analizando bloque, distribuyendo días y diseñando cada sesión..."}]);
-        const planFocusInicial=await orquestarGeneracionSemana(true);
-        if(planFocusInicial?.goalRequirement){setGenerandoSemana(false);return;}
+        const planFocusInicial=await orquestarGeneracionSemana();
+        if(planFocusInicial?.goalRequirement || planFocusInicial?.preflightRequirement){setGenerandoSemana(false);return;}
         const respuestaFocusInicial=planFocusInicial
           ? `✅ **Semana generada y guardada.**\n\nBloque: ${planFocusInicial.block_name} — ${planFocusInicial.week_objective}\n\nRevisa el detalle completo en **Mi Plan**. ¿Alguna duda?`
           : "No se ha confirmado una semana nueva. El plan guardado, si existe, sigue disponible; revisemos lo ocurrido antes de intentar otra generación.";
@@ -941,7 +941,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
   };
 
   // FORGE ORCHESTRATOR — genera la semana completa en 3 pasos pequeños en vez de una llamada gigante
-  const orquestarGeneracionSemana=async(empezarHoy:boolean=true):Promise<any>=>{
+  const orquestarGeneracionSemana=async(empezarHoy?:boolean,temporalAnswer?:string,temporalReply:boolean=false):Promise<any>=>{
     if(!codigoUsuario) return null;
     console.log("=== FORGE ORCHESTRATOR: INICIO ===");
 
@@ -956,12 +956,18 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     // devolvia undefined — causando que el Orchestrator SIEMPRE creyera que la semana seguia
     // abierta y regenerara la semana actual en vez de avanzar a la siguiente.
     const resVerificarCierreActual=await apiCall({action:"check_week_closure",codigo:codigoUsuario});
+    if(resVerificarCierreActual?.ok!==true) return null;
     const semanaActualYaCerrada=resVerificarCierreActual?.yaCerrada===true;
 
     const weekStartOrchestrator=semanaActualYaCerrada
       ? weeklyGeneration.nextWeek
       : weekStartSemanaActual;
     console.log("ORCHESTRATOR: semana actual ya cerrada =", semanaActualYaCerrada, "→ weekStart real:", weekStartOrchestrator);
+
+    const preflight=await apiCall({action:"preflight_generacion_semana",codigo:codigoUsuario,datos:{generationToken:weeklyGeneration.token,targetWeekStart:weekStartOrchestrator,temporalIntent:empezarHoy ?? temporalAnswer,temporalReply}});
+    if(preflight?.goalRequirement || preflight?.preflightRequirement) return preflight;
+    if(!preflight?.canContinue || typeof preflight.temporalDecision?.includeToday!=="boolean") return null;
+    empezarHoy=preflight.temporalDecision.includeToday;
 
 
     // Paso 1: Block Analyzer
@@ -1257,7 +1263,8 @@ const [equipoSeleccionado,setEquipoSeleccionado]=useState<any>(null);
   const accentColor=cat?.color||C.accent;
 
 const [pendingPrescriptionQuestion,setPendingPrescriptionQuestion]=useState<{codigo:string;token:string}|null>(null);
-const [pendingGoalQuestion,setPendingGoalQuestion]=useState<{codigo:string;token:string;empezarHoy:boolean}|null>(null);
+const [pendingGoalQuestion,setPendingGoalQuestion]=useState<{codigo:string;token:string;empezarHoy?:boolean;temporalAnswer?:string;temporalReply?:boolean}|null>(null);
+const weeklyTemporalIntentRef=useRef<{text?:string;answeringQuestion:boolean}>({answeringQuestion:false});
 const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     const generationResult=!body.action && codigoUsuario
       ? await apiCall({action:"preparar_generacion_semana",codigo:codigoUsuario}) : null;
@@ -1270,9 +1277,17 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
         const controller=useAbort?abortControllerRef.current:null;
         const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:controller?.signal});
         if(res.ok) { const result=await res.json();
+          if(result.preflightRequirement?.text){
+            setEsperandoConfirmacionDisponibilidad(result.preflightRequirement.kind==="availability");
+            setEsperandoConfirmacionEmpezarHoy(result.preflightRequirement.kind==="temporal");
+            setMensajes(prev=>[...prev,{role:"assistant",content:result.preflightRequirement.text}]);
+          }
           if(result.goalRequirement?.questionToken && result.goalRequirement.question?.text){
-            const empezarHoy=(body.datos as any)?.empezarHoy ?? pendingGoalQuestion?.empezarHoy ?? true;
-            setPendingGoalQuestion({codigo:codigoUsuario,token:result.goalRequirement.questionToken,empezarHoy});
+            const intent=(body.datos as any)?.temporalIntent;
+            const empezarHoy=typeof intent==="boolean" ? intent : (body.datos as any)?.empezarHoy ?? pendingGoalQuestion?.empezarHoy;
+            const temporalAnswer=typeof intent==="string" ? intent : pendingGoalQuestion?.temporalAnswer;
+            const temporalReply=(body.datos as any)?.temporalReply ?? pendingGoalQuestion?.temporalReply ?? false;
+            setPendingGoalQuestion({codigo:codigoUsuario,token:result.goalRequirement.questionToken,empezarHoy,temporalAnswer,temporalReply});
             setMensajes(prev=>[...prev,{role:"assistant",content:(result.code==='GOAL_SELECTION_AMBIGUOUS' ? '«Mantener mi objetivo» es ambiguo: hay varias declaraciones principales. Elige una. ' : result.code==='GOAL_DECLARATION_REQUIRED' ? 'Elige una declaración o usa «Mi objetivo es: ...». ' : '')+result.goalRequirement.question.text}]);
           }
           if(result.questionToken && result.question?.text){
@@ -1724,6 +1739,24 @@ const forgeValidator=(texto:string):string=>{
     finally{setCargando(false);}
   };
 
+  // All generation entries use the same server preflight; the client only presents requirements.
+  const dispararGeneracion=async(temporalAnswer?:string,answeringQuestion:boolean=false)=>{
+    weeklyTemporalIntentRef.current={text:temporalAnswer,answeringQuestion};
+    setGenerandoSemana(true);
+    setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu semana paso a paso..."}]);
+    try {
+      const plan=await orquestarGeneracionSemana(undefined,temporalAnswer,answeringQuestion);
+      if(plan?.goalRequirement || plan?.preflightRequirement) return;
+      const respuestaFinalGen=plan
+        ? `✅ **Semana generada y guardada.**\n\nBloque: ${plan.block_name} — ${plan.week_objective}\n\nRevisa el detalle completo en **Mi Plan**.`
+        : "No se ha confirmado una semana nueva. El plan guardado, si existe, sigue disponible; revisemos lo ocurrido antes de intentar otra generación.";
+      setMensajes(prev=>[...prev,{role:"assistant",content:respuestaFinalGen}]);
+      const histConGeneracion=[...historial,{role:"user",content:temporalAnswer||"Genera mi semana"},{role:"assistant",content:respuestaFinalGen}];
+      setHistorial(histConGeneracion);
+      if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histConGeneracion}});
+    } finally { setGenerandoSemana(false); }
+  };
+
   const enviar=async(texto:string=input)=>{
     console.log("=== ENTRA A FUNCION enviar() ===");
     if((!texto.trim()&&imagenesAdjuntas.length===0)||cargando||bloqueado) return;
@@ -1736,8 +1769,8 @@ const forgeValidator=(texto:string):string=>{
           setObjetivoPrincipal(result.primaryGoal);setRespuestas(result.profile);
           setPendingGoalQuestion(null);setGenerandoSemana(true);
           setMensajes(prev=>[...prev,{role:"assistant",content:"Objetivo principal guardado y comprobado. Continúo con la planificación."}]);
-          const plan=await orquestarGeneracionSemana(pendingGoalQuestion.empezarHoy);
-          if(!plan?.goalRequirement) setMensajes(prev=>[...prev,{role:"assistant",content:plan
+          const plan=await orquestarGeneracionSemana(pendingGoalQuestion.empezarHoy,pendingGoalQuestion.temporalAnswer,pendingGoalQuestion.temporalReply);
+          if(!plan?.goalRequirement && !plan?.preflightRequirement) setMensajes(prev=>[...prev,{role:"assistant",content:plan
             ? `✅ **Semana generada y guardada.**\n\n${plan.week_objective}\n\nRevisa el detalle en **Mi Plan**.`
             : "No se ha confirmado una semana nueva. Puedes volver a solicitarla para comprobar el contexto actual."}]);
         }else if(!result.goalRequirement){
@@ -1795,8 +1828,9 @@ const forgeValidator=(texto:string):string=>{
         } else {
           setPendingCoachOwnership(null);
           if(pendingCoachOwnership.weekly){
-            setEsperandoConfirmacionDisponibilidad(false);setEsperandoConfirmacionEmpezarHoy(true);
-            setMensajes(prev=>[...prev,{role:"assistant",content:confirmed+" ¿Quieres empezar hoy o desde el próximo día disponible?"}]);
+            setEsperandoConfirmacionDisponibilidad(false);
+            setMensajes(prev=>[...prev,{role:"assistant",content:confirmed}]);
+            await dispararGeneracion(weeklyTemporalIntentRef.current.text,weeklyTemporalIntentRef.current.answeringQuestion);
           } else setMensajes(prev=>[...prev,{role:"assistant",content:confirmed}]);
         }
       } finally {setCargando(false);}
@@ -1983,41 +2017,14 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
           return;
         }
         setEsperandoConfirmacionDisponibilidad(false);
-        // FIX: pregunta EXPLICITA y determinista (nunca inferida por hora ni decidida por el LLM)
-        // de si el atleta quiere empezar hoy mismo o desde el proximo dia disponible — evita
-        // prescribir una sesion de hoy cuando genera la semana ya entrada la noche.
-        const hoyEmpezarStr=new Date().toLocaleDateString("es-ES",{weekday:"long",timeZone:"Atlantic/Canary"});
-        setMensajes(prev=>[...prev,{role:"assistant",content:`Perfecto. Una última cosa: hoy es ${hoyEmpezarStr} — ¿quieres empezar tu planificación hoy mismo, o prefieres arrancar desde el próximo día disponible?`}]);
-        setEsperandoConfirmacionEmpezarHoy(true);
+        await dispararGeneracion(weeklyTemporalIntentRef.current.text,weeklyTemporalIntentRef.current.answeringQuestion);
         setCargando(false);
         return;
       }
       if(esperandoConfirmacionEmpezarHoy && codigoUsuario){
         setEsperandoConfirmacionEmpezarHoy(false);
-        const mensajeDisplayConfirmacion=texto.trim();
-        const empezarHoyReal=/^(s[ií]|hoy|empezamos hoy|claro|vale|de acuerdo)/i.test(mensajeDisplayConfirmacion);
-        const dispararGeneracion=async()=>{
-          setGenerandoSemana(true);
-          setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu próxima semana paso a paso — analizando bloque, distribuyendo días y diseñando cada sesión..."}]);
-          const plan=await orquestarGeneracionSemana(empezarHoyReal);
-          if(plan?.goalRequirement){setGenerandoSemana(false);return;}
-          const respuestaFinalGen=plan
-            ? `✅ **Semana generada y guardada.**\n\nBloque: ${plan.block_name} — ${plan.week_objective}\n\nRevisa el detalle completo en **Mi Plan**. ¿Alguna duda?`
-            : "No se ha confirmado una semana nueva. El plan guardado, si existe, sigue disponible; revisemos lo ocurrido antes de intentar otra generación.";
-          setMensajes(prev=>[...prev,{role:"assistant",content:respuestaFinalGen}]);
-          setGenerandoSemana(false);
-          // FIX: persistir el mensaje final en el historial real, no solo en el estado visual —
-          // sin esto, el mensaje desaparecia al navegar y volver al chat.
-          const histConGeneracion=[...historial,{role:"user",content:mensajeDisplayConfirmacion},{role:"assistant",content:respuestaFinalGen}];
-          setHistorial(histConGeneracion);
-          if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histConGeneracion}});
-        };
+        await dispararGeneracion(texto.trim(),true);
         setCargando(false);
-        if(esConfirmacionSimple){
-          dispararGeneracion();
-        } else {
-          setTimeout(dispararGeneracion, 2500);
-        }
         return;
       } else if(esConfirmacionSimple && codigoUsuario && typeof modificacionPendienteConfirmar?.pendingId==="string" && modificacionPendienteConfirmar.pendingId.trim()){
         const pendingConfirmado=modificacionPendienteConfirmar.pendingId;
@@ -2057,16 +2064,8 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
           if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histSinPermiso}});
           return;
         }
-        // FIX: mismo comportamiento que el boton oficial — preguntar disponibilidad ANTES de generar,
-        // en vez de disparar el Orchestrator directamente sin confirmar.
-        const mensajeDisplayUsuario=texto.trim();
-        const respuestaConfirmacion=await availabilityQuestion();
-        setMensajes(prev=>[...prev,{role:"assistant",content:respuestaConfirmacion}]);
-        setEsperandoConfirmacionDisponibilidad(true);
+        await dispararGeneracion(texto.trim());
         setCargando(false);
-        const histConPregunta=[...historial,{role:"user",content:mensajeDisplayUsuario},{role:"assistant",content:respuestaConfirmacion}];
-        setHistorial(histConPregunta);
-        if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histConPregunta}});
         return;
       }
 
@@ -3517,11 +3516,7 @@ ${testStr}`}]});
                       : "No se ha confirmado el cierre de la semana. No se generará la siguiente semana."}]);
                     return;
                   }
-                  // FIX: preguntar disponibilidad ANTES de generar, en vez de asumir silenciosamente
-                  // la misma distribucion de semanas anteriores. El usuario puede confirmar o corregir.
-                  const pregunta=await availabilityQuestion();
-                  setMensajes(prev=>[...prev,{role:"assistant",content:pregunta}]);
-                  setEsperandoConfirmacionDisponibilidad(true);
+                  await dispararGeneracion();
                 }} style={{background:accentColor,color:"#fff",border:"none",borderRadius:100,padding:"12px 28px",fontSize:14,fontWeight:600,cursor:"pointer"}}>
                   🚀 Generar mi próxima semana
                 </button>

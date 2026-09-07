@@ -63,6 +63,8 @@ export async function recordPlanCompletion(
     || typeof description !== 'string' || !description.trim()) return fail('INVALID_COMPLETION_EVIDENCE');
   const effective = resolveCompletionDate(evidence.fecha);
   if (!effective) return fail('INVALID_COMPLETION_DATE');
+  const today = resolveCompletionDate(new Date().toISOString())!.date;
+  if (effective.date > today) return fail('FUTURE_COMPLETION_NOT_ALLOWED');
   let stage = 'PLAN_READ_FAILED';
   try {
     const { data: existingPlan, error: readError } = await supabase.from('weekly_plan').select('*')

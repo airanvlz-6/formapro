@@ -6,6 +6,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { getCanonicalRestrictions } from '../athlete/getCanonicalRestrictions';
 import { prepareSessionTrainingContract } from './prepareSessionTrainingContract';
 import { buildAllowedTrainingContract } from './allowedTrainingContract';
+import type { BuilderCompletion } from './builderDiagnostics';
 import { generateContractSession } from './sessionGeneration';
 import { renderContractSession, parseStructuredSession, validateSessionAgainstTrainingContract } from './structuredSession';
 import { canonicalDiscipline, normalizeTrainingKey, buildPrescriptionScope, resolveProfileDisciplines } from './prescriptionScope';
@@ -48,7 +49,7 @@ export async function repairSessionWithinReceipt(session: Record<string, any>, c
 }
 /** Only this server adapter issues receipts, after both sports and duplication checks. */
 export async function generateTrainingSession(db: any, userCodigo: string, request: Request,
-  complete: (prompt: string) => Promise<string>, context = '') {
+  complete: (prompt: string) => Promise<string | BuilderCompletion>, context = '', planningRunId?: string) {
   try {
     let weekly: { calendarReceipt: string; optionId: string } | undefined;
     let weeklyContext: any;
@@ -101,12 +102,12 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
     const recent = history.data.flatMap((p: any) => Array.isArray(p.sessions) ? p.sessions.filter((s: any) => s.completada && s.descripcion_real)
       .map((s: any) => ({ titulo: s.titulo, descripcion_real: s.descripcion_real })) : []).slice(0, 5);
     const result = await generateContractSession(prepared.contract, recent, complete,
-      JSON.stringify({ serverProfile: profile, requestContext: context }));
+      JSON.stringify({ serverProfile: profile, requestContext: context }), planningRunId);
     if (!result.ok) return result;
     const payload = Buffer.from(JSON.stringify({ userCodigo, expiresAt: Date.now() + 30 * 60_000,
       contract: result.contract, proposal: result.proposal, ...(weekly ? { weekly } : {}) })).toString('base64url');
     const sessionReceipt = `${payload}.${signature(payload)}`;
-    return { ok: true as const, trainingContract: result.contract, sesion: { ...result.session, sessionReceipt }, attempts: result.attempts };
+    return { ok: true as const, trainingContract: result.contract, sesion: { ...result.session, sessionReceipt }, attempts: result.attempts, diagnostics: result.diagnostics };
   } catch (error: any) { return { ok: false as const, code: error.message?.startsWith('WEEKLY_') || error.message?.startsWith('CALENDAR_')
     ? error.message : 'SESSION_AUTHORITY_FAILED', errors: [error.message], retryable: false }; }
 }

@@ -977,7 +977,20 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     // esta generando — si es una semana nueva (recien empezada), esto correctamente sera vacio.
     const sessionsExistentes=weeklyGeneration.snapshots[weekStartOrchestrator]?.sessions || [];
     const diasYaCompletados=sessionsExistentes.filter((s:any)=>s.completada===true || estructura.sessions.some((d:any)=>d.weeklyProtected && d.dia===s.dia));
-    console.log("ORCHESTRATOR: dias ya completados en la semana que se esta generando, se preservan:", JSON.stringify(diasYaCompletados.map((s:any)=>s.dia)));
+    console.log("ORCHESTRATOR_PRESERVATION", {
+      planningRunId:weeklyGeneration.planningRunId ?? null, weekStart:weekStartOrchestrator,
+      completedDays:diasYaCompletados.filter((s:any)=>s.completada===true).map((s:any)=>s.dia),
+      protectedDays:diasYaCompletados.filter((s:any)=>estructura.sessions.some((d:any)=>d.weeklyProtected && d.dia===s.dia)).map((s:any)=>s.dia),
+      slots:estructura.sessions.map((s:any)=>{
+        const day=(s.dia||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase();
+        const index=["lunes","martes","miercoles","jueves","viernes","sabado","domingo"].indexOf(day);
+        const slotStatus=s.tipo==="descanso"?"REST":["external_blocked","sin_registrar","unavailable"].includes(s.tipo)?"UNAVAILABLE":
+          s.stimulusId==="recuperacion_activa"||(s.tipo==="carrera"&&s.titulo?.startsWith("recuperacion activa · "))?"RECOVERY":"TRAIN";
+        return {day,derivedCivilDate:index<0?null:new Date(Date.parse(weekStartOrchestrator)+index*86400000).toISOString().slice(0,10),
+          completed:s.completada===true,weeklyProtected:estructura.sessions.some((d:any)=>d.weeklyProtected&&d.dia===s.dia),
+          protectionReason:s.completada===true?"COMPLETED":estructura.sessions.some((d:any)=>d.weeklyProtected&&d.dia===s.dia)?slotStatus:null,slotStatus};
+      })
+    });
 
     // Paso 3: Session Builder, TODAS las llamadas en PARALELO (Promise.all) en vez de secuencial.
     // Reduce el tiempo total de ~7x30s (210s) a ~30-40s, sin cambiar la arquitectura.
@@ -997,7 +1010,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
       const idxDia=ORDEN_DIAS.indexOf(normalizarDiaOrch(d.dia));
       return d.tipo!=="sin_registrar" && idxDia<hoyOrchIdx && !diasYaCompletados.some((dc:any)=>normalizarDiaOrch(dc.dia)===normalizarDiaOrch(d.dia));
     }):[];
-    console.log("ORCHESTRATOR Paso 3 — Session Builder: construyendo", (estructura.sessions||[]).length, "dias EN PARALELO. esSemanaActualReal=", esSemanaActualReal);
+    console.log("ORCHESTRATOR Paso 3 — calendario:", (estructura.sessions||[]).length, "slots. esSemanaActualReal=", esSemanaActualReal);
     const diasAConstruir=(estructura.sessions||[]).filter((d:any)=>{
       const idxDia=ORDEN_DIAS.indexOf(normalizarDiaOrch(d.dia));
       return !["descanso","external_blocked","sin_registrar"].includes(d.tipo) && idxDia>=hoyOrchIdx && !diasYaCompletados.some((dc:any)=>normalizarDiaOrch(dc.dia)===normalizarDiaOrch(d.dia));
@@ -1007,6 +1020,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
       return d.tipo==="descanso" && idxDia>=hoyOrchIdx && !diasYaCompletados.some((dc:any)=>normalizarDiaOrch(dc.dia)===normalizarDiaOrch(d.dia));
     });
 
+    console.log("ORCHESTRATOR_BUILDER_TARGETS", {planningRunId:weeklyGeneration.planningRunId ?? null, count:diasAConstruir.length, days:diasAConstruir.map((d:any)=>d.dia)});
     const todasLasSesionesOrden=estructura.sessions||[];
     const resultadosParalelos=await Promise.all(
       diasAConstruir.map((diaEstructura:any)=>{
@@ -1038,7 +1052,8 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
           diaAnterior,
           diaSiguiente
         }}).then((res:any)=>{
-          console.log(`ORCHESTRATOR Paso 3 — ${diaEstructura.dia}: resultado:`, {ok:res?.ok,code:res?.code});
+          console.log(`ORCHESTRATOR Paso 3 — ${diaEstructura.dia}: resultado:`, {ok:res?.ok,code:res?.code,planningRunId:res?.diagnostics?.planningRunId,
+            attempts:res?.diagnostics?.attemptCount,stage:res?.diagnostics?.finalStage,violations:res?.diagnostics?.finalViolations,retryExhausted:res?.diagnostics?.retryExhausted});
           return res;
         });
       })
@@ -1046,7 +1061,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
 
     // A rejected contract is terminal for this proposal; never save a week with missing days.
     if(resultadosParalelos.some((r:any)=>!r?.ok || !r.sesion)){
-      console.error("SESSION BUILDER: semana detenida", resultadosParalelos.filter((r:any)=>!r?.ok || !r.sesion));
+      console.error("SESSION BUILDER: semana detenida", resultadosParalelos.filter((r:any)=>!r?.ok || !r.sesion).map((r:any)=>({ok:r?.ok,code:r?.code,diagnostics:r?.diagnostics})));
       return null;
     }
     const sesionesCompletas:any[]=[

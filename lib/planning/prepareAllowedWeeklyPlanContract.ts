@@ -9,11 +9,12 @@ import { buildAllowedWeeklyPlanContract, composeBoundedWeek, type WeeklyContract
 import { admitSessionContent } from '../sports/sessionAuthority';
 import { loadAthletePrescriptionContext } from '../athlete/loadAthletePrescriptionContext';
 import { buildCanonicalWeekStrategy, renderWeekObjective } from './canonicalWeekStrategy';
+import { strategyDiagnostic } from './planningDiagnostics';
 
 /** Read-only preparation, before any Planner call. Bounded reads per discipline, never per option. */
 export async function loadWeeklyPlanningContext(db: any, codigo: string, request: {
   targetWeekStart: string; today: string; empezarHoy: boolean; snapshot: { sessions: readonly any[] } | null;
-  strategyVersion?: 1; strategyProposal?: unknown;
+  strategyVersion?: 1; strategyProposal?: unknown; planningRunId?: string;
 }) {
   const c = await loadWeeklyCalendarContext(db, codigo);
   if (request.strategyVersion !== undefined && request.strategyVersion !== 1) throw new Error('STRATEGY_VERSION_UNSUPPORTED');
@@ -39,6 +40,12 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
     const past = civil < request.today || (civil === request.today && !request.empezarHoy);
     hasPast ||= past;
     const before = existing.find(s => calendarKey(s.dia) === day);
+    if (before?.completada === true && civil > request.today) {
+      const diagnostic = { weekStart: request.targetWeekStart, day, derivedCivilDate: civil, currentCivilDate: request.today,
+        completed: true, slotStatus: calendarState(before), code: 'FUTURE_COMPLETION_NOT_ALLOWED' };
+      console.warn('WEEKLY_FUTURE_COMPLETION_REJECTED', diagnostic);
+      return { ok: false as const, code: 'WEEKLY_CONTEXT_INVALID', errors: ['FUTURE_COMPLETION_NOT_ALLOWED'], diagnostic };
+    }
     // Existing protected states and completed prescriptions are never rewritten.
     if (before && isProtectedCalendarSession(before)) fixedSessions[day] = before;
     else if (past) fixedSessions[day] = { dia: day, tipo: 'sin_registrar', titulo: 'Sin registrar',
@@ -92,6 +99,9 @@ export async function planBoundedWeek(db: any, codigo: string, request: Paramete
       trabaja_debilidad: option.intent?.kind === 'adaptation' && !!option.intent.weaknessId };
   });
   const contractDigest = weeklyDigest(proposal.contract);
+  const diagnostic = strategyDiagnostic(proposal.contract.strategy, proposal.selected);
+  try { console.info?.('WEEKLY_STRATEGY_DIAGNOSTIC', { planningRunId: request.planningRunId ?? null, weekStart: request.targetWeekStart, contractDigest, ...diagnostic }); }
+  catch { /* Observability cannot change the admitted strategy. */ }
   const calendarReceipt = generationToken === undefined ? undefined : await issueWeeklyCalendar(db, codigo, request.targetWeekStart, sessions,
     { contract: proposal.contract, selections: calendarDays.map(day => ({ day, optionId: proposal.selected[day].optionId })), request, generationToken });
   return { ok: true as const, estructura: { weeklyContractVersion: 1, calendarProtocolVersion: 2, contractDigest, calendarReceipt,

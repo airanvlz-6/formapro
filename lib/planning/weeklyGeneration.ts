@@ -1,9 +1,9 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual, randomUUID } from 'node:crypto';
 import type { ExistingPlanSnapshot } from './planMutationTypes';
 import type { PlanDatabase } from './planPersistence';
 
 export type WeeklyGenerationContext = {
-  userCodigo: string; currentWeek: string; nextWeek: string;
+  planningRunId?: string; userCodigo: string; currentWeek: string; nextWeek: string;
   snapshots: Record<string, ExistingPlanSnapshot | null>;
 };
 function key() {
@@ -30,7 +30,7 @@ export async function beginWeeklyGeneration(db: PlanDatabase, userCodigo: string
       throw new Error('GENERATION_SNAPSHOT_IDENTITY_MISMATCH');
     snapshots[week] = result.data;
   }
-  const context: WeeklyGenerationContext = { userCodigo, currentWeek, nextWeek, snapshots };
+  const context: WeeklyGenerationContext = { planningRunId: randomUUID(), userCodigo, currentWeek, nextWeek, snapshots };
   const payload = Buffer.from(JSON.stringify(context)).toString('base64url');
   return { ...context, token: payload + '.' + sign(payload) };
 }

@@ -2216,7 +2216,7 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
       const result = await planBoundedWeek(supabase, codigo, {
         targetWeekStart: datos.targetWeekStart, today: resolveCompletionDate(new Date().toISOString())!.date,
         empezarHoy: datos.empezarHoy !== false, snapshot: generation.snapshots[datos.targetWeekStart],
-        strategyVersion: 1, strategyProposal: datos.analisis?.strategyProposal,
+        strategyVersion: 1, strategyProposal: datos.analisis?.strategyProposal, planningRunId: generation.planningRunId,
       }, async (prompt: string) => {
         const response = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
@@ -2276,9 +2276,11 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
           });
           if (!response.ok) throw new Error("LLM_REQUEST_FAILED");
           const output = await response.json();
-          return output.content?.map((b: any) => b.text || "").join("") || "";
+          return { text: output.content?.map((b: any) => b.text || "").join("") || "", planningRunId: generation.planningRunId,
+            metadata: { stopReason: output.stop_reason, outputTokens: output.usage?.output_tokens,
+              contentBlockCount: output.content?.length, contentBlockTypes: output.content?.map((b: any) => b.type) } };
         }, JSON.stringify({ intent: datos.titulo_breve ?? datos.tituloBreve, analysis: datos.analisis,
-          previousDay: datos.diaAnterior, nextDay: datos.diaSiguiente }));
+          previousDay: datos.diaAnterior, nextDay: datos.diaSiguiente }), generation.planningRunId);
       return NextResponse.json(generated);
     } catch (error: any) {
       return NextResponse.json({ ok: false, code: "TRAINING_CONTRACT_INVALID", errors: [error.message], retryable: false });

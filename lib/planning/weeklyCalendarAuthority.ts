@@ -8,6 +8,7 @@ import { weeklyAvailabilityFailure } from './weeklyAvailabilityDiagnostics';
 import { buildPrescriptionScope, canonicalDiscipline, resolveProfileDisciplines } from '../sports/prescriptionScope';
 import { aplicarTrainingFrequencySafetyNet, calcularFrecuenciaRealRelativa } from '../sports/trainingFrequencySafetyNet';
 import { calendarDays, calendarKey, calendarState, isExecutableCalendarState, validateWeeklyCalendar } from './weeklyCalendar';
+import { renderWeekObjective } from './canonicalWeekStrategy';
 
 export const weeklyDigest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const snapshotDigest = (snapshot: any) => weeklyDigest(snapshot ? { id: snapshot.id, revision: snapshot.revision, sessions: snapshot.sessions } : null);
@@ -70,7 +71,9 @@ export async function issueWeeklyCalendar(db: any, codigo: string, week: string,
     authority = { protocolVersion: 2, contractVersion: contract.contractVersion, policyVersion: contract.policyVersion,
       contractDigest: weeklyDigest(contract), contextDigest: contract.contextDigest, prescriptionScope: contract.prescriptionScope,
       admittedSlots, snapshotDigest: snapshotDigest(request.snapshot), generationDigest: weeklyDigest(generationToken),
-      planning: { today: request.today, empezarHoy: request.empezarHoy } };
+      ...(contract.strategy ? { strategy: contract.strategy } : {}),
+      planning: { today: request.today, empezarHoy: request.empezarHoy,
+        ...(request.strategyVersion === 1 ? { strategyVersion: 1, ...(request.strategyProposal !== undefined ? { strategyProposal: request.strategyProposal } : {}) } : {}) } };
   }
   const payload = Buffer.from(JSON.stringify({ codigo, week, slots: result.slots, expires: Date.now() + 30 * 60_000, ...authority })).toString('base64url');
   // Catch changes during Planner composition before issuing any authority.
@@ -92,6 +95,12 @@ export function verifyWeeklyCalendarReceipt(receipt: unknown, codigo: string, we
   return evidence;
 }
 
+/** Save derives text from signed canonical strategy; legacy receipts retain their historical field. */
+export function admittedWeekObjective(receipt: unknown, codigo: string, week: string, legacy: string | null) {
+  const evidence = verifyWeeklyCalendarReceipt(receipt, codigo, week, true);
+  return evidence.strategy ? renderWeekObjective(evidence.strategy) : legacy;
+}
+
 /** Current context once per admission, never per candidate option. No writes or expansion. */
 export async function assertFreshWeeklyAuthority(db: any, codigo: string, week: string, receipt: unknown, generationToken?: unknown) {
   const evidence = verifyWeeklyCalendarReceipt(receipt, codigo, week, true);
@@ -100,7 +109,8 @@ export async function assertFreshWeeklyAuthority(db: any, codigo: string, week: 
   if (row.error) rejectWeekly('WEEKLY_FRESHNESS_READ_FAILED');
   if (row.data && (row.data.user_codigo !== codigo || row.data.week_start !== week)) rejectWeekly('WEEKLY_CONTEXT_STALE');
   if (snapshotDigest(row.data) !== evidence.snapshotDigest) rejectWeekly('WEEKLY_REVISION_STALE');
-  const current = await loadWeeklyPlanningContext(db, codigo, { targetWeekStart: week, ...evidence.planning, snapshot: row.data });
+  const current = await loadWeeklyPlanningContext(db, codigo, { targetWeekStart: week, ...evidence.planning, snapshot: row.data })
+    .catch(error => { if (error?.message === 'STRATEGY_PROPOSAL_INVALID') rejectWeekly('WEEKLY_CONTEXT_STALE'); throw error; });
   if (!current.ok) rejectWeekly('WEEKLY_CONTEXT_STALE');
   const rebuilt = buildAllowedWeeklyPlanContract(current.input);
   if (!rebuilt.ok || rebuilt.contract.contextDigest !== evidence.contextDigest || weeklyDigest(rebuilt.contract) !== evidence.contractDigest

@@ -90,7 +90,7 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
   if (!structure || !contract.allowedStructureIds.includes(p.structureId) || structure.discipline !== contract.discipline) violations.push('STRUCTURE_NOT_ALLOWED');
   const main = p.blocks[1].movements;
   violations.push(...validateStructureSemantics(structure, main));
-  if (contract.intent?.kind === 'main_pattern' && !intentMatchingMovementIds(contract.intent,
+  if (contract.intent && contract.intent.kind !== 'stimulus_only' && !intentMatchingMovementIds(contract.intent,
     main.map(m => m.movementId).filter(id => contract.allowedMovementIds.includes(id))).length) violations.push('INTENT_NOT_SATISFIED');
   const restrictions = contract.restrictionsSnapshot;
   const notes = [...restrictions.restrictions, ...restrictions.reassessments];
@@ -114,9 +114,9 @@ export function renderContractSession(contract: AllowedTrainingContract, proposa
   const headings = { warmup: 'Calentamiento', main: 'Bloque principal', cooldown: 'Vuelta a la calma' };
   const units: Record<string, string> = { sets: 'series', reps: 'repeticiones', durationSeconds: 'segundos', distanceMeters: 'metros', restSeconds: 'segundos de descanso' };
   return { dia: contract.targetDay, tipo: contract.discipline, titulo: `${label(proposal.stimulusId)} · ${label(proposal.structureId)}`,
-    // Pending RECOVERY is reconstructed on replan. Preserve its verified v2 identity,
-    // without changing TRAIN or inventing canonical intent for legacy v1 contracts.
-    ...(contract.contractVersion === 2 && calendarState({ tipo: contract.discipline, stimulusId: contract.stimulusId }) === 'RECOVERY'
+    // Preserve strategic trace on new TRAIN sessions and verified pending RECOVERY identity.
+    // Never invent strategic metadata for legacy contracts.
+    ...(contract.contractVersion === 2 && (contract.intent?.kind === 'adaptation' || calendarState({ tipo: contract.discipline, stimulusId: contract.stimulusId }) === 'RECOVERY')
       ? { stimulusId: contract.stimulusId, intent: structuredClone(contract.intent!) } : {}),
     por_que: `Estímulo programado: ${label(contract.stimulusId)}.`, debilidad_relacionada: null,
     descripcion: `Estructura: ${label(proposal.structureId)}\n\n` + proposal.blocks.map(b => `**${headings[b.blockType]}**\n` + b.movements.map(m =>

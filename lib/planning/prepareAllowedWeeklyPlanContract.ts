@@ -7,12 +7,18 @@ import { prepareSessionTrainingContext } from '../sports/prepareSessionTrainingC
 import type { ContractInput } from '../sports/allowedTrainingContract';
 import { buildAllowedWeeklyPlanContract, composeBoundedWeek, type WeeklyContractInput } from './allowedWeeklyPlanContract';
 import { admitSessionContent } from '../sports/sessionAuthority';
+import { loadAthletePrescriptionContext } from '../athlete/loadAthletePrescriptionContext';
+import { buildCanonicalWeekStrategy, renderWeekObjective } from './canonicalWeekStrategy';
 
 /** Read-only preparation, before any Planner call. Bounded reads per discipline, never per option. */
 export async function loadWeeklyPlanningContext(db: any, codigo: string, request: {
   targetWeekStart: string; today: string; empezarHoy: boolean; snapshot: { sessions: readonly any[] } | null;
+  strategyVersion?: 1; strategyProposal?: unknown;
 }) {
   const c = await loadWeeklyCalendarContext(db, codigo);
+  if (request.strategyVersion !== undefined && request.strategyVersion !== 1) throw new Error('STRATEGY_VERSION_UNSUPPORTED');
+  const strategy = request.strategyVersion === 1 ? buildCanonicalWeekStrategy(
+    await loadAthletePrescriptionContext(db, codigo, { asOfDate: request.today }), c.scope, c.max, request.strategyProposal) : undefined;
   const restrictions = await getCanonicalRestrictions(db, codigo);
   const contexts: Record<string, ContractInput> = {};
   for (const discipline of c.scope.managedDisciplines) {
@@ -57,7 +63,8 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
     }
   }
   return { ok: true as const, input: { targetWeekStart: request.targetWeekStart, prescriptionScope: c.scope,
-    maxExecutableDays: c.max, completeNewWeek: !request.snapshot && !hasPast, allowed: c.allowed, contexts, fixed },
+    maxExecutableDays: c.max, completeNewWeek: !request.snapshot && !hasPast, allowed: c.allowed, contexts, fixed,
+    ...(strategy ? { strategy } : {}) },
     fixedSessions: structuredClone(fixedSessions) };
 }
 
@@ -82,14 +89,15 @@ export async function planBoundedWeek(db: any, codigo: string, request: Paramete
     if (option.state === 'REST') return { dia: day, state: 'REST', tipo: 'descanso', titulo_breve: 'Descanso', focus: '' };
     return { dia: day, state: option.state, discipline: option.discipline, tipo: option.discipline,
       stimulusId: option.stimulusId, intent: option.intent, titulo_breve: option.stimulusId!.replaceAll('_', ' '), focus: option.stimulusId,
-      trabaja_debilidad: false };
+      trabaja_debilidad: option.intent?.kind === 'adaptation' && !!option.intent.weaknessId };
   });
   const contractDigest = weeklyDigest(proposal.contract);
   const calendarReceipt = generationToken === undefined ? undefined : await issueWeeklyCalendar(db, codigo, request.targetWeekStart, sessions,
     { contract: proposal.contract, selections: calendarDays.map(day => ({ day, optionId: proposal.selected[day].optionId })), request, generationToken });
   return { ok: true as const, estructura: { weeklyContractVersion: 1, calendarProtocolVersion: 2, contractDigest, calendarReceipt,
     contextDigest: proposal.contract.contextDigest,
-    strategy: { adaptacion_principal: 'Estímulos genéricos seleccionados dentro del contrato autorizado.' },
+    strategy: { ...(proposal.contract.strategy ? { canonical: proposal.contract.strategy } : {}),
+      adaptacion_principal: proposal.contract.strategy ? renderWeekObjective(proposal.contract.strategy) : 'Estímulos genéricos seleccionados dentro del contrato autorizado.' },
     sessions: sessions.map((s, i) => ('weeklyProtected' in s && s.weeklyProtected) ? s : ({ ...s, optionId: proposal.selected[calendarDays[i]].optionId,
       targetDate: new Date(new Date(request.targetWeekStart + 'T12:00:00Z').getTime() + i * 86400000).toISOString().slice(0, 10) })) }, attempts: proposal.attempts };
 }

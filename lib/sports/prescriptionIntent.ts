@@ -1,6 +1,7 @@
 import { MOVEMENT_LIBRARY, type PatronMovimiento } from './movementLibrary';
+import { validateStrategicIntent, type StrategicIntent } from './goalTransferModel';
 
-export type PrescriptionIntent = { kind: 'stimulus_only' } | { kind: 'main_pattern'; pattern: PatronMovimiento };
+export type PrescriptionIntent = { kind: 'stimulus_only' } | { kind: 'main_pattern'; pattern: PatronMovimiento } | StrategicIntent;
 
 // Runtime validation of the existing type, not aliases or a new taxonomy.
 // Exhaustive Record keeps this validator aligned when PatronMovimiento changes.
@@ -15,6 +16,7 @@ export function resolvePrescriptionIntent(value: unknown): { ok: true; intent: P
   if (!value || typeof value !== 'object' || Array.isArray(value)) return { ok: false, errors: ['INTENT_INVALID'] };
   const v = value as Record<string, unknown>;
   const keys = Object.keys(v);
+  if (v.kind === 'adaptation') return validateStrategicIntent(v) ? { ok: true, intent: structuredClone(v) } : { ok: false, errors: ['STRATEGIC_INTENT_INVALID'] };
   if (v.kind === 'stimulus_only' && keys.length === 1 && keys[0] === 'kind') return { ok: true, intent: { kind: 'stimulus_only' } };
   if (v.kind !== 'main_pattern' || keys.length !== 2 || !keys.includes('kind') || !keys.includes('pattern') || typeof v.pattern !== 'string')
     return { ok: false, errors: ['INTENT_INVALID'] };

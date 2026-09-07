@@ -1,5 +1,8 @@
 import { protectedCalendarSessionIndices } from "@/lib/planning/weeklyCalendar";
 import { planBoundedWeek } from "@/lib/planning/prepareAllowedWeeklyPlanContract";
+import { admittedWeekObjective } from "@/lib/planning/weeklyCalendarAuthority";
+import { loadAthletePrescriptionContext } from "@/lib/athlete/loadAthletePrescriptionContext";
+import { strategyDemandIds, normalizeStrategyProposal } from "@/lib/planning/canonicalWeekStrategy";
 import { plannerProviderMetadata } from "@/lib/planning/weeklyPlannerDiagnostics";
 import { assertWeeklyCalendar, assertCalendarMutation } from "@/lib/planning/weeklyCalendarAuthority";
 import { updateChatAvailability } from "@/lib/sports/chatAvailability";
@@ -1978,10 +1981,15 @@ async function buildAthleteSnapshot(supabase: any, codigo: string) {
 }
 
 if (action === "analizar_bloque_semana") {
-    // FORGE ORCHESTRATOR — Paso 1: Block Analyzer. Solo decide estructura, no genera entrenamientos.
+    // Preserve the existing restriction read boundary before any strategy preparation.
     let canonicalRestrictions: CanonicalRestrictions;
     try { canonicalRestrictions = await getCanonicalRestrictions(supabase, codigo); }
     catch (err: any) { return NextResponse.json({ error: err.message }, { status: 503 }); }
+    let allowedAdaptations: string[];
+    try { allowedAdaptations = strategyDemandIds(await loadAthletePrescriptionContext(supabase, codigo,
+      { asOfDate: resolveCompletionDate(new Date().toISOString())!.date })); }
+    catch (err: any) { return NextResponse.json({ error: err.message }, { status: 503 }); }
+    // FORGE ORCHESTRATOR — Paso 1: Block Analyzer. Solo decide estructura, no genera entrenamientos.
     const estado = await generarEstadoCanonico(supabase, codigo, canonicalRestrictions);
     // FORGE FOCUS — contrato determinista de disciplinas externas, consultado ANTES del prompt.
     const focusContext = await buildFocusContext(supabase, codigo);
@@ -2115,7 +2123,7 @@ const { data: exposicionesParaSeguimiento } = await supabase.from("weakness_expo
     const analyzerPrompt = `Eres un analizador de bloques de entrenamiento. Tu ÚNICA tarea es devolver un JSON pequeño describiendo la estructura de la PRÓXIMA semana. NO generes entrenamientos ni sesiones detalladas.
 
 CONTEXTO OBLIGATORIO — RESPETAR SIEMPRE:
-Categoría/especialidad del atleta: ${usuarioAnalyzer?.especialidad || usuarioAnalyzer?.categoria || "no especificada"} (la estructura semanal DEBE incluir las disciplinas propias de esta especialidad — si es hibrido/crossfit, incluye halterofilia y gimnasticos; si incluye running, incluye sesiones de carrera; etc.)
+Categoría/especialidad del atleta: ${usuarioAnalyzer?.especialidad || usuarioAnalyzer?.categoria || "no especificada"} (práctica declarada; no amplía disciplinas gestionadas ni sustituye el objetivo canónico)
 Objetivo principal: ${JSON.stringify(usuarioAnalyzer?.objetivo_principal) || "no especificado"}
 Ciclo actual: ${JSON.stringify(estado.ciclo)}
 Debilidad prioritaria activa: ${debilidadPrioritaria ? debilidadPrioritaria.nombre_visible : "ninguna"}
@@ -2138,14 +2146,16 @@ ${estado.athlete_state?.estado && estado.athlete_state.estado !== "normal" ? `
 
 Si alguna observacion tecnica pendiente encaja con el bloque/fase actual y no compromete el objetivo principal de la semana, puedes incorporarla como parte del objetivo o debilidad_prioritaria. Si decides incorporar una, incluye su id en el campo "coaching_notes_incorporadas" (array de ids, puede estar vacio).
 
-Responde SOLO con este JSON, sin texto adicional ni markdown:
-{"tipo_semana":"acumulacion|intensificacion|realizacion|deload","objetivo":"frase corta del objetivo de esta semana","volumen_relativo":0.0-1.0,"intensidad_relativa":0.0-1.0,"debilidad_prioritaria":"nombre o null","dias_entreno_sugeridos":número,"coaching_notes_incorporadas":[]}`;
+La estrategia ejecutable es canónica. Añade strategyProposal con version:1 y preferredAdaptations: un array sin duplicados usando SOLO estos IDs: ${JSON.stringify(allowedAdaptations)}.
+Ese array solo propone orden dentro de prioridades ya autorizadas. No cambia objetivo, fase, disciplinas, restricciones ni dosis. Los demás campos son análisis consultivo.
+Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni markdown:
+{"tipo_semana":"acumulacion|intensificacion|realizacion|deload","objetivo":"frase corta del objetivo de esta semana","volumen_relativo":0.0-1.0,"intensidad_relativa":0.0-1.0,"debilidad_prioritaria":"nombre o null","dias_entreno_sugeridos":número,"coaching_notes_incorporadas":[],"strategyProposal":{"version":1,"preferredAdaptations":[]}}`;
 
     try {
       const analyzerRes = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 300, messages: [{ role: "user", content: analyzerPrompt }] }),
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 500, messages: [{ role: "user", content: analyzerPrompt }] }),
       });
       const analyzerData = await analyzerRes.json();
       const analyzerTexto = analyzerData.content?.map((b: any) => b.text || "").join("") || "{}";
@@ -2153,6 +2163,7 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
       const analyzerMatch = analyzerClean.match(/\{[\s\S]*\}/);
       if (!analyzerMatch) throw new Error("Block Analyzer no devolvio JSON valido");
       const analisisBloque = JSON.parse(analyzerMatch[0]);
+      analisisBloque.strategyProposal = normalizeStrategyProposal(analisisBloque.strategyProposal, allowedAdaptations);
 
       // FORGE TRAINING FREQUENCY SAFETY NET — barrera determinista, NUNCA deja al LLM decidir si
       // aplicar descanso: dias_entreno_sugeridos nunca puede ser 7, sin excepcion, independiente
@@ -2190,6 +2201,7 @@ Responde SOLO con este JSON, sin texto adicional ni markdown:
       const result = await planBoundedWeek(supabase, codigo, {
         targetWeekStart: datos.targetWeekStart, today: resolveCompletionDate(new Date().toISOString())!.date,
         empezarHoy: datos.empezarHoy !== false, snapshot: generation.snapshots[datos.targetWeekStart],
+        strategyVersion: 1, strategyProposal: datos.analisis?.strategyProposal,
       }, async (prompt: string) => {
         const response = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
@@ -4644,7 +4656,7 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
       week_number: plan.week_number,
       total_weeks_block: plan.total_weeks_block || null,
       block_name: plan.block_name,
-      week_objective: plan.week_objective || null,
+      week_objective: admittedWeekObjective(datos.calendarReceipt, codigo, plan.week_start, plan.week_objective || null),
       status: plan.status || "active",
       confidence: plan.confidence || 100,
       sessions: plan.sessions,

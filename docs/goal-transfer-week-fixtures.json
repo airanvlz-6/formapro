@@ -1,0 +1,736 @@
+[
+  {
+    "name": "half-marathon-crossfit",
+    "scope": {
+      "mode": "coach",
+      "prescriptionAllowed": true,
+      "managedDisciplines": [
+        "box",
+        "carrera"
+      ],
+      "externalDisciplines": []
+    },
+    "strategy": {
+      "version": 1,
+      "policy": "goal-transfer-v1",
+      "goal": {
+        "id": "half_marathon",
+        "sources": [
+          "usuarios.objetivo_principal"
+        ],
+        "evidenceDigest": "d9e0475437d68343e29e959f96e438bdf724b09639b98fdfa3fc5f1a8d7cce79"
+      },
+      "block": {
+        "phase": "accumulation",
+        "week": 2,
+        "totalWeeks": 4,
+        "evidenceDigest": "914300fa191c8569f52d5f28e354e0935fe013e8a1a45f8b31350abaf6712c02"
+      },
+      "adaptations": [
+        {
+          "id": "base_aerobica",
+          "role": "PRIMARY",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "umbral",
+          "role": "PRIMARY",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "resistencia_especifica",
+          "role": "PRIMARY",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "fuerza_general",
+          "role": "SUPPORTING",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "economia_carrera",
+          "role": "SUPPORTING",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "cadena_posterior",
+          "role": "OPTIONAL",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "potencia",
+          "role": "OPTIONAL",
+          "weaknessIds": [],
+          "requiredPattern": null
+        }
+      ],
+      "preferredEnvironments": [
+        "carrera",
+        "box"
+      ],
+      "methods": [
+        "running_base",
+        "running_threshold",
+        "running_specific",
+        "running_economy",
+        "box_support_strength",
+        "runner_support_strength",
+        "box_posterior",
+        "runner_posterior",
+        "box_power",
+        "runner_power"
+      ],
+      "deferred": [
+        {
+          "reference": "adaptation:economia_carrera",
+          "reason": "weekly_capacity_or_availability_conflict"
+        },
+        {
+          "reference": "cadena_posterior",
+          "reason": "optional_not_required"
+        },
+        {
+          "reference": "potencia",
+          "reason": "optional_not_required"
+        }
+      ],
+      "coverage": [
+        {
+          "id": "adaptation:base_aerobica",
+          "adaptationId": "base_aerobica"
+        },
+        {
+          "id": "adaptation:umbral",
+          "adaptationId": "umbral"
+        },
+        {
+          "id": "adaptation:resistencia_especifica",
+          "adaptationId": "resistencia_especifica"
+        },
+        {
+          "id": "adaptation:fuerza_general",
+          "adaptationId": "fuerza_general"
+        },
+        {
+          "id": "environment:carrera",
+          "discipline": "carrera"
+        },
+        {
+          "id": "environment:box",
+          "discipline": "box"
+        }
+      ],
+      "volumeIntent": "unspecified",
+      "intensityIntent": "unspecified",
+      "trainingDaysTarget": {
+        "maximum": 5,
+        "minimum": 1
+      },
+      "diagnostics": [
+        {
+          "code": "GOAL_DEMAND_RESOLUTION",
+          "reason": "resolved"
+        },
+        {
+          "code": "CANONICAL_WEEK_STRATEGY",
+          "reason": "accumulation"
+        },
+        {
+          "code": "ADAPTATION_PRIORITY",
+          "reason": "discrete_goal_roles_and_canonical_weakness"
+        },
+        {
+          "code": "TRANSFER_RESOLUTION",
+          "reason": "managed_scope_intersection"
+        },
+        {
+          "code": "TRANSFER_RESOLUTION",
+          "reason": "time_typical_ranges_not_hard_bounds"
+        },
+        {
+          "code": "TRANSFER_RESOLUTION",
+          "reason": "equipment_inventory_and_all_vs_any_requirements_not_canonical"
+        },
+        {
+          "code": "TRANSFER_RESOLUTION",
+          "reason": "level_and_readiness_not_new_authority"
+        },
+        {
+          "code": "TRANSFER_RESOLUTION",
+          "reason": "interday_interference_not_established_by_structure_metadata"
+        },
+        {
+          "code": "DAILY_INTENT_RESOLUTION",
+          "reason": "feasible_methods_and_required_coverage"
+        }
+      ]
+    },
+    "week_objective": "half marathon · accumulation: base aerobica (primary); umbral (primary); resistencia especifica (primary); fuerza general (supporting).",
+    "sessions": {
+      "lunes": {
+        "optionId": "lunes:carrera:base_aerobica:running_base:run",
+        "state": "TRAIN",
+        "discipline": "carrera",
+        "stimulusId": "base_aerobica",
+        "intent": {
+          "kind": "adaptation",
+          "goalId": "half_marathon",
+          "adaptationId": "base_aerobica",
+          "methodId": "running_base",
+          "role": "PRIMARY",
+          "pattern": "run",
+          "blockPhase": "accumulation",
+          "blockWeek": 2,
+          "weaknessId": null
+        }
+      },
+      "martes": {
+        "optionId": "martes:rest",
+        "state": "REST"
+      },
+      "miercoles": {
+        "optionId": "miercoles:carrera:umbral:running_threshold:run",
+        "state": "TRAIN",
+        "discipline": "carrera",
+        "stimulusId": "umbral",
+        "intent": {
+          "kind": "adaptation",
+          "goalId": "half_marathon",
+          "adaptationId": "umbral",
+          "methodId": "running_threshold",
+          "role": "PRIMARY",
+          "pattern": "run",
+          "blockPhase": "accumulation",
+          "blockWeek": 2,
+          "weaknessId": null
+        }
+      },
+      "jueves": {
+        "optionId": "jueves:box:fuerza_general:box_support_strength:squat",
+        "state": "TRAIN",
+        "discipline": "box",
+        "stimulusId": "fuerza_general",
+        "intent": {
+          "kind": "adaptation",
+          "goalId": "half_marathon",
+          "adaptationId": "fuerza_general",
+          "methodId": "box_support_strength",
+          "role": "SUPPORTING",
+          "pattern": "squat",
+          "blockPhase": "accumulation",
+          "blockWeek": 2,
+          "weaknessId": null
+        }
+      },
+      "viernes": {
+        "optionId": "viernes:rest",
+        "state": "REST"
+      },
+      "sabado": {
+        "optionId": "sabado:carrera:resistencia_especifica:running_specific:run",
+        "state": "TRAIN",
+        "discipline": "carrera",
+        "stimulusId": "resistencia_especifica",
+        "intent": {
+          "kind": "adaptation",
+          "goalId": "half_marathon",
+          "adaptationId": "resistencia_especifica",
+          "methodId": "running_specific",
+          "role": "PRIMARY",
+          "pattern": "run",
+          "blockPhase": "accumulation",
+          "blockWeek": 2,
+          "weaknessId": null
+        }
+      },
+      "domingo": {
+        "optionId": "domingo:rest",
+        "state": "REST"
+      }
+    }
+  },
+  {
+    "name": "half-marathon-running-only",
+    "scope": {
+      "mode": "coach",
+      "prescriptionAllowed": true,
+      "managedDisciplines": [
+        "carrera"
+      ],
+      "externalDisciplines": []
+    },
+    "strategy": {
+      "version": 1,
+      "policy": "goal-transfer-v1",
+      "goal": {
+        "id": "half_marathon",
+        "sources": [
+          "usuarios.objetivo_principal"
+        ],
+        "evidenceDigest": "d9e0475437d68343e29e959f96e438bdf724b09639b98fdfa3fc5f1a8d7cce79"
+      },
+      "block": {
+        "phase": "accumulation",
+        "week": 2,
+        "totalWeeks": 4,
+        "evidenceDigest": "914300fa191c8569f52d5f28e354e0935fe013e8a1a45f8b31350abaf6712c02"
+      },
+      "adaptations": [
+        {
+          "id": "base_aerobica",
+          "role": "PRIMARY",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "umbral",
+          "role": "PRIMARY",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "resistencia_especifica",
+          "role": "PRIMARY",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "fuerza_general",
+          "role": "SUPPORTING",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "economia_carrera",
+          "role": "SUPPORTING",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "cadena_posterior",
+          "role": "OPTIONAL",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "potencia",
+          "role": "OPTIONAL",
+          "weaknessIds": [],
+          "requiredPattern": null
+        }
+      ],
+      "preferredEnvironments": [
+        "carrera"
+      ],
+      "methods": [
+        "running_base",
+        "running_threshold",
+        "running_specific",
+        "running_economy",
+        "runner_support_strength",
+        "runner_posterior",
+        "runner_power"
+      ],
+      "deferred": [
+        {
+          "reference": "adaptation:fuerza_general",
+          "reason": "weekly_capacity_or_availability_conflict"
+        },
+        {
+          "reference": "adaptation:economia_carrera",
+          "reason": "weekly_capacity_or_availability_conflict"
+        },
+        {
+          "reference": "cadena_posterior",
+          "reason": "optional_not_required"
+        },
+        {
+          "reference": "potencia",
+          "reason": "optional_not_required"
+        }
+      ],
+      "coverage": [
+        {
+          "id": "adaptation:base_aerobica",
+          "adaptationId": "base_aerobica"
+        },
+        {
+          "id": "adaptation:umbral",
+          "adaptationId": "umbral"
+        },
+        {
+          "id": "adaptation:resistencia_especifica",
+          "adaptationId": "resistencia_especifica"
+        },
+        {
+          "id": "environment:carrera",
+          "discipline": "carrera"
+        }
+      ],
+      "volumeIntent": "unspecified",
+      "intensityIntent": "unspecified",
+      "trainingDaysTarget": {
+        "maximum": 5,
+        "minimum": 1
+      },
+      "diagnostics": [
+        {
+          "code": "GOAL_DEMAND_RESOLUTION",
+          "reason": "resolved"
+        },
+        {
+          "code": "CANONICAL_WEEK_STRATEGY",
+          "reason": "accumulation"
+        },
+        {
+          "code": "ADAPTATION_PRIORITY",
+          "reason": "discrete_goal_roles_and_canonical_weakness"
+        },
+        {
+          "code": "TRANSFER_RESOLUTION",
+          "reason": "managed_scope_intersection"
+        },
+        {
+          "code": "TRANSFER_RESOLUTION",
+          "reason": "time_typical_ranges_not_hard_bounds"
+        },
+        {
+          "code": "TRANSFER_RESOLUTION",
+          "reason": "equipment_inventory_and_all_vs_any_requirements_not_canonical"
+        },
+        {
+          "code": "TRANSFER_RESOLUTION",
+          "reason": "level_and_readiness_not_new_authority"
+        },
+        {
+          "code": "TRANSFER_RESOLUTION",
+          "reason": "interday_interference_not_established_by_structure_metadata"
+        },
+        {
+          "code": "DAILY_INTENT_RESOLUTION",
+          "reason": "feasible_methods_and_required_coverage"
+        }
+      ]
+    },
+    "week_objective": "half marathon · accumulation: base aerobica (primary); umbral (primary); resistencia especifica (primary).",
+    "sessions": {
+      "lunes": {
+        "optionId": "lunes:carrera:base_aerobica:running_base:run",
+        "state": "TRAIN",
+        "discipline": "carrera",
+        "stimulusId": "base_aerobica",
+        "intent": {
+          "kind": "adaptation",
+          "goalId": "half_marathon",
+          "adaptationId": "base_aerobica",
+          "methodId": "running_base",
+          "role": "PRIMARY",
+          "pattern": "run",
+          "blockPhase": "accumulation",
+          "blockWeek": 2,
+          "weaknessId": null
+        }
+      },
+      "martes": {
+        "optionId": "martes:rest",
+        "state": "REST"
+      },
+      "miercoles": {
+        "optionId": "miercoles:carrera:umbral:running_threshold:run",
+        "state": "TRAIN",
+        "discipline": "carrera",
+        "stimulusId": "umbral",
+        "intent": {
+          "kind": "adaptation",
+          "goalId": "half_marathon",
+          "adaptationId": "umbral",
+          "methodId": "running_threshold",
+          "role": "PRIMARY",
+          "pattern": "run",
+          "blockPhase": "accumulation",
+          "blockWeek": 2,
+          "weaknessId": null
+        }
+      },
+      "jueves": {
+        "optionId": "jueves:rest",
+        "state": "REST"
+      },
+      "viernes": {
+        "optionId": "viernes:rest",
+        "state": "REST"
+      },
+      "sabado": {
+        "optionId": "sabado:carrera:resistencia_especifica:running_specific:run",
+        "state": "TRAIN",
+        "discipline": "carrera",
+        "stimulusId": "resistencia_especifica",
+        "intent": {
+          "kind": "adaptation",
+          "goalId": "half_marathon",
+          "adaptationId": "resistencia_especifica",
+          "methodId": "running_specific",
+          "role": "PRIMARY",
+          "pattern": "run",
+          "blockPhase": "accumulation",
+          "blockWeek": 2,
+          "weaknessId": null
+        }
+      },
+      "domingo": {
+        "optionId": "domingo:rest",
+        "state": "REST"
+      }
+    }
+  },
+  {
+    "name": "crossfit-running",
+    "scope": {
+      "mode": "coach",
+      "prescriptionAllowed": true,
+      "managedDisciplines": [
+        "box",
+        "carrera"
+      ],
+      "externalDisciplines": []
+    },
+    "strategy": {
+      "version": 1,
+      "policy": "goal-transfer-v1",
+      "goal": {
+        "id": "crossfit",
+        "sources": [
+          "usuarios.objetivo_principal"
+        ],
+        "evidenceDigest": "3e7db56a6ee21e9c9e3cb85bb5cb9bf69601059e5b08862758b5de9f5cafbbc8"
+      },
+      "block": {
+        "phase": "accumulation",
+        "week": 2,
+        "totalWeeks": 4,
+        "evidenceDigest": "914300fa191c8569f52d5f28e354e0935fe013e8a1a45f8b31350abaf6712c02"
+      },
+      "adaptations": [
+        {
+          "id": "fuerza_maxima",
+          "role": "PRIMARY",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "potencia",
+          "role": "PRIMARY",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "gimnasticos",
+          "role": "PRIMARY",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "capacidad_glucolitica",
+          "role": "PRIMARY",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "base_aerobica",
+          "role": "SUPPORTING",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "halterofilia_tecnica",
+          "role": "SUPPORTING",
+          "weaknessIds": [],
+          "requiredPattern": null
+        }
+      ],
+      "preferredEnvironments": [
+        "carrera",
+        "box"
+      ],
+      "methods": [
+        "running_base",
+        "box_aerobic",
+        "box_max_strength",
+        "box_power",
+        "runner_power",
+        "box_gymnastics",
+        "box_mixed",
+        "box_weightlifting"
+      ],
+      "deferred": [
+        {
+          "reference": "adaptation:capacidad_glucolitica",
+          "reason": "weekly_capacity_or_availability_conflict"
+        },
+        {
+          "reference": "adaptation:halterofilia_tecnica",
+          "reason": "weekly_capacity_or_availability_conflict"
+        }
+      ],
+      "coverage": [
+        {
+          "id": "adaptation:fuerza_maxima",
+          "adaptationId": "fuerza_maxima"
+        },
+        {
+          "id": "adaptation:potencia",
+          "adaptationId": "potencia"
+        },
+        {
+          "id": "adaptation:gimnasticos",
+          "adaptationId": "gimnasticos"
+        },
+        {
+          "id": "adaptation:base_aerobica",
+          "adaptationId": "base_aerobica"
+        },
+        {
+          "id": "environment:carrera",
+          "discipline": "carrera"
+        },
+        {
+          "id": "environment:box",
+          "discipline": "box"
+        }
+      ],
+      "volumeIntent": "unspecified",
+      "intensityIntent": "unspecified",
+      "trainingDaysTarget": {
+        "maximum": 5,
+        "minimum": 1
+      },
+      "diagnostics": [
+        {
+          "code": "GOAL_DEMAND_RESOLUTION",
+          "reason": "resolved"
+        },
+        {
+          "code": "CANONICAL_WEEK_STRATEGY",
+          "reason": "accumulation"
+        },
+        {
+          "code": "ADAPTATION_PRIORITY",
+          "reason": "discrete_goal_roles_and_canonical_weakness"
+        },
+        {
+          "code": "TRANSFER_RESOLUTION",
+          "reason": "managed_scope_intersection"
+        },
+        {
+          "code": "TRANSFER_RESOLUTION",
+          "reason": "time_typical_ranges_not_hard_bounds"
+        },
+        {
+          "code": "TRANSFER_RESOLUTION",
+          "reason": "equipment_inventory_and_all_vs_any_requirements_not_canonical"
+        },
+        {
+          "code": "TRANSFER_RESOLUTION",
+          "reason": "level_and_readiness_not_new_authority"
+        },
+        {
+          "code": "TRANSFER_RESOLUTION",
+          "reason": "interday_interference_not_established_by_structure_metadata"
+        },
+        {
+          "code": "DAILY_INTENT_RESOLUTION",
+          "reason": "feasible_methods_and_required_coverage"
+        }
+      ]
+    },
+    "week_objective": "crossfit · accumulation: fuerza maxima (primary); potencia (primary); gimnasticos (primary); base aerobica (supporting).",
+    "sessions": {
+      "lunes": {
+        "optionId": "lunes:rest",
+        "state": "REST"
+      },
+      "martes": {
+        "optionId": "martes:box:fuerza_maxima:box_max_strength:squat",
+        "state": "TRAIN",
+        "discipline": "box",
+        "stimulusId": "fuerza_maxima",
+        "intent": {
+          "kind": "adaptation",
+          "goalId": "crossfit",
+          "adaptationId": "fuerza_maxima",
+          "methodId": "box_max_strength",
+          "role": "PRIMARY",
+          "pattern": "squat",
+          "blockPhase": "accumulation",
+          "blockWeek": 2,
+          "weaknessId": null
+        }
+      },
+      "miercoles": {
+        "optionId": "miercoles:carrera:base_aerobica:running_base:run",
+        "state": "TRAIN",
+        "discipline": "carrera",
+        "stimulusId": "base_aerobica",
+        "intent": {
+          "kind": "adaptation",
+          "goalId": "crossfit",
+          "adaptationId": "base_aerobica",
+          "methodId": "running_base",
+          "role": "SUPPORTING",
+          "pattern": "run",
+          "blockPhase": "accumulation",
+          "blockWeek": 2,
+          "weaknessId": null
+        }
+      },
+      "jueves": {
+        "optionId": "jueves:box:gimnasticos:box_gymnastics:vertical_pull",
+        "state": "TRAIN",
+        "discipline": "box",
+        "stimulusId": "gimnasticos",
+        "intent": {
+          "kind": "adaptation",
+          "goalId": "crossfit",
+          "adaptationId": "gimnasticos",
+          "methodId": "box_gymnastics",
+          "role": "PRIMARY",
+          "pattern": "vertical_pull",
+          "blockPhase": "accumulation",
+          "blockWeek": 2,
+          "weaknessId": null
+        }
+      },
+      "viernes": {
+        "optionId": "viernes:rest",
+        "state": "REST"
+      },
+      "sabado": {
+        "optionId": "sabado:carrera:potencia_carrera:runner_power:jump",
+        "state": "TRAIN",
+        "discipline": "carrera",
+        "stimulusId": "potencia_carrera",
+        "intent": {
+          "kind": "adaptation",
+          "goalId": "crossfit",
+          "adaptationId": "potencia",
+          "methodId": "runner_power",
+          "role": "PRIMARY",
+          "pattern": "jump",
+          "blockPhase": "accumulation",
+          "blockWeek": 2,
+          "weaknessId": null
+        }
+      },
+      "domingo": {
+        "optionId": "domingo:rest",
+        "state": "REST"
+      }
+    }
+  }
+]

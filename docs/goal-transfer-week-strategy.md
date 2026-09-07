@@ -1,0 +1,73 @@
+# FORGE — Fase 3B: informe de implementación
+
+## Auditoría breve y decisión
+
+La ruta `planificar_semana` consumía el calendario autorizado, pero ignoraba `datos.analisis`. `planBoundedWeek` devolvía un objetivo semanal fijo y enumeraba estímulos con `stimulus_only`. La elección respetaba seguridad y disponibilidad, pero no tenía una obligación verificable respecto al objetivo del atleta. El Builder validaba movimientos/estructuras sin una cadena Goal→Adaptation→Method.
+
+Se revisaron `athletePrescriptionContext`, su lector 3A, `prescriptionScope`, `trainingAvailability`, `movementLibrary`, `workoutStructureLibrary`, `prescriptionIntent`, `trainingFeasibility`, contratos semanal/de sesión, `sessionAuthority`, `weeklyCalendarAuthority`, ruta y orquestador cliente. También se consultó la guía local Next 16 de Route Handlers. No se modificó 3A.
+
+## Informe solicitado, puntos 1–29
+
+1. **Root cause:** desconexión entre análisis/objetivo y espacio de opciones verificables; objetivo semanal constante. No era un fallo de ownership.
+2. **Archivos:** nuevos `lib/sports/goalTransferModel.ts`, `lib/planning/canonicalWeekStrategy.ts`, `lib/planning/goalTransferStrategy.test.mjs` y este informe/fixtures. Modificados `app/api/chat/route.ts`, `lib/planning/{allowedWeeklyPlanContract,prepareAllowedWeeklyPlanContract,weeklyCalendarAuthority}.ts`, `lib/sports/{prescriptionIntent,trainingFeasibility,sessionGeneration,structuredSession}.ts`. Se actualizaron dobles de prueba en `allowedWeeklyPlanContract.test.mjs`, `weeklySave.test.mjs` y `sessionAuthority.test.mjs` para las nuevas dependencias de ruta.
+3. **Taxonomías encontradas:** 162 movimientos, 24 estímulos, patrones `PatronMovimiento`, modalidades, disciplinas, formatos/estructuras, compatibilidad por estímulo, equipo y coste de recuperación. Se reutilizan sus IDs; no se crea otro catálogo de patrones.
+4. **Representaciones nuevas:** demandas por Goal, relaciones de transferencia, estrategia semanal y variante `adaptation` del intent. Faltaban relaciones entre conceptos existentes, no nuevos movimientos ni nuevas métricas fisiológicas.
+5. **Goal:** resultado declarado y resuelto por 3A. Se reconocen etiquetas exactas normalizadas de media maratón, 10K, rendimiento CrossFit, fuerza máxima y Hyrox. Conflictos 3A, prosa no reconocida y ausencia siguen sin resolver. No se infiere el Goal desde categoría o desde el LLM.
+6. **Activity/preference:** práctica declarada en categoría/especialidad, cuando corresponde inequívocamente a running/carrera o box/CrossFit. Orienta un entorno compatible si es viable; no concede autoridad. Etiquetas híbridas ambiguas no fabrican una preferencia por dos deportes.
+7. **Managed discipline:** límite de autoridad del `PrescriptionScope` existente. Coach, Focus y Supervisión conservan sus reglas; fuentes externas no pasan a gestionadas por tener transferencia.
+8. **Training method:** relación identificable entre adaptación, estímulo, disciplina y patrones del catálogo. Por ejemplo, `box_support_strength` entrega `fuerza_general` mediante Box; `runner_support_strength` entrega la misma adaptación mediante `fuerza_corredor` en carrera.
+9. **Goal Demand Model:** tabla explícita `GOAL_DEMANDS`, versionada por la política `goal-transfer-v1`. Media maratón prioriza base aeróbica, umbral y resistencia específica; fuerza/economía apoyan. CrossFit prioriza fuerza, potencia, gimnasia y capacidad glucolítica; base aeróbica y técnica de halterofilia apoyan. 10K, fuerza máxima y Hyrox tienen sus propias listas.
+10. **Adaptation taxonomy:** reutiliza IDs de estímulos como vocabulario cualitativo de adaptación. Un ID de adaptación no obliga a usar la disciplina del estímulo homónimo: el método resuelve ese puente.
+11. **Prioridades:** `PRIMARY`, `SUPPORTING`, `MAINTENANCE`, `OPTIONAL`. Orden discreto, después debilidad canónica y después propuesta admitida dentro del mismo nivel. No hay pesos deportivos arbitrarios. Se exige cada cobertura solo si existe una distribución semanal viable; lo demás queda `deferred`.
+12. **Transfer Model:** `TRANSFER_METHODS` relaciona IDs existentes y roles `DIRECT`, `SUPPORTING`, `MAINTENANCE`, `CONDITIONAL`.
+13. **Reglas:** Goal→demanda→método→intersección con disciplinas gestionadas→día autorizado→pool de movimientos permitido→estructura realizable→intent. La fuerza en Box puede apoyar carrera. Running puede apoyar la base aeróbica de CrossFit. El trabajo cíclico de Box es condicional para CrossFit/Hyrox; no sustituye las demandas de carrera de media maratón.
+14. **Límites:** relaciones cualitativas, no garantía de transferencia individual ni de mejora. No se prescribe dosis óptima. No se interpreta texto libre como una regla. Un método sin candidatos viables se excluye, sin reparaciones del LLM.
+15. **Scope:** filtrado antes de emitir opciones y revalidado por las autoridades existentes. La preferencia nunca añade disciplinas; running-only puede usar el método de fuerza del catálogo de carrera, pero no recibe Box.
+16. **Availability:** se mantienen los días originales. Un DP sobre siete días, número de sesiones, descanso y bits de cobertura verifica existencia. Las preferencias se exigen después de las adaptaciones prioritarias y solo cuando siguen siendo viables. Disponibilidad sigue siendo permiso, no obligación de ocupar todos los días.
+17. **Equipment:** limitación explícita `equipment_inventory_and_all_vs_any_requirements_not_canonical`. El catálogo tiene listas de equipo, pero mezcla alternativas (p. ej. mancuerna/kettlebell) y conjuntos (barra/cajón); no hay semántica ALL/ANY ni inventario cerrado canónico en 3A. No es seguro convertirlo en una exclusión nueva. No se promete que esta fase valide material. Tiempo típico de una estructura tampoco se convierte en máximo individual.
+18. **Restrictions:** preceden a cobertura y preferencias mediante `evaluateTrainingFeasibility` y la política existente. Si quedan métodos seguros pero no para una demanda, se aplaza; si no queda ninguna sesión ejecutable, la semana es insatisfacible y no se llama al Planner.
+19. **Weakness:** solo entradas activas de 3A con patrón inequívoco. Una debilidad de squat restringe el método de fuerza a squat y conserva su ID. Una prioridad opcional/mantenimiento compatible puede subir a apoyo; no supera PRIMARY. Patrones incompatibles, ambiguos o conflictos se aplazan. No se usan `debilidades` legacy como nueva autoridad.
+20. **Block:** fase, semana y total proceden de 3A. Acumulación mantiene demandas del Goal. Una descarga declarada difiere explícitamente: intención cualitativa de reducir volumen/intensidad y métodos de recuperación/técnica; las demandas normales quedan aplazadas. No se inventa calendario de bloques. Intensificación/realización conservan la trazabilidad, sin reglas de progresión nuevas.
+21. **Readiness:** se carga mediante el contexto 3A y sus autoridades existentes; no se calcula un score adicional, ni se inventa HRV, ni se transforma ausencia en autorización médica. Esta política no impone umbrales de readiness. El nivel tampoco autoriza escalados nuevos sin metadatos fiables.
+22. **CanonicalWeekStrategy:** versión/política, Goal y procedencia, digest de evidencia, bloque y digest, demandas/roles/debilidades, entornos preferidos, métodos, cobertura exigida, aplazamientos, límite de días e intenciones cualitativas. Incluye diagnósticos `GOAL_DEMAND_RESOLUTION`, `ADAPTATION_PRIORITY`, `TRANSFER_RESOLUTION`, `CANONICAL_WEEK_STRATEGY`, `DAILY_INTENT_RESOLUTION`, `STRATEGY_FALLBACK`.
+23. **Objetivo antes/después:** antes: «Estímulos genéricos seleccionados dentro del contrato autorizado». Ahora: Goal + fase + adaptaciones/roles cubiertos, renderizados por código. El guardado deriva ese texto del recibo firmado, ignorando un texto sustituto del cliente. Los recibos legacy conservan su tratamiento histórico.
+24. **Daily Prescription Intent:** `kind: adaptation`, `goalId`, `adaptationId`, `methodId`, `role`, `pattern`, `blockPhase`, `blockWeek`, `weaknessId`. Esquema estricto; método/estímulo/disciplina deben coincidir. El bloque main debe contener un movimiento que cumpla el patrón.
+25. **stimulus_only:** se mantiene por compatibilidad y cuando no se resuelve Goal. Esa semana completa emite diagnóstico explícito de fallback; un Goal conocido con pool vacío no se degrada silenciosamente a genérico. No se inventa metadata para planes históricos.
+26. **AllowedWeeklyPlanContract:** versión 1 preservada, campo `strategy` aditivo y opciones de intent estratégico. IDs exactos incluyen método/patrón; validación semanal exige todas las coberturas admitidas. Context digest incluye la estrategia preparada.
+27. **Planner:** sigue seleccionando solo optionIds, con máximo dos propuestas y el mismo contrato inmutable. Analyzer puede proponer únicamente una lista de IDs permitidos para ordenar dentro de prioridades. Su texto, fase propuesta y cifras no cambian autoridad. La ruta activa `strategyVersion: 1`; llamadas/recibos anteriores sin ese campo reconstruyen la política legacy.
+28. **Builder:** recibe intent estratégico firmado, pool filtrado y estructuras del contrato actual. Debe cumplir el patrón en main; warmup/cooldown no sirven para satisfacerlo. Tiene el contexto de perfil ya existente para el trabajo posterior de dosis, sin nuevos campos de carga en esta fase.
+29. **Goal→Session:** Goal canónico→demanda→método→opción→slot firmado→contrato de sesión→validación main→render→`admitSessionContent`→JSON persistible con intent. El recibo se elimina al admitir, la metadata estratégica se conserva. Alterar el intent produce rechazo. Cambiar Goal invalida la autoridad semanal anterior. HMAC, identidad, CAS y semántica de regeneración no se sustituyen.
+
+## Fixtures y pruebas, puntos 30–38
+
+Los resultados deterministas están en [goal-transfer-week-fixtures.json](./goal-transfer-week-fixtures.json). Se generaron usando los mismos constructores y validadores de producción, con selección de prueba exacta; no son recomendaciones de dosis.
+
+30. **Half-marathon + CrossFit:** carrera lunes/miércoles/sábado y Box martes/jueves. Las tres demandas primarias ocupan carrera; fuerza de apoyo puede cubrirse en Box. Economía no puede imponerse como otra sesión de carrera en esos tres días y se aplaza con motivo. No se fuerza un metcon por preferir CrossFit.
+31. **Half-marathon running-only:** mismas preferencias declaradas, pero scope solo carrera. No existe ninguna opción de Box. Se cubren las tres demandas primarias; apoyo que no cabe queda aplazado, sin ampliar ownership.
+32. **CrossFit + running:** running tiene métodos de base aeróbica/potencia compatibles. Las demandas que precisan más días de Box que los disponibles quedan aplazadas. La selección conserva las dos disciplinas cuando es viable.
+33. **Cambio de Goal:** cambian demandas, intents y digest; una selección del contrato anterior se rechaza.
+34. **Cambio de block:** acumulación frente a deload cambia cobertura, métodos/intents y señales cualitativas de reducción.
+35. **Weakness:** squat activo estrecha fuerza de apoyo al patrón y conserva `squat-weakness`.
+36. **Restriction precedence:** combinación severa con debilidad squat deja el contrato insatisfacible; sin esa debilidad puede quedar bench press seguro. Nunca se introduce squat para satisfacer la estrategia.
+37. **Preference:** entorno compatible gestionado puede convertirse en cobertura; perfil ambiguo no lo impone y scope running-only elimina Box.
+38. **Interference:** la prueba verifica diagnóstico de información insuficiente. `WorkoutStructure.interference` describe interferencia entre movimientos de una estructura, no entre días. `recovery_cost_horas` de un movimiento aislado no permite predecir la carga de una sesión aún no compuesta. No se inventan intervalos interdiarios ni umbrales.
+
+## Reservas, validación y entrega, puntos 39–47
+
+39. **3C:** dosis, intensidad, RPE/RIR, carga/%RM, ritmo/zonas, ajuste temporal individual, rendering humano y validación de esos campos. Incluye traducir 4800 segundos a «1 h 20 min», sin cambiar almacenamiento numérico. La descarga aquí expresa intención; no garantiza una reducción dosificada todavía.
+40. **3C.5:** comprobación global de duplicación/variedad entre sesiones hermanas, coordinación de cargas interdiarias y validación del plan compuesto. Outcomes, progreso y evaluación longitudinal siguen fuera de 3B; no se recalculan ni se declara que estén resueltos.
+41. **Tests:** suite completa `node --test lib/**/*.test.mjs`: 982 tests (967 existentes + 15 de estrategia/transferencia/integración). Cubre 3A, intent, Planner/contratos, bibliotecas, restricciones, Coach/Focus/Supervisión, disponibilidad, ownership, recibos y guardado. Las pruebas de sesión usan dosis mínimas de fixture para ejercitar contratos, no para recomendar entrenamiento.
+42. **TypeScript:** `npx tsc --noEmit`, exit 0, sin errores.
+43. **Whitespace:** `git diff --check`, exit 0, sin errores.
+44. **Migraciones:** ninguna. Metadata aditiva en JSON de sesiones/recibos; columnas SQL y contratos criptográficos existentes preservados.
+45. **Commit:** `feat: bind goals and transfer to weekly strategy`; SHA comunicado en la entrega, para evitar una autorreferencia dentro del commit.
+46. **Git status:** comprobado tras el commit y comunicado en la entrega.
+47. **NO PUSH:** no se ejecuta push.
+
+## Fundamento y límites de la política
+
+Las tablas son decisiones cualitativas de programación de FORGE, no una reproducción de un protocolo universal. El catálogo local define qué puede representarse. La evidencia respalda el uso complementario de fuerza para corredores, pero no justifica que cualquier WOD produzca la misma adaptación ni determina automáticamente la distribución de una persona. Véanse la [revisión sobre fuerza y economía de carrera](https://pmc.ncbi.nlm.nih.gov/articles/PMC11052887/) y la [revisión de fuerza y rendimiento en corredores](https://pmc.ncbi.nlm.nih.gov/articles/PMC5889786/).
+
+La cobertura de varias capacidades en CrossFit se apoya en su [definición de aptitudes físicas](https://www.crossfit.com/essentials/what-is-fitness-lecture-10-physical-skills) y su [descripción del entrenamiento](https://www.crossfit.com/faq/general). La asignación concreta de roles y el aplazamiento por capacidad semanal son política de producto, no porcentajes ni efectos científicos estimados.
+
+No hay pesos, tiempos de recuperación deportivos nuevos, umbrales de readiness ni cálculos de intensidad en esta fase. Los únicos límites numéricos nuevos son de esquema (lista acotada) y representación; frecuencia/descanso conservan la autoridad previa. La selección de ejemplo no debe confundirse con un programa individual completo hasta terminar 3C y 3C.5.

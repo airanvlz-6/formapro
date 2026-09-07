@@ -14,7 +14,7 @@ export async function generateContractSession(contract: AllowedTrainingContract,
   const preflight = validateAllowedTrainingContract(authority);
   if (!preflight.ok) return { ok: false as const, code: 'TRAINING_CONTRACT_INVALID', violations: preflight.errors };
   const recent = structuredClone(history);
-  const intentInstruction = authority.intent?.kind === 'main_pattern'
+  const intentInstruction = authority.intent && authority.intent.kind !== 'stimulus_only'
     ? `\nIntent canónico: el bloque main debe incluir al menos un ID de ${JSON.stringify(intentMatchingMovementIds(authority.intent, authority.allowedMovementIds))}. Otros IDs permitidos pueden acompañarlo. Un movimiento solo en warmup/cooldown no satisface el intent.` : '';
   const prompt = `${STRUCTURED_SESSION_INSTRUCTIONS}\nCONTRACT:\n${JSON.stringify(authority)}${intentInstruction}\nContexto no autoritativo:\n${context}\nHistorial para evitar duplicación:\n${JSON.stringify(recent)}`;
   for (let attempt = 0; attempt < 2; attempt++) {

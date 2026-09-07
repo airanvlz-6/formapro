@@ -5,6 +5,7 @@ import { WORKOUT_STRUCTURE_LIBRARY, STRUCTURES_BY_STIMULUS } from './workoutStru
 import { normalizeTrainingKey, validatePrescriptionScope } from './prescriptionScope';
 import { activeRestrictionFlags, evaluateMovementRestrictions } from './movementRestrictionPolicy';
 import { isStructureSatisfiable } from './structureSemantics';
+import { transferMethod } from './goalTransferModel';
 
 export type StimulusResolution = { status: 'resolved'; stimulusId: string } | { status: 'unresolved'; reason: string };
 export function resolveTrainingStimulus(discipline: string, value: unknown): StimulusResolution {
@@ -46,6 +47,10 @@ export function feasibilityInputErrors(input: ContractInput): string[] {
   if (Object.hasOwn(input, 'intent')) {
     const intent = resolvePrescriptionIntent(input.intent);
     if (!intent.ok) errors.push(...intent.errors);
+    else if (intent.intent.kind === 'adaptation') {
+      const method = transferMethod(intent.intent.methodId)!;
+      if (method.discipline !== input.discipline || method.stimulusId !== input.stimulus) errors.push('STRATEGIC_METHOD_MISMATCH');
+    }
   }
   if (input.source !== 'weekly_session_builder') errors.push('CONTRACT_SOURCE_INVALID');
   return [...new Set(errors)];

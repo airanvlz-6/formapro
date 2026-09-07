@@ -7,6 +7,7 @@ import type { PrescriptionIntent } from '../sports/prescriptionIntent';
 import { evaluateTrainingFeasibility } from '../sports/trainingFeasibility';
 import { STIMULUS_LIBRARY } from '../sports/movementLibrary';
 import { calendarDays, calendarState, isExecutableCalendarState, validateWeeklyCalendar } from './weeklyCalendar';
+import { assertStrategyShape, strategicIntents, type CanonicalWeekStrategy } from './canonicalWeekStrategy';
 
 export type WeeklyOption = { optionId: string; state: 'TRAIN' | 'RECOVERY' | 'REST' | 'UNAVAILABLE';
   discipline?: string; stimulusId?: string; intent?: PrescriptionIntent; protected?: true };
@@ -15,19 +16,58 @@ export type AllowedWeeklyPlanContract = {
   prescriptionScope: PrescriptionScope; contextDigest: string;
   frequencyPolicy: { maxExecutableDays: number; minExecutableDays: 1; requireGenuineRest: boolean };
   dayOptions: Record<string, WeeklyOption[]>;
+  strategy?: CanonicalWeekStrategy;
 };
 export type WeeklyContractInput = {
   targetWeekStart: string; prescriptionScope: PrescriptionScope; maxExecutableDays: number;
   completeNewWeek: boolean; allowed: Record<string, string[]>;
   contexts: Record<string, ContractInput>;
+  strategy?: CanonicalWeekStrategy;
   // Only the server adapter derives these from protected history/external/past days.
   fixed: Record<string, { state: WeeklyOption['state']; discipline?: string }>;
 };
 const failure = (code: string, errors: string[]) => ({ ok: false as const, code, errors });
 
+type Coverage = CanonicalWeekStrategy['coverage'][number];
+function covers(option: WeeklyOption, group: Coverage): boolean {
+  const intent = option.intent;
+  return intent?.kind === 'adaptation' && (!group.adaptationId || intent.adaptationId === group.adaptationId)
+    && (!group.discipline || option.discipline === group.discipline) && (!group.weaknessId || intent.weaknessId === group.weaknessId);
+}
+/** Finite existence proof over seven days, count, rest and demand bits. No session dosing or interday physiology. */
+function coverageFeasible(contract: AllowedWeeklyPlanContract, groups: Coverage[]): boolean {
+  const full = (1 << groups.length) - 1;
+  let states = new Set(['0:0:0']);
+  for (const day of calendarDays) {
+    const signatures = [...new Set(contract.dayOptions[day].map(o => `${Number(isExecutableCalendarState(o.state))}:${Number(o.state === 'REST')}:${groups.reduce((mask, g, i) => mask | (covers(o, g) ? 1 << i : 0), 0)}`))];
+    const next = new Set<string>();
+    for (const state of states) for (const signature of signatures) {
+      const [n, rest, mask] = state.split(':').map(Number), [add, r, bits] = signature.split(':').map(Number);
+      if (n + add <= contract.frequencyPolicy.maxExecutableDays) next.add(`${n + add}:${rest | r}:${mask | bits}`);
+    }
+    states = next;
+  }
+  return [...states].some(s => { const [n, rest, mask] = s.split(':').map(Number);
+    return n >= 1 && (!contract.frequencyPolicy.requireGenuineRest || !!rest) && mask === full; });
+}
+function bindStrategicCoverage(contract: AllowedWeeklyPlanContract) {
+  const strategy = contract.strategy!;
+  strategy.coverage = [];
+  const candidates: Coverage[] = strategy.adaptations.filter(a => a.role !== 'OPTIONAL').map(a => ({ id: `adaptation:${a.id}`, adaptationId: a.id }));
+  candidates.push(...strategy.preferredEnvironments.map(discipline => ({ id: `environment:${discipline}`, discipline })));
+  for (const group of candidates) {
+    if (coverageFeasible(contract, [...strategy.coverage, group])) strategy.coverage.push(group);
+    else strategy.deferred.push({ reference: group.id, reason: Object.values(contract.dayOptions).flat().some(o => covers(o, group))
+      ? 'weekly_capacity_or_availability_conflict' : 'no_feasible_managed_method' });
+  }
+  for (const a of strategy.adaptations.filter(a => a.role === 'OPTIONAL')) strategy.deferred.push({ reference: a.id, reason: 'optional_not_required' });
+  strategy.diagnostics.push({ code: 'DAILY_INTENT_RESOLUTION', reason: strategy.goal.id ? 'feasible_methods_and_required_coverage' : 'stimulus_only_entire_week' });
+}
+
 /** Pure option enumeration. Generic catalog stimuli are code-owned objectives, not text promises. */
 export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput) {
   try {
+    if (input.strategy) assertStrategyShape(input.strategy);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(input.targetWeekStart) || new Date(input.targetWeekStart).getUTCDay() !== 1
       || new Date(input.targetWeekStart).toISOString().slice(0, 10) !== input.targetWeekStart
       || typeof input.completeNewWeek !== 'boolean' || !Number.isInteger(input.maxExecutableDays) || input.maxExecutableDays < 0 || input.maxExecutableDays > 6
@@ -49,12 +89,15 @@ export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput) {
         if (!Array.isArray(input.allowed[discipline])) return failure('WEEKLY_CONTEXT_INVALID', ['AVAILABILITY_REQUIRED']);
         if (!input.allowed[discipline].includes(day)) continue;
         for (const stimulus of Object.values(STIMULUS_LIBRARY).filter(s => s.discipline === discipline)) {
-          const intent: PrescriptionIntent = Object.hasOwn(context, 'intent') ? context.intent! : { kind: 'stimulus_only' };
+          const intents: PrescriptionIntent[] = input.strategy?.goal.id ? strategicIntents(input.strategy, discipline, stimulus.id)
+            : [Object.hasOwn(context, 'intent') ? context.intent! : { kind: 'stimulus_only' }];
+          for (const intent of intents) {
           const feasible = evaluateTrainingFeasibility({ ...context, targetWeekStart: input.targetWeekStart, targetDay: day, stimulus: stimulus.id, intent });
           if (!feasible.resolved) return failure('WEEKLY_CONTEXT_INVALID', feasible.errors);
           if (!feasible.feasible) continue;
-          options.push({ optionId: `${day}:${discipline}:${stimulus.id}:${intent.kind === 'main_pattern' ? intent.pattern : 'generic'}`,
+          options.push({ optionId: `${day}:${discipline}:${stimulus.id}:${intent.kind === 'adaptation' ? intent.methodId + ':' + intent.pattern : intent.kind === 'main_pattern' ? intent.pattern : 'generic'}`,
             state: calendarState({ tipo: discipline, stimulusId: stimulus.id }), discipline, stimulusId: stimulus.id, intent });
+          }
         }
       }
       dayOptions[day] = options;
@@ -64,6 +107,7 @@ export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput) {
       prescriptionScope: structuredClone(input.prescriptionScope), contextDigest: createHash('sha256').update(JSON.stringify(input)).digest('hex'),
       frequencyPolicy: { maxExecutableDays: input.maxExecutableDays, minExecutableDays: 1,
         requireGenuineRest: input.completeNewWeek && Object.values(dayOptions).some(options => options.some(o => o.state === 'REST')) }, dayOptions,
+      ...(input.strategy ? { strategy: structuredClone(input.strategy) } : {}),
     };
     const fixedCalendar = validateWeeklyCalendar(calendarDays.map(day => {
       const fixed = input.fixed[day];
@@ -84,6 +128,7 @@ export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput) {
     }
     if (![...states].some(s => { const [n, rest] = s.split(':').map(Number); return n >= 1 && (!contract.frequencyPolicy.requireGenuineRest || rest); }))
       return failure('WEEKLY_CONTRACT_UNSATISFIABLE', ['NO_VALID_EXECUTABLE_REST_ARRANGEMENT']);
+    if (contract.strategy) bindStrategicCoverage(contract);
     return { ok: true as const, contract };
   } catch { return failure('WEEKLY_CONTEXT_INVALID', ['CANONICAL_CONTEXT_MALFORMED']); }
 }
@@ -111,12 +156,15 @@ export function validateWeeklySelection(contract: AllowedWeeklyPlanContract, pro
   if (count > contract.frequencyPolicy.maxExecutableDays) return failure('WEEKLY_SELECTION_INVALID', ['WEEKLY_EXECUTABLE_LIMIT']);
   if (count < contract.frequencyPolicy.minExecutableDays) return failure('WEEKLY_SELECTION_INVALID', ['WEEKLY_NO_EXECUTABLE_SELECTION']);
   if (contract.frequencyPolicy.requireGenuineRest && !options.some(o => o.state === 'REST')) return failure('WEEKLY_SELECTION_INVALID', ['WEEKLY_REST_REQUIRED']);
+  if (contract.strategy?.coverage.some(group => !options.some(option => covers(option, group))))
+    return failure('WEEKLY_SELECTION_INVALID', ['WEEKLY_STRATEGY_COVERAGE_REQUIRED']);
   return { ok: true as const, selected };
 }
 
 export function weeklyPlannerPrompt(contract: AllowedWeeklyPlanContract) {
   return `Selecciona una semana exclusivamente entre las opciones del contrato JSON. Disponibilidad es permiso, no obligación.
 TRAIN y RECOVERY cuentan hacia maxExecutableDays. RECOVERY no sustituye REST. No inventes movimientos ni objetivos específicos.
+Si existe strategy, debes cubrir TODOS sus grupos coverage con las opciones seleccionadas. Respeta roles y métodos; deferred explica lo que no puede exigirse esta semana.
 Devuelve exclusivamente JSON RAW: el objeto directamente. El primer carácter de la respuesta DEBE ser { y el último carácter DEBE ser }.
 NO uses Markdown. NO uses \`\`\`json ni fences \`\`\` de ningún tipo. NO añadas prosa antes ni después del JSON, explicaciones ni comentarios.
 Usa exactamente el esquema del ejemplo completo siguiente. Sustituye REEMPLAZAR_DIGEST por el contextDigest exacto del contrato y cada REEMPLAZAR_OPTION_ID por un optionId exacto permitido para ese día; los placeholders NO son opciones autorizadas.

@@ -1739,9 +1739,17 @@ const forgeValidator=(texto:string):string=>{
     finally{setCargando(false);}
   };
 
-  // All generation entries use the same server preflight; the client only presents requirements.
-  const dispararGeneracion=async(temporalAnswer?:string,answeringQuestion:boolean=false)=>{
+  // Chat/button share the weekly confirmation. Confirmed continuations retain temporal intent.
+  const dispararGeneracion=async(temporalAnswer?:string,answeringQuestion:boolean=false,availabilityConfirmed:boolean=false)=>{
     weeklyTemporalIntentRef.current={text:temporalAnswer,answeringQuestion};
+    if(!availabilityConfirmed){
+      const confirmation=await apiCall({action:"obtener_confirmacion_disponibilidad",codigo:codigoUsuario});
+      availabilityConfirmationRef.current=confirmation.ok?confirmation.snapshotDigest:null;
+      setEsperandoConfirmacionDisponibilidad(confirmation.ok===true);
+      setMensajes(prev=>[...prev,{role:"assistant",content:confirmation.ok?confirmation.question
+        :"No he podido comprobar tu disponibilidad. Revisa la configuración y vuelve a solicitar la semana."}]);
+      return;
+    }
     setGenerandoSemana(true);
     setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu semana paso a paso..."}]);
     try {
@@ -1830,7 +1838,7 @@ const forgeValidator=(texto:string):string=>{
           if(pendingCoachOwnership.weekly){
             setEsperandoConfirmacionDisponibilidad(false);
             setMensajes(prev=>[...prev,{role:"assistant",content:confirmed}]);
-            await dispararGeneracion(weeklyTemporalIntentRef.current.text,weeklyTemporalIntentRef.current.answeringQuestion);
+            await dispararGeneracion(weeklyTemporalIntentRef.current.text,weeklyTemporalIntentRef.current.answeringQuestion,true);
           } else setMensajes(prev=>[...prev,{role:"assistant",content:confirmed}]);
         }
       } finally {setCargando(false);}
@@ -2017,13 +2025,13 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
           return;
         }
         setEsperandoConfirmacionDisponibilidad(false);
-        await dispararGeneracion(weeklyTemporalIntentRef.current.text,weeklyTemporalIntentRef.current.answeringQuestion);
+        await dispararGeneracion(weeklyTemporalIntentRef.current.text,weeklyTemporalIntentRef.current.answeringQuestion,true);
         setCargando(false);
         return;
       }
       if(esperandoConfirmacionEmpezarHoy && codigoUsuario){
         setEsperandoConfirmacionEmpezarHoy(false);
-        await dispararGeneracion(texto.trim(),true);
+        await dispararGeneracion(texto.trim(),true,true);
         setCargando(false);
         return;
       } else if(esConfirmacionSimple && codigoUsuario && typeof modificacionPendienteConfirmar?.pendingId==="string" && modificacionPendienteConfirmar.pendingId.trim()){

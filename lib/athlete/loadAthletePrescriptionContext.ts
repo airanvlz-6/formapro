@@ -5,6 +5,7 @@ import { validDate } from '../physiology/authority';
 import type { ReadinessResultado } from '../readiness/readinessEngine';
 import { buildExposureReport } from '../sports/exposureEngine';
 import { resolveCompletionDate } from '../planning/recordCompletion';
+import { resolvePlanningStrategy } from './strategyResolution';
 
 export type PreparedPrescriptionReadiness = { userCodigo: string; effectiveDate: string;
   source: 'canonical_readiness_engine'; result: ReadinessResultado };
@@ -58,7 +59,8 @@ export async function loadAthletePrescriptionContext(db: any, userCodigo: string
   const fromDate = new Date(Date.parse(options.asOfDate) - 6 * 86400000).toISOString().slice(0, 10);
   const datedHistory = history.map(raw => ({ raw, effective: resolveCompletionDate(record(raw).fecha) }));
   const signals = recovery.objective;
-  return structuredClone({ ...projectAthletePrescriptionProfile(profile, options.prescriptionDate || options.asOfDate), userCodigo, asOfDate: options.asOfDate,
+  const projected = projectAthletePrescriptionProfile(profile, options.prescriptionDate || options.asOfDate);
+  return structuredClone({ ...projected, planningStrategy: resolvePlanningStrategy(projected), userCodigo, asOfDate: options.asOfDate,
     physiology: { source: 'prepareRecoveryContext', recovery, missingSignals: ['hrv', 'restingHr', 'sleepDuration', 'sleepScore']
       .filter(k => record(record(signals)[k]).status !== 'available') },
     readiness: options.readiness ? { status: 'available' as const, ...options.readiness }

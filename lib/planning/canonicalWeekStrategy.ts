@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { AthletePrescriptionContext } from '../athlete/loadAthletePrescriptionContext';
 import { GOAL_DEMANDS, TRANSFER_METHODS, type GoalId, type AdaptationRole, type StrategicIntent } from '../sports/goalTransferModel';
-import { resolveGoalAuthority } from '../athlete/goalResolution';
+import { resolvePlanningStrategy } from '../athlete/strategyResolution';
 import { STIMULUS_LIBRARY, type PatronMovimiento } from '../sports/movementLibrary';
 import type { PrescriptionScope } from '../sports/prescriptionScope';
 
@@ -21,8 +21,8 @@ export type CanonicalWeekStrategy = {
 };
 const digest = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const normalize = (v: unknown) => typeof v === 'string' ? v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() : '';
-export function resolveStrategyGoal(context: Pick<AthletePrescriptionContext, 'goals'>) {
-  return resolveGoalAuthority(context).canonicalGoalId;
+export function resolveStrategyGoal(context: Parameters<typeof resolvePlanningStrategy>[0]) {
+  return resolvePlanningStrategy(context).strategyId;
 }
 /** Strict proposal admission: only ordering within existing priorities, never new demands, scope or a new phase. */
 export function normalizeStrategyProposal(raw: unknown, allowed: readonly string[]): StrategyProposal {
@@ -82,7 +82,7 @@ export function buildCanonicalWeekStrategy(context: AthletePrescriptionContext, 
     { code: 'TRANSFER_RESOLUTION', reason: 'equipment_inventory_and_all_vs_any_requirements_not_canonical' },
     { code: 'TRANSFER_RESOLUTION', reason: 'level_and_readiness_not_new_authority' },
     { code: 'TRANSFER_RESOLUTION', reason: 'interday_interference_not_established_by_structure_metadata' });
-  return { version: 1, policy: 'goal-transfer-v1', goal: { id: goalId, sources: context.goals.primary.candidates.map(c => c.source), evidenceDigest: digest(context.goals.primary) },
+  return { version: 1, policy: 'goal-transfer-v1', goal: { id: goalId, sources: resolvePlanningStrategy(context).sources, evidenceDigest: digest(resolvePlanningStrategy(context)) },
     block: { phase, week: typeof context.cycle.week.value === 'number' ? context.cycle.week.value : null,
       totalWeeks: typeof context.cycle.totalWeeks.value === 'number' ? context.cycle.totalWeeks.value : null, evidenceDigest: digest(context.cycle) },
     adaptations, preferredEnvironments, methods, deferred, coverage: [],

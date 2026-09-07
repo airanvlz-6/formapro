@@ -2,6 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { projectAthletePrescriptionProfile } from './athletePrescriptionContext';
 import { resolveGoalAuthority, type GoalResolutionResult } from './goalResolution';
 import { resolveGoalId } from '../sports/goalTransferModel';
+import { resolvePlanningStrategy } from './strategyResolution';
 import { buildPrescriptionScope, resolveProfileDisciplines } from '../sports/prescriptionScope';
 
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -22,20 +23,21 @@ export function goalQuestion(resolution: GoalResolutionResult) {
   const options = resolution.candidates.map((candidate, index) => ({ id: String(index + 1), label: candidate.value,
     source: candidate.source, recognizedId: candidate.recognizedId }));
   const intro = resolution.status === 'GOAL_CONFLICT' ? 'Hay declaraciones distintas de objetivo principal. ¿Cuál quieres priorizar ahora?'
-    : resolution.status === 'GOAL_UNSUPPORTED' ? 'Tu objetivo declarado todavía no tiene una estrategia modelada. La planificación orientada a ese objetivo no está disponible. Puedes conservarlo o elegir expresamente otro objetivo principal compatible.'
+    : resolution.status === 'GOAL_UNSUPPORTED' ? 'Forge todavía no dispone de una estrategia compatible con este tipo de preparación. Puedes conservar tu objetivo o elegir expresamente otro objetivo principal compatible.'
     : 'Falta un objetivo principal para construir la estrategia. ¿Cuál quieres priorizar ahora?';
   return { id: 'primary_goal', answerType: 'primary_goal_declaration' as const, options,
     classification: options.length && options.every(o => !o.recognizedId) ? 'needs_classification' : 'select_or_declare',
     text: intro + (options.length ? '\nDeclaraciones registradas:\n' + options.map(o => `${o.id}. ${o.label}`).join('\n')
       + '\nResponde con el número o el texto exacto de una declaración.' : '')
-      + '\nPara declarar o corregir otra meta, escribe «Mi objetivo es: ...». Una meta no modelada se conservará como principal, pero no habilitará planificación estratégica. Las declaraciones principales sustituidas se conservarán como antecedentes. «Cancelar» sale sin cambios.' };
+      + '\nPara declarar o corregir otra meta, escribe «Mi objetivo es: ...». La descripción se conservará y se comprobará si existe una estrategia compatible. Las declaraciones principales sustituidas se conservarán como antecedentes. «Cancelar» sale sin cambios.' };
 }
 export async function requireGoalAuthority(db: any, codigo: string) {
   const authority = await readAuthority(db, codigo);
-  const resolution = resolveGoalAuthority(projectAthletePrescriptionProfile(authority.user));
-  if (resolution.status === 'GOAL_RESOLVED') throw new Error('GOAL_AUTHORITY_CHANGED_RETRY');
+  const context = projectAthletePrescriptionProfile(authority.user);
+  const resolution = resolveGoalAuthority(context), planningStrategy = resolvePlanningStrategy(context);
+  if (planningStrategy.status === 'STRATEGY_RESOLVED') throw new Error('GOAL_AUTHORITY_CHANGED_RETRY');
   const payload = Buffer.from(JSON.stringify({ user: codigo, fingerprint: authority.fingerprint, expires: Date.now() + 30 * 60_000 })).toString('base64url');
-  return { resolution, canPlanTowardDeclaredGoal: false as const, state: 'goal_required' as const,
+  return { resolution, planningStrategy, canPlanTowardDeclaredGoal: false as const, state: 'goal_required' as const,
     question: goalQuestion(resolution), questionToken: payload + '.' + mac(payload) };
 }
 /** Explicit selection supersedes competing primary declarations, preserving them as unclassified history.
@@ -67,7 +69,7 @@ export async function saveGoalAnswer(db: any, codigo: string, token: unknown, an
   for (const key of ['objetivo_general', 'objetivo_principal']) {
     if (Object.hasOwn(profile, key)) { previousDeclarations[key] = profile[key]; delete profile[key]; }
   }
-  const primary = { descripcion: goalId ?? value, updated_at: new Date().toISOString(),
+  const primary = { descripcion: value, updated_at: new Date().toISOString(),
     resolution: { version: 1, source: 'structured_primary_goal_question',
       previousPrimary: before.user.objetivo_principal ?? null, previousProfileDeclarations: previousDeclarations } };
   let query = db.from('usuarios').update({ objetivo_principal: primary, perfil: profile }).eq('codigo', codigo);
@@ -81,9 +83,11 @@ export async function saveGoalAnswer(db: any, codigo: string, token: unknown, an
   const after = await readAuthority(db, codigo);
   const resolution = resolveGoalAuthority(projectAthletePrescriptionProfile(after.user));
   if (resolution.status !== (goalId ? 'GOAL_RESOLVED' : 'GOAL_UNSUPPORTED') || resolution.canonicalGoalId !== goalId
-    || after.user.objetivo_principal?.descripcion !== (goalId ?? value)
+    || after.user.objetivo_principal?.descripcion !== value
     || digest(after.scope) !== digest(before.scope)) throw new Error('GOAL_AUTHORITY_CHANGED_RETRY');
-  return { ok: true, resolved: !!goalId, saved: true, resolution, canPlanTowardDeclaredGoal: !!goalId,
-    ...(!goalId ? { code: 'GOAL_UNSUPPORTED', message: 'Objetivo principal guardado. Forge todavía no tiene una estrategia modelada para esa meta; la planificación estratégica sigue pendiente.' } : {}),
+  const planningStrategy = resolvePlanningStrategy(projectAthletePrescriptionProfile(after.user));
+  const canPlan = planningStrategy.status === 'STRATEGY_RESOLVED';
+  return { ok: true, resolved: canPlan, saved: true, resolution, planningStrategy, canPlanTowardDeclaredGoal: canPlan,
+    ...(!canPlan ? { code: planningStrategy.status, message: 'Objetivo principal guardado. Forge todavía no dispone de una estrategia compatible con este tipo de preparación.' } : {}),
     primaryGoal: after.user.objetivo_principal, profile: after.user.perfil };
 }

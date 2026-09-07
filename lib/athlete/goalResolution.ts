@@ -1,4 +1,4 @@
-import type { AthletePrescriptionContext } from './loadAthletePrescriptionContext';
+import type { projectAthletePrescriptionProfile } from './athletePrescriptionContext';
 import { resolveGoalId, type GoalId } from '../sports/goalTransferModel';
 
 export type GoalResolutionResult = {
@@ -7,7 +7,7 @@ export type GoalResolutionResult = {
   candidates: { source: string; value: string; recognizedId: GoalId | null }[];
 };
 /** Only declared primary evidence is authority. No analysis, ownership or discipline inference. */
-export function resolveGoalAuthority(context: Pick<AthletePrescriptionContext, 'goals'>): GoalResolutionResult {
+export function resolveGoalAuthority(context: Pick<ReturnType<typeof projectAthletePrescriptionProfile>, 'goals'>): GoalResolutionResult {
   const primary = context.goals.primary;
   const candidates = primary.candidates.map(c => ({ source: c.source, value: c.value, recognizedId: resolveGoalId(c.value) }));
   const ids = candidates.map(c => c.recognizedId);
@@ -21,5 +21,5 @@ export function goalResolutionDiagnostic(result: GoalResolutionResult) {
     candidateSources: [...new Set(result.candidates.map(c => c.source))],
     recognizedIds: [...new Set(result.candidates.flatMap(c => c.recognizedId ? [c.recognizedId] : []))],
     conflict: result.status === 'GOAL_CONFLICT', unsupportedLabelsSafe: result.candidates.filter(c => !c.recognizedId).map(() => '[unrecognized]'),
-    decision: result.status === 'GOAL_RESOLVED' ? 'admit' : 'require_primary_goal' };
+    decision: 'defer_to_strategy_resolution' };
 }

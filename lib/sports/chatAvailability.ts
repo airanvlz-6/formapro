@@ -26,7 +26,7 @@ export async function readAvailabilityConfirmation(db: any, codigo: string) {
     const availability = { ...days, ...c.allowed };
     const snapshotDigest = weeklyDigest({ distribution: c.profile.distribucion_semanal, sources: c.sources, scope: c.scope });
     const labels: Record<string,string> = { box:'Box', carrera:'Carrera', fuerza:'Fuerza' };
-    const question = `Actualmente tengo tu disponibilidad así:\n\n${Object.entries(availability).map(([d,v]) => `${labels[d] || d}: ${v.length ? v.join(', ') : 'sin días disponibles'}.`).join('\n')}\n\n¿Sigue siendo correcta?`;
+    const question = `Actualmente tengo tu disponibilidad así:\n\n${Object.entries(availability).map(([d,v]) => `${labels[d] || d}: ${v.length ? v.join(', ') : 'sin días disponibles'}.`).join('\n')}\n\n¿Sigue siendo correcta para esta semana?`;
     return { ok: true as const, availability, snapshotDigest, question,
       distribucion: typeof c.profile.distribucion_semanal === 'string' ? c.profile.distribucion_semanal : JSON.stringify(c.profile.distribucion_semanal) };
   } catch { return fail('AVAILABILITY_EXISTING_REQUIRED'); }

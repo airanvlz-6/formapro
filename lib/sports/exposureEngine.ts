@@ -8,6 +8,20 @@
 
 import { MOVEMENT_LIBRARY, Movimiento } from "./movementLibrary";
 
+/** Structured sibling of the existing textual report. No text parsing or inferred executed reps.
+ * Counts distinct sessions and keeps unknown repetitions separate from known subtotals. */
+export function buildStructuredExposureReport(rows: { sessionId: string; movementId: string; repetitions: number | null }[]) {
+  const known = rows.filter(r => Object.hasOwn(MOVEMENT_LIBRARY, r.movementId));
+  const summarize = (entries: typeof rows) => ({ sessions: new Set(entries.map(r => r.sessionId)).size,
+    knownRepetitions: entries.reduce((n,r) => n + (r.repetitions ?? 0), 0),
+    status: entries.every(r => r.repetitions !== null) ? 'complete' : entries.some(r => r.repetitions !== null) ? 'partial' : 'unknown' });
+  return { source: 'ExposureEngine.structured',
+    byMovement: Object.fromEntries([...new Set(known.map(r=>r.movementId))].sort().map(id=>[id,summarize(known.filter(r=>r.movementId===id))])),
+    byPattern: Object.fromEntries([...new Set(known.map(r=>MOVEMENT_LIBRARY[r.movementId].movement_pattern))].sort()
+      .map(pattern=>[pattern,summarize(known.filter(r=>MOVEMENT_LIBRARY[r.movementId].movement_pattern===pattern))])),
+    unknownMovementRows: rows.length-known.length };
+}
+
 export interface ExposicionMovimiento {
   movementId: string;
   vecesUltimas4Semanas: number;

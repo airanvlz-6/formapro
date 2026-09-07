@@ -23,6 +23,7 @@ import { detectarDebilidadDuplicada } from "@/lib/validators/weaknessDeduplicati
 import { STIMULUS_LIBRARY } from "@/lib/sports/movementLibrary";
 import { generateTrainingSession, assertFreshSessionRestrictions, verifySessionReceipt, admitSessionContent, assertCurrentPrescriptionScope } from "@/lib/sports/sessionAuthority";
 import { savePrescriptionAnswer } from "@/lib/athlete/prescriptionAnswers";
+import { loadTrainingLoad } from "@/lib/trainingLoad/loadTrainingLoad";
 import { canonicalDiscipline } from "@/lib/sports/prescriptionScope";
 import { aplicarTrainingFrequencySafetyNet, calcularFrecuenciaRealRelativa } from "@/lib/sports/trainingFrequencySafetyNet";
 import { calcularReadiness, scoreAForgeState, combinarConCheckinSubjetivo } from "@/lib/readiness/readinessEngine";
@@ -5013,6 +5014,11 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
 
   if (action === "responder_dato_prescripcion") {
     try { return NextResponse.json(await savePrescriptionAnswer(supabase, codigo, datos.questionToken, datos.answer)); }
+    catch (error: any) { return NextResponse.json({ ok: false, code: error.message }); }
+  }
+
+  if (action === "obtener_carga_entrenamiento") {
+    try { return NextResponse.json({ ok: true, report: await loadTrainingLoad(supabase, codigo, datos.fromDate, datos.toDate) }); }
     catch (error: any) { return NextResponse.json({ ok: false, code: error.message }); }
   }
 

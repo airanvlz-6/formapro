@@ -1,0 +1,498 @@
+{
+  "version": 1,
+  "athlete": {
+    "modo_entrada": {
+      "value": "coach",
+      "source": "usuarios.modo_entrada",
+      "raw": "coach",
+      "updatedAt": null,
+      "authority": "declared"
+    },
+    "categoria": {
+      "value": "hibrido",
+      "source": "usuarios.categoria",
+      "raw": "hibrido",
+      "updatedAt": null,
+      "authority": "declared"
+    },
+    "especialidad": {
+      "value": "hibrido_general",
+      "source": "usuarios.especialidad",
+      "raw": "hibrido_general",
+      "updatedAt": null,
+      "authority": "declared"
+    }
+  },
+  "goals": {
+    "primary": {
+      "resolved": {
+        "value": "Mejorar squat + 10K",
+        "source": "usuarios.objetivo_principal",
+        "raw": {
+          "descripcion": "Mejorar squat + 10K"
+        },
+        "updatedAt": null,
+        "authority": "declared"
+      },
+      "candidates": [
+        {
+          "value": "Mejorar squat + 10K",
+          "source": "usuarios.objetivo_principal",
+          "raw": {
+            "descripcion": "Mejorar squat + 10K"
+          },
+          "updatedAt": null,
+          "authority": "declared"
+        },
+        {
+          "value": "Mejorar squat + 10K",
+          "source": "usuarios.perfil.objetivo_general",
+          "raw": "Mejorar squat + 10K",
+          "updatedAt": null,
+          "authority": "declared"
+        }
+      ],
+      "reason": "resolved"
+    },
+    "secondary": [],
+    "disciplineSpecific": [],
+    "competition": []
+  },
+  "sessionTimeBudget": {
+    "resolved": {
+      "value": {
+        "minMinutes": null,
+        "maxMinutes": 45,
+        "openEnded": false,
+        "lowerExclusive": false
+      },
+      "source": "usuarios.perfil.duracion",
+      "raw": "45 min",
+      "updatedAt": null,
+      "authority": "declared"
+    },
+    "candidates": [
+      {
+        "value": {
+          "minMinutes": null,
+          "maxMinutes": 45,
+          "openEnded": false,
+          "lowerExclusive": false
+        },
+        "source": "usuarios.perfil.duracion",
+        "raw": "45 min",
+        "updatedAt": null,
+        "authority": "declared"
+      }
+    ],
+    "reason": "resolved"
+  },
+  "strength": {
+    "references": [
+      {
+        "value": {
+          "movementId": "back_squat",
+          "valueKg": 140,
+          "referenceType": "1rm",
+          "repsIfKnown": 1,
+          "dateIfKnown": "2026-09-01"
+        },
+        "source": "usuarios.test_atleta.back_squat",
+        "raw": "140kg",
+        "updatedAt": null,
+        "authority": "declared"
+      }
+    ],
+    "byMovement": {
+      "back_squat": {
+        "resolved": {
+          "value": {
+            "movementId": "back_squat",
+            "valueKg": 140,
+            "referenceType": "1rm",
+            "repsIfKnown": 1,
+            "dateIfKnown": "2026-09-01"
+          },
+          "source": "usuarios.test_atleta.back_squat",
+          "raw": "140kg",
+          "updatedAt": null,
+          "authority": "declared"
+        },
+        "candidates": [
+          {
+            "value": {
+              "movementId": "back_squat",
+              "valueKg": 140,
+              "referenceType": "1rm",
+              "repsIfKnown": 1,
+              "dateIfKnown": "2026-09-01"
+            },
+            "source": "usuarios.test_atleta.back_squat",
+            "raw": "140kg",
+            "updatedAt": null,
+            "authority": "declared"
+          }
+        ],
+        "reason": "resolved"
+      }
+    }
+  },
+  "running": {
+    "references": [
+      {
+        "value": {
+          "metric": "maxHr",
+          "value": 190,
+          "unit": "bpm"
+        },
+        "source": "usuarios.perfil.fc_max",
+        "raw": 190,
+        "updatedAt": null,
+        "authority": "declared",
+        "observedAt": null
+      },
+      {
+        "value": {
+          "metric": "z2",
+          "value": {
+            "min": 130,
+            "max": 145
+          },
+          "unit": "bpm"
+        },
+        "source": "usuarios.datos_entrenamiento.z2_fc",
+        "raw": "130–145",
+        "updatedAt": null,
+        "authority": "declared",
+        "observedAt": null
+      }
+    ],
+    "byMetric": {
+      "maxHr": {
+        "resolved": {
+          "value": {
+            "metric": "maxHr",
+            "value": 190,
+            "unit": "bpm"
+          },
+          "source": "usuarios.perfil.fc_max",
+          "raw": 190,
+          "updatedAt": null,
+          "authority": "declared",
+          "observedAt": null
+        },
+        "candidates": [
+          {
+            "value": {
+              "metric": "maxHr",
+              "value": 190,
+              "unit": "bpm"
+            },
+            "source": "usuarios.perfil.fc_max",
+            "raw": 190,
+            "updatedAt": null,
+            "authority": "declared",
+            "observedAt": null
+          }
+        ],
+        "reason": "resolved"
+      },
+      "z2": {
+        "resolved": {
+          "value": {
+            "metric": "z2",
+            "value": {
+              "min": 130,
+              "max": 145
+            },
+            "unit": "bpm"
+          },
+          "source": "usuarios.datos_entrenamiento.z2_fc",
+          "raw": "130–145",
+          "updatedAt": null,
+          "authority": "declared",
+          "observedAt": null
+        },
+        "candidates": [
+          {
+            "value": {
+              "metric": "z2",
+              "value": {
+                "min": 130,
+                "max": 145
+              },
+              "unit": "bpm"
+            },
+            "source": "usuarios.datos_entrenamiento.z2_fc",
+            "raw": "130–145",
+            "updatedAt": null,
+            "authority": "declared",
+            "observedAt": null
+          }
+        ],
+        "reason": "resolved"
+      }
+    }
+  },
+  "development": [
+    {
+      "value": {
+        "id": "weakness-squat",
+        "area": null,
+        "indicador": "back_squat",
+        "nombre": null,
+        "diagnostico": null,
+        "estado": "activa",
+        "progreso": null,
+        "prioridad": "alta",
+        "confianza": null,
+        "evidencias": [
+          "Declaración del atleta"
+        ],
+        "detectado": null,
+        "ultimaRevision": "2026-09-06",
+        "planAccion": null,
+        "beneficioEsperado": null,
+        "discipline": null,
+        "movementId": "back_squat",
+        "pattern": "squat"
+      },
+      "source": "usuarios.athlete_development.0",
+      "raw": {
+        "id": "weakness-squat",
+        "indicador": "back_squat",
+        "estado": "activa",
+        "prioridad": "alta",
+        "evidencias": [
+          "Declaración del atleta"
+        ],
+        "ultima_revision": "2026-09-06"
+      },
+      "updatedAt": "2026-09-06",
+      "authority": "declared"
+    }
+  ],
+  "declaredLimitations": {
+    "value": null,
+    "source": "usuarios.perfil.lesiones",
+    "raw": null,
+    "updatedAt": null,
+    "authority": "declared"
+  },
+  "cycle": {
+    "block": {
+      "value": "acumulación",
+      "source": "usuarios.ciclo_actual.bloque",
+      "raw": "acumulación",
+      "updatedAt": null,
+      "authority": "declared"
+    },
+    "week": {
+      "value": 2,
+      "source": "usuarios.ciclo_actual.semana",
+      "raw": 2,
+      "updatedAt": null,
+      "authority": "declared"
+    },
+    "totalWeeks": {
+      "value": 4,
+      "source": "usuarios.ciclo_actual.totalSemanas",
+      "raw": 4,
+      "updatedAt": null,
+      "authority": "declared"
+    },
+    "objective": {
+      "value": "Mejorar fuerza y carrera",
+      "source": "usuarios.ciclo_actual.objetivo",
+      "raw": "Mejorar fuerza y carrera",
+      "updatedAt": null,
+      "authority": "declared"
+    }
+  },
+  "legacyDevelopment": {
+    "weaknesses": {
+      "value": null,
+      "source": "usuarios.debilidades",
+      "raw": null,
+      "updatedAt": null,
+      "authority": "declared"
+    },
+    "testWeaknesses": {
+      "value": null,
+      "source": "usuarios.test_atleta.informe.debilidades",
+      "raw": null,
+      "updatedAt": null,
+      "authority": "declared"
+    }
+  },
+  "unparsed": [],
+  "userCodigo": "fixture-hybrid",
+  "asOfDate": "2026-09-07",
+  "physiology": {
+    "source": "prepareRecoveryContext",
+    "recovery": {
+      "userCodigo": "fixture-hybrid",
+      "objective": {
+        "effectiveDate": "2026-09-07",
+        "asOfDate": "2026-09-07",
+        "ageDays": 0,
+        "isToday": true,
+        "rowPresent": false,
+        "hrv": {
+          "status": "missing",
+          "value": null,
+          "source": null,
+          "ingestedAt": null
+        },
+        "restingHr": {
+          "status": "missing",
+          "value": null,
+          "source": null,
+          "ingestedAt": null
+        },
+        "sleepDuration": {
+          "status": "missing",
+          "value": null,
+          "source": null,
+          "ingestedAt": null
+        },
+        "sleepScore": {
+          "status": "missing",
+          "value": null,
+          "source": null,
+          "ingestedAt": null
+        },
+        "completeness": {
+          "total": 4,
+          "available": 0,
+          "missing": 4,
+          "invalid": 0,
+          "percentAvailable": 0
+        }
+      },
+      "subjective": {
+        "acuteFatigue": null,
+        "trend": null,
+        "source": "usuarios.estado_fisiologico",
+        "effectiveDate": null
+      },
+      "trends": {
+        "hrv": {
+          "observations": [],
+          "direction": null,
+          "status": "insufficient"
+        },
+        "sleep": {
+          "status": "unavailable",
+          "reason": "legacy_sleep_semantics_ambiguous"
+        }
+      },
+      "hrv": null,
+      "sueno": null,
+      "tendencia": null
+    },
+    "missingSignals": [
+      "hrv",
+      "restingHr",
+      "sleepDuration",
+      "sleepScore"
+    ]
+  },
+  "readiness": {
+    "status": "unknown",
+    "source": "canonical_readiness_engine",
+    "result": null,
+    "reason": "not_prepared_no_recalculation"
+  },
+  "restrictions": {
+    "source": "getCanonicalRestrictions",
+    "value": {
+      "asOfDate": "2026-09-07",
+      "state": null,
+      "areas": [],
+      "restrictions": [],
+      "reassessments": [],
+      "active": false
+    }
+  },
+  "history": {
+    "completedSessions": [],
+    "exposure": {
+      "source": "buildExposureReport",
+      "byDiscipline": {
+        "box": {
+          "disciplina": "box",
+          "exposiciones": [],
+          "estimulosSubexpuestos": [
+            "fuerza_maxima",
+            "hipertrofia",
+            "halterofilia_soporte",
+            "fuerza_general",
+            "tecnica",
+            "fuerza_corredor",
+            "capacidad_glucolitica",
+            "capacidad_aerobica",
+            "potencia",
+            "gimnasticos",
+            "cadena_posterior",
+            "coordinacion",
+            "halterofilia_tecnica",
+            "movilidad_tecnica",
+            "potencia_carrera"
+          ],
+          "estimulosSobreexpuestos": []
+        },
+        "carrera": {
+          "disciplina": "carrera",
+          "exposiciones": [],
+          "estimulosSubexpuestos": [
+            "fuerza_general",
+            "tecnica",
+            "fuerza_corredor",
+            "cadena_posterior",
+            "coordinacion",
+            "hipertrofia",
+            "potencia",
+            "potencia_carrera",
+            "economia_carrera",
+            "velocidad",
+            "recuperacion_activa",
+            "base_aerobica",
+            "resistencia_especifica",
+            "umbral",
+            "vo2max"
+          ],
+          "estimulosSobreexpuestos": []
+        },
+        "fuerza": {
+          "disciplina": "fuerza",
+          "exposiciones": [],
+          "estimulosSubexpuestos": [],
+          "estimulosSobreexpuestos": []
+        }
+      },
+      "limitations": [
+        "last_four_weekly_rows_not_exact_window",
+        "textual_report_matching",
+        "no_intra_week_reservations",
+        "unknown_dates_excluded"
+      ]
+    },
+    "recentFrequency": {
+      "source": "usuarios.workout_history",
+      "fromDate": "2026-09-01",
+      "toDate": "2026-09-07",
+      "completedRecords": 0,
+      "unknownDateRecords": 0,
+      "interpretation": "record_count_not_deduplicated_training_days"
+    },
+    "modifications": {
+      "source": "session_modification_events",
+      "records": [],
+      "limitations": [
+        "last_30_events",
+        "not_all_legacy_modification_paths_emit_events"
+      ]
+    }
+  }
+}

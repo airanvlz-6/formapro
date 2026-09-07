@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { AthletePrescriptionContext } from '../athlete/loadAthletePrescriptionContext';
-import { GOAL_DEMANDS, TRANSFER_METHODS, resolveGoalId, type GoalId, type AdaptationRole, type StrategicIntent } from '../sports/goalTransferModel';
+import { GOAL_DEMANDS, TRANSFER_METHODS, type GoalId, type AdaptationRole, type StrategicIntent } from '../sports/goalTransferModel';
+import { resolveGoalAuthority } from '../athlete/goalResolution';
 import { STIMULUS_LIBRARY, type PatronMovimiento } from '../sports/movementLibrary';
 import type { PrescriptionScope } from '../sports/prescriptionScope';
 
@@ -21,10 +22,7 @@ export type CanonicalWeekStrategy = {
 const digest = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const normalize = (v: unknown) => typeof v === 'string' ? v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() : '';
 export function resolveStrategyGoal(context: Pick<AthletePrescriptionContext, 'goals'>) {
-  const primary = context.goals.primary;
-  const ids = primary.candidates.map(c => resolveGoalId(c.value));
-  // 3A conflicts are never silently repaired even if text aliases would map to the same sport.
-  return primary.reason === 'resolved' && ids.length && ids.every(id => id && id === ids[0]) ? ids[0] : null;
+  return resolveGoalAuthority(context).canonicalGoalId;
 }
 /** Strict proposal admission: only ordering within existing priorities, never new demands, scope or a new phase. */
 export function normalizeStrategyProposal(raw: unknown, allowed: readonly string[]): StrategyProposal {

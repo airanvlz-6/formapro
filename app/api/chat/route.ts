@@ -27,6 +27,7 @@ import { detectarDebilidadDuplicada } from "@/lib/validators/weaknessDeduplicati
 import { STIMULUS_LIBRARY } from "@/lib/sports/movementLibrary";
 import { generateTrainingSession, assertFreshSessionRestrictions, verifySessionReceipt, admitSessionContent, assertCurrentPrescriptionScope } from "@/lib/sports/sessionAuthority";
 import { savePrescriptionAnswer } from "@/lib/athlete/prescriptionAnswers";
+import { saveGoalAnswer } from "@/lib/athlete/goalAnswers";
 import { loadTrainingLoad } from "@/lib/trainingLoad/loadTrainingLoad";
 import { canonicalDiscipline } from "@/lib/sports/prescriptionScope";
 import { aplicarTrainingFrequencySafetyNet, calcularFrecuenciaRealRelativa } from "@/lib/sports/trainingFrequencySafetyNet";
@@ -5051,6 +5052,11 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
   if (action === "responder_dato_prescripcion") {
     try { return NextResponse.json(await savePrescriptionAnswer(supabase, codigo, datos.questionToken, datos.answer)); }
     catch (error: any) { return NextResponse.json({ ok: false, code: error.message }); }
+  }
+
+  if (action === "responder_objetivo_principal") {
+    try { return NextResponse.json(await saveGoalAnswer(supabase, codigo, datos.questionToken, datos.answer)); }
+    catch (error: any) { return NextResponse.json({ ok: false, code: /^GOAL_[A-Z_]+$/.test(error.message) ? error.message : 'GOAL_ANSWER_FAILED' }); }
   }
 
   if (action === "obtener_carga_entrenamiento") {

@@ -21,6 +21,15 @@ export const GOAL_DEMANDS: Record<GoalId, readonly GoalDemand[]> = {
   hyrox: [demand('resistencia_especifica', 'PRIMARY'), demand('capacidad_glucolitica', 'PRIMARY'), demand('fuerza_general', 'SUPPORTING'),
     demand('base_aerobica', 'SUPPORTING'), demand('umbral', 'SUPPORTING')],
 };
+/** Catalog metadata distinguishes event profiles from broad activity/performance goals.
+ * New domains extend definitions, demands and transfer methods, never the shared admission engine. */
+export const GOAL_DEFINITIONS: Record<GoalId, { label: string; kind: 'event' | 'activity_performance' | 'performance_target' }> = {
+  half_marathon: { label: 'Media maratón', kind: 'event' },
+  '10k': { label: '10K', kind: 'event' },
+  crossfit: { label: 'CrossFit', kind: 'activity_performance' },
+  max_strength: { label: 'Fuerza máxima', kind: 'performance_target' },
+  hyrox: { label: 'Hyrox', kind: 'event' },
+};
 const goalAliases: Record<string, GoalId> = {
   half_marathon: 'half_marathon', media_maraton: 'half_marathon', '21k': 'half_marathon', '21km': 'half_marathon',
   preparar_media_maraton: 'half_marathon', correr_media_maraton: 'half_marathon',

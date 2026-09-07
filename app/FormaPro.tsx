@@ -639,6 +639,7 @@ export default function Forge() {
         setGenerandoSemana(true);
         setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu primera semana paso a paso — analizando bloque, distribuyendo días y diseñando cada sesión..."}]);
         const planFocusInicial=await orquestarGeneracionSemana(true);
+        if(planFocusInicial?.goalRequirement){setGenerandoSemana(false);return;}
         const respuestaFocusInicial=planFocusInicial
           ? `✅ **Semana generada y guardada.**\n\nBloque: ${planFocusInicial.block_name} — ${planFocusInicial.week_objective}\n\nRevisa el detalle completo en **Mi Plan**. ¿Alguna duda?`
           : "No se ha confirmado una semana nueva. El plan guardado, si existe, sigue disponible; revisemos lo ocurrido antes de intentar otra generación.";
@@ -972,6 +973,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
 
     // The server owns the two-proposal budget; client never multiplies Planner retries.
     const plannerRes=await apiCall({action:"planificar_semana",codigo:codigoUsuario,datos:{weeklyContractVersion:1,analisis,generationToken:weeklyGeneration.token,targetWeekStart:weekStartOrchestrator,empezarHoy}});
+    if(plannerRes?.goalRequirement) return {goalRequirement:plannerRes.goalRequirement};
     if(!plannerRes?.ok || plannerRes.estructura?.weeklyContractVersion!==1) return null;
     const estructura=plannerRes.estructura;
 
@@ -1255,6 +1257,7 @@ const [equipoSeleccionado,setEquipoSeleccionado]=useState<any>(null);
   const accentColor=cat?.color||C.accent;
 
 const [pendingPrescriptionQuestion,setPendingPrescriptionQuestion]=useState<{codigo:string;token:string}|null>(null);
+const [pendingGoalQuestion,setPendingGoalQuestion]=useState<{codigo:string;token:string;empezarHoy:boolean}|null>(null);
 const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     const generationResult=!body.action && codigoUsuario
       ? await apiCall({action:"preparar_generacion_semana",codigo:codigoUsuario}) : null;
@@ -1267,6 +1270,11 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
         const controller=useAbort?abortControllerRef.current:null;
         const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:controller?.signal});
         if(res.ok) { const result=await res.json();
+          if(result.goalRequirement?.questionToken && result.goalRequirement.question?.text){
+            const empezarHoy=(body.datos as any)?.empezarHoy ?? pendingGoalQuestion?.empezarHoy ?? true;
+            setPendingGoalQuestion({codigo:codigoUsuario,token:result.goalRequirement.questionToken,empezarHoy});
+            setMensajes(prev=>[...prev,{role:"assistant",content:(result.code==='GOAL_ANSWER_UNSUPPORTED' ? 'Esa respuesta no corresponde a un objetivo modelado. ' : '')+result.goalRequirement.question.text}]);
+          }
           if(result.questionToken && result.question?.text){
             setPendingPrescriptionQuestion({codigo:codigoUsuario,token:result.questionToken});
             setMensajes(prev=>[...prev,{role:"assistant",content:result.question.text}]);
@@ -1719,6 +1727,28 @@ const forgeValidator=(texto:string):string=>{
   const enviar=async(texto:string=input)=>{
     console.log("=== ENTRA A FUNCION enviar() ===");
     if((!texto.trim()&&imagenesAdjuntas.length===0)||cargando||bloqueado) return;
+    if(pendingGoalQuestion){
+      if(pendingGoalQuestion.codigo!==codigoUsuario){setPendingGoalQuestion(null);return;}
+      setCargando(true);setInput("");setMensajes(prev=>[...prev,{role:"user",content:texto}]);
+      try{
+        const result=await apiCall({action:"responder_objetivo_principal",codigo:codigoUsuario,datos:{questionToken:pendingGoalQuestion.token,answer:texto}});
+        if(result.ok && result.resolved){
+          setObjetivoPrincipal(result.primaryGoal);setRespuestas(result.profile);
+          setPendingGoalQuestion(null);setGenerandoSemana(true);
+          setMensajes(prev=>[...prev,{role:"assistant",content:"Objetivo principal guardado y comprobado. Continúo con la planificación."}]);
+          const plan=await orquestarGeneracionSemana(pendingGoalQuestion.empezarHoy);
+          if(!plan?.goalRequirement) setMensajes(prev=>[...prev,{role:"assistant",content:plan
+            ? `✅ **Semana generada y guardada.**\n\n${plan.week_objective}\n\nRevisa el detalle en **Mi Plan**.`
+            : "No se ha confirmado una semana nueva. Puedes volver a solicitarla para comprobar el contexto actual."}]);
+        }else if(!result.goalRequirement){
+          setPendingGoalQuestion(null);
+          setMensajes(prev=>[...prev,{role:"assistant",content:result.cancelled
+            ? "Conservo tu objetivo. La planificación orientada a él queda pendiente de resolución."
+            : "No se ha confirmado el objetivo. Solicita de nuevo la semana para comprobar los datos actuales."}]);
+        }
+      }finally{setCargando(false);setGenerandoSemana(false);}
+      return;
+    }
     if(pendingPrescriptionQuestion){
       if(pendingPrescriptionQuestion.codigo!==codigoUsuario){setPendingPrescriptionQuestion(null);return;}
       setCargando(true);setInput("");
@@ -1969,6 +1999,7 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
           setGenerandoSemana(true);
           setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu próxima semana paso a paso — analizando bloque, distribuyendo días y diseñando cada sesión..."}]);
           const plan=await orquestarGeneracionSemana(empezarHoyReal);
+          if(plan?.goalRequirement){setGenerandoSemana(false);return;}
           const respuestaFinalGen=plan
             ? `✅ **Semana generada y guardada.**\n\nBloque: ${plan.block_name} — ${plan.week_objective}\n\nRevisa el detalle completo en **Mi Plan**. ¿Alguna duda?`
             : "No se ha confirmado una semana nueva. El plan guardado, si existe, sigue disponible; revisemos lo ocurrido antes de intentar otra generación.";

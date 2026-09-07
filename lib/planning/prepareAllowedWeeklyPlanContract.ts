@@ -10,6 +10,8 @@ import { admitSessionContent } from '../sports/sessionAuthority';
 import { loadAthletePrescriptionContext } from '../athlete/loadAthletePrescriptionContext';
 import { buildCanonicalWeekStrategy, renderWeekObjective } from './canonicalWeekStrategy';
 import { strategyDiagnostic } from './planningDiagnostics';
+import { resolveGoalAuthority, goalResolutionDiagnostic } from '../athlete/goalResolution';
+import { requireGoalAuthority } from '../athlete/goalAnswers';
 
 /** Read-only preparation, before any Planner call. Bounded reads per discipline, never per option. */
 export async function loadWeeklyPlanningContext(db: any, codigo: string, request: {
@@ -18,8 +20,16 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
 }) {
   const c = await loadWeeklyCalendarContext(db, codigo);
   if (request.strategyVersion !== undefined && request.strategyVersion !== 1) throw new Error('STRATEGY_VERSION_UNSUPPORTED');
-  const strategy = request.strategyVersion === 1 ? buildCanonicalWeekStrategy(
-    await loadAthletePrescriptionContext(db, codigo, { asOfDate: request.today }), c.scope, c.max, request.strategyProposal) : undefined;
+  const athlete = request.strategyVersion === 1 ? await loadAthletePrescriptionContext(db, codigo, { asOfDate: request.today }) : undefined;
+  if (athlete) {
+    const goal = resolveGoalAuthority(athlete), admitted = goal.status === 'GOAL_RESOLVED';
+    console.log('GOAL_RESOLUTION_DIAGNOSTIC', goalResolutionDiagnostic(goal));
+    console.log('WEEK_STRATEGY_ADMISSION', { planningRunId: request.planningRunId ?? null, goalStatus: goal.status,
+      admitted, reason: admitted ? 'supported_primary_goal' : 'primary_goal_required' });
+    if (!admitted) return { ok: false as const, code: goal.status, retryable: false,
+      goalRequirement: await requireGoalAuthority(db, codigo) };
+  }
+  const strategy = athlete ? buildCanonicalWeekStrategy(athlete, c.scope, c.max, request.strategyProposal) : undefined;
   const restrictions = await getCanonicalRestrictions(db, codigo);
   const contexts: Record<string, ContractInput> = {};
   for (const discipline of c.scope.managedDisciplines) {

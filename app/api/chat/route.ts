@@ -1,6 +1,9 @@
 import { protectedCalendarSessionIndices } from "@/lib/planning/weeklyCalendar";
 import { planBoundedWeek } from "@/lib/planning/prepareAllowedWeeklyPlanContract";
 import { admittedWeekObjective } from "@/lib/planning/weeklyCalendarAuthority";
+import { issueWholeWeekReceipt } from "@/lib/planning/weeklyCalendarAuthority";
+import { enforceWholeWeek } from "@/lib/planning/enforceWholeWeek";
+import { validateAdmittedWholeWeek } from "@/lib/planning/wholeWeekAdapter";
 import { loadAthletePrescriptionContext } from "@/lib/athlete/loadAthletePrescriptionContext";
 import { strategyDemandIds, normalizeStrategyProposal } from "@/lib/planning/canonicalWeekStrategy";
 import { plannerProviderMetadata } from "@/lib/planning/weeklyPlannerDiagnostics";
@@ -4644,7 +4647,7 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
     try { hardConstraintsValidator = (await getCanonicalRestrictions(supabase, codigo)).restrictions; }
     catch (err: any) { return NextResponse.json({ error: err.message }, { status: 503 }); }
 
-    const newlyPrescribedSessions: any[] = [];
+    let newlyPrescribedSessions: any[] = [];
     // Sports admission is independent of persistence/identity admission below.
     try {
       const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Atlantic/Canary' });
@@ -4666,8 +4669,28 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
       }
     } catch (error: any) { return NextResponse.json({ ok: false, code: error.message, retryable: false }); }
 
-    try { await assertWeeklyCalendar(supabase, codigo, plan.week_start, plan.sessions, datos.calendarReceipt,
-      { requireV2: true, generationToken: datos.generationToken, sessionEvidence: newlyPrescribedSessions }); }
+    let wholeWeek;
+    let wholeWeekAuthority;
+    try {
+      const authority = await assertWeeklyCalendar(supabase, codigo, plan.week_start, plan.sessions, datos.calendarReceipt,
+        { requireV2: true, generationToken: datos.generationToken, sessionEvidence: newlyPrescribedSessions });
+      wholeWeekAuthority = authority;
+      wholeWeek = await enforceWholeWeek(codigo, plan.week_start, plan.sessions, newlyPrescribedSessions, datos.calendarReceipt, authority,
+        async (prompt: string) => {
+          const response = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 2400, messages: [{ role: "user", content: prompt }] }),
+          });
+          if (!response.ok) throw new Error("LLM_REQUEST_FAILED");
+          const output = await response.json();
+          return output.content?.map((b: any) => b.text || "").join("") || "";
+        });
+      if (!wholeWeek.ok) return NextResponse.json({ ...wholeWeek, retryable: false }, { status: 422 });
+      plan.sessions = wholeWeek.sessions;
+      newlyPrescribedSessions = wholeWeek.sessionEvidence;
+      if (wholeWeek.repairCount) await assertWeeklyCalendar(supabase, codigo, plan.week_start, plan.sessions, datos.calendarReceipt,
+        { requireV2: true, generationToken: datos.generationToken, sessionEvidence: newlyPrescribedSessions });
+    }
     catch (error: any) { return NextResponse.json({ ok: false, code: error.message, retryable: false }); }
 
     // Final proposal content: admit identity only after all content transformations.
@@ -4720,6 +4743,11 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
     try {
       for (const session of newlyPrescribedSessions) await assertFreshSessionRestrictions(supabase, codigo, plan.week_start, session);
     } catch (error: any) { return NextResponse.json({ ok: false, code: error.message, retryable: false }); }
+    const finalWeekValidation = validateAdmittedWholeWeek(plan.week_start, validationResult.candidate.sessions,
+      wholeWeekAuthority!.evidence, wholeWeekAuthority!.contexts);
+    if (finalWeekValidation.status !== "pass") return NextResponse.json({ ok: false, code: "WEEK_FINAL_VALIDATION_FAILED", result: finalWeekValidation, retryable: false }, { status: 422 });
+    const wholeWeekReceipt = issueWholeWeekReceipt(codigo, plan.week_start, datos.calendarReceipt,
+      validationResult.candidate.sessions, finalWeekValidation, wholeWeek.repairCount);
     const persisted = planExistente
       ? await mutatePlanWithCAS(supabase, validationResult.mutation)
       : await createPlan(supabase, validationResult.mutation);
@@ -4751,8 +4779,9 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
     await recordWeeklyEffect("WEEKLY_AUDIT_FAILED", () => supabase.from("weekly_plan_events").insert({
       user_codigo: codigo, week_start: plan.week_start, nivel: "A_regeneracion_completa",
       accion: esSemanaActual ? "regenerar_semana" : "generar_semana_nueva",
-      motivo: plan.week_objective || null, confirmado_por_usuario: true }));
-    return NextResponse.json({ ok: true, persistenceStatus: "committed", revision: persisted.revision, warnings });
+      motivo: JSON.stringify({ weekObjective: plan.week_objective || null, wholeWeekReceipt }), confirmado_por_usuario: true }));
+    return NextResponse.json({ ok: true, persistenceStatus: "committed", revision: persisted.revision, warnings,
+      wholeWeekValidation: finalWeekValidation, wholeWeekReceipt, sessions: validationResult.candidate.sessions });
   }
 
   if (action === "actualizar_sesion_plan") {

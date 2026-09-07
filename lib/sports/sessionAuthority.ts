@@ -7,7 +7,7 @@ import { getCanonicalRestrictions } from '../athlete/getCanonicalRestrictions';
 import { prepareSessionTrainingContract } from './prepareSessionTrainingContract';
 import { buildAllowedTrainingContract } from './allowedTrainingContract';
 import { generateContractSession } from './sessionGeneration';
-import { renderContractSession } from './structuredSession';
+import { renderContractSession, parseStructuredSession, validateSessionAgainstTrainingContract } from './structuredSession';
 import { canonicalDiscipline, normalizeTrainingKey, buildPrescriptionScope, resolveProfileDisciplines } from './prescriptionScope';
 import { loadAthletePrescriptionContext } from '../athlete/loadAthletePrescriptionContext';
 import { buildSessionDoseContext } from './sessionDoseContext';
@@ -26,6 +26,21 @@ function signature(payload: string) {
 }
 type Request = { targetWeekStart: string; day: string; discipline: string; stimulus: unknown; intent?: PrescriptionIntent; state?: 'TRAIN' | 'RECOVERY';
   weekly?: { receipt: unknown; generationToken: unknown; optionId: unknown; claims?: Record<string, any> } };
+
+/** One repair proposal under the original authenticated authority; never widen pools or replace intent. */
+export async function repairSessionWithinReceipt(session: Record<string, any>, codigo: string, week: string, calendarReceipt: string,
+  diagnostics: unknown, siblings: unknown, complete: (prompt: string) => Promise<string>) {
+  verifySessionReceipt(session.sessionReceipt, session, codigo, week, calendarReceipt);
+  const evidence = JSON.parse(Buffer.from(session.sessionReceipt.split('.')[0], 'base64url').toString());
+  const raw = await complete(`Repair one structured proposal within this unchanged signed contract. Return only proposal JSON. No titles or authority changes.\nCONTRACT:\n${JSON.stringify(evidence.contract)}\nREJECTED_PROPOSAL:\n${JSON.stringify(evidence.proposal)}\nWHOLE_WEEK_DIAGNOSTICS:\n${JSON.stringify(diagnostics)}\nSIBLING_PROPOSALS:\n${JSON.stringify(siblings)}`);
+  const parsed = parseStructuredSession(raw);
+  if (!parsed.ok) throw new Error('WEEK_REPAIR_PROPOSAL_INVALID');
+  const checked = validateSessionAgainstTrainingContract(evidence.contract, parsed.proposal);
+  if (!checked.ok) throw new Error('WEEK_REPAIR_CONTRACT_INVALID');
+  const rendered = renderContractSession(evidence.contract, checked.proposal);
+  const payload = Buffer.from(JSON.stringify({...evidence,proposal:checked.proposal})).toString('base64url');
+  return {...rendered,sessionReceipt:`${payload}.${signature(payload)}`};
+}
 /** Only this server adapter issues receipts, after both sports and duplication checks. */
 export async function generateTrainingSession(db: any, userCodigo: string, request: Request,
   complete: (prompt: string) => Promise<string>, context = '') {

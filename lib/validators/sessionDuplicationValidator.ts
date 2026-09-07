@@ -13,13 +13,16 @@ function normalizarTexto(t: string): string {
 }
 
 // Similitud simple por solapamiento de palabras significativas (Jaccard sobre tokens de 4+ letras)
+export function setSimilarity(valuesA: readonly string[], valuesB: readonly string[]): number {
+  const a = new Set(valuesA), b = new Set(valuesB);
+  if (!a.size || !b.size) return 0;
+  return [...a].filter(v => b.has(v)).length / new Set([...a, ...b]).size;
+}
 function calcularSimilitud(textoA: string, textoB: string): number {
   const tokensA = new Set(normalizarTexto(textoA).split(/\s+/).filter(w => w.length >= 4));
   const tokensB = new Set(normalizarTexto(textoB).split(/\s+/).filter(w => w.length >= 4));
   if (tokensA.size === 0 || tokensB.size === 0) return 0;
-  const interseccion = [...tokensA].filter(t => tokensB.has(t)).length;
-  const union = new Set([...tokensA, ...tokensB]).size;
-  return interseccion / union;
+  return setSimilarity([...tokensA], [...tokensB]);
 }
 
 export interface ResultadoDuplicacion {

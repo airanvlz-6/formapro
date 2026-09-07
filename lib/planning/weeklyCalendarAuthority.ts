@@ -137,8 +137,9 @@ export function resolveWeeklySlot(evidence: any, request: Record<string, any>) {
 export async function assertWeeklyCalendar(db: any, codigo: string, week: string, sessions: any[], receipt: unknown,
   options: { requireV2?: boolean; generationToken?: unknown; sessionEvidence?: any[] } = {}) {
   const evidence = verifyWeeklyCalendarReceipt(receipt, codigo, week, options.requireV2);
+  let contexts: Record<string, any> = {};
   if (evidence.protocolVersion === 2) {
-    await assertFreshWeeklyAuthority(db, codigo, week, receipt, options.generationToken);
+    contexts = (await assertFreshWeeklyAuthority(db, codigo, week, receipt, options.generationToken)).contexts;
     for (const slot of evidence.admittedSlots) {
       const saved = sessions.find(s => calendarKey(s.dia) === slot.day);
       if (slot.protectedSessionDigest && (!saved || weeklyDigest(saved) !== slot.protectedSessionDigest))
@@ -152,6 +153,15 @@ export async function assertWeeklyCalendar(db: any, codigo: string, week: string
   const c = await loadWeeklyCalendarContext(db, codigo);
   const result = validateWeeklyCalendar(sessions, c.max, c.allowed, evidence.slots);
   if (!result.ok) throw new Error(result.errors.join(','));
+  return { evidence, contexts };
+}
+
+/** Reuses the calendar HMAC infrastructure; summary is evidence, never a bypass of final validation. */
+export function issueWholeWeekReceipt(codigo:string,week:string,calendarReceipt:string,sessions:readonly any[],result:any,repairCount:number) {
+  const payload = Buffer.from(JSON.stringify({kind:'whole-week-validation',version:1,codigo,week,
+    calendarDigest:weeklyDigest(calendarReceipt),contentDigest:weeklyDigest(sessions),status:result.status,
+    diagnosticCodes:result.diagnostics.map((d:any)=>d.code),repairCount})).toString('base64url');
+  return payload + '.' + mac(payload);
 }
 
 /** Session edits cannot evade whole-week safety or erase an existing protected day. */

@@ -1112,7 +1112,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     // The server receipt confirms persistence. Never replay this proposal after a write.
     console.log("=== FORGE ORCHESTRATOR: EXITO COMPLETO ===");
     await cargarPlanSemanal(codigoUsuario,planCompleto.week_start);
-    return planCompleto;
+    return { ...planCompleto, sessions: resultadoGuardado.sessions || planCompleto.sessions };
   };
 
   const cargarEquipos=async(cod:string)=>{

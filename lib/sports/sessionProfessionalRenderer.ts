@@ -12,7 +12,7 @@ export function formatDuration(seconds: number): string {
 const number = (n: number) => String(Math.round(n * 100) / 100);
 const range = (min: number, max: number) => min === max ? number(min) : `${number(min)}–${number(max)}`;
 const label = (id: string) => id.replaceAll('_', ' ');
-const goals: Record<string, string> = { half_marathon: 'media maratón', '10k': '10 km', crossfit: 'rendimiento en CrossFit', max_strength: 'fuerza máxima', hyrox: 'Hyrox' };
+const goals: Record<string, string> = { running_general: 'carrera general', half_marathon: 'media maratón', '10k': '10 km', crossfit: 'rendimiento en CrossFit', max_strength: 'fuerza máxima', hyrox: 'Hyrox' };
 const roles: Record<string, string> = { PRIMARY: 'principal', SUPPORTING: 'de apoyo', MAINTENANCE: 'de mantenimiento', OPTIONAL: 'opcional' };
 const phases: Record<string, string> = { accumulation: 'acumulación', intensification: 'intensificación', realization: 'realización', deload: 'descarga', unknown: 'fase sin resolver' };
 function pace(n: number) { const seconds = Math.round(n); return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')} min/km`; }

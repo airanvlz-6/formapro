@@ -1,14 +1,15 @@
 import type { projectAthletePrescriptionProfile } from './athletePrescriptionContext';
 import { resolveGoalAuthority } from './goalResolution';
-import { declaredSportStrategy, structuredEventStrategy } from '../sports/declaredSportStrategy';
-import type { GoalId } from '../sports/goalTransferModel';
+import { declaredSportStrategy, structuredEventStrategy, generalSportStrategy } from '../sports/declaredSportStrategy';
+import { GOAL_DEFINITIONS, type GoalId } from '../sports/goalTransferModel';
 
 type Profile = ReturnType<typeof projectAthletePrescriptionProfile>;
 type Context = Pick<Profile, 'goals'> & Partial<Pick<Profile, 'athlete'>>;
 export type StrategyResolutionResult = {
   status: 'STRATEGY_RESOLVED' | 'STRATEGY_UNSUPPORTED' | 'GOAL_MISSING' | 'GOAL_CONFLICT';
   strategyId: GoalId | null;
-  source: 'exact_primary_goal' | 'structured_event' | 'declared_sport' | null;
+  source: 'exact_primary_goal' | 'structured_event' | 'declared_sport' | 'general_declared_sport' | null;
+  strategySpecificity: 'SPECIFIC' | 'GENERAL' | null;
   sources: string[];
   goal: ReturnType<typeof resolveGoalAuthority>;
   declaredSport: { value: unknown; source: string } | null;
@@ -22,14 +23,16 @@ export function resolvePlanningStrategy(context: Context): StrategyResolutionRes
   const distance = context.goals.disciplineSpecific.find(e => e.source === 'usuarios.perfil.distancia_objetivo');
   const event = structuredEventStrategy(sport?.value, distance?.value);
   const family = declaredSportStrategy(sport?.value);
-  const fallback = event ?? family;
+  const fallback = event ?? family ?? generalSportStrategy(sport?.value);
   const ids = goal.candidates.map(c => c.recognizedId ?? fallback);
   const distinct = new Set(ids);
   const status = !ids.length ? 'GOAL_MISSING' : distinct.size > 1 ? 'GOAL_CONFLICT'
     : ids[0] ? 'STRATEGY_RESOLVED' : goal.status === 'GOAL_CONFLICT' ? 'GOAL_CONFLICT' : 'STRATEGY_UNSUPPORTED';
   const source = status !== 'STRATEGY_RESOLVED' ? null : goal.candidates.every(c => c.recognizedId)
-    ? 'exact_primary_goal' : event ? 'structured_event' : 'declared_sport';
-  return { status, strategyId: status === 'STRATEGY_RESOLVED' ? ids[0] : null, source,
+    ? 'exact_primary_goal' : event ? 'structured_event' : family ? 'declared_sport' : 'general_declared_sport';
+  const strategyId = status === 'STRATEGY_RESOLVED' ? ids[0] : null;
+  return { status, strategyId, source,
+    strategySpecificity: strategyId ? GOAL_DEFINITIONS[strategyId].kind === 'general_training' ? 'GENERAL' : 'SPECIFIC' : null,
     sources: [...goal.candidates.map(c => c.source), ...(source === 'structured_event' ? [sport!.source, distance!.source]
-      : source === 'declared_sport' ? [sport!.source] : [])], goal, declaredSport };
+      : source === 'declared_sport' || source === 'general_declared_sport' ? [sport!.source] : [])], goal, declaredSport };
 }

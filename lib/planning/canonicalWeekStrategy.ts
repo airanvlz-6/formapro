@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { AthletePrescriptionContext } from '../athlete/loadAthletePrescriptionContext';
-import { GOAL_DEMANDS, TRANSFER_METHODS, type GoalId, type AdaptationRole, type StrategicIntent } from '../sports/goalTransferModel';
+import { GOAL_DEMANDS, GOAL_DEFINITIONS, TRANSFER_METHODS, type GoalId, type AdaptationRole, type StrategicIntent } from '../sports/goalTransferModel';
 import { resolvePlanningStrategy } from '../athlete/strategyResolution';
 import { STIMULUS_LIBRARY, type PatronMovimiento } from '../sports/movementLibrary';
 import type { PrescriptionScope } from '../sports/prescriptionScope';
@@ -102,7 +102,9 @@ export function renderWeekObjective(strategy: CanonicalWeekStrategy): string {
   if (!strategy.goal.id) return 'Objetivo pendiente de resolución: planificación limitada por el contexto autorizado.';
   const required = strategy.adaptations.filter(a => strategy.coverage.some(c => c.adaptationId === a.id));
   const labels = required.map(a => `${a.id.replaceAll('_', ' ')} (${a.role.toLowerCase()})`).join('; ');
-  return `${strategy.goal.id.replaceAll('_', ' ')} · ${strategy.block.phase}: ${labels || 'adaptaciones pendientes de un método compatible'}.`;
+  const title = GOAL_DEFINITIONS[strategy.goal.id].kind === 'general_training'
+    ? GOAL_DEFINITIONS[strategy.goal.id].label : strategy.goal.id.replaceAll('_', ' ');
+  return `${title} · ${strategy.block.phase}: ${labels || 'adaptaciones pendientes de un método compatible'}.`;
 }
 export function strategyDemandIds(context: AthletePrescriptionContext): string[] {
   const goal = resolveStrategyGoal(context); return goal ? GOAL_DEMANDS[goal].map(d => d.adaptationId) : [];

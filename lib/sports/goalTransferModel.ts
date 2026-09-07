@@ -7,12 +7,16 @@ import { STRUCTURES_BY_STIMULUS, WORKOUT_STRUCTURE_LIBRARY } from './workoutStru
  */
 export type AdaptationRole = 'PRIMARY' | 'SUPPORTING' | 'MAINTENANCE' | 'OPTIONAL';
 export type TransferRole = 'DIRECT' | 'SUPPORTING' | 'MAINTENANCE' | 'CONDITIONAL';
-export type GoalId = 'half_marathon' | '10k' | 'crossfit' | 'max_strength' | 'hyrox';
+export type GoalId = 'half_marathon' | '10k' | 'crossfit' | 'max_strength' | 'hyrox' | 'running_general';
 export type GoalDemand = { adaptationId: string; role: AdaptationRole };
 const demand = (adaptationId: string, role: AdaptationRole): GoalDemand => ({ adaptationId, role });
 const endurance = [demand('base_aerobica', 'PRIMARY'), demand('umbral', 'PRIMARY'), demand('resistencia_especifica', 'PRIMARY'),
   demand('fuerza_general', 'SUPPORTING'), demand('economia_carrera', 'SUPPORTING'), demand('cadena_posterior', 'OPTIONAL'), demand('potencia', 'OPTIONAL')];
 export const GOAL_DEMANDS: Record<GoalId, readonly GoalDemand[]> = {
+  // General capacity only: no distance-specific endurance or event periodization.
+  running_general: [demand('base_aerobica', 'PRIMARY'), demand('umbral', 'SUPPORTING'),
+    demand('economia_carrera', 'SUPPORTING'), demand('fuerza_general', 'SUPPORTING'),
+    demand('vo2max', 'OPTIONAL'), demand('potencia', 'OPTIONAL'), demand('cadena_posterior', 'OPTIONAL')],
   half_marathon: endurance, '10k': [...endurance.filter(d => d.adaptationId !== 'resistencia_especifica'), demand('vo2max', 'SUPPORTING')],
   crossfit: [demand('fuerza_maxima', 'PRIMARY'), demand('potencia', 'PRIMARY'), demand('gimnasticos', 'PRIMARY'),
     demand('capacidad_glucolitica', 'PRIMARY'), demand('base_aerobica', 'SUPPORTING'), demand('halterofilia_tecnica', 'SUPPORTING')],
@@ -23,7 +27,8 @@ export const GOAL_DEMANDS: Record<GoalId, readonly GoalDemand[]> = {
 };
 /** Catalog metadata distinguishes event profiles from broad activity/performance goals.
  * New domains extend definitions, demands and transfer methods, never the shared admission engine. */
-export const GOAL_DEFINITIONS: Record<GoalId, { label: string; kind: 'event' | 'activity_performance' | 'performance_target' }> = {
+export const GOAL_DEFINITIONS: Record<GoalId, { label: string; kind: 'event' | 'activity_performance' | 'performance_target' | 'general_training' }> = {
+  running_general: { label: 'Carrera general (sin preparación específica de distancia)', kind: 'general_training' },
   half_marathon: { label: 'Media maratón', kind: 'event' },
   '10k': { label: '10K', kind: 'event' },
   crossfit: { label: 'CrossFit', kind: 'activity_performance' },

@@ -8,6 +8,11 @@ const families: Readonly<Record<string, GoalId>> = {
 export function declaredSportStrategy(specialty: unknown): GoalId | null {
   return typeof specialty === 'string' && Object.hasOwn(families, specialty) ? families[specialty] : null;
 }
+/** Explicit general capability catalog. Delegated disciplines never select a primary sport. */
+const generalFamilies: Readonly<Record<string, GoalId>> = { carrera: 'running_general' };
+export function generalSportStrategy(specialty: unknown): GoalId | null {
+  return typeof specialty === 'string' && Object.hasOwn(generalFamilies, specialty) ? generalFamilies[specialty] : null;
+}
 /** This questionnaire field is shared with triathlon. Only the running selection authorizes it. */
 export function structuredEventStrategy(specialty: unknown, distance: unknown): GoalId | null {
   if (specialty !== 'carrera') return null;

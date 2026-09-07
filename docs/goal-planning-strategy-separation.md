@@ -1,5 +1,7 @@
 # Goal description y planning strategy
 
+Actualización posterior: el bloqueo de Carrera por falta de estrategia específica descrito en este informe histórico queda sustituido por [el fallback general de Carrera](general-running-strategy.md). Las demás reglas se conservan.
+
 Base local: `1e2817b57c01058c5b4e6230855b47ec8db2cbcf`, sobre `bfb8657303f617869b469eede22d41b9a8ed813b`. Cambio nuevo, sin amend, rebase, migración ni push.
 
 ## Auditoría de fuentes, previa a la implementación

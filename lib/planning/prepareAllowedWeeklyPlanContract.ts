@@ -27,6 +27,7 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
     console.log('GOAL_RESOLUTION_DIAGNOSTIC', goalResolutionDiagnostic(goal));
     console.log('WEEK_STRATEGY_ADMISSION', { planningRunId: request.planningRunId ?? null, goalStatus: goal.status,
       strategyStatus: resolution.status, strategyId: resolution.strategyId, strategySource: resolution.source,
+      strategySpecificity: resolution.strategySpecificity,
       admitted, reason: admitted ? 'supported_planning_strategy' : 'strategy_resolution_required' });
     if (!admitted) return { ok: false as const, code: resolution.status, retryable: false,
       goalRequirement: await requireGoalAuthority(db, codigo) };

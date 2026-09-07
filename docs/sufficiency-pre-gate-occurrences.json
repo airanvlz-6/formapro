@@ -1,0 +1,2331 @@
+{
+  "auditedCommit": "f52b3ba228c4fbd2b7f28cc266a54c6d8e7c4506",
+  "scope": "Archivos nuevos de autoridad completos y líneas añadidas por 3C.1 en archivos previos; documentación excluida del código. Las dependencias previas se evalúan separadamente en el informe.",
+  "occurrences": [
+    {
+      "file": "app/FormaPro.tsx",
+      "line": 1236,
+      "matches": [
+        "Question",
+        "Question",
+        "useState"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "const [pendingPrescriptionQuestion,setPendingPrescriptionQuestion]=useState<{codigo:string;token:string}|null>(null);"
+    },
+    {
+      "file": "app/FormaPro.tsx",
+      "line": 1249,
+      "matches": [
+        "question",
+        "question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "if(result.questionToken && result.question?.text){"
+    },
+    {
+      "file": "app/FormaPro.tsx",
+      "line": 1250,
+      "matches": [
+        "Question",
+        "question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "setPendingPrescriptionQuestion({codigo:codigoUsuario,token:result.questionToken});"
+    },
+    {
+      "file": "app/FormaPro.tsx",
+      "line": 1251,
+      "matches": [
+        "question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "setMensajes(prev=>[...prev,{role:\"assistant\",content:result.question.text}]);"
+    },
+    {
+      "file": "app/FormaPro.tsx",
+      "line": 1701,
+      "matches": [
+        "Question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "if(pendingPrescriptionQuestion){"
+    },
+    {
+      "file": "app/FormaPro.tsx",
+      "line": 1702,
+      "matches": [
+        "Question",
+        "Question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "if(pendingPrescriptionQuestion.codigo!==codigoUsuario){setPendingPrescriptionQuestion(null);return;}"
+    },
+    {
+      "file": "app/FormaPro.tsx",
+      "line": 1706,
+      "matches": [
+        "question",
+        "Question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "const result=await apiCall({action:\"responder_dato_prescripcion\",codigo:codigoUsuario,datos:{questionToken:pendingPrescriptionQuestion.token,answer:texto}});"
+    },
+    {
+      "file": "app/FormaPro.tsx",
+      "line": 1708,
+      "matches": [
+        "Question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "setPendingPrescriptionQuestion(null);"
+    },
+    {
+      "file": "app/FormaPro.tsx",
+      "line": 1710,
+      "matches": [
+        "question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "}else if(!result.questionToken){"
+    },
+    {
+      "file": "app/FormaPro.tsx",
+      "line": 1714,
+      "matches": [
+        "Question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "setPendingPrescriptionQuestion(null);"
+    },
+    {
+      "file": "app/api/chat/route.ts",
+      "line": 1278,
+      "matches": [
+        "NextResponse"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "if (current.error || !current.data) return NextResponse.json({ ok: false, code: 'PRESCRIPTION_PROFILE_READ_FAILED' });"
+    },
+    {
+      "file": "app/api/chat/route.ts",
+      "line": 5015,
+      "matches": [
+        "NextResponse",
+        "question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "try { return NextResponse.json(await savePrescriptionAnswer(supabase, codigo, datos.questionToken, datos.answer)); }"
+    },
+    {
+      "file": "app/api/chat/route.ts",
+      "line": 5016,
+      "matches": [
+        "NextResponse"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "catch (error: any) { return NextResponse.json({ ok: false, code: error.message }); }"
+    },
+    {
+      "file": "lib/athlete/prescriptionAnswers.ts",
+      "line": 3,
+      "matches": [
+        "Question",
+        "Question",
+        "Question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "import { prescriptionQuestion, referenceQuestionFields, type PrescriptionQuestion } from '../sports/prescriptionDataSufficiency';"
+    },
+    {
+      "file": "lib/athlete/prescriptionAnswers.ts",
+      "line": 9,
+      "matches": [
+        "QUESTION"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "if (!secret) throw new Error('PRESCRIPTION_QUESTION_AUTHORITY_UNAVAILABLE');"
+    },
+    {
+      "file": "lib/athlete/prescriptionAnswers.ts",
+      "line": 10,
+      "matches": [
+        "question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "return createHmac('sha256', secret).update('forge-prescription-question-v1:' + payload).digest('base64url');"
+    },
+    {
+      "file": "lib/athlete/prescriptionAnswers.ts",
+      "line": 12,
+      "matches": [
+        "Question",
+        "question",
+        "Question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "export function issuePrescriptionQuestion(user: string, discipline: string, question: PrescriptionQuestion) {"
+    },
+    {
+      "file": "lib/athlete/prescriptionAnswers.ts",
+      "line": 13,
+      "matches": [
+        "question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "const payload = Buffer.from(JSON.stringify({ user, discipline, signals: question.signalIds, expires: Date.now() + 30 * 60_000 })).toString('base64url');"
+    },
+    {
+      "file": "lib/athlete/prescriptionAnswers.ts",
+      "line": 17,
+      "matches": [
+        "question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "/** Bounded replies to an identified question, never extraction from arbitrary chat. */"
+    },
+    {
+      "file": "lib/athlete/prescriptionAnswers.ts",
+      "line": 19,
+      "matches": [
+        "QUESTION"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "if (!ids.length || ids.some(id => !signalIds.includes(id))) throw new Error('PRESCRIPTION_QUESTION_INVALID');"
+    },
+    {
+      "file": "lib/athlete/prescriptionAnswers.ts",
+      "line": 31,
+      "matches": [
+        "equipment",
+        "equipment"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "return Object.fromEntries(ids.filter(id => ['equipment.barra', 'equipment.rack'].includes(id)).map(id => [id, 'available']));"
+    },
+    {
+      "file": "lib/athlete/prescriptionAnswers.ts",
+      "line": 36,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "const id = `equipment.${match[1] === 'mancuernas' ? 'mancuerna' : match[1]}`;"
+    },
+    {
+      "file": "lib/athlete/prescriptionAnswers.ts",
+      "line": 45,
+      "matches": [
+        "QUESTION"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "if (typeof token !== 'string' || token.length > 8000) throw new Error('PRESCRIPTION_QUESTION_INVALID');"
+    },
+    {
+      "file": "lib/athlete/prescriptionAnswers.ts",
+      "line": 48,
+      "matches": [
+        "QUESTION"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "if (extra || expected.length !== actual.length || !timingSafeEqual(expected, actual)) throw new Error('PRESCRIPTION_QUESTION_INVALID');"
+    },
+    {
+      "file": "lib/athlete/prescriptionAnswers.ts",
+      "line": 50,
+      "matches": [
+        "QUESTION"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "if (q.user !== user || !Number.isFinite(q.expires) || q.expires < Date.now()) throw new Error('PRESCRIPTION_QUESTION_EXPIRED');"
+    },
+    {
+      "file": "lib/athlete/prescriptionAnswers.ts",
+      "line": 52,
+      "matches": [
+        "Question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "if (q.signals?.length === 1 && referenceQuestionFields[q.signals[0]]) {"
+    },
+    {
+      "file": "lib/athlete/prescriptionAnswers.ts",
+      "line": 53,
+      "matches": [
+        "Question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "const id = q.signals[0], field = referenceQuestionFields[id];"
+    },
+    {
+      "file": "lib/athlete/prescriptionAnswers.ts",
+      "line": 55,
+      "matches": [
+        "question",
+        "question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "return { ok: false, code: 'PRESCRIPTION_REFERENCE_UNKNOWN_REQUEST_ALTERNATIVE', resolved: false, question: null, questionToken: null };"
+    },
+    {
+      "file": "lib/athlete/prescriptionAnswers.ts",
+      "line": 58,
+      "matches": [
+        "running",
+        "running"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": ": projected.running.byMetric[id.slice('reference.running:'.length)]?.reason === 'resolved';"
+    },
+    {
+      "file": "lib/athlete/prescriptionAnswers.ts",
+      "line": 59,
+      "matches": [
+        "question",
+        "Question",
+        "question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "if (!valid) return { ok: true, resolved: false, question: prescriptionQuestion([id]), questionToken: token };"
+    },
+    {
+      "file": "lib/athlete/prescriptionAnswers.ts",
+      "line": 67,
+      "matches": [
+        "question",
+        "question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "return { ok: true, resolved: true, question: null, questionToken: null };"
+    },
+    {
+      "file": "lib/athlete/prescriptionAnswers.ts",
+      "line": 80,
+      "matches": [
+        "question",
+        "Question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "const question = missing.length ? prescriptionQuestion(missing) : null;"
+    },
+    {
+      "file": "lib/athlete/prescriptionAnswers.ts",
+      "line": 81,
+      "matches": [
+        "question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "return { ok: true, resolved: !missing.length, question,"
+    },
+    {
+      "file": "lib/athlete/prescriptionAnswers.ts",
+      "line": 82,
+      "matches": [
+        "question",
+        "question",
+        "Question",
+        "question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "questionToken: question ? issuePrescriptionQuestion(user, q.discipline, question) : null };"
+    },
+    {
+      "file": "lib/athlete/prescriptionSignals.ts",
+      "line": 7,
+      "matches": [
+        "equipment",
+        "equipment"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "export const equipmentIds = [...new Set([...Object.values(MOVEMENT_LIBRARY).flatMap(m => m.equipment), 'rack'])].sort();"
+    },
+    {
+      "file": "lib/athlete/prescriptionSignals.ts",
+      "line": 8,
+      "matches": [
+        "capabilit",
+        "canMeasure",
+        "canMeasure",
+        "canMeasure"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "export const capabilityIds = ['canMeasureHeartRate', 'canMeasurePace', 'canMeasureDistance'] as const;"
+    },
+    {
+      "file": "lib/athlete/prescriptionSignals.ts",
+      "line": 9,
+      "matches": [
+        "equipment",
+        "equipment",
+        "capabilit",
+        "capabilit",
+        "box",
+        "carrera"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "export const signalIds = [...equipmentIds.map(id => `equipment.${id}`), ...capabilityIds.map(id => `capability.${id}`), 'skill.box.advanced', 'skill.carrera.advanced'];"
+    },
+    {
+      "file": "lib/athlete/prescriptionSignals.ts",
+      "line": 28,
+      "matches": [
+        "equipment",
+        "equipment"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "for (const id of materialAliases[key] || (equipmentIds.includes(key) ? [key] : [])) set(`equipment.${id}`, 'available', 'usuarios.perfil.material');"
+    },
+    {
+      "file": "lib/athlete/prescriptionSignals.ts",
+      "line": 31,
+      "matches": [
+        "gps"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "if (['si, reloj gps con pulsometro', 'si, solo pulsometro (banda o reloj basico)'].includes(device))"
+    },
+    {
+      "file": "lib/athlete/prescriptionSignals.ts",
+      "line": 32,
+      "matches": [
+        "capabilit",
+        "canMeasure"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "set('capability.canMeasureHeartRate', 'available', 'usuarios.perfil.dispositivo');"
+    },
+    {
+      "file": "lib/athlete/prescriptionSignals.ts",
+      "line": 33,
+      "matches": [
+        "gps",
+        "canMeasure",
+        "canMeasure",
+        "capabilit"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "if (device === 'si, reloj gps con pulsometro') for (const id of ['canMeasurePace', 'canMeasureDistance']) set(`capability.${id}`, 'available', 'usuarios.perfil.dispositivo');"
+    },
+    {
+      "file": "lib/athlete/prescriptionSignals.ts",
+      "line": 34,
+      "matches": [
+        "rpe",
+        "capabilit",
+        "canMeasure"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "if (device === 'no, entreno por sensacion (rpe)') set('capability.canMeasureHeartRate', 'unavailable', 'usuarios.perfil.dispositivo');"
+    },
+    {
+      "file": "lib/athlete/prescriptionSignals.ts",
+      "line": 35,
+      "matches": [
+        "GPS",
+        "measurement"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "// No GPS does not rule out a measured track or another distance measurement method."
+    },
+    {
+      "file": "lib/athlete/prescriptionSignals.ts",
+      "line": 36,
+      "matches": [
+        "box",
+        "carrera",
+        "carrera"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "for (const [discipline, field] of [['box', 'nivel_cf'], ['carrera', 'nivel_carrera']] as const) {"
+    },
+    {
+      "file": "lib/auth/legacyContainment.test.mjs",
+      "line": 115,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const stored = { 'equipment.rack': { state: 'unavailable', updatedAt: '2026-09-07' } };"
+    },
+    {
+      "file": "lib/auth/legacyContainment.test.mjs",
+      "line": 118,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "perfil: { objetivo: 'new', prescription_signals: { 'equipment.rack': { state: 'available' } } },"
+    },
+    {
+      "file": "lib/planning/allowedWeeklyPlanContract.test.mjs",
+      "line": 32,
+      "matches": [
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const tables = () => ({ usuarios: { modo_entrada: 'coach', categoria: 'box', perfil: { ...equippedProfileFixture(), dias: 6 }, workout_history: [],"
+    },
+    {
+      "file": "lib/planning/goalTransferStrategy.test.mjs",
+      "line": 123,
+      "matches": [
+        "carrera",
+        "crossfit"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const tables = { usuarios: { modo_entrada: 'coach', categoria: 'carrera', especialidad: 'crossfit', perfil: { ...equippedProfileFixture(), dias: 5 },"
+    },
+    {
+      "file": "lib/planning/weeklyAuthorityBinding.test.mjs",
+      "line": 20,
+      "matches": [
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const data = {usuarios:{modo_entrada:'coach',categoria:'box',perfil:{...equippedProfileFixture(),dias:6},workout_history:[],"
+    },
+    {
+      "file": "lib/sports/allowedTrainingContract.ts",
+      "line": 57,
+      "matches": [
+        "equipment",
+        "equipment",
+        "equipment"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "gaps: ['external_load_context_only_no_physiological_rule', input.doseContext?.sufficiency ? 'equipment_plate_increments_unknown' : input.doseContext ? 'equipment_inventory_and_skill_not_enforced' : 'equipment_skill_and_dose_not_enforced'] });"
+    },
+    {
+      "file": "lib/sports/movementLibrary.ts",
+      "line": 23,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "A",
+      "reason": "Requisito físico o alternativa real de un movimiento del catálogo.",
+      "code": "/** Each inner group is ANY; all groups are required. Default equipment list is ALL. */"
+    },
+    {
+      "file": "lib/sports/movementLibrary.ts",
+      "line": 24,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "A",
+      "reason": "Requisito físico o alternativa real de un movimiento del catálogo.",
+      "code": "equipmentRequirements?: string[][];"
+    },
+    {
+      "file": "lib/sports/movementLibrary.ts",
+      "line": 45,
+      "matches": [
+        "box",
+        "equipment"
+      ],
+      "classification": "A",
+      "reason": "Requisito físico o alternativa real de un movimiento del catálogo.",
+      "code": "back_squat: { id: \"back_squat\", discipline: [\"box\"], movement_pattern: \"squat\", stimulus: [\"fuerza_maxima\", \"hipertrofia\"], equipment: [\"barra\", \"rack\"], technical_demand: \"alta\", impact: \"bajo\", axial_load: \"alto\", scalable: true, progressions: [\"back_squat_pausa\"], regressions: [\"goblet_squat\"], variants: [\"front_squat\", \"box_squat\", \"overhead_squat\"], suitable_for: [\"fuerza_maxima\", \"hipertrofia\"], avoid_with: [\"rodilla\", \"lumbar\"], fatigue_cost: \"alto\", recovery_cost_horas: 48 },"
+    },
+    {
+      "file": "lib/sports/movementLibrary.ts",
+      "line": 46,
+      "matches": [
+        "box",
+        "equipment"
+      ],
+      "classification": "A",
+      "reason": "Requisito físico o alternativa real de un movimiento del catálogo.",
+      "code": "front_squat: { id: \"front_squat\", discipline: [\"box\"], movement_pattern: \"squat\", stimulus: [\"fuerza_maxima\", \"halterofilia_soporte\"], equipment: [\"barra\", \"rack\"], technical_demand: \"alta\", impact: \"bajo\", axial_load: \"alto\", scalable: true, variants: [\"back_squat\"], suitable_for: [\"fuerza_maxima\", \"halterofilia_soporte\"], avoid_with: [\"rodilla\", \"muñeca\"], fatigue_cost: \"alto\", recovery_cost_horas: 48 },"
+    },
+    {
+      "file": "lib/sports/movementLibrary.ts",
+      "line": 48,
+      "matches": [
+        "box",
+        "equipment"
+      ],
+      "classification": "A",
+      "reason": "Requisito físico o alternativa real de un movimiento del catálogo.",
+      "code": "box_squat: { id: \"box_squat\", discipline: [\"box\"], movement_pattern: \"squat\", stimulus: [\"fuerza_maxima\"], equipment: [\"barra\", \"cajon\", \"rack\"], technical_demand: \"media\", impact: \"bajo\", axial_load: \"alto\", scalable: true, suitable_for: [\"fuerza_maxima\"], avoid_with: [\"rodilla\", \"lumbar\"], fatigue_cost: \"alto\", recovery_cost_horas: 48 },"
+    },
+    {
+      "file": "lib/sports/movementLibrary.ts",
+      "line": 49,
+      "matches": [
+        "box",
+        "carrera",
+        "equipment",
+        "equipment"
+      ],
+      "classification": "A",
+      "reason": "Requisito físico o alternativa real de un movimiento del catálogo.",
+      "code": "goblet_squat: { id: \"goblet_squat\", discipline: [\"box\", \"carrera\"], movement_pattern: \"squat\", stimulus: [\"fuerza_general\", \"tecnica\", \"fuerza_corredor\"], equipment: [\"mancuerna\", \"kettlebell\"], equipmentRequirements: [[\"mancuerna\", \"kettlebell\"]], technical_demand: \"baja\", impact: \"bajo\", axial_load: \"bajo\", scalable: true, progressions: [\"front_squat\"], suitable_for: [\"fuerza_general\", \"tecnica\", \"fuerza_corredor\"], fatigue_cost: \"bajo\", recovery_cost_horas: 24 },"
+    },
+    {
+      "file": "lib/sports/movementLibrary.ts",
+      "line": 56,
+      "matches": [
+        "box",
+        "carrera",
+        "equipment",
+        "equipment"
+      ],
+      "classification": "A",
+      "reason": "Requisito físico o alternativa real de un movimiento del catálogo.",
+      "code": "rdl: { id: \"rdl\", discipline: [\"box\", \"carrera\"], movement_pattern: \"hinge\", stimulus: [\"cadena_posterior\", \"fuerza_general\", \"fuerza_corredor\"], equipment: [\"barra\", \"mancuerna\"], equipmentRequirements: [[\"barra\", \"mancuerna\"]], technical_demand: \"media\", impact: \"bajo\", axial_load: \"medio\", scalable: true, variants: [\"deadlift\", \"single_leg_rdl\"], suitable_for: [\"cadena_posterior\", \"fuerza_corredor\"], avoid_with: [\"lumbar\"], fatigue_cost: \"medio\", recovery_cost_horas: 24 },"
+    },
+    {
+      "file": "lib/sports/movementLibrary.ts",
+      "line": 81,
+      "matches": [
+        "box",
+        "equipment"
+      ],
+      "classification": "A",
+      "reason": "Requisito físico o alternativa real de un movimiento del catálogo.",
+      "code": "bench_press: { id: \"bench_press\", discipline: [\"box\"], movement_pattern: \"horizontal_push\", stimulus: [\"fuerza_maxima\", \"hipertrofia\"], equipment: [\"barra\", \"banco\", \"rack\"], technical_demand: \"media\", impact: \"bajo\", axial_load: \"bajo\", scalable: true, variants: [\"db_bench_press\", \"close_grip_bench\"], suitable_for: [\"fuerza_maxima\", \"hipertrofia\"], avoid_with: [\"hombro\"], fatigue_cost: \"medio\", recovery_cost_horas: 24 },"
+    },
+    {
+      "file": "lib/sports/movementLibrary.ts",
+      "line": 89,
+      "matches": [
+        "box",
+        "equipment",
+        "equipment"
+      ],
+      "classification": "A",
+      "reason": "Requisito físico o alternativa real de un movimiento del catálogo.",
+      "code": "muscle_up: { id: \"muscle_up\", discipline: [\"box\"], movement_pattern: \"vertical_pull\", stimulus: [\"gimnasticos\"], equipment: [\"barra_dominadas\", \"anillas\"], equipmentRequirements: [[\"barra_dominadas\", \"anillas\"]], technical_demand: \"alta\", impact: \"bajo\", axial_load: \"bajo\", scalable: false, regressions: [\"pull_up\", \"dip\"], suitable_for: [\"gimnasticos\"], avoid_with: [\"hombro\"], fatigue_cost: \"alto\", recovery_cost_horas: 24 },"
+    },
+    {
+      "file": "lib/sports/movementLibrary.ts",
+      "line": 105,
+      "matches": [
+        "box",
+        "equipment",
+        "equipment"
+      ],
+      "classification": "A",
+      "reason": "Requisito físico o alternativa real de un movimiento del catálogo.",
+      "code": "farmers_carry: { id: \"farmers_carry\", discipline: [\"box\"], movement_pattern: \"carry\", stimulus: [\"fuerza_general\", \"capacidad_aerobica\"], equipment: [\"mancuerna\", \"kettlebell\"], equipmentRequirements: [[\"mancuerna\", \"kettlebell\"]], technical_demand: \"baja\", impact: \"bajo\", axial_load: \"medio\", scalable: true, suitable_for: [\"fuerza_general\"], avoid_with: [\"lumbar\"], fatigue_cost: \"medio\", recovery_cost_horas: 12 },"
+    },
+    {
+      "file": "lib/sports/movementLibrary.ts",
+      "line": 208,
+      "matches": [
+        "box",
+        "equipment",
+        "equipment"
+      ],
+      "classification": "A",
+      "reason": "Requisito físico o alternativa real de un movimiento del catálogo.",
+      "code": "overhead_carry: { id: \"overhead_carry\", discipline: [\"box\"], movement_pattern: \"carry\", stimulus: [\"fuerza_general\"], equipment: [\"mancuerna\", \"kettlebell\"], equipmentRequirements: [[\"mancuerna\", \"kettlebell\"]], technical_demand: \"media\", impact: \"bajo\", axial_load: \"medio\", scalable: true, suitable_for: [\"fuerza_general\"], avoid_with: [\"hombro\", \"lumbar\"], fatigue_cost: \"medio\", recovery_cost_horas: 12 },"
+    },
+    {
+      "file": "lib/sports/movementLibrary.ts",
+      "line": 238,
+      "matches": [
+        "box",
+        "equipment"
+      ],
+      "classification": "A",
+      "reason": "Requisito físico o alternativa real de un movimiento del catálogo.",
+      "code": "close_grip_bench: { id: \"close_grip_bench\", discipline: [\"box\"], movement_pattern: \"horizontal_push\", stimulus: [\"hipertrofia\", \"fuerza_general\"], equipment: [\"barra\", \"banco\", \"rack\"], technical_demand: \"media\", impact: \"bajo\", axial_load: \"bajo\", scalable: true, variants: [\"bench_press\"], suitable_for: [\"hipertrofia\", \"fuerza_general\"], avoid_with: [\"hombro\", \"muñeca\"], fatigue_cost: \"medio\", recovery_cost_horas: 24 },"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 6,
+      "matches": [
+        "Question"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const { resolvePrescriptionDataSufficiency: resolve, prescriptionQuestion } = load('prescriptionDataSufficiency');"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 11,
+      "matches": [
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const squat = { movementId:'back_squat',discipline:'box',intensity:'1rm',allowRpe:true };"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 12,
+      "matches": [
+        "carrera",
+        "hr",
+        "running"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const run = { movementId:'rodaje_z2',discipline:'carrera',intensity:'hr',referenceId:'running:z2',allowPace:true,allowRpe:true };"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 13,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const equipment = { material:['barra','rack'] };"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 15,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const r=decide({perfil:equipment,test_atleta:{back_squat:150}},squat);"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 16,
+      "matches": [
+        "question"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(r.status,'sufficient');assert.equal(r.questions.length,0);"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 19,
+      "matches": [
+        "RPE"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "for(const rm of [undefined,'5RM 120kg','3RM 120kg','120kg']) test(`strength ${rm} uses explicit RPE without asking`,()=>{"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 20,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const r=decide({perfil:equipment,marcas_especificas:{back_squat:rm}},squat);"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 21,
+      "matches": [
+        "fallback",
+        "fallback",
+        "fallback",
+        "rpe",
+        "question"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(r.status,'fallback_available');assert.equal(r.fallbacks[0].fallback,'rpe');assert.equal(r.questions.length,0);"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 23,
+      "matches": [
+        "RPE",
+        "fallback"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "test('unknown bar and rack asks exactly those signals, never 1RM with RPE fallback',()=>{"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 25,
+      "matches": [
+        "question",
+        "equipment",
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.deepEqual(plain(r.questions[0].signalIds),['equipment.barra','equipment.rack']);"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 27,
+      "matches": [
+        "HR"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "test('valid zone plus measurable HR sufficient, maxHR not additionally required',()=>{"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 29,
+      "matches": [
+        "question"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(r.status,'sufficient');assert.equal(r.questions.length,0);"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 31,
+      "matches": [
+        "HR"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "test('HR unavailable uses corresponding canonical measurable pace',()=>{"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 32,
+      "matches": [
+        "capabilit",
+        "canMeasure",
+        "capabilit",
+        "canMeasure"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const r=decide({perfil:{...signals({'capability.canMeasureHeartRate':'unavailable','capability.canMeasurePace':'available'})},datos_entrenamiento:{z2_fc:'130–145',ritmo_z2:'5:30'}},run);"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 33,
+      "matches": [
+        "fallback",
+        "fallback",
+        "running",
+        "question"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(r.status,'fallback_available');assert.equal(r.fallbacks[0].referenceId,'running:easyPace');assert.equal(r.questions.length,0);"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 35,
+      "matches": [
+        "benchmark",
+        "RPE",
+        "question"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "test('no devices or benchmarks uses duration RPE without question',()=>{"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 36,
+      "matches": [
+        "RPE"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const r=decide({perfil:{dispositivo:'No, entreno por sensación (RPE)'}},{...run,distance:true});"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 37,
+      "matches": [
+        "fallback",
+        "fallback",
+        "fallback",
+        "question"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(r.status,'fallback_available');assert.ok(r.fallbacks.every(f=>f.fallback==='duration_rpe'));assert.equal(r.questions.length,0);"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 39,
+      "matches": [
+        "measurement",
+        "capabilit"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "test('precise non-substitutable interval needs unknown measurement capability',()=>{"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 40,
+      "matches": [
+        "carrera",
+        "running"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const r=decide({datos_entrenamiento:{ritmo_umbral:'4:30'}},{movementId:'rodaje_z2',discipline:'carrera',intensity:'pace',referenceId:'running:thresholdPace',distance:true});"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 41,
+      "matches": [
+        "question",
+        "capabilit",
+        "canMeasure"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(r.status,'missing_required_data');assert.ok(r.questions[0].signalIds.includes('capability.canMeasurePace'));"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 43,
+      "matches": [
+        "capabilit",
+        "GPS"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "test('measured track capability admits distance without GPS ownership',()=>{"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 44,
+      "matches": [
+        "capabilit",
+        "canMeasure",
+        "capabilit",
+        "canMeasure",
+        "running"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const r=decide({perfil:signals({'capability.canMeasureDistance':'available','capability.canMeasurePace':'available'}),datos_entrenamiento:{ritmo_z2:'5:30'}},{...run,intensity:'pace',referenceId:'running:easyPace',distance:true,allowRpe:false});"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 47,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "test('ALL versus ANY equipment: dumbbell goblet allowed; dumbbell bench needs both',()=>{"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 49,
+      "matches": [
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(decide(user,{movementId:'goblet_squat',discipline:'box'}).status,'sufficient');"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 50,
+      "matches": [
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(decide(user,{movementId:'db_bench_press',discipline:'box'}).status,'missing_required_data');"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 51,
+      "matches": [
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(decide({perfil:{material:['Mancuernas','banco']}},{movementId:'db_bench_press',discipline:'box'}).status,'sufficient');"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 53,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "test('authorized same-pattern alternative with known equipment avoids asking',()=>{"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 55,
+      "matches": [
+        "fallback",
+        "fallback",
+        "question"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(r.status,'fallback_available');assert.equal(r.fallbacks[0].movementId,'goblet_squat');assert.equal(r.questions.length,0);"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 58,
+      "matches": [
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const request={movementId:'db_bench_press',discipline:'box',authorizedAlternatives:['push_up']};"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 59,
+      "matches": [
+        "fallback"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(decide({},request).status,'fallback_available');"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 62,
+      "matches": [
+        "equipment",
+        "question"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "test('known unavailable equipment remains unavailable and does not ask the same question',()=>{"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 63,
+      "matches": [
+        "equipment",
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const r=decide({perfil:signals({'equipment.barra':'unavailable','equipment.rack':'unavailable'})},squat);"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 64,
+      "matches": [
+        "question"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(r.status,'missing_required_data');assert.equal(r.questions.length,0);assert.ok(r.missingSignals.some(s=>s.state==='unavailable'));"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 68,
+      "matches": [
+        "equipment",
+        "capabilit",
+        "canMeasure"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(c.sufficiency.signals['equipment.barra'].state,'unknown');assert.equal(c.sufficiency.signals['capability.canMeasureHeartRate'].state,'unknown');"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 71,
+      "matches": [
+        "CrossFit",
+        "box",
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "test('CrossFit/full box and old exposure never establish equipment',()=>{"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 72,
+      "matches": [
+        "box",
+        "Box",
+        "CrossFit"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const p=project({categoria:'box',perfil:{lugar_entreno:'Box CrossFit (equipamiento completo)'},workout_history:[{movementId:'remo'}]});"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 73,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(p.prescriptionSignals.signals['equipment.remo'].state,'unknown');"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 75,
+      "matches": [
+        "HR"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "test('estimated max HR retains provenance and creates no zone',()=>{"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 79,
+      "matches": [
+        "CrossFit"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "test('high skill requires discipline-specific level; generic advanced is not CrossFit certification',()=>{"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 80,
+      "matches": [
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(decide({perfil:{nivel:'Avanzado'}},{movementId:'handstand_push_up',discipline:'box'}).status,'missing_required_data');"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 81,
+      "matches": [
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(decide({perfil:{nivel_cf:'Avanzado (+3 años)'}},{movementId:'handstand_push_up',discipline:'box'}).status,'sufficient');"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 84,
+      "matches": [
+        "equipment",
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const perfil={...signals({'equipment.barra':'available'}),prescription_access:{'2026-09-07':{'equipment.barra':{state:'unavailable'}}}};"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 85,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(project({perfil},'2026-09-07').prescriptionSignals.signals['equipment.barra'].state,'unavailable');"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 86,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(project({perfil},'2026-09-08').prescriptionSignals.signals['equipment.barra'].state,'available');"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 89,
+      "matches": [
+        "equipment",
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const ids=['equipment.barra','equipment.rack'];"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 90,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.deepEqual(plain(answers.parsePrescriptionAnswer(ids,'barra sí')),{'equipment.barra':'available'});"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 95,
+      "matches": [
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const tables={usuarios:{codigo:'u',modo_entrada:'coach',categoria:'box',perfil:profile},weekly_plan:[],athlete_training_sources:[],external_training_records:[]};"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 102,
+      "matches": [
+        "question"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const before=decide(db.tables.usuarios,squat),q=before.questions[0];"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 103,
+      "matches": [
+        "Question",
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const token=answers.issuePrescriptionQuestion('u','box',q);"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 110,
+      "matches": [
+        "Question",
+        "equipment",
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const db=database(),q=prescriptionQuestion(['equipment.barra','equipment.rack']);"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 111,
+      "matches": [
+        "Question",
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const r=await answers.savePrescriptionAnswer(db,'u',answers.issuePrescriptionQuestion('u','box',q),'barra sí');"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 112,
+      "matches": [
+        "question",
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.deepEqual(plain(r.question.signalIds),['equipment.rack']);"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 113,
+      "matches": [
+        "question"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const next=await answers.savePrescriptionAnswer(db,'u',r.questionToken,'depende');"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 114,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(next.resolved,false);assert.equal(db.tables.usuarios.perfil.prescription_signals['equipment.rack'].state,'ambiguous');"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 116,
+      "matches": [
+        "question"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "test('signed question bound to user and current scope',async()=>{"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 117,
+      "matches": [
+        "Question",
+        "box",
+        "Question",
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const db=database(),token=answers.issuePrescriptionQuestion('u','box',prescriptionQuestion(['equipment.barra']));"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 123,
+      "matches": [
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const r=await server.generateTrainingSession(db,'u',{targetWeekStart:'2026-09-07',day:'martes',discipline:'box',stimulus:'fuerza_maxima',intent:{kind:'main_pattern',pattern:'squat'}},async()=>{calls++;return '{}';});"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 124,
+      "matches": [
+        "question"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(r.code,'PRESCRIPTION_DATA_MISSING');assert.ok(r.questionToken);assert.equal(calls,0);assert.equal(db.writes,0);assert.equal(r.sesion,undefined);"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 126,
+      "matches": [
+        "equipment",
+        "measurement"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "test('production filters equipment without changing intent and validates measurement before receipt',()=>{"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 132,
+      "matches": [
+        "capabilit",
+        "HR",
+        "RPE"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "test('unknown capability rejects an otherwise complete HR dose; duration RPE passes',()=>{"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 133,
+      "matches": [
+        "carrera",
+        "carrera"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const dc=context({datos_entrenamiento:{z2_fc:'130–145'}}), input=contractFixture({discipline:'carrera',stimulus:'base_aerobica',doseContext:dc});input.exposureContext.report.disciplina='carrera';"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 135,
+      "matches": [
+        "carrera"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const p=completeDoseFixture(c,{stimulusId:c.stimulusId,structureId:'continuo_carrera',blocks:['warmup','main'].map(blockType=>({blockType,movements:[{movementId:'rodaje_z2',prescription:{}}]}))});"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 137,
+      "matches": [
+        "running"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(validator(c,p).ok,true);p.blocks[1].movements[0].prescription.intensity={kind:'reference',referenceId:'running:z2'};"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 138,
+      "matches": [
+        "canMeasure"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const r=validator(c,p);assert.equal(r.ok,false);assert.ok(r.violations.some(v=>v.includes('canMeasureHeartRate')));"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 143,
+      "matches": [
+        "capabilit"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "// First resolve capability; then ask for the still missing precise reference."
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 144,
+      "matches": [
+        "capabilit",
+        "canMeasure"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "db.tables.usuarios.perfil=signals({'capability.canMeasureHeartRate':'available'});"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 145,
+      "matches": [
+        "question"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const required=decide(db.tables.usuarios,{...run,allowPace:false,allowRpe:false}),q=required.questions[0];"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 146,
+      "matches": [
+        "question",
+        "running"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(q.questionType,'reference');assert.deepEqual(plain(q.signalIds),['reference.running:z2']);"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 147,
+      "matches": [
+        "Question",
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const result=await answers.savePrescriptionAnswer(db,'u',answers.issuePrescriptionQuestion('u','box',q),'130–145 ppm');"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 152,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "test('Focus cannot use an equipment answer outside its delegated discipline',async()=>{"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 153,
+      "matches": [
+        "carrera",
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const db=database();db.tables.usuarios.modo_entrada='focus';db.tables.athlete_training_sources=[{disciplina:'carrera',owner:'forge',activo:true,dias:['martes']},{disciplina:'box',owner:'external',activo:true,dias:['jueves']}];"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 154,
+      "matches": [
+        "Question",
+        "box",
+        "Question",
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const token=answers.issuePrescriptionQuestion('u','box',prescriptionQuestion(['equipment.barra']));"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 158,
+      "matches": [
+        "question"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "test('legacy v1/v2 remain readable; new restricted scopes fail before any question',async()=>{"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 161,
+      "matches": [
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const r=await server.generateTrainingSession(db,'u',{targetWeekStart:'2026-09-07',day:'martes',discipline:'box',stimulus:'fuerza_maxima'},async()=>{calls++;return '{}';});"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 162,
+      "matches": [
+        "question"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(r.ok,false);assert.equal(r.questionToken,undefined);assert.equal(calls,0);"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 169,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const db=database(equipment);"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 170,
+      "matches": [
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const r=await server.generateTrainingSession(db,'u',{targetWeekStart:'2026-09-07',day:'martes',discipline:'box',stimulus:'fuerza_maxima',intent:{kind:'main_pattern',pattern:'squat'}},async prompt=>{"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.test.mjs",
+      "line": 174,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "assert.equal(r.ok,true,JSON.stringify(r));db.tables.usuarios.perfil=signals({'equipment.barra':'unavailable'});"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 6,
+      "matches": [
+        "Fallback"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "criticality: 'required' | 'preferred'; acceptableFallbacks: string[] };"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 7,
+      "matches": [
+        "Question",
+        "question"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "export type PrescriptionQuestion = { id: string; signalIds: string[]; questionType: 'availability' | 'reference'; text: string };"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 8,
+      "matches": [
+        "Question"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "export const referenceQuestionFields: Record<string, string> = {"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 9,
+      "matches": [
+        "running",
+        "running"
+      ],
+      "classification": "C",
+      "reason": "Alias de almacenamiento o presentación; extraído del módulo de resolución.",
+      "code": "'reference.running:easyHr': 'fc_suave', 'reference.running:thresholdHr': 'umbral_fc',"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 10,
+      "matches": [
+        "running",
+        "running"
+      ],
+      "classification": "C",
+      "reason": "Alias de almacenamiento o presentación; extraído del módulo de resolución.",
+      "code": "'reference.running:easyPace': 'ritmo_z2', 'reference.running:thresholdPace': 'ritmo_umbral',"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 11,
+      "matches": [
+        "running"
+      ],
+      "classification": "C",
+      "reason": "Alias de almacenamiento o presentación; extraído del módulo de resolución.",
+      "code": "...Object.fromEntries([1,2,3,4,5].map(n => [`reference.running:z${n}`, `z${n}_fc`])),"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 14,
+      "matches": [
+        "fallback"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "export type PrescriptionDataSufficiency = { status: 'sufficient' | 'fallback_available' | 'missing_required_data';"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 17,
+      "matches": [
+        "fallback",
+        "fallback"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "fallbacks: { signal: string; fallback: string; movementId?: string; referenceId?: string }[];"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 18,
+      "matches": [
+        "question",
+        "Question"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "questions: PrescriptionQuestion[]; diagnostics: { code: string; signal: string; reason: string }[] };"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 19,
+      "matches": [
+        "hr",
+        "rpe"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "export type SufficiencyRequest = { movementId: string; discipline: string; intensity?: '1rm' | 'hr' | 'pace' | 'rpe' | 'rir';"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 25,
+      "matches": [
+        "canMeasure"
+      ],
+      "classification": "C",
+      "reason": "Alias de almacenamiento o presentación; extraído del módulo de resolución.",
+      "code": "barra_dominadas: 'barra de dominadas', ski_erg: 'SkiErg', remo: 'remo', canMeasureHeartRate: 'medir la frecuencia cardíaca',"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 26,
+      "matches": [
+        "canMeasure",
+        "canMeasure"
+      ],
+      "classification": "C",
+      "reason": "Alias de almacenamiento o presentación; extraído del módulo de resolución.",
+      "code": "canMeasurePace: 'medir el ritmo', canMeasureDistance: 'medir la distancia', advanced: 'experiencia avanzada en esta disciplina' };"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 27,
+      "matches": [
+        "Question",
+        "Question"
+      ],
+      "classification": "C",
+      "reason": "Alias de almacenamiento o presentación; extraído del módulo de resolución.",
+      "code": "export function prescriptionQuestion(signals: string[]): PrescriptionQuestion {"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 29,
+      "matches": [
+        "Question",
+        "question"
+      ],
+      "classification": "C",
+      "reason": "Alias de almacenamiento o presentación; extraído del módulo de resolución.",
+      "code": "if (ids.length === 1 && referenceQuestionFields[ids[0]]) return { id: `prescription:${ids[0]}`, signalIds: ids, questionType: 'reference',"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 31,
+      "matches": [
+        "question"
+      ],
+      "classification": "C",
+      "reason": "Alias de almacenamiento o presentación; extraído del módulo de resolución.",
+      "code": "return { id: `prescription:${ids.join('+')}`, signalIds: ids, questionType: 'availability',"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 38,
+      "matches": [
+        "fallback",
+        "fallback"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "missingSignals: PrescriptionDataSufficiency['missingSignals'] = [], fallbacks: PrescriptionDataSufficiency['fallbacks'] = [];"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 42,
+      "matches": [
+        "Fallback"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "requirements.push({ signal: id, reason, requiredFor: request.movementId, criticality: 'required', acceptableFallbacks: [] });"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 48,
+      "matches": [
+        "box"
+      ],
+      "classification": "D",
+      "reason": "Dependencia de catálogo/unidades/conocimiento deportivo dentro de resolución central; encapsulada en adaptador.",
+      "code": "if (!movement || !movement.discipline.includes(request.discipline as 'box')) {"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 51,
+      "matches": [
+        "equipment",
+        "equipment"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "for (const group of movement.equipmentRequirements || movement.equipment.map(id => [id])) {"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 52,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "const selected = group.find(id => signal(`equipment.${id}`).state === 'available');"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 53,
+      "matches": [
+        "equipment",
+        "equipment"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "if (selected) requireSignal(`equipment.${selected}`, 'movement_equipment');"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 56,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "const id = group.find(id => signal(`equipment.${id}`).state !== 'unavailable') || group[0];"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 57,
+      "matches": [
+        "equipment",
+        "equipment"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "requireSignal(`equipment.${id}`, 'movement_equipment');"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 63,
+      "matches": [
+        "hr"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "const usable = (kind: '1rm' | 'hr' | 'pace', id?: string) => references.find(r => (!id || r.id === id)"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 64,
+      "matches": [
+        "running",
+        "hr"
+      ],
+      "classification": "D",
+      "reason": "Dependencia de catálogo/unidades/conocimiento deportivo dentro de resolución central; encapsulada en adaptador.",
+      "code": "&& (kind === '1rm' ? r.kind === '1rm' && r.movementId === request.movementId : r.kind === 'running' && r.unit === (kind === 'hr' ? 'bpm' : 'seconds_per_km')));"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 65,
+      "matches": [
+        "rpe"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "if (request.intensity && !['rpe', 'rir'].includes(request.intensity)) {"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 66,
+      "matches": [
+        "hr",
+        "hr",
+        "running",
+        "running"
+      ],
+      "classification": "D",
+      "reason": "Dependencia de catálogo/unidades/conocimiento deportivo dentro de resolución central; encapsulada en adaptador.",
+      "code": "const kind = request.intensity as '1rm' | 'hr' | 'pace', id = `reference.${request.referenceId || (kind === '1rm' ? `1rm:${request.movementId}` : kind === 'hr' ? 'running:easyHr' : 'running:easyPace')}`;"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 67,
+      "matches": [
+        "hr",
+        "capabilit",
+        "canMeasure",
+        "capabilit",
+        "canMeasure"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "const ref = usable(kind, request.referenceId), cap = kind === 'hr' ? 'capability.canMeasureHeartRate' : kind === 'pace' ? 'capability.canMeasurePace' : null;"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 70,
+      "matches": [
+        "Fallback",
+        "hr"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "acceptableFallbacks: [...(request.allowPace && kind === 'hr' ? ['pace'] : []), ...(request.allowRpe ? ['duration_rpe'] : [])] });"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 77,
+      "matches": [
+        "hr",
+        "capabilit",
+        "canMeasure"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "if (kind === 'hr' && request.allowPace && pace && signal('capability.canMeasurePace').state === 'available')"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 78,
+      "matches": [
+        "fallback",
+        "fallback"
+      ],
+      "classification": "D",
+      "reason": "Dependencia de catálogo/unidades/conocimiento deportivo dentro de resolución central; encapsulada en adaptador.",
+      "code": "fallbacks.push({ signal: id, fallback: 'pace', referenceId: pace.id });"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 79,
+      "matches": [
+        "fallback",
+        "fallback",
+        "rpe"
+      ],
+      "classification": "D",
+      "reason": "Dependencia de catálogo/unidades/conocimiento deportivo dentro de resolución central; encapsulada en adaptador.",
+      "code": "else if (request.allowRpe) fallbacks.push({ signal: id, fallback: kind === '1rm' ? 'rpe' : 'duration_rpe' });"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 84,
+      "matches": [
+        "capabilit",
+        "canMeasure"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "const cap = signal('capability.canMeasureDistance');"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 86,
+      "matches": [
+        "capabilit",
+        "canMeasure"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "requirements.push({ signal: 'capability.canMeasureDistance', reason: 'distance_not_measurable', requiredFor: request.movementId,"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 87,
+      "matches": [
+        "Fallback"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "criticality: 'preferred', acceptableFallbacks: ['duration_rpe'] });"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 88,
+      "matches": [
+        "capabilit",
+        "canMeasure"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "missingSignals.push({ signal: 'capability.canMeasureDistance', state: cap.state, reason: 'distance_not_measurable' });"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 89,
+      "matches": [
+        "fallback",
+        "capabilit",
+        "canMeasure",
+        "fallback"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "fallbacks.push({ signal: 'capability.canMeasureDistance', fallback: 'duration_rpe' });"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 90,
+      "matches": [
+        "capabilit",
+        "canMeasure"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "} else requireSignal('capability.canMeasureDistance', 'distance_not_measurable');"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 96,
+      "matches": [
+        "fallback"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "if (alternative.status !== 'missing_required_data') return { ...alternative, status: 'fallback_available',"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 98,
+      "matches": [
+        "fallback",
+        "fallback",
+        "equipment",
+        "fallback"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "fallbacks: [{ signal: 'movement', fallback: 'authorized_equipment_or_skill_alternative', movementId: id }, ...alternative.fallbacks],"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 99,
+      "matches": [
+        "FALLBACK"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "diagnostics: [...alternative.diagnostics, { code: 'PRESCRIPTION_DATA_FALLBACK', signal: 'movement', reason: 'same_authorized_intent_and_pattern' }] };"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 102,
+      "matches": [
+        "fallback",
+        "fallback"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "const status = critical.length ? 'missing_required_data' : fallbacks.length ? 'fallback_available' : 'sufficient';"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 103,
+      "matches": [
+        "equipment",
+        "capabilit"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "const askable = critical.filter(id => signal(id).state !== 'unavailable' && (id.startsWith('equipment.') || id.startsWith('capability.') || id.startsWith('skill.')));"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 105,
+      "matches": [
+        "Question"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "const missingReference = critical.find(id => referenceQuestionFields[id]);"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 106,
+      "matches": [
+        "question",
+        "Question"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "const questions = critical.some(id => signal(id).state === 'unavailable') ? [] : askable.length ? [prescriptionQuestion(askable)]"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 107,
+      "matches": [
+        "Question"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": ": missingReference ? [prescriptionQuestion([missingReference])] : [];"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 108,
+      "matches": [
+        "fallback",
+        "FALLBACK"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "const diagnostics = [{ code: status === 'sufficient' ? 'PRESCRIPTION_DATA_SUFFICIENT' : status === 'fallback_available' ? 'PRESCRIPTION_DATA_FALLBACK' : 'PRESCRIPTION_DATA_MISSING', signal: 'prescription', reason: status },"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 110,
+      "matches": [
+        "question",
+        "QUESTION",
+        "fallback"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "...questions.flatMap(q => q.signalIds).map(signal => ({ code: 'PRESCRIPTION_DATA_QUESTION_REQUIRED', signal, reason: 'no_authorized_fallback' }))];"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 111,
+      "matches": [
+        "fallback",
+        "question"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "return { status, requirements, resolvedSignals, missingSignals, fallbacks, questions, diagnostics };"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 114,
+      "matches": [
+        "HR"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "/** Explicit executable choices supplied to Builder; percentages/HR are preferred only when supported. */"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 118,
+      "matches": [
+        "running"
+      ],
+      "classification": "D",
+      "reason": "Dependencia de catálogo/unidades/conocimiento deportivo dentro de resolución central; encapsulada en adaptador.",
+      "code": "const running = ['run', 'cyclic'].includes(movement.movement_pattern);"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 121,
+      "matches": [
+        "running",
+        "rpe"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "intensity: running ? 'rpe' : '1rm', allowRpe: true });"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 123,
+      "matches": [
+        "running",
+        "capabilit",
+        "canMeasure",
+        "capabilit",
+        "canMeasure"
+      ],
+      "classification": "D",
+      "reason": "Dependencia de catálogo/unidades/conocimiento deportivo dentro de resolución central; encapsulada en adaptador.",
+      "code": ": running && context.signals[r.unit === 'bpm' ? 'capability.canMeasureHeartRate' : 'capability.canMeasurePace']?.state === 'available').map(r => r.id);"
+    },
+    {
+      "file": "lib/sports/prescriptionDataSufficiency.ts",
+      "line": 124,
+      "matches": [
+        "capabilit",
+        "canMeasure"
+      ],
+      "classification": "C",
+      "reason": "Requisito/fallback legítimo o contrato; ahora compilado por adaptador y decidido por core compartido.",
+      "code": "return { movementId, decision, executableReferenceIds, distanceAvailable: context.signals['capability.canMeasureDistance']?.state === 'available' };"
+    },
+    {
+      "file": "lib/sports/sessionAuthority.test.mjs",
+      "line": 11,
+      "matches": [
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const tables = { usuarios: { modo_entrada: 'planificacion', categoria: 'box', perfil: equippedProfileFixture() }, weekly_plan: [], athlete_training_sources: [], external_training_records: [] };"
+    },
+    {
+      "file": "lib/sports/sessionAuthority.test.mjs",
+      "line": 40,
+      "matches": [
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const profile = { modo_entrada: 'planificacion', categoria: 'box', perfil: { ...equippedProfileFixture(), duracion: '60 min' } };"
+    },
+    {
+      "file": "lib/sports/sessionAuthority.test.mjs",
+      "line": 71,
+      "matches": [
+        "box",
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "await assert.rejects(assertCurrentPrescriptionScope(db({ usuarios: { modo_entrada: 'supervision', categoria: 'box', perfil: equippedProfileFixture() } }), 'u', 'box'), /SCOPE_REVOKED/);"
+    },
+    {
+      "file": "lib/sports/sessionAuthority.test.mjs",
+      "line": 105,
+      "matches": [
+        "box",
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const database = db({ usuarios: { modo_entrada: mode, categoria: 'box', perfil: equippedProfileFixture() }, athlete_training_sources: mode === 'focus' ? [{ disciplina: 'box', owner: 'forge', activo: true, dias: ['martes'] }] : [] });"
+    },
+    {
+      "file": "lib/sports/sessionAuthority.test.mjs",
+      "line": 119,
+      "matches": [
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "if (table === 'usuarios') return { data: { modo_entrada: mode, categoria: 'box', perfil: equippedProfileFixture() }, error: null };"
+    },
+    {
+      "file": "lib/sports/sessionAuthority.test.mjs",
+      "line": 254,
+      "matches": [
+        "box",
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const calendarDB = fakeDatabase({usuarios:{modo_entrada:'planificacion',categoria:'box',perfil:{...equippedProfileFixture(),dias:6},workout_history:[],distribucion_semanal:{box:days}},athlete_training_sources:[]});"
+    },
+    {
+      "file": "lib/sports/sessionAuthority.ts",
+      "line": 16,
+      "matches": [
+        "Question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "import { issuePrescriptionQuestion } from '../athlete/prescriptionAnswers';"
+    },
+    {
+      "file": "lib/sports/sessionAuthority.ts",
+      "line": 70,
+      "matches": [
+        "question",
+        "question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": ".sort((a, b) => Number(!a.questions.length) - Number(!b.questions.length) || a.missingSignals.length - b.missingSignals.length);"
+    },
+    {
+      "file": "lib/sports/sessionAuthority.ts",
+      "line": 71,
+      "matches": [
+        "question",
+        "question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "const sufficiency = decisions[0], question = sufficiency?.questions[0];"
+    },
+    {
+      "file": "lib/sports/sessionAuthority.ts",
+      "line": 72,
+      "matches": [
+        "question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "return { ok: false as const, code: 'PRESCRIPTION_DATA_MISSING', errors: prepared.errors, sufficiency, question,"
+    },
+    {
+      "file": "lib/sports/sessionAuthority.ts",
+      "line": 73,
+      "matches": [
+        "question",
+        "question",
+        "Question",
+        "question"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "questionToken: question ? issuePrescriptionQuestion(userCodigo, base.contract.discipline, question) : undefined };"
+    },
+    {
+      "file": "lib/sports/sessionContractIntegration.test.mjs",
+      "line": 15,
+      "matches": [
+        "box"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const profile = { modo_entrada: 'planificacion', categoria: 'box', athlete_development: [], perfil:{...equippedProfileFixture(),dias:6},workout_history:[],"
+    },
+    {
+      "file": "lib/sports/sessionDoseContext.ts",
+      "line": 50,
+      "matches": [
+        "running",
+        "running"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "evidenceDigest: createHash('sha256').update(JSON.stringify({ strength: context.strength, running: context.running, budget, development: context.development, goals: context.goals, cycle: context.cycle,"
+    },
+    {
+      "file": "lib/sports/sessionDoseContext.ts",
+      "line": 53,
+      "matches": [
+        "equipment",
+        "capabilit",
+        "equipment"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "{ code: 'SESSION_DOSE_RESOLUTION', reason: enforceSufficiency ? 'equipment_capability_skill_required_plate_increments_unknown' : 'equipment_inventory_and_increments_unknown' }] };"
+    },
+    {
+      "file": "lib/sports/sessionProfessionalRenderer.ts",
+      "line": 80,
+      "matches": [
+        "capabilit",
+        "canMeasure",
+        "canMeasure",
+        "canMeasure",
+        "RPE"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "Si doseContext.sufficiency existe: FC numérica requiere capability.canMeasureHeartRate available; ritmo numérico requiere canMeasurePace available; distancia requiere canMeasureDistance available. Sin capacidad usa duración + RPE. Esto no autoriza inventar referencias ni cambiar el intent. Solo allowedMovementIds tienen material y nivel resueltos."
+    },
+    {
+      "file": "lib/sports/structuredSession.ts",
+      "line": 121,
+      "matches": [
+        "hr"
+      ],
+      "classification": "C",
+      "reason": "Adaptador de perfil/persistencia, integración de backend o presentación cliente; no regla cerrada del core.",
+      "code": "intensity: intensity?.kind === 'percent_1rm' ? '1rm' : intensity?.kind === 'reference' ? ref?.unit === 'bpm' ? 'hr' : 'pace' : intensity?.kind,"
+    },
+    {
+      "file": "lib/sports/trainingContractTestRuntime.mjs",
+      "line": 42,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "let equipmentSignalIds;"
+    },
+    {
+      "file": "lib/sports/trainingContractTestRuntime.mjs",
+      "line": 44,
+      "matches": [
+        "equipment"
+      ],
+      "classification": "B",
+      "reason": "Fixture o harness; no autoridad de producto.",
+      "code": "const ids = equipmentSignalIds ??= sportsRuntime()('../athlete/prescriptionSignals').signalIds;"
+    }
+  ]
+}

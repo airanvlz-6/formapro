@@ -7,6 +7,7 @@ import { WORKOUT_STRUCTURE_LIBRARY } from './workoutStructureLibrary';
 import { activeRestrictionFlags, evaluateMovementRestrictions } from './movementRestrictionPolicy';
 import { normalizeTrainingKey } from './prescriptionScope';
 import { checkDoseExtension, checkFormatDose, validateSessionDose, type DoseIntensity, type FormatDose } from './sessionDose';
+import { resolvePrescriptionDataSufficiency } from './prescriptionDataSufficiency';
 import { renderProfessionalSession } from './sessionProfessionalRenderer';
 
 export type MovementDose = { sets?: number; reps?: number; durationSeconds?: number; distanceMeters?: number; restSeconds?: number;
@@ -112,6 +113,15 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
       || notes.some(n => normalizeTrainingKey(n.movement) === m.id)) violations.push(`MOVEMENT_RESTRICTED:${m.id}`);
   }
   if (!violations.length) violations.push(...validateSessionDose(contract, p));
+  if (!violations.length && contract.doseContext?.sufficiency) for (const block of p.blocks) for (const m of block.movements) {
+    const intensity = m.prescription.intensity;
+    const ref = intensity && 'referenceId' in intensity ? contract.doseContext.references.find(r => r.id === intensity.referenceId) : undefined;
+    const decision = resolvePrescriptionDataSufficiency(contract.doseContext.sufficiency, contract.doseContext.references, {
+      movementId: m.movementId, discipline: contract.discipline, distance: !!m.prescription.distanceMeters,
+      intensity: intensity?.kind === 'percent_1rm' ? '1rm' : intensity?.kind === 'reference' ? ref?.unit === 'bpm' ? 'hr' : 'pace' : intensity?.kind,
+      referenceId: ref?.id });
+    if (decision.status !== 'sufficient') violations.push(...decision.missingSignals.map(s => `PRESCRIPTION_DATA_MISSING:${s.signal}`));
+  }
   return violations.length ? { ok: false, violations } : checked;
 }
 

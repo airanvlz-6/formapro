@@ -22,6 +22,7 @@ import { buildExposureReport, exposureReportToPromptText } from "@/lib/sports/ex
 import { detectarDebilidadDuplicada } from "@/lib/validators/weaknessDeduplicationValidator";
 import { STIMULUS_LIBRARY } from "@/lib/sports/movementLibrary";
 import { generateTrainingSession, assertFreshSessionRestrictions, verifySessionReceipt, admitSessionContent, assertCurrentPrescriptionScope } from "@/lib/sports/sessionAuthority";
+import { savePrescriptionAnswer } from "@/lib/athlete/prescriptionAnswers";
 import { canonicalDiscipline } from "@/lib/sports/prescriptionScope";
 import { aplicarTrainingFrequencySafetyNet, calcularFrecuenciaRealRelativa } from "@/lib/sports/trainingFrequencySafetyNet";
 import { calcularReadiness, scoreAForgeState, combinarConCheckinSubjetivo } from "@/lib/readiness/readinessEngine";
@@ -1272,6 +1273,15 @@ if (action === "verificar_cambio_modo") {
 
   if (action === "actualizar_usuario") {
     const profilePatch = projectLegacyUpdate(datos);
+    if (profilePatch.perfil && typeof profilePatch.perfil === 'object') {
+      const current = await supabase.from('usuarios').select('perfil').eq('codigo', codigo).single();
+      if (current.error || !current.data) return NextResponse.json({ ok: false, code: 'PRESCRIPTION_PROFILE_READ_FAILED' });
+      // Progressive declarations belong to the signed answer path, not generic extraction or stale UI copies.
+      for (const field of ['prescription_signals', 'prescription_access']) {
+        delete profilePatch.perfil[field];
+        if (current.data.perfil?.[field] !== undefined) profilePatch.perfil[field] = current.data.perfil[field];
+      }
+    }
     if (!Object.keys(profilePatch).length) return NextResponse.json({ ok: true, changed: false });
     let physiologyResult: PhysiologyResult | undefined;
     const physiologyContext = stripGenericPhysiology(profilePatch);
@@ -4999,6 +5009,11 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
 
   if (action === "verificar_correccion_disponibilidad_deterministico") {
     return NextResponse.json(await updateChatAvailability(supabase, codigo, datos.mensajeUsuario));
+  }
+
+  if (action === "responder_dato_prescripcion") {
+    try { return NextResponse.json(await savePrescriptionAnswer(supabase, codigo, datos.questionToken, datos.answer)); }
+    catch (error: any) { return NextResponse.json({ ok: false, code: error.message }); }
   }
 
   if (action === "confirmar_ownership_coach") {

@@ -3,10 +3,12 @@ import type { PrescriptionIntent } from './prescriptionIntent';
 import type { CanonicalWeekStrategy } from '../planning/canonicalWeekStrategy';
 import { resolveStrategyGoal } from '../planning/canonicalWeekStrategy';
 import { createHash } from 'node:crypto';
+import type { PrescriptionSignals } from '../athlete/prescriptionSignals';
 
 export type DoseReference = { id: string; kind: '1rm' | 'running'; movementId?: string; metric?: string;
   value: number | { min: number; max: number }; unit: 'kg' | 'bpm' | 'seconds_per_km'; source: string; observedAt: string | null };
 export type SessionDoseContext = { version: 1; policy: 'structured-dose-v1'; references: DoseReference[];
+  sufficiency?: PrescriptionSignals;
   timeBudget: { maximumSeconds: number | null; minimumSeconds: number | null; status: string; source: string | null };
   weakness: { id: string; name: string | null; source: string } | null;
   weekStrategy: CanonicalWeekStrategy | null;
@@ -16,7 +18,7 @@ export type SessionDoseContext = { version: 1; policy: 'structured-dose-v1'; ref
 /** Projection of 3A only. Resolved declared references are usable, not promoted to laboratory measurements.
  * No e1RM, age zones, fuzzy reference substitutions or fresh-score calculations. */
 export function buildSessionDoseContext(context: AthletePrescriptionContext, intent?: PrescriptionIntent,
-  weekStrategy: CanonicalWeekStrategy | null = null, neighbours: SessionDoseContext['neighbours'] = []): SessionDoseContext {
+  weekStrategy: CanonicalWeekStrategy | null = null, neighbours: SessionDoseContext['neighbours'] = [], enforceSufficiency = false): SessionDoseContext {
   if (intent?.kind === 'adaptation' && resolveStrategyGoal(context) !== intent.goalId) throw new Error('SESSION_GOAL_CONTEXT_CHANGED');
   if (context.sessionTimeBudget.reason === 'conflict') throw new Error('SESSION_TIME_BUDGET_CONFLICT');
   const references: DoseReference[] = [];
@@ -40,17 +42,22 @@ export function buildSessionDoseContext(context: AthletePrescriptionContext, int
     (d.value.id || d.source) === intent.weaknessId && d.value.estado === 'activa' && d.value.pattern === intent.pattern) : undefined;
   if (intent?.kind === 'adaptation' && intent.weaknessId && !weakness) throw new Error('SESSION_WEAKNESS_CONTEXT_CHANGED');
   return { version: 1, policy: 'structured-dose-v1', references,
+    ...(enforceSufficiency ? { sufficiency: structuredClone(context.prescriptionSignals) } : {}),
     timeBudget: { maximumSeconds: time?.value.maxMinutes != null ? time.value.maxMinutes * 60 : null,
       minimumSeconds: time?.value.minMinutes != null ? time.value.minMinutes * 60 : null, status: budget.reason, source: time?.source || null },
     weakness: weakness ? { id: intent!.kind === 'adaptation' ? intent!.weaknessId! : '', name: weakness.value.nombre, source: weakness.source } : null,
     weekStrategy: structuredClone(weekStrategy), neighbours: structuredClone(neighbours),
-    evidenceDigest: createHash('sha256').update(JSON.stringify({ strength: context.strength, running: context.running, budget, development: context.development, goals: context.goals, cycle: context.cycle })).digest('hex'),
+    evidenceDigest: createHash('sha256').update(JSON.stringify({ strength: context.strength, running: context.running, budget, development: context.development, goals: context.goals, cycle: context.cycle,
+      ...(enforceSufficiency ? { sufficiency: context.prescriptionSignals } : {}) })).digest('hex'),
     diagnostics: [{ code: 'BENCHMARK_RESOLUTION', reason: 'resolved_references_only_no_nrm_conversion' },
-      { code: 'SESSION_DOSE_RESOLUTION', reason: 'equipment_inventory_and_increments_unknown' }] };
+      { code: 'SESSION_DOSE_RESOLUTION', reason: enforceSufficiency ? 'equipment_capability_skill_required_plate_increments_unknown' : 'equipment_inventory_and_increments_unknown' }] };
 }
 
 export function validateDoseContext(c: SessionDoseContext): boolean {
   return !!c && c.version === 1 && c.policy === 'structured-dose-v1' && Array.isArray(c.references)
+    && (!Object.hasOwn(c, 'sufficiency') || !!c.sufficiency && c.sufficiency.version === 1 && !!c.sufficiency.signals
+      && Object.values(c.sufficiency.signals).every(s => !!s && ['available', 'unavailable', 'unknown', 'ambiguous'].includes(s.state)
+        && (s.source === null || typeof s.source === 'string')))
     && new Set(c.references.map(r => r.id)).size === c.references.length && !!c.timeBudget
     && [c.timeBudget.maximumSeconds, c.timeBudget.minimumSeconds].every(n => n === null || Number.isFinite(n) && n > 0)
     && c.references.every(r => typeof r.id === 'string' && typeof r.source === 'string'

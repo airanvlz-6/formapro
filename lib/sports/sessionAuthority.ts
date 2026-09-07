@@ -11,9 +11,14 @@ import { renderContractSession } from './structuredSession';
 import { canonicalDiscipline, normalizeTrainingKey, buildPrescriptionScope, resolveProfileDisciplines } from './prescriptionScope';
 import { loadAthletePrescriptionContext } from '../athlete/loadAthletePrescriptionContext';
 import { buildSessionDoseContext } from './sessionDoseContext';
+import { resolvePrescriptionDataSufficiency } from './prescriptionDataSufficiency';
+import { intentMatchingMovementIds } from './prescriptionIntent';
+import { issuePrescriptionQuestion } from '../athlete/prescriptionAnswers';
 
 const PROFILE = 'modo_entrada,distribucion_semanal,especialidad,categoria';
 const domain = 'forge-session-contract-v1:';
+const prescriptionDate = (week: string, day: string) => new Date(Date.parse(week) +
+  ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'].indexOf(day) * 86400000).toISOString().slice(0, 10);
 function signature(payload: string) {
   const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!secret) throw new Error('SESSION_AUTHORITY_UNAVAILABLE');
@@ -54,10 +59,19 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
       stimulus: request.stimulus, intent: request.intent, restrictionsSnapshot: restrictions })
       : await prepareSessionTrainingContract(db, userCodigo, profile, request, restrictions);
     if (!base.ok) return { ok: false as const, code: 'TRAINING_CONTRACT_INVALID', errors: base.errors };
-    const canonical = await loadAthletePrescriptionContext(db, userCodigo, { asOfDate: restrictions.asOfDate });
-    const prepared = buildAllowedTrainingContract({ ...base.contract, stimulus: base.contract.stimulusId,
-      doseContext: buildSessionDoseContext(canonical, base.contract.intent, strategicWeek, neighbours) });
-    if (!prepared.ok) return { ok: false as const, code: 'TRAINING_CONTRACT_INVALID', errors: prepared.errors };
+    const canonical = await loadAthletePrescriptionContext(db, userCodigo, { asOfDate: restrictions.asOfDate,
+      prescriptionDate: prescriptionDate(request.targetWeekStart, request.day) });
+    const doseContext = buildSessionDoseContext(canonical, base.contract.intent, strategicWeek, neighbours, true);
+    const prepared = buildAllowedTrainingContract({ ...base.contract, stimulus: base.contract.stimulusId, doseContext });
+    if (!prepared.ok) {
+      const ids = intentMatchingMovementIds(base.contract.intent || { kind: 'stimulus_only' }, base.contract.allowedMovementIds);
+      const decisions = ids.map(movementId => resolvePrescriptionDataSufficiency(doseContext.sufficiency!, doseContext.references,
+        { movementId, discipline: base.contract.discipline })).filter(d => d.status === 'missing_required_data')
+        .sort((a, b) => Number(!a.questions.length) - Number(!b.questions.length) || a.missingSignals.length - b.missingSignals.length);
+      const sufficiency = decisions[0], question = sufficiency?.questions[0];
+      return { ok: false as const, code: 'PRESCRIPTION_DATA_MISSING', errors: prepared.errors, sufficiency, question,
+        questionToken: question ? issuePrescriptionQuestion(userCodigo, base.contract.discipline, question) : undefined };
+    }
     if (weekly && (weeklyDigest(prepared.contract.restrictionsSnapshot) !== weeklyDigest(weeklyContext.restrictionsSnapshot)
       || weeklyDigest(prepared.contract.prescriptionScope) !== weeklyDigest(weeklyContext.prescriptionScope)
       || weeklyDigest(prepared.contract.availableDays) !== weeklyDigest(weeklyContext.availableDays)))
@@ -121,8 +135,9 @@ export async function assertFreshSessionRestrictions(db: any, userCodigo: string
   if (material(original) !== material(current)) throw new Error('SESSION_RESTRICTIONS_CHANGED_REGENERATE');
   const contract = JSON.parse(Buffer.from(session.sessionReceipt.split('.')[0], 'base64url').toString()).contract;
   if (contract.contractVersion === 3) {
-    const canonical = await loadAthletePrescriptionContext(db, userCodigo, { asOfDate: current.asOfDate });
-    const now = buildSessionDoseContext(canonical, contract.intent, contract.doseContext.weekStrategy, contract.doseContext.neighbours);
+    const canonical = await loadAthletePrescriptionContext(db, userCodigo, { asOfDate: current.asOfDate,
+      prescriptionDate: prescriptionDate(contract.targetWeekStart, contract.targetDay) });
+    const now = buildSessionDoseContext(canonical, contract.intent, contract.doseContext.weekStrategy, contract.doseContext.neighbours, !!contract.doseContext.sufficiency);
     if (now.evidenceDigest !== contract.doseContext.evidenceDigest) throw new Error('SESSION_DOSE_CONTEXT_CHANGED_REGENERATE');
   }
 }

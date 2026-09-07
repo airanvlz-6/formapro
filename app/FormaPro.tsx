@@ -1233,6 +1233,7 @@ const [equipoSeleccionado,setEquipoSeleccionado]=useState<any>(null);
   const bloqueado=!esPremium&&!esAdmin&&fechaRegistro!==null&&diasUsados>=diasPrueba;
   const accentColor=cat?.color||C.accent;
 
+const [pendingPrescriptionQuestion,setPendingPrescriptionQuestion]=useState<{codigo:string;token:string}|null>(null);
 const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     const generationResult=!body.action && codigoUsuario
       ? await apiCall({action:"preparar_generacion_semana",codigo:codigoUsuario}) : null;
@@ -1244,7 +1245,12 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
       try{
         const controller=useAbort?abortControllerRef.current:null;
         const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:controller?.signal});
-        if(res.ok) { const result=await res.json(); return weeklyGeneration ? {...result,weeklyGeneration} : result; }
+        if(res.ok) { const result=await res.json();
+          if(result.questionToken && result.question?.text){
+            setPendingPrescriptionQuestion({codigo:codigoUsuario,token:result.questionToken});
+            setMensajes(prev=>[...prev,{role:"assistant",content:result.question.text}]);
+          }
+          return weeklyGeneration ? {...result,weeklyGeneration} : result; }
         intentos++;
         await new Promise(r=>setTimeout(r,1000));
       }catch(e:any){
@@ -1692,6 +1698,24 @@ const forgeValidator=(texto:string):string=>{
   const enviar=async(texto:string=input)=>{
     console.log("=== ENTRA A FUNCION enviar() ===");
     if((!texto.trim()&&imagenesAdjuntas.length===0)||cargando||bloqueado) return;
+    if(pendingPrescriptionQuestion){
+      if(pendingPrescriptionQuestion.codigo!==codigoUsuario){setPendingPrescriptionQuestion(null);return;}
+      setCargando(true);setInput("");
+      setMensajes(prev=>[...prev,{role:"user",content:texto}]);
+      try{
+        const result=await apiCall({action:"responder_dato_prescripcion",codigo:codigoUsuario,datos:{questionToken:pendingPrescriptionQuestion.token,answer:texto}});
+        if(result.ok && result.resolved){
+          setPendingPrescriptionQuestion(null);
+          setMensajes(prev=>[...prev,{role:"assistant",content:"Dato guardado. Puedes volver a solicitar la sesión; comprobaré de nuevo el material y las referencias disponibles."}]);
+        }else if(!result.questionToken){
+          setMensajes(prev=>[...prev,{role:"assistant",content:result.code==='PRESCRIPTION_REFERENCE_UNKNOWN_REQUEST_ALTERNATIVE'
+            ? "Esta dosis precisa necesita esa referencia. Solicita otra dosis compatible; no utilizaré un valor supuesto."
+            : "No he podido guardar esta respuesta. Vuelve a solicitar la sesión para comprobar los datos actuales."}]);
+          setPendingPrescriptionQuestion(null);
+        }
+      }finally{setCargando(false);}
+      return;
+    }
     if(pendingCoachOwnership){
       if(pendingCoachOwnership.codigo!==codigoUsuario){
         setPendingCoachOwnership(null);

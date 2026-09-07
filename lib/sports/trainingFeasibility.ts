@@ -6,6 +6,7 @@ import { normalizeTrainingKey, validatePrescriptionScope } from './prescriptionS
 import { activeRestrictionFlags, evaluateMovementRestrictions } from './movementRestrictionPolicy';
 import { isStructureSatisfiable } from './structureSemantics';
 import { transferMethod } from './goalTransferModel';
+import { resolvePrescriptionDataSufficiency } from './prescriptionDataSufficiency';
 
 export type StimulusResolution = { status: 'resolved'; stimulusId: string } | { status: 'unresolved'; reason: string };
 export function resolveTrainingStimulus(discipline: string, value: unknown): StimulusResolution {
@@ -60,7 +61,9 @@ function evaluatePools(input: ContractInput, stimulusId: string) {
   const flags = activeRestrictionFlags([...input.restrictionsSnapshot.restrictions, ...input.restrictionsSnapshot.reassessments]);
   const candidates = rankearCandidatos(stimulusId, input.discipline, input.restrictionsSnapshot.areas, input.exposureContext.report.exposiciones).filter(m => !excluded.has(m.id));
   const evaluated = candidates.map(m => ({ movement: m, ...evaluateMovementRestrictions(m, flags) }));
-  const movements = evaluated.filter(e => e.allowed).map(e => e.movement);
+  const movements = evaluated.filter(e => e.allowed).map(e => e.movement).filter(m => !input.doseContext?.sufficiency ||
+    resolvePrescriptionDataSufficiency(input.doseContext.sufficiency, input.doseContext.references,
+      { movementId: m.id, discipline: input.discipline }).status !== 'missing_required_data');
   const restrictionFiltering = evaluated.filter(e => !e.allowed).map(e => ({ movementId: e.movement.id, incompatible: e.incompatible, unknown: e.unknown }));
   const structures = (STRUCTURES_BY_STIMULUS[stimulusId] || []).filter(id => WORKOUT_STRUCTURE_LIBRARY[id]?.discipline === input.discipline);
   return { candidates, movements, structures, restrictionFiltering };

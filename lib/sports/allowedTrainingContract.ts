@@ -54,7 +54,7 @@ function buildContract(input: ContractInput): ContractResult {
     allowedMovementIds: pool.allowedMovementIds, allowedStructureIds: pool.allowedStructureIds,
     rankedCandidates: pool.rankedCandidates,
     restrictionFiltering: pool.restrictionFiltering,
-    gaps: ['external_load_context_only_no_physiological_rule', input.doseContext ? 'equipment_inventory_and_skill_not_enforced' : 'equipment_skill_and_dose_not_enforced'] });
+    gaps: ['external_load_context_only_no_physiological_rule', input.doseContext?.sufficiency ? 'equipment_plate_increments_unknown' : input.doseContext ? 'equipment_inventory_and_skill_not_enforced' : 'equipment_skill_and_dose_not_enforced'] });
   const validation = validateAllowedTrainingContract(contract);
   return validation.ok ? { ok: true, contract } : validation;
 }

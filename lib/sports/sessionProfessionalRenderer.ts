@@ -3,6 +3,7 @@ import type { MovementDose, StructuredSessionProposal } from './structuredSessio
 import { calculatedLoad, doseReference, estimateSessionDuration } from './sessionDose';
 import { WORKOUT_STRUCTURE_LIBRARY } from './workoutStructureLibrary';
 import { renderWeekObjective } from '../planning/canonicalWeekStrategy';
+import { prescriptionGenerationOptions } from './prescriptionDataSufficiency';
 
 export function formatDuration(seconds: number): string {
   const n = Math.max(0, Math.round(seconds)), h = Math.floor(n / 3600), m = Math.floor(n % 3600 / 60), s = n % 60;
@@ -61,6 +62,8 @@ export function renderProfessionalSession(c: AllowedTrainingContract, p: Structu
   const structuredPrescription = { schemaVersion: 2, proposal: structuredClone(p),
     objective: { intent: structuredClone(intent), weekObjective, neighbours: dc.neighbours }, sessionRole: c.stimulusId === 'recuperacion_activa' ? 'RECOVERY' : strategic?.role || null,
     weakness: dc.weakness, references: dc.references.filter(r => used.has(r.id)),
+    ...(dc.sufficiency ? { dataSufficiency: prescriptionGenerationOptions(dc.sufficiency, dc.references,
+      [...new Set(p.blocks.flatMap(b => b.movements.map(m => m.movementId)))], c.discipline) } : {}),
     calculatedLoads: p.blocks.flatMap(b => b.movements.flatMap(m => { const load = calculatedLoad(c, m.prescription); return load ? [{ blockType: b.blockType, movementId: m.movementId, ...load }] : []; })),
     duration, timeBudget: dc.timeBudget, contextEvidenceDigest: dc.evidenceDigest,
     diagnostics: [...dc.diagnostics, { code: 'SESSION_DURATION_ESTIMATE', reason: duration.policy }, { code: 'PROFESSIONAL_RENDER', reason: 'structured_facts_only' }] };
@@ -74,6 +77,7 @@ export function renderProfessionalSession(c: AllowedTrainingContract, p: Structu
 }
 
 export const STRUCTURED_DOSE_INSTRUCTIONS = `Devuelve SOLO JSON con schemaVersion:2, stimulusId, structureId y blocks. Reutiliza IDs exactos del contrato.
+Si doseContext.sufficiency existe: FC numérica requiere capability.canMeasureHeartRate available; ritmo numérico requiere canMeasurePace available; distancia requiere canMeasureDistance available. Sin capacidad usa duración + RPE. Esto no autoriza inventar referencias ni cambiar el intent. Solo allowedMovementIds tienen material y nivel resueltos.
 blocks: warmup, main, cooldown opcional, en orden. Cada bloque: blockType, movements; solo main admite formatDose.
 Cada movimiento: movementId y prescription. prescription: sets, reps, durationSeconds, distanceMeters, restSeconds, perSide (boolean), tempo (array de 4 segundos), intensity.
 Intensity: {kind:"rpe",value:7,max:8 opcional}, {kind:"rir",value:3}, {kind:"percent_1rm",referenceId:"ID del contrato",value:75,max:80 opcional}, o {kind:"reference",referenceId:"ID running del contrato"}.

@@ -9,7 +9,7 @@ import { loadAthletePrescriptionContext } from "@/lib/athlete/loadAthletePrescri
 import { strategyDemandIds, normalizeStrategyProposal } from "@/lib/planning/canonicalWeekStrategy";
 import { plannerProviderMetadata } from "@/lib/planning/weeklyPlannerDiagnostics";
 import { assertWeeklyCalendar, assertCalendarMutation } from "@/lib/planning/weeklyCalendarAuthority";
-import { updateChatAvailability } from "@/lib/sports/chatAvailability";
+import { updateChatAvailability, readAvailabilityConfirmation } from "@/lib/sports/chatAvailability";
 import { confirmCoachOwnership, persistTrainingSources } from "@/lib/sports/coachOwnership";
 import { normalizeAvailabilityForStorage } from "@/lib/sports/trainingAvailability";
 import { disabledLegacyOperation, projectLegacyCreate, projectLegacyUpdate } from "@/lib/auth/legacyContainment";
@@ -5040,8 +5040,12 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
 
 
 
+  if (action === "obtener_confirmacion_disponibilidad") {
+    return NextResponse.json(await readAvailabilityConfirmation(supabase, codigo));
+  }
+
   if (action === "verificar_correccion_disponibilidad_deterministico") {
-    return NextResponse.json(await updateChatAvailability(supabase, codigo, datos.mensajeUsuario));
+    return NextResponse.json(await updateChatAvailability(supabase, codigo, datos.mensajeUsuario, datos.snapshotDigest));
   }
 
   if (action === "responder_dato_prescripcion") {

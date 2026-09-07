@@ -1,8 +1,36 @@
 import { normalizeAvailabilityDays, normalizeAvailabilityForStorage, normalizeTrainingAvailability } from './trainingAvailability';
 import { buildPrescriptionScope, canonicalDiscipline, resolveProfileDisciplines } from './prescriptionScope';
-import { loadWeeklyCalendarContext } from '../planning/weeklyCalendarAuthority';
+import { loadWeeklyCalendarContext, weeklyDigest } from '../planning/weeklyCalendarAuthority';
+import { isExistingAvailabilityConfirmation, parseAvailabilityChange } from './availabilityResponse';
 
 const fail = (code: string) => ({ ok: false as const, actualizado: false, code, retryable: false });
+function canonicalDays(profile: any, sources: any[], disciplines: string[]) {
+  let distribution = profile.distribucion_semanal;
+  try { distribution = typeof distribution === 'string' ? JSON.parse(distribution) : distribution; } catch { return null; }
+  const result: Record<string, string[]> = {};
+  for (const discipline of disciplines) {
+    const matching = sources.filter(s => canonicalDiscipline(s.disciplina) === discipline && s.dias != null);
+    const normalized = normalizeTrainingAvailability(distribution || {}, [discipline]);
+    const groups = matching.map(s => normalizeAvailabilityDays(s.dias));
+    if (matching.length ? groups.some(g => g === null) : !normalized.ok) return null;
+    result[discipline] = matching.length ? [...new Set(groups.flatMap(g => g!))] : normalized.ok ? normalized.availability[discipline] : [];
+  }
+  return result;
+}
+/** Read-only snapshot/question using the same managed-day authority as the Planner. */
+export async function readAvailabilityConfirmation(db: any, codigo: string) {
+  try {
+    const c = await loadWeeklyCalendarContext(db, codigo);
+    const days = canonicalDays(c.profile, c.sources, [...c.scope.managedDisciplines, ...c.scope.externalDisciplines]);
+    if (!days) return fail('AVAILABILITY_EXISTING_REQUIRED');
+    const availability = { ...days, ...c.allowed };
+    const snapshotDigest = weeklyDigest({ distribution: c.profile.distribucion_semanal, sources: c.sources, scope: c.scope });
+    const labels: Record<string,string> = { box:'Box', carrera:'Carrera', fuerza:'Fuerza' };
+    const question = `Actualmente tengo tu disponibilidad así:\n\n${Object.entries(availability).map(([d,v]) => `${labels[d] || d}: ${v.length ? v.join(', ') : 'sin días disponibles'}.`).join('\n')}\n\n¿Sigue siendo correcta?`;
+    return { ok: true as const, availability, snapshotDigest, question,
+      distribucion: typeof c.profile.distribucion_semanal === 'string' ? c.profile.distribucion_semanal : JSON.stringify(c.profile.distribucion_semanal) };
+  } catch { return fail('AVAILABILITY_EXISTING_REQUIRED'); }
+}
 /** Complete explicit clauses only; never infer days or ownership from conversational prose. */
 export function parseChatAvailability(value: unknown): Record<string, string[]> | null {
   if (typeof value !== 'string' || value.length > 2000) return null;
@@ -33,10 +61,9 @@ export function parseChatAvailability(value: unknown): Record<string, string[]> 
 }
 
 /** Existing distribution plus explicit source days; ownership and scope never change. */
-export async function updateChatAvailability(db: any, codigo: string, input: unknown) {
-  const confirmedUnchanged = typeof input === 'string' && /^(si|sí|igual|sigue igual|correcto|confirmo|sin cambios)[.!\s]*$/i.test(input.trim());
-  const update = parseChatAvailability(input) ?? normalizeAvailabilityForStorage(input);
-  if (!confirmedUnchanged && !update) return fail('AVAILABILITY_FORMAT_INVALID');
+export async function updateChatAvailability(db: any, codigo: string, input: unknown, expectedSnapshot?: unknown) {
+  const confirmedUnchanged = isExistingAvailabilityConfirmation(input);
+  let update = parseChatAvailability(input) ?? normalizeAvailabilityForStorage(input);
   try {
     const p = await db.from('usuarios').select('modo_entrada,perfil,workout_history,distribucion_semanal,especialidad,categoria').eq('codigo', codigo).single();
     const t = await db.from('athlete_training_sources').select('disciplina,owner,activo,dias').eq('user_codigo', codigo).eq('activo', true);
@@ -48,9 +75,15 @@ export async function updateChatAvailability(db: any, codigo: string, input: unk
     try { previous = typeof previous === 'string' ? JSON.parse(previous) : previous; } catch { return fail('AVAILABILITY_FORMAT_INVALID'); }
     if (!previous || typeof previous !== 'object' || Array.isArray(previous)) previous = {};
     if (confirmedUnchanged) {
-      await loadWeeklyCalendarContext(db, codigo);
-      return { ok: true as const, actualizado: false, distribucion: JSON.stringify(previous) };
+      const current = await readAvailabilityConfirmation(db, codigo);
+      if (!current.ok) return { ...current, responseKind: 'UNRESOLVED_AVAILABILITY_RESPONSE' as const };
+      if (expectedSnapshot != null && expectedSnapshot !== current.snapshotDigest) return { ...fail('AVAILABILITY_CONFIRMATION_STALE'),
+        responseKind: 'UNRESOLVED_AVAILABILITY_RESPONSE' as const, question: current.question, snapshotDigest: current.snapshotDigest };
+      return { ...current, actualizado: false, responseKind: 'CONFIRM_EXISTING_AVAILABILITY' as const };
     }
+    const authorizedDays = canonicalDays(p.data, t.data, [...before.scope.managedDisciplines, ...before.scope.externalDisciplines]) || {};
+    update ??= parseAvailabilityChange(input, authorizedDays);
+    if (!update) return { ...fail('AVAILABILITY_FORMAT_INVALID'), responseKind: 'UNRESOLVED_AVAILABILITY_RESPONSE' as const };
     const requested = Object.keys(update!).filter(k => Array.isArray(update![k]));
     if (!requested.length || requested.some(k => !['box', 'carrera', 'fuerza'].includes(canonicalDiscipline(k)))) return fail('AVAILABILITY_FORMAT_INVALID');
     const authorized = [...before.scope.managedDisciplines, ...before.scope.externalDisciplines];
@@ -92,7 +125,8 @@ export async function updateChatAvailability(db: any, codigo: string, input: unk
       const actual = readback.scope.managedDisciplines.includes(discipline) ? readback.allowed[discipline] : stored.availability[discipline];
       if (JSON.stringify([...new Set(actual)].sort()) !== JSON.stringify(expected)) return fail('AVAILABILITY_READBACK_FAILED');
     }
-    return { ok: true as const, actualizado: true, distribucion, partial: rejectedCategories.length > 0, rejectedCategories,
-      updatedCategories: categories, ownershipPending };
+    return { ok: true as const, actualizado: true, responseKind: 'UPDATE_AVAILABILITY' as const, distribucion, partial: rejectedCategories.length > 0, rejectedCategories,
+      updatedCategories: categories, ownershipPending,
+      snapshotDigest: weeklyDigest({ distribution: readback.profile.distribucion_semanal, sources: readback.sources, scope: readback.scope }) };
   } catch { return fail('AVAILABILITY_READBACK_FAILED'); }
 }

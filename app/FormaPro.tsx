@@ -858,6 +858,12 @@ const [semanaPendienteCompartir,setSemanaPendienteCompartir]=useState<{sesionesC
 const [rachaPendienteCompartir,setRachaPendienteCompartir]=useState<number|null>(null);
 const [modoEntrada,setModoEntrada]=useState<string>("planificacion");
 const [esperandoConfirmacionDisponibilidad,setEsperandoConfirmacionDisponibilidad]=useState(false);
+const availabilityConfirmationRef=useRef<string|null>(null);
+const availabilityQuestion=async()=>{
+  const result=await apiCall({action:"obtener_confirmacion_disponibilidad",codigo:codigoUsuario});
+  availabilityConfirmationRef.current=result?.ok?result.snapshotDigest:null;
+  return result?.ok?result.question:"No tengo una disponibilidad canónica válida para confirmar. Indica qué días puedes entrenar cada disciplina.";
+};
 const [pendingCoachOwnership,setPendingCoachOwnership]=useState<{codigo:string; weekly:boolean; queue:{discipline:string;days:string[]}[]}|null>(null);
 const ownershipQuestion=(discipline:string)=>`${discipline} no está configurado todavía como una disciplina que Forge gestione. ¿Quieres que Forge programe esas sesiones y las coordine con el resto de tu planificación, o te las programa otra persona?`;
 const requestCoachOwnership=(result:any,weekly:boolean)=>{
@@ -1922,7 +1928,8 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
 
       // Persistir y verificar la disponibilidad antes de confirmar o avanzar a generación.
       if(esperandoConfirmacionDisponibilidad && codigoUsuario){
-        const resCorreccion = await apiCall({action:"verificar_correccion_disponibilidad_deterministico",codigo:codigoUsuario,datos:{mensajeUsuario:texto}});
+        const resCorreccion = await apiCall({action:"verificar_correccion_disponibilidad_deterministico",codigo:codigoUsuario,datos:{mensajeUsuario:texto,snapshotDigest:availabilityConfirmationRef.current}});
+        if(resCorreccion?.ok) availabilityConfirmationRef.current=resCorreccion.snapshotDigest ?? null;
         const ownershipPrompt=requestCoachOwnership(resCorreccion,true);
         if(ownershipPrompt){
           if(resCorreccion.ok&&resCorreccion.distribucion) setDistribucionSemanal(resCorreccion.distribucion);
@@ -1931,7 +1938,10 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
           return;
         }
         if(resCorreccion?.ok !== true){
-          setMensajes(prev=>[...prev,{role:"assistant",content:"No he podido actualizar tu disponibilidad de forma segura. Indica cada disciplina y sus días exactos, por ejemplo: carrera lunes/miércoles/sábado."}]);
+          if(resCorreccion?.snapshotDigest) availabilityConfirmationRef.current=resCorreccion.snapshotDigest;
+          setMensajes(prev=>[...prev,{role:"assistant",content:resCorreccion?.question || (resCorreccion?.code==="AVAILABILITY_EXISTING_REQUIRED"
+            ? "No tengo una disponibilidad canónica válida para reutilizar. Indica los días disponibles de cada disciplina."
+            : "No he podido confirmar un cambio inequívoco. Si todo sigue igual, puedes decir ‘sigue igual’; si ha cambiado, indica la disciplina y los días disponibles.")}]);
           setCargando(false);
           return;
         }
@@ -2018,14 +2028,7 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
         // FIX: mismo comportamiento que el boton oficial — preguntar disponibilidad ANTES de generar,
         // en vez de disparar el Orchestrator directamente sin confirmar.
         const mensajeDisplayUsuario=texto.trim();
-        let distTextoOrch="No tengo tu disponibilidad guardada todavia.";
-        try{
-          const distParsedOrch=typeof distribucionSemanal==="string"?JSON.parse(distribucionSemanal):distribucionSemanal;
-          if(distParsedOrch && typeof distParsedOrch==="object"){
-            distTextoOrch=Object.entries(distParsedOrch).filter(([k])=>k!=="observaciones").map(([k,v]:[string,any])=>`${k}: ${Array.isArray(v)?v.join(", "):v}`).join(" — ");
-          }
-        }catch{}
-        const respuestaConfirmacion=`Antes de generar tu próxima semana, confirmemos tu disponibilidad actual:\n\n📅 ${distTextoOrch}\n\n¿Sigue siendo así, o ha cambiado algo?`;
+        const respuestaConfirmacion=await availabilityQuestion();
         setMensajes(prev=>[...prev,{role:"assistant",content:respuestaConfirmacion}]);
         setEsperandoConfirmacionDisponibilidad(true);
         setCargando(false);
@@ -3484,15 +3487,8 @@ ${testStr}`}]});
                   }
                   // FIX: preguntar disponibilidad ANTES de generar, en vez de asumir silenciosamente
                   // la misma distribucion de semanas anteriores. El usuario puede confirmar o corregir.
-                  const distActual=distribucionSemanal;
-                  let distTexto="No tengo tu disponibilidad guardada todavia.";
-                  try{
-                    const distParsed=typeof distActual==="string"?JSON.parse(distActual):distActual;
-                    if(distParsed && typeof distParsed==="object"){
-                      distTexto=Object.entries(distParsed).filter(([k])=>k!=="observaciones").map(([k,v]:[string,any])=>`${k}: ${Array.isArray(v)?v.join(", "):v}`).join(" — ");
-                    }
-                  }catch{}
-                  setMensajes(prev=>[...prev,{role:"assistant",content:`Antes de generar tu próxima semana, confirmemos tu disponibilidad actual:\n\n📅 ${distTexto}\n\n¿Sigue siendo así, o ha cambiado algo?`}]);
+                  const pregunta=await availabilityQuestion();
+                  setMensajes(prev=>[...prev,{role:"assistant",content:pregunta}]);
                   setEsperandoConfirmacionDisponibilidad(true);
                 }} style={{background:accentColor,color:"#fff",border:"none",borderRadius:100,padding:"12px 28px",fontSize:14,fontWeight:600,cursor:"pointer"}}>
                   🚀 Generar mi próxima semana

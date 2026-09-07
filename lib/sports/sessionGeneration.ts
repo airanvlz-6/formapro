@@ -27,13 +27,17 @@ export async function generateContractSession(contract: AllowedTrainingContract,
   for (let attempt = 0; attempt < 2; attempt++) {
     trace.beginAttempt();
     let raw;
-    try { raw = trace.completion(await complete(prompt + (attempt ? `\nLa primera propuesta fue rechazada: ${JSON.stringify(previousErrors)}. Devuelve una composición válida dentro del MISMO contrato; no repitas la propuesta rechazada.` : ''))); }
+    const duplicateCorrection = attempt && previousErrors.some(v => v.startsWith('DUPLICATE_MOVEMENT:'))
+      ? `\nREPAIR_CONSTRAINTS:\n${JSON.stringify({ previousErrors: ['DUPLICATE_MOVEMENT'], scope: 'within_each_block',
+        instruction: 'Cada movementId debe aparecer como máximo una vez dentro de cada bloque. Recompón la propuesta dentro del mismo contrato; no traslades ni elimines dosis automáticamente. Esta restricción no prohíbe repetir un movementId entre warmup y main con dosis apropiadas.' })}` : '';
+    try { raw = trace.completion(await complete(prompt + (attempt ? `\nLa primera propuesta fue rechazada: ${JSON.stringify(previousErrors)}. Devuelve una composición válida dentro del MISMO contrato; no repitas la propuesta rechazada.` : '') + duplicateCorrection)); }
     catch { trace.emit(attempt + 1, 'provider', 'SESSION_GENERATION_FAILED', ['LLM_REQUEST_FAILED'], false, 'provider_failure_terminal'); return { ok: false as const, code: 'SESSION_GENERATION_FAILED', violations: ['LLM_REQUEST_FAILED'], diagnostics: trace.summary() }; }
     const parsed = parseStructuredSession(raw);
     if (!parsed.ok) {
       previousErrors = parsed.violations;
-      const retry = !attempt && parsed.violations.some(v => v.startsWith('DOSE_'));
-      trace.emit(attempt + 1, parsed.violations.some(v => v.startsWith('JSON_')) ? 'parseStructuredSession' : 'checkSessionShape', 'SESSION_PROPOSAL_INVALID', parsed.violations, retry, retry ? 'dose_parse_retry' : attempt ? 'attempt_limit' : 'parse_rule_not_retryable');
+      const duplicate = parsed.violations.some(v => v.startsWith('DUPLICATE_MOVEMENT:'));
+      const retry = !attempt && (duplicate || parsed.violations.some(v => v.startsWith('DOSE_')));
+      trace.emit(attempt + 1, parsed.violations.some(v => v.startsWith('JSON_')) ? 'parseStructuredSession' : 'checkSessionShape', 'SESSION_PROPOSAL_INVALID', parsed.violations, retry, retry ? duplicate ? 'duplicate_movement_retry' : 'dose_parse_retry' : attempt ? 'attempt_limit' : 'parse_rule_not_retryable');
       if (retry) continue;
       return { ok: false as const, code: 'SESSION_PROPOSAL_INVALID', violations: parsed.violations, diagnostics: trace.summary() };
     }

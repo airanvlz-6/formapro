@@ -2215,9 +2215,20 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
       if (datos.weeklyContractVersion !== 1) throw new Error("WEEKLY_CLIENT_UPGRADE_REQUIRED");
       const generation = resolveWeeklyGeneration(datos.generationToken, codigo);
       if (![generation.currentWeek, generation.nextWeek].includes(datos.targetWeekStart)) throw new Error("CALENDAR_TARGET_INVALID");
+      const today = resolveCompletionDate(new Date().toISOString())!.date;
+      let includeToday: boolean;
+      if (typeof datos.empezarHoy === "boolean") includeToday = datos.empezarHoy;
+      else {
+        const temporal = await resolveWeeklyGenerationPreflight(supabase, codigo, {
+          targetWeekStart: datos.targetWeekStart, today, snapshot: generation.snapshots[datos.targetWeekStart],
+          confirmedAvailabilityDigest: datos.confirmedAvailabilityDigest, planningRunId: generation.planningRunId,
+        });
+        if (!temporal.canContinue || typeof temporal.temporalDecision?.includeToday !== "boolean") return NextResponse.json(temporal);
+        includeToday = temporal.temporalDecision.includeToday;
+      }
       const result = await planBoundedWeek(supabase, codigo, {
-        targetWeekStart: datos.targetWeekStart, today: resolveCompletionDate(new Date().toISOString())!.date,
-        empezarHoy: datos.empezarHoy !== false, snapshot: generation.snapshots[datos.targetWeekStart],
+        targetWeekStart: datos.targetWeekStart, today,
+        empezarHoy: includeToday, snapshot: generation.snapshots[datos.targetWeekStart],
         strategyVersion: 1, strategyProposal: datos.analisis?.strategyProposal, planningRunId: generation.planningRunId,
       }, async (prompt: string) => {
         const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -5068,6 +5079,7 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
       if (![generation.currentWeek, generation.nextWeek].includes(datos.targetWeekStart)) throw new Error('CALENDAR_TARGET_INVALID');
       return NextResponse.json(await resolveWeeklyGenerationPreflight(supabase, codigo, {
         targetWeekStart: datos.targetWeekStart, today: new Date().toLocaleDateString('en-CA', { timeZone: 'Atlantic/Canary' }),
+        confirmedAvailabilityDigest: datos.confirmedAvailabilityDigest,
         snapshot: generation.snapshots[datos.targetWeekStart], temporalIntent: datos.temporalIntent, temporalReply: datos.temporalReply === true, planningRunId: generation.planningRunId,
       }));
     } catch { return NextResponse.json({ ok: false, canContinue: false, code: 'PREFLIGHT_CONTEXT_INVALID' }); }

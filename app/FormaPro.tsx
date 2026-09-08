@@ -1,4 +1,5 @@
 'use client';
+import type { WeeklyGenerationContext } from '@/lib/planning/weeklyGeneration';
 import { noWeeklyPrescription, weeklyGenerationOutcomeMessage } from '@/lib/planning/weeklyRegeneration';
 import { contextualPhysiology } from "@/lib/physiology/authority";
 import { useState, useRef, useEffect } from "react";
@@ -638,7 +639,6 @@ export default function Forge() {
       (async()=>{
         setMensajes([{role:"assistant",content:"¡Bienvenido a tu nuevo modo! Ya tengo todos tus datos — voy a construir tu primera semana ahora mismo."}]);
         setGenerandoSemana(true);
-        setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu primera semana paso a paso — analizando bloque, distribuyendo días y diseñando cada sesión..."}]);
         const planFocusInicial=await orquestarGeneracionSemana();
         if(planFocusInicial?.goalRequirement || planFocusInicial?.preflightRequirement){setGenerandoSemana(false);return;}
         const respuestaFocusInicial=planFocusInicial && planFocusInicial.ok!==false
@@ -861,6 +861,7 @@ const [rachaPendienteCompartir,setRachaPendienteCompartir]=useState<number|null>
 const [modoEntrada,setModoEntrada]=useState<string>("planificacion");
 const [esperandoConfirmacionDisponibilidad,setEsperandoConfirmacionDisponibilidad]=useState(false);
 const availabilityConfirmationRef=useRef<string|null>(null);
+const weeklyPlanningContinuationRef=useRef<{codigo:string;generation:WeeklyGenerationContext & {token:string};targetWeekStart:string}|null>(null);
 const availabilityQuestion=async()=>{
   const result=await apiCall({action:"obtener_confirmacion_disponibilidad",codigo:codigoUsuario});
   availabilityConfirmationRef.current=result?.ok?result.snapshotDigest:null;
@@ -946,29 +947,27 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     if(!codigoUsuario) return null;
     console.log("=== FORGE ORCHESTRATOR: INICIO ===");
 
-    const generationResult=await apiCall({action:"preparar_generacion_semana",codigo:codigoUsuario});
-    if(!generationResult?.ok) return null;
-    const weeklyGeneration=generationResult.generation;
-
+    let continuation=weeklyPlanningContinuationRef.current;
+    if(continuation?.codigo!==codigoUsuario) continuation=null;
+    if(!continuation){
+      const generationResult=await apiCall({action:"preparar_generacion_semana",codigo:codigoUsuario});
+      if(!generationResult?.ok) return null;
+      const generation=generationResult.generation;
+      const closure=await apiCall({action:"check_week_closure",codigo:codigoUsuario});
+      if(closure?.ok!==true) return null;
+      continuation={codigo:codigoUsuario,generation,targetWeekStart:closure.yaCerrada===true?generation.nextWeek:generation.currentWeek};
+    }
+    const weeklyGeneration=continuation.generation;
     const weekStartSemanaActual=weeklyGeneration.currentWeek;
+    const weekStartOrchestrator=continuation.targetWeekStart;
 
-    // FIX CRITICO: usar la nueva accion check_week_closure (solo lectura) en vez de la antigua
-    // verificar_semana_completa_sin_cierre, que dejo de existir en el backend hoy y siempre
-    // devolvia undefined — causando que el Orchestrator SIEMPRE creyera que la semana seguia
-    // abierta y regenerara la semana actual en vez de avanzar a la siguiente.
-    const resVerificarCierreActual=await apiCall({action:"check_week_closure",codigo:codigoUsuario});
-    if(resVerificarCierreActual?.ok!==true) return null;
-    const semanaActualYaCerrada=resVerificarCierreActual?.yaCerrada===true;
-
-    const weekStartOrchestrator=semanaActualYaCerrada
-      ? weeklyGeneration.nextWeek
-      : weekStartSemanaActual;
-    console.log("ORCHESTRATOR: semana actual ya cerrada =", semanaActualYaCerrada, "→ weekStart real:", weekStartOrchestrator);
-
-    const preflight=await apiCall({action:"preflight_generacion_semana",codigo:codigoUsuario,datos:{generationToken:weeklyGeneration.token,targetWeekStart:weekStartOrchestrator,temporalIntent:empezarHoy ?? temporalAnswer,temporalReply}});
-    if(preflight?.goalRequirement || preflight?.preflightRequirement) return preflight;
+    const preflight=await apiCall({action:"preflight_generacion_semana",codigo:codigoUsuario,datos:{generationToken:weeklyGeneration.token,targetWeekStart:weekStartOrchestrator,confirmedAvailabilityDigest:availabilityConfirmationRef.current,temporalIntent:empezarHoy ?? temporalAnswer,temporalReply}});
+    if(preflight?.preflightRequirement){weeklyPlanningContinuationRef.current=continuation;return preflight;}
+    weeklyPlanningContinuationRef.current=null;
+    if(preflight?.goalRequirement) return preflight;
     if(!preflight?.canContinue || typeof preflight.temporalDecision?.includeToday!=="boolean") return { ...preflight, ok:false, canContinue:false };
     empezarHoy=preflight.temporalDecision.includeToday;
+    setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu semana paso a paso..."}]);
 
 
     // Paso 1: Block Analyzer
@@ -1284,6 +1283,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
         const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:controller?.signal});
         if(res.ok) { const result=await res.json();
           if(result.preflightRequirement?.text){
+            if(result.preflightRequirement.kind==="availability" && typeof result.snapshotDigest==="string") availabilityConfirmationRef.current=result.snapshotDigest;
             setEsperandoConfirmacionDisponibilidad(result.preflightRequirement.kind==="availability");
             setEsperandoConfirmacionEmpezarHoy(result.preflightRequirement.kind==="temporal");
             setMensajes(prev=>[...prev,{role:"assistant",content:result.preflightRequirement.text}]);
@@ -1753,6 +1753,7 @@ const forgeValidator=(texto:string):string=>{
   const dispararGeneracion=async(temporalAnswer?:string,answeringQuestion:boolean=false,availabilityConfirmed:boolean=false)=>{
     weeklyTemporalIntentRef.current={text:temporalAnswer,answeringQuestion};
     if(!availabilityConfirmed){
+      weeklyPlanningContinuationRef.current=null;
       const confirmation=await apiCall({action:"obtener_confirmacion_disponibilidad",codigo:codigoUsuario});
       availabilityConfirmationRef.current=confirmation.ok?confirmation.snapshotDigest:null;
       setEsperandoConfirmacionDisponibilidad(confirmation.ok===true);
@@ -1761,7 +1762,6 @@ const forgeValidator=(texto:string):string=>{
       return;
     }
     setGenerandoSemana(true);
-    setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu semana paso a paso..."}]);
     try {
       const plan=await orquestarGeneracionSemana(undefined,temporalAnswer,answeringQuestion);
       if(plan?.goalRequirement || plan?.preflightRequirement) return;

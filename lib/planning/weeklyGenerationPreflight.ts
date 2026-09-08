@@ -1,7 +1,7 @@
-import { loadWeeklyCalendarContext } from './weeklyCalendarAuthority';
+import { loadWeeklyCalendarContext, weeklyDigest } from './weeklyCalendarAuthority';
 import { prepareAllowedWeeklyPlanContract } from './prepareAllowedWeeklyPlanContract';
-import { calendarDays } from './weeklyCalendar';
-import type { AllowedWeeklyPlanContract } from './allowedWeeklyPlanContract';
+import { calendarDays, calendarKey } from './weeklyCalendar';
+import { readAvailabilityConfirmation } from '../sports/chatAvailability';
 
 /** A request-local choice, never a persistent availability or ownership change. */
 export function parseIncludeToday(value: unknown, answeringQuestion = false): boolean | null {
@@ -15,47 +15,48 @@ export function parseIncludeToday(value: unknown, answeringQuestion = false): bo
   return request ? ['desde hoy', 'incluyendo hoy'].includes(request[1]) : null;
 }
 
-/** Existence proof under the actual weekly count/rest/coverage constraints, forcing a NEW TRAIN today.
- * Does not alter strategy, select a session, or ask the model to decide temporal authority. */
-export function admitsNewTrainToday(contract: AllowedWeeklyPlanContract, today: string): boolean {
-  const groups = contract.strategy?.coverage || [], full = (1 << groups.length) - 1;
-  let states = new Set(['0:0:0']);
-  for (const day of calendarDays) {
-    const options = contract.dayOptions[day].filter(o => day !== today || o.state === 'TRAIN' && !o.protected);
-    const signatures = [...new Set(options.map(o => `${Number(['TRAIN', 'RECOVERY'].includes(o.state))}:${Number(o.state === 'REST')}:${groups.reduce((mask, g, i) => mask | (o.intent?.kind === 'adaptation'
-      && (!g.adaptationId || o.intent.adaptationId === g.adaptationId) && (!g.discipline || o.discipline === g.discipline)
-      && (!g.weaknessId || o.intent.weaknessId === g.weaknessId) ? 1 << i : 0), 0)}`))];
-    const next = new Set<string>();
-    for (const state of states) for (const signature of signatures) {
-      const [n, rest, mask] = state.split(':').map(Number), [add, r, bits] = signature.split(':').map(Number);
-      if (n + add <= contract.frequencyPolicy.maxExecutableDays) next.add(`${n + add}:${rest | r}:${mask | bits}`);
-    }
-    states = next;
-  }
-  return [...states].some(state => { const [n, rest, mask] = state.split(':').map(Number);
-    return n >= contract.frequencyPolicy.minExecutableDays && (!contract.frequencyPolicy.requireGenuineRest || !!rest) && mask === full; });
-}
-
 export async function resolveWeeklyGenerationPreflight(db: any, codigo: string, request: {
-  targetWeekStart: string; today: string; snapshot: { sessions: readonly any[] } | null; temporalIntent?: unknown; temporalReply?: boolean; planningRunId?: string;
+  targetWeekStart: string; today: string; snapshot: { sessions: readonly any[] } | null; temporalIntent?: unknown; temporalReply?: boolean; planningRunId?: string; confirmedAvailabilityDigest?: string | null;
 }) {
   let availabilityStatus: 'VALID' | 'MISSING' | 'INVALID' | 'READ_ERROR' | 'NOT_CHECKED' = 'NOT_CHECKED';
   try {
     const c = await loadWeeklyCalendarContext(db, codigo);
     if (Object.values(c.allowed).some(days => days.some(day => !calendarDays.includes(day)))) throw new Error('CALENDAR_AVAILABILITY_INVALID');
     availabilityStatus = 'VALID';
+    // Reuse the existing confirmation digest. A temporal answer is not confirmation of changed availability.
+    if (request.confirmedAvailabilityDigest != null && request.confirmedAvailabilityDigest !== weeklyDigest({
+      distribution: c.profile.distribucion_semanal, sources: c.sources, scope: c.scope })) {
+      const confirmation = await readAvailabilityConfirmation(db, codigo);
+      if (!confirmation.ok) return { ok: false, code: confirmation.code, availabilityStatus, canContinue: false, temporalDecision: null };
+      return { ok: false, code: 'AVAILABILITY_CONFIRMATION_STALE', availabilityStatus, canContinue: false,
+        temporalDecision: null, snapshotDigest: confirmation.snapshotDigest,
+        preflightRequirement: { kind: 'availability', text: confirmation.question } };
+    }
     const explicit = parseIncludeToday(request.temporalIntent, request.temporalReply === true);
-    // Keep the existing empezarHoy transport name at the adapter boundary only.
-    const prepared = await prepareAllowedWeeklyPlanContract(db, codigo, { ...request, empezarHoy: explicit ?? true, strategyVersion: 1,
-      diagnosticTemporalDecision: explicit });
-    if (!prepared.ok) return { ...prepared, availabilityStatus, canContinue: false, temporalDecision: null };
-    const index = Math.round((Date.parse(request.today) - Date.parse(request.targetWeekStart)) / 86400000);
-    const today = calendarDays[index];
-    const needsChoice = explicit === null && !!today && admitsNewTrainToday(prepared.contract, today);
-    if (needsChoice) return { ok: true, availabilityStatus, availability: c.allowed, canContinue: false, temporalDecision: null,
-      preflightRequirement: { kind: 'temporal', text: 'Hoy admite una sesión nueva. ¿Quieres incluir hoy en esta planificación? Responde «incluir hoy» o «excluir hoy».' } };
+    const index = (Date.parse(request.today) - Date.parse(request.targetWeekStart)) / 86400000;
+    const todayInTarget = Number.isInteger(index) && index >= 0 && index < calendarDays.length;
+    // Potential calendar relevance only. Never evaluate movements, strategy, dose or DP to decide whether to ask.
+    const relevantDays = todayInTarget ? calendarDays.filter((day, i) => i >= index
+      && c.scope.managedDisciplines.some(discipline => c.allowed[discipline].includes(day))
+      && !request.snapshot?.sessions.some(s => s.completada === true && typeof s.dia === 'string' && calendarKey(s.dia) === day)
+      && !c.sources.some((source: { owner: string; dias?: string[] }) => source.owner === 'external'
+        && Array.isArray(source.dias) && source.dias.some(d => calendarKey(d) === day))) : [];
+    if (explicit === null && todayInTarget && relevantDays.length) return {
+      ok: true, code: 'TEMPORAL_DECISION_REQUIRED', temporalStatus: 'TEMPORAL_DECISION_UNRESOLVED',
+      availabilityStatus, availability: c.allowed, targetWeekStart: request.targetWeekStart,
+      canContinue: false, temporalDecision: null,
+      preflightRequirement: { kind: 'temporal', targetWeekStart: request.targetWeekStart,
+        options: [{ value: true, label: 'Incluir hoy' }, { value: false, label: 'Próximo día disponible' }],
+        text: '¿Quieres empezar hoy o desde el próximo día disponible? Las sesiones ya completadas se conservan. Responde «incluir hoy» o «próximo día disponible».' } };
+    // Outside the target interval, includeToday cannot change any target slot. No unresolved default enters feasibility.
+    const temporalDecision = { includeToday: explicit !== null ? explicit : false,
+      reason: explicit !== null ? 'explicit_intent' : !todayInTarget ? 'today_outside_target_week' : 'no_remaining_managed_days' };
+    const prepared = await prepareAllowedWeeklyPlanContract(db, codigo, { ...request,
+      empezarHoy: temporalDecision.includeToday, strategyVersion: 1, diagnosticTemporalDecision: explicit });
+    if (!prepared.ok) return { ...prepared, availabilityStatus, canContinue: false,
+      temporalStatus: 'TEMPORAL_DECISION_RESOLVED', temporalDecision };
     return { ok: true, availabilityStatus, availability: c.allowed, canContinue: true,
-      temporalDecision: { includeToday: explicit ?? true, reason: explicit !== null ? 'explicit_intent' : !today ? 'today_outside_target_week' : 'no_admissible_new_train_today' } };
+      temporalStatus: 'TEMPORAL_DECISION_RESOLVED', temporalDecision };
   } catch (error: any) {
     const code = typeof error?.message === 'string' && /^[A-Z_]+(?::[a-z_]+)?$/.test(error.message) ? error.message : 'PREFLIGHT_READ_FAILED';
     availabilityStatus = code === 'CALENDAR_AVAILABILITY_REQUIRED' ? 'MISSING'

@@ -46,7 +46,8 @@ export async function resolveWeeklyGenerationPreflight(db: any, codigo: string, 
     availabilityStatus = 'VALID';
     const explicit = parseIncludeToday(request.temporalIntent, request.temporalReply === true);
     // Keep the existing empezarHoy transport name at the adapter boundary only.
-    const prepared = await prepareAllowedWeeklyPlanContract(db, codigo, { ...request, empezarHoy: explicit ?? true, strategyVersion: 1 });
+    const prepared = await prepareAllowedWeeklyPlanContract(db, codigo, { ...request, empezarHoy: explicit ?? true, strategyVersion: 1,
+      diagnosticTemporalDecision: explicit });
     if (!prepared.ok) return { ...prepared, availabilityStatus, canContinue: false, temporalDecision: null };
     const index = Math.round((Date.parse(request.today) - Date.parse(request.targetWeekStart)) / 86400000);
     const today = calendarDays[index];

@@ -8,6 +8,7 @@ import { evaluateTrainingFeasibility } from '../sports/trainingFeasibility';
 import { STIMULUS_LIBRARY } from '../sports/movementLibrary';
 import { calendarDays, calendarState, isExecutableCalendarState, validateWeeklyCalendar } from './weeklyCalendar';
 import { assertStrategyShape, strategicIntents, type CanonicalWeekStrategy } from './canonicalWeekStrategy';
+import { projectRejectedWeeklyIntent, emitWeeklyFeasibilityDiagnostic, type WeeklyDiagnosticContext } from './weeklyFeasibilityDiagnostic';
 
 export type WeeklyOption = { optionId: string; state: 'TRAIN' | 'RECOVERY' | 'REST' | 'UNAVAILABLE';
   discipline?: string; stimulusId?: string; intent?: PrescriptionIntent; protected?: true };
@@ -65,7 +66,8 @@ function bindStrategicCoverage(contract: AllowedWeeklyPlanContract) {
 }
 
 /** Pure option enumeration. Generic catalog stimuli are code-owned objectives, not text promises. */
-export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput) {
+export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput, diagnosticContext?: WeeklyDiagnosticContext) {
+  const rejected: ReturnType<typeof projectRejectedWeeklyIntent>[] = [];
   try {
     if (input.strategy) assertStrategyShape(input.strategy);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(input.targetWeekStart) || new Date(input.targetWeekStart).getUTCDay() !== 1
@@ -94,7 +96,11 @@ export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput) {
           for (const intent of intents) {
           const feasible = evaluateTrainingFeasibility({ ...context, targetWeekStart: input.targetWeekStart, targetDay: day, stimulus: stimulus.id, intent });
           if (!feasible.resolved) return failure('WEEKLY_CONTEXT_INVALID', feasible.errors);
-          if (!feasible.feasible) continue;
+          if (!feasible.feasible) {
+            try { rejected.push(projectRejectedWeeklyIntent(day, discipline, intent, feasible)); }
+            catch { /* Diagnostic capture must not affect feasibility. */ }
+            continue;
+          }
           options.push({ optionId: `${day}:${discipline}:${stimulus.id}:${intent.kind === 'adaptation' ? intent.methodId + ':' + intent.pattern : intent.kind === 'main_pattern' ? intent.pattern : 'generic'}`,
             state: calendarState({ tipo: discipline, stimulusId: stimulus.id }), discipline, stimulusId: stimulus.id, intent });
           }
@@ -126,8 +132,10 @@ export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput) {
       }
       states = next;
     }
-    if (![...states].some(s => { const [n, rest] = s.split(':').map(Number); return n >= 1 && (!contract.frequencyPolicy.requireGenuineRest || rest); }))
+    if (![...states].some(s => { const [n, rest] = s.split(':').map(Number); return n >= 1 && (!contract.frequencyPolicy.requireGenuineRest || rest); })) {
+      emitWeeklyFeasibilityDiagnostic(input, dayOptions, rejected, diagnosticContext);
       return failure('WEEKLY_CONTRACT_UNSATISFIABLE', ['NO_VALID_EXECUTABLE_REST_ARRANGEMENT']);
+    }
     if (contract.strategy) bindStrategicCoverage(contract);
     return { ok: true as const, contract };
   } catch { return failure('WEEKLY_CONTEXT_INVALID', ['CANONICAL_CONTEXT_MALFORMED']); }

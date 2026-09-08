@@ -17,7 +17,7 @@ import { resolvePlanningStrategy } from '../athlete/strategyResolution';
 /** Read-only preparation, before any Planner call. Bounded reads per discipline, never per option. */
 export async function loadWeeklyPlanningContext(db: any, codigo: string, request: {
   targetWeekStart: string; today: string; empezarHoy: boolean; snapshot: { sessions: readonly any[] } | null;
-  strategyVersion?: 1; strategyProposal?: unknown; planningRunId?: string;
+  strategyVersion?: 1; strategyProposal?: unknown; planningRunId?: string; diagnosticTemporalDecision?: boolean | null;
 }) {
   const c = await loadWeeklyCalendarContext(db, codigo);
   if (request.strategyVersion !== undefined && request.strategyVersion !== 1) throw new Error('STRATEGY_VERSION_UNSUPPORTED');
@@ -91,7 +91,8 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
 export async function prepareAllowedWeeklyPlanContract(db: any, codigo: string, request: Parameters<typeof loadWeeklyPlanningContext>[2]) {
   const context = await loadWeeklyPlanningContext(db, codigo, request);
   if (!context.ok) return context;
-  const built = buildAllowedWeeklyPlanContract(context.input);
+  const built = buildAllowedWeeklyPlanContract(context.input, { planningRunId: request.planningRunId,
+    temporalDecision: request.diagnosticTemporalDecision === undefined ? request.empezarHoy : request.diagnosticTemporalDecision });
   return built.ok ? { ...built, fixedSessions: context.fixedSessions } : built;
 }
 

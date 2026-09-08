@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { signalIds } from '../athlete/prescriptionSignals';
 import { referenceQuestionFields } from './prescriptionReferenceFields';
+import { MOVEMENT_LIBRARY } from './movementLibrary';
 
 export type SufficiencyFailure = { FAILED_RULE: 'PRESCRIPTION_DATA_MISSING'; FAILED_FIELD: string;
   EXPECTED_KIND: 'available_signal' | 'executable_reference'; RECEIVED_TYPE_SAFE_SUMMARY: string; PROPOSAL_PATH: string;
@@ -58,6 +59,16 @@ export function builderTrace(contract: unknown, runId?: string) {
       if (details.length > 32) Object.assign(event, { failuresTruncated: true, failureTotalCount: details.length });
       events.push(event);
       try { console.info?.('SESSION_BUILDER_ATTEMPT', event); } catch { /* Diagnostics cannot change admission. */ }
+      const duplicates = violations.filter(v => v.startsWith('DUPLICATE_MOVEMENT:'));
+      for (const [occurrence, violation] of duplicates.slice(0, 32).entries()) {
+        const [, block, movement] = violation.split(':');
+        try { console.info?.('SESSION_DUPLICATE_MOVEMENT_DETAIL', JSON.stringify({ planningRunId, builderInvocationId,
+          contractIdentity: identity, day: c.targetDay, attempt, occurrence,
+          blockIndex: /^[0-2]$/.test(block) ? Number(block) : null,
+          movementId: Object.hasOwn(MOVEMENT_LIBRARY, movement ?? '') ? movement : null,
+          expected: 'unique_movement_id_within_block', totalCount: duplicates.length, truncated: duplicates.length > 32 })); }
+        catch { /* Diagnostics cannot alter parsing or retry. */ }
+      }
       for (const detail of details.slice(0, 32)) {
         try { console.info?.('SESSION_PRESCRIPTION_DATA_MISSING_DETAIL', JSON.stringify({ planningRunId, builderInvocationId,
           contractIdentity: identity, day: c.targetDay, attempt, ...detail, totalCount: details.length, truncated: details.length > 32 })); }

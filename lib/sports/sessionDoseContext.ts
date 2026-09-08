@@ -4,12 +4,15 @@ import type { CanonicalWeekStrategy } from '../planning/canonicalWeekStrategy';
 import { resolveStrategyGoal } from '../planning/canonicalWeekStrategy';
 import { createHash } from 'node:crypto';
 import type { PrescriptionSignals } from '../athlete/prescriptionSignals';
+import type { SessionTimeDoseAuthority } from './sessionTimeDoseAuthority';
+import { timeAuthorityForIntent } from './sessionTimeDosePolicy';
 
 export type DoseReference = { id: string; kind: '1rm' | 'running'; movementId?: string; metric?: string;
   value: number | { min: number; max: number }; unit: 'kg' | 'bpm' | 'seconds_per_km'; source: string; observedAt: string | null };
 export type SessionDoseContext = { version: 1; policy: 'structured-dose-v1'; references: DoseReference[];
   sufficiency?: PrescriptionSignals;
   timeBudget: { maximumSeconds: number | null; minimumSeconds: number | null; status: string; source: string | null };
+  timeAuthority?: SessionTimeDoseAuthority;
   weakness: { id: string; name: string | null; source: string } | null;
   weekStrategy: CanonicalWeekStrategy | null;
   neighbours: { day: string; adaptationId: string | null; state: string }[];
@@ -41,10 +44,11 @@ export function buildSessionDoseContext(context: AthletePrescriptionContext, int
   const weakness = intent?.kind === 'adaptation' && intent.weaknessId ? context.development.find(d =>
     (d.value.id || d.source) === intent.weaknessId && d.value.estado === 'activa' && d.value.pattern === intent.pattern) : undefined;
   if (intent?.kind === 'adaptation' && intent.weaknessId && !weakness) throw new Error('SESSION_WEAKNESS_CONTEXT_CHANGED');
+  const timeBudget = { maximumSeconds: time?.value.maxMinutes != null ? time.value.maxMinutes * 60 : null,
+    minimumSeconds: time?.value.minMinutes != null ? time.value.minMinutes * 60 : null, status: budget.reason, source: time?.source || null };
   return { version: 1, policy: 'structured-dose-v1', references,
     ...(enforceSufficiency ? { sufficiency: structuredClone(context.prescriptionSignals) } : {}),
-    timeBudget: { maximumSeconds: time?.value.maxMinutes != null ? time.value.maxMinutes * 60 : null,
-      minimumSeconds: time?.value.minMinutes != null ? time.value.minMinutes * 60 : null, status: budget.reason, source: time?.source || null },
+    timeBudget, timeAuthority: timeAuthorityForIntent(timeBudget, intent),
     weakness: weakness ? { id: intent!.kind === 'adaptation' ? intent!.weaknessId! : '', name: weakness.value.nombre, source: weakness.source } : null,
     weekStrategy: structuredClone(weekStrategy), neighbours: structuredClone(neighbours),
     evidenceDigest: createHash('sha256').update(JSON.stringify({ strength: context.strength, running: context.running, budget, development: context.development, goals: context.goals, cycle: context.cycle,

@@ -7,6 +7,7 @@ import { activeRestrictionFlags, evaluateMovementRestrictions } from './movement
 import { isStructureSatisfiable } from './structureSemantics';
 import { transferMethod } from './goalTransferModel';
 import { resolvePrescriptionDataSufficiency } from './prescriptionDataSufficiency';
+import { timeAuthorityForIntent } from './sessionTimeDosePolicy';
 
 export type StimulusResolution = { status: 'resolved'; stimulusId: string } | { status: 'unresolved'; reason: string };
 export function resolveTrainingStimulus(discipline: string, value: unknown): StimulusResolution {
@@ -54,6 +55,8 @@ export function feasibilityInputErrors(input: ContractInput): string[] {
     }
   }
   if (input.source !== 'weekly_session_builder') errors.push('CONTRACT_SOURCE_INVALID');
+  if (input.doseContext?.timeAuthority && timeAuthorityForIntent(input.doseContext.timeBudget, input.intent).resolution === 'INFEASIBLE')
+    errors.push('SESSION_DOSE_TIME_INFEASIBLE');
   return [...new Set(errors)];
 }
 function evaluatePools(input: ContractInput, stimulusId: string) {

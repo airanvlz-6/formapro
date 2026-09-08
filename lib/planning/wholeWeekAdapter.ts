@@ -5,6 +5,10 @@ import { buildStructuredExposureReport } from '../sports/exposureEngine';
 import { plannedPrescriptionLoad, externalActualLoad } from '../trainingLoad/prescriptionLoadAdapter';
 import { calendarKey, calendarState, calendarDays } from './weeklyCalendar';
 import { validateWholeWeek, type WeekSessionFacts, type WholeWeekInput } from './wholeWeekValidation';
+import { estimateSessionDuration } from '../sports/sessionDose';
+import { timeAuthorityForIntent } from '../sports/sessionTimeDosePolicy';
+import { validateSessionTimeDose, sameSessionTimeDoseAuthority } from '../sports/sessionTimeDoseAuthority';
+import type { AllowedTrainingContract } from '../sports/allowedTrainingContract';
 
 /** Domain metadata lives here. The validator has no specialty branches or catalog taxonomy. */
 export function wholeWeekInput(week: string, rows: readonly any[], evidence: any, contexts: Record<string, any> = {}): WholeWeekInput {
@@ -17,6 +21,14 @@ export function wholeWeekInput(week: string, rows: readonly any[], evidence: any
     const structured = stored?.schemaVersion === 2 && proposal?.schemaVersion === 2 && Array.isArray(proposal.blocks);
     const main = structured ? proposal.blocks.filter((b: any) => b.blockType === 'main').flatMap((b: any) => b.movements) : [];
     const intent = stored?.objective?.intent, method = intent?.kind === 'adaptation' ? transferMethod(intent.methodId) : undefined;
+    // Recompute from admitted facts, never trust the stored duration estimate.
+    let adaptationDoseSatisfied: boolean | undefined;
+    if (structured && stored.timeAuthority?.policyId) {
+      const temporal = timeAuthorityForIntent(stored.timeBudget, intent);
+      const same = sameSessionTimeDoseAuthority(temporal, stored.timeAuthority);
+      const estimate = estimateSessionDuration({ doseContext: { references: stored.references || [], timeAuthority: temporal } } as AllowedTrainingContract, proposal);
+      adaptationDoseSatisfied = same && validateSessionTimeDose(temporal, { ...estimate, expectedSeconds: estimate.expectedSeconds ?? null }).length === 0;
+    }
     const adaptation = strategy?.adaptations.find((a: any) => a.id === intent?.adaptationId);
     const movements: string[] = main.map((m: any) => m.movementId);
     const metadata = movements.map(id => MOVEMENT_LIBRARY[id]);
@@ -35,6 +47,7 @@ export function wholeWeekInput(week: string, rows: readonly any[], evidence: any
       reference: stored.references?.filter((r: any) => r.id === m.prescription.intensity?.referenceId).map((r:any)=>({id:r.id,value:r.value,unit:r.unit,movementId:r.movementId})) || [] }));
     const load = ['TRAIN','RECOVERY'].includes(state) ? plannedPrescriptionLoad(row,date,`${day}:${index}`) : null;
     return { id:`${day}:${index}`,date,discipline:row.tipo || null,state,protected:!!slot.protected,structured,
+      ...(adaptationDoseSatisfied !== undefined ? { adaptationDoseSatisfied } : {}),
       adaptationId:intent?.kind === 'adaptation' ? intent.adaptationId : null,methodId:method?.id || null,weaknessId:intent?.weaknessId || null,role,
       structure:proposal?.structureId || null,stimulus:proposal?.stimulusId || null,movements,patterns,
       dose:structured ? proposal.blocks.map((b: any)=>({blockType:b.blockType,formatDose:b.formatDose || null,movements:b.movements})) : null,intensity,

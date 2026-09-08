@@ -3,6 +3,7 @@ import type { MovementDose, StructuredSessionProposal } from './structuredSessio
 import { MOVEMENT_LIBRARY } from './movementLibrary';
 import { WORKOUT_STRUCTURE_LIBRARY } from './workoutStructureLibrary';
 import type { DoseReference } from './sessionDoseContext';
+import { validateSessionTimeDose } from './sessionTimeDoseAuthority';
 
 export type DoseIntensity = { kind: 'rpe' | 'rir'; value: number; max?: number }
   | { kind: 'percent_1rm'; referenceId: string; value: number; max?: number }
@@ -89,13 +90,17 @@ export function estimateSessionDuration(c: AllowedTrainingContract, p: Structure
   });
   // Allow 0–2 minutes per change of block/movement for setup. Explicit and versioned uncertainty, not hidden work.
   const transitions = p.blocks.length - 1 + p.blocks.reduce((n, b) => n + (b.formatDose?.durationSeconds || b.formatDose?.timeCapSeconds || b.formatDose?.intervalSeconds ? 0 : Math.max(0, b.movements.length - 1)), 0);
-  return { minimumSeconds: Math.ceil(parts.reduce((n, r) => n + r.minimumSeconds, 0)),
-    maximumSeconds: parts.some(r => r.maximumSeconds === null) ? null : Math.ceil(parts.reduce((n, r) => n + r.maximumSeconds!, 0) + transitions * 120),
+  const minimumSeconds = Math.ceil(parts.reduce((n, r) => n + r.minimumSeconds, 0));
+  const maximumSeconds = parts.some(r => r.maximumSeconds === null) ? null : Math.ceil(parts.reduce((n, r) => n + r.maximumSeconds!, 0) + transitions * 120);
+  return { minimumSeconds, maximumSeconds,
+    // Opt-in metadata preserves the rendering of already-issued legacy receipts.
+    ...(c.doseContext?.timeAuthority ? { expectedSeconds: maximumSeconds === null ? null : Math.round((minimumSeconds + maximumSeconds) / 2) } : {}),
     parts, transitionMaximumSeconds: transitions * 120, policy: 'operational_estimate_2_to_6s_per_rep_0_to_120s_per_transition_v1' };
 }
 
 /** Single semantic dose authority, downstream of schema, catalog, scope and restrictions. */
-export function validateSessionDose(c: AllowedTrainingContract, p: StructuredSessionProposal): string[] {
+export function validateSessionDose(c: AllowedTrainingContract, p: StructuredSessionProposal,
+  observe?: (estimate: ReturnType<typeof estimateSessionDuration>, errors: readonly string[]) => void): string[] {
   if (c.contractVersion !== 3) return p.schemaVersion === 2 ? ['DOSE_CONTRACT_VERSION_REQUIRED'] : [];
   if (p.schemaVersion !== 2) return ['SESSION_DOSE_INCOMPLETE:SCHEMA_VERSION_REQUIRED'];
   const errors: string[] = [], main = p.blocks.find(b => b.blockType === 'main')!;
@@ -141,5 +146,8 @@ export function validateSessionDose(c: AllowedTrainingContract, p: StructuredSes
   if (totalReps > 10000 || estimate.minimumSeconds > 28800) errors.push('DOSE_SESSION_TOTAL_BOUND');
   if (maximum !== null && estimate.maximumSeconds === null) errors.push('SESSION_DURATION_ESTIMATE:UNBOUNDED_WITH_FINITE_BUDGET');
   else if (maximum !== null && estimate.maximumSeconds! > maximum) errors.push('SESSION_BUDGET_EXCEEDED');
+  if (c.doseContext?.timeAuthority) errors.push(...validateSessionTimeDose(c.doseContext.timeAuthority,
+    { ...estimate, expectedSeconds: estimate.expectedSeconds ?? null }));
+  try { observe?.(estimate, errors); } catch { /* Observation never changes validation. */ }
   return [...new Set(errors)];
 }

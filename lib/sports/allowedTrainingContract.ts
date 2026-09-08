@@ -7,6 +7,8 @@ import type { PrescriptionScope } from './prescriptionScope';
 import type { RestrictionFlag } from './movementRestrictionPolicy';
 import { evaluateTrainingFeasibility, feasibilityInputErrors, resolveTrainingStimulus } from './trainingFeasibility';
 import { validateDoseContext, type SessionDoseContext } from './sessionDoseContext';
+import { timeAuthorityForIntent } from './sessionTimeDosePolicy';
+import { sameSessionTimeDoseAuthority } from './sessionTimeDoseAuthority';
 
 export { STRUCTURES_BY_STIMULUS } from './workoutStructureLibrary';
 export { resolveTrainingStimulus, type StimulusResolution } from './trainingFeasibility';
@@ -65,6 +67,8 @@ export function validateAllowedTrainingContract(contract: AllowedTrainingContrac
     const errors = feasibilityInputErrors(input);
     if (![1, 2, 3].includes(contract.contractVersion)) errors.push('CONTRACT_VERSION_INVALID');
     if (contract.contractVersion === 3 ? !validateDoseContext(contract.doseContext!) : Object.hasOwn(contract, 'doseContext')) errors.push('DOSE_CONTEXT_VERSION_INVALID');
+    if (contract.doseContext?.timeAuthority && !sameSessionTimeDoseAuthority(contract.doseContext.timeAuthority,
+      timeAuthorityForIntent(contract.doseContext.timeBudget, contract.intent))) errors.push('SESSION_DOSE_AUTHORITY_MISMATCH');
     if (contract.contractVersion === 1 && Object.hasOwn(contract, 'intent')) errors.push('INTENT_VERSION_MISMATCH');
     if (contract.contractVersion === 2 && !Object.hasOwn(contract, 'intent')) errors.push('INTENT_REQUIRED');
     const stimulus = resolveTrainingStimulus(contract.discipline, contract.stimulusId);

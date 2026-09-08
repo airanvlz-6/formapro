@@ -7,6 +7,7 @@ export type WeekSessionFacts = {
   structure: string | null; stimulus: string | null; movements: string[]; patterns: string[];
   dose: unknown; intensity: unknown; impact: 'high' | 'not_high' | 'unknown';
   demanding: string[]; contributionValid: boolean; recoveryContradiction: boolean; load: SessionLoad | null;
+  adaptationDoseSatisfied?: boolean;
 };
 export type WeekStrategyFacts = {
   goal: string | null; adaptations: { id: string; role: string; weaknessIds: string[] }[];
@@ -43,11 +44,13 @@ export function validateWholeWeek(input: WholeWeekInput) {
     if (s.state === 'REST' && s.structured) add('WEEK_REST_CONTENT', 'ERROR', [s], null, null, 'REST cannot contain a prescription.');
     if (!['TRAIN', 'RECOVERY'].includes(s.state)) continue;
     if (!s.structured) add('WEEK_STRUCTURE_UNKNOWN', s.protected ? 'WARNING' : 'ERROR', [s], null, null, 'No structured dose; no inference from prose.');
+    if (s.adaptationDoseSatisfied === false) add('WEEK_ADAPTATION_DOSE_UNSATISFIED', s.protected ? 'WARNING' : 'ERROR', [s], 'duration', s.adaptationId,
+      'Explicit temporal dose policy is not satisfied; presence alone cannot establish coverage.', s.protected ? 'none' : 'same_contract');
     if (s.recoveryContradiction) add('WEEK_SESSION_ROLE_CONTRADICTION', 'ERROR', [s], 'role', s.demanding, 'Recovery contradicts admitted intensity or structure.', s.protected ? 'none' : 'same_contract');
     if (input.strategy?.goal && s.structured && !s.contributionValid) add('WEEK_SESSION_OBJECTIVE_UNJUSTIFIED', s.protected ? 'WARNING' : 'ERROR', [s], 'adaptation', s.adaptationId, 'No compatible strategy → intent → main-block contribution.', s.protected ? 'none' : 'same_contract');
     if (s.impact === 'unknown') add('WEEK_IMPACT_UNKNOWN', 'INFO', [s], 'impact', null, 'Missing impact is not low impact.');
   }
-  const covered = (g: { adaptationId?: string; discipline?: string; weaknessId?: string }) => train.filter(s => s.structured && s.contributionValid
+  const covered = (g: { adaptationId?: string; discipline?: string; weaknessId?: string }) => train.filter(s => s.structured && s.contributionValid && s.adaptationDoseSatisfied !== false
     && (!g.adaptationId || s.adaptationId === g.adaptationId) && (!g.discipline || s.discipline === g.discipline) && (!g.weaknessId || s.weaknessId === g.weaknessId));
   const coverage: { id: string; sessionIds: string[]; required: boolean }[] = [];
   if (input.strategy?.goal) {

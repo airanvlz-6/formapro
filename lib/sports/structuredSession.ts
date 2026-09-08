@@ -87,7 +87,8 @@ export function parseStructuredSession(raw: unknown): SessionValidation {
   catch { return { ok: false, violations: ['JSON_INVALID'] }; }
 }
 
-export function validateSessionAgainstTrainingContract(contract: AllowedTrainingContract, value: unknown): SessionValidation {
+export function validateSessionAgainstTrainingContract(contract: AllowedTrainingContract, value: unknown,
+  observeDose?: Parameters<typeof validateSessionDose>[2]): SessionValidation {
   const checked = checkSessionShape(value);
   if (!checked.ok) return checked;
   const authority = validateAllowedTrainingContract(contract);
@@ -112,7 +113,7 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
     if (!evaluateMovementRestrictions(m, flags).allowed || restrictions.areas.some(a => m.avoid_with?.includes(a))
       || notes.some(n => normalizeTrainingKey(n.movement) === m.id)) violations.push(`MOVEMENT_RESTRICTED:${m.id}`);
   }
-  if (!violations.length) violations.push(...validateSessionDose(contract, p));
+  if (!violations.length) violations.push(...validateSessionDose(contract, p, observeDose));
   if (!violations.length && contract.doseContext?.sufficiency) for (const block of p.blocks) for (const m of block.movements) {
     const intensity = m.prescription.intensity;
     const ref = intensity && 'referenceId' in intensity ? contract.doseContext.references.find(r => r.id === intensity.referenceId) : undefined;

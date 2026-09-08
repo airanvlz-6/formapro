@@ -65,7 +65,7 @@ export function renderProfessionalSession(c: AllowedTrainingContract, p: Structu
     ...(dc.sufficiency ? { dataSufficiency: prescriptionGenerationOptions(dc.sufficiency, dc.references,
       [...new Set(p.blocks.flatMap(b => b.movements.map(m => m.movementId)))], c.discipline) } : {}),
     calculatedLoads: p.blocks.flatMap(b => b.movements.flatMap(m => { const load = calculatedLoad(c, m.prescription); return load ? [{ blockType: b.blockType, movementId: m.movementId, ...load }] : []; })),
-    duration, timeBudget: dc.timeBudget, contextEvidenceDigest: dc.evidenceDigest,
+    duration, timeBudget: dc.timeBudget, ...(dc.timeAuthority ? { timeAuthority: dc.timeAuthority } : {}), contextEvidenceDigest: dc.evidenceDigest,
     diagnostics: [...dc.diagnostics, { code: 'SESSION_DURATION_ESTIMATE', reason: duration.policy }, { code: 'PROFESSIONAL_RENDER', reason: 'structured_facts_only' }] };
   const headings = { warmup: 'CALENTAMIENTO', main: 'BLOQUE PRINCIPAL', cooldown: 'VUELTA A LA CALMA' };
   return { dia: c.targetDay, tipo: c.discipline, titulo: `${label(c.stimulusId)} · ${label(p.structureId)}`,

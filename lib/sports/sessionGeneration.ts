@@ -5,6 +5,7 @@ import { parseStructuredSession, validateSessionAgainstTrainingContract, renderC
 import { detectarSesionDuplicada, type SesionParaComparar } from '../validators/sessionDuplicationValidator';
 import { STRUCTURED_DOSE_INSTRUCTIONS } from './sessionProfessionalRenderer';
 import { prescriptionGenerationOptions } from './prescriptionDataSufficiency';
+import { emitSessionDoseAuthority } from './sessionDoseDiagnostics';
 
 function freeze<T>(value: T): T {
   if (value && typeof value === 'object') { Object.freeze(value); Object.values(value).forEach(freeze); }
@@ -22,7 +23,9 @@ export async function generateContractSession(contract: AllowedTrainingContract,
     ? `\nIntent canónico: el bloque main debe incluir al menos un ID de ${JSON.stringify(intentMatchingMovementIds(authority.intent, authority.allowedMovementIds))}. Otros IDs permitidos pueden acompañarlo. Un movimiento solo en warmup/cooldown no satisface el intent.` : '';
   const options = authority.doseContext?.sufficiency ? prescriptionGenerationOptions(authority.doseContext.sufficiency,
     authority.doseContext.references, authority.allowedMovementIds, authority.discipline) : null;
-  const prompt = `${authority.contractVersion === 3 ? STRUCTURED_DOSE_INSTRUCTIONS : STRUCTURED_SESSION_INSTRUCTIONS}\nCONTRACT:\n${JSON.stringify(authority)}${intentInstruction}\nContexto no autoritativo:\n${context}\nOpciones ejecutables resueltas por el servidor (solo sus referencias pueden usarse; sin distancia medible usa duración):\n${JSON.stringify(options)}\nHistorial para evitar duplicación:\n${JSON.stringify(recent)}`;
+  const timeInstruction = authority.doseContext?.timeAuthority?.targetDuration
+    ? '\nLa banda temporal y minimumUsefulDurationSeconds de doseContext.timeAuthority pertenecen al servidor. Compón dentro de esa banda sin cambiar intent, pools ni intensidad autorizada. El máximo conservador estimado debe caber bajo hardMaximumSeconds; expectedSeconds es el punto medio operativo del rango, no una medición. No añadas descansos o transiciones artificiales para satisfacer la dosis.' : '';
+  const prompt = `${authority.contractVersion === 3 ? STRUCTURED_DOSE_INSTRUCTIONS : STRUCTURED_SESSION_INSTRUCTIONS}${timeInstruction}\nCONTRACT:\n${JSON.stringify(authority)}${intentInstruction}\nContexto no autoritativo:\n${context}\nOpciones ejecutables resueltas por el servidor (solo sus referencias pueden usarse; sin distancia medible usa duración):\n${JSON.stringify(options)}\nHistorial para evitar duplicación:\n${JSON.stringify(recent)}`;
   let previousErrors: string[] = [];
   for (let attempt = 0; attempt < 2; attempt++) {
     trace.beginAttempt();
@@ -41,7 +44,8 @@ export async function generateContractSession(contract: AllowedTrainingContract,
       if (retry) continue;
       return { ok: false as const, code: 'SESSION_PROPOSAL_INVALID', violations: parsed.violations, diagnostics: trace.summary() };
     }
-    const validation = validateSessionAgainstTrainingContract(authority, parsed.proposal);
+    const validation = validateSessionAgainstTrainingContract(authority, parsed.proposal, (estimate, errors) =>
+      emitSessionDoseAuthority(authority, { ...estimate, expectedSeconds: estimate.expectedSeconds ?? null }, errors, trace.summary().planningRunId ?? undefined));
     if (!validation.ok) {
       previousErrors = validation.violations;
       const retry = !attempt && validation.violations.some(v => v.startsWith('PRESCRIPTION_DATA_') || v.startsWith('DOSE_') || v.startsWith('STRUCTURE_') || v.startsWith('SESSION_DOSE_') || v.startsWith('SESSION_BUDGET_') || v.startsWith('SESSION_DURATION_'));

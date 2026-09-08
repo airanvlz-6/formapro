@@ -6,6 +6,7 @@ import { detectarSesionDuplicada, type SesionParaComparar } from '../validators/
 import { STRUCTURED_DOSE_INSTRUCTIONS } from './sessionProfessionalRenderer';
 import { prescriptionGenerationOptions } from './prescriptionDataSufficiency';
 import { emitSessionDoseAuthority } from './sessionDoseDiagnostics';
+import type { PresentationVersion } from './sessionPresentation';
 
 function freeze<T>(value: T): T {
   if (value && typeof value === 'object') { Object.freeze(value); Object.values(value).forEach(freeze); }
@@ -13,7 +14,7 @@ function freeze<T>(value: T): T {
 }
 /** One private immutable snapshot for prompt, both attempts, validation and rendering. */
 export async function generateContractSession(contract: AllowedTrainingContract, history: SesionParaComparar[],
-  complete: (prompt: string) => Promise<string | BuilderCompletion>, context = '', planningRunId?: string) {
+  complete: (prompt: string) => Promise<string | BuilderCompletion>, context = '', planningRunId?: string, presentationVersion: PresentationVersion = 'legacy') {
   const authority = freeze(structuredClone(contract));
   const preflight = validateAllowedTrainingContract(authority);
   if (!preflight.ok) return { ok: false as const, code: 'TRAINING_CONTRACT_INVALID', violations: preflight.errors };
@@ -53,7 +54,7 @@ export async function generateContractSession(contract: AllowedTrainingContract,
       if (retry) continue;
       return { ok: false as const, code: 'SESSION_CONTRACT_INVALID', violations: validation.violations, diagnostics: trace.summary() };
     }
-    const session = renderContractSession(authority, validation.proposal);
+    const session = renderContractSession(authority, validation.proposal, presentationVersion);
     if (!detectarSesionDuplicada(session, recent).esDuplicado) { trace.emit(attempt + 1, 'complete', 'PASS', [], false, 'accepted'); return { ok: true as const, contract: authority,
       proposal: validation.proposal, session, attempts: attempt + 1, diagnostics: trace.summary() }; }
     trace.emit(attempt + 1, 'duplication', 'SESSION_DUPLICATE', ['SESSION_DUPLICATE'], !attempt, attempt ? 'attempt_limit' : 'duplicate_retry');

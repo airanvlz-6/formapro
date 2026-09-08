@@ -1,5 +1,7 @@
 'use client';
 import { useState, useEffect } from "react";
+import { legacySessionView } from '@/lib/sports/sessionPresentation';
+import { planBlockLabel } from '@/lib/sports/planPresentation';
 
 const DIAS = ["lunes","martes","miércoles","jueves","viernes","sábado","domingo"];
 const TIPO_CONFIG: Record<string, {emoji:string;color:string}> = {
@@ -166,7 +168,7 @@ export default function Plan() {
 
             {/* Info semana */}
             <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"16px 18px",marginBottom:16}}>
-              <p style={{color:C.ink,fontSize:15,fontWeight:700,marginBottom:2,textTransform:"capitalize"}}>{plan.block_name}</p>
+              <p style={{color:C.ink,fontSize:15,fontWeight:700,marginBottom:2,textTransform:"capitalize"}}>{planBlockLabel(plan)}</p>
               <p style={{color:C.muted,fontSize:12,marginBottom:10}}>
                 Semana {plan.week_number}{plan.total_weeks_block?` de ${plan.total_weeks_block}`:""} · {new Date(weekStart).toLocaleDateString("es-ES",{day:"numeric",month:"long"})} — {new Date(new Date(weekStart).getTime()+6*24*60*60*1000).toLocaleDateString("es-ES",{day:"numeric",month:"long"})}
               </p>
@@ -180,7 +182,7 @@ export default function Plan() {
               {plan.week_objective && (
                 <div style={{background:`${C.accent}12`,border:`1px solid ${C.accent}30`,borderRadius:10,padding:"12px 14px",marginBottom:14}}>
                   <p style={{color:C.accent,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>🎯 Objetivo del bloque</p>
-                  <p style={{color:C.ink,fontSize:13,lineHeight:1.6}}>Esta semana Forge priorizará {plan.week_objective.charAt(0).toLowerCase()+plan.week_objective.slice(1)}</p>
+                  <p style={{color:C.ink,fontSize:13,lineHeight:1.6}}>{plan.week_objective}</p>
                 </div>
               )}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -229,12 +231,12 @@ export default function Plan() {
               const normalizar = (s:string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"");
               const sesion = sesiones.find((s:any) => normalizar(s.dia) === normalizar(dia));
               const esHoy = esSemanaActual && dia === diaHoy;
-              const config = sesion ? getTipoConfig(sesion.tipo, sesion.titulo) : {emoji:"—",color:C.muted};
+              const config = sesion ? getTipoConfig(sesion.tipo, legacySessionView(sesion).titulo) : {emoji:"—",color:C.muted};
               // FIX: una sesion MODIFICADA (ej: "Descanso completo con movilidad suave", titulo real que
         // contiene contenido de movilidad + descripcion real) NUNCA debe clasificarse como descanso
         // vacio solo por tener "completo" en el titulo — eso bloqueaba el modal de detalle justo
         // para las sesiones donde mas importa poder ver el motivo/contenido del cambio.
-        const esDescansoTotal = !sesion?.modificado && (/descanso completo|descanso total|^descanso$/i.test(`${sesion?.tipo||""} ${sesion?.titulo||""}`.trim()) || !sesion);
+        const esDescansoTotal = !sesion?.modificado && (/descanso completo|descanso total|^descanso$/i.test(`${sesion?.tipo||""} ${sesion ? legacySessionView(sesion).titulo || '' : ''}`.trim()) || !sesion);
               const esDescanso = esDescansoTotal;
 
               return (
@@ -306,12 +308,12 @@ export default function Plan() {
                     // Normalizar: dividir por saltos de línea Y por patrones de bloque conocidos.
                     // Soporta AMBOS formatos: "Calentamiento:" (formato antiguo) y "**Calentamiento**" (nuevo, con asteriscos markdown)
                     let texto = sesionDetalle.descripcion;
-                    const patronesBloque = /\*?\*?(Calentamiento|Bloque principal|Bloque fuerza|Bloque técnica|Metcon|Vuelta a la calma|Enfriamiento|Notas técnicas|Notas|Objetivo)\*?\*?(\s*\([^)]*\))?:?/gi;
+                    const patronesBloque = /\*?\*?(Calentamiento|Bloque principal|Bloque fuerza|Bloque técnica|Metcon|Vuelta a la calma|Enfriamiento|Notas técnicas|Notas|Objetivo|Duración)\*?\*?(\s*\([^)]*\))?:?/gi;
                     texto = texto.replace(patronesBloque, (match:string) => `\n\n${match}`);
                     const lineas = texto.split(/\n+/).filter((l:string)=>l.trim());
                     return lineas.map((linea:string,i:number)=>{
                       const t=linea.trim();
-                      const esEncabezado = /^\*?\*?(Calentamiento|Bloque principal|Bloque fuerza|Bloque técnica|Metcon|Vuelta a la calma|Enfriamiento|Notas técnicas|Notas|Objetivo)\*?\*?\s*(\([^)]*\))?:?$/i.test(t);
+                      const esEncabezado = /^\*?\*?(Calentamiento|Bloque principal|Bloque fuerza|Bloque técnica|Metcon|Vuelta a la calma|Enfriamiento|Notas técnicas|Notas|Objetivo|Duración)\*?\*?\s*(\([^)]*\))?:?$/i.test(t);
                       const esItem = /^[-.•]/.test(t) || /^[A-Z]\)/.test(t);
                       const limpio = t.replace(/^[-.•]\s*/,'').replace(/\*\*/g,'').replace(/^#+\s*/,'');
                       if(esEncabezado){

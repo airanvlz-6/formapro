@@ -17,6 +17,7 @@ import { intentMatchingMovementIds } from './prescriptionIntent';
 import { issuePrescriptionQuestion } from '../athlete/prescriptionAnswers';
 import { emitEquipmentAuthorityDiagnostic } from './equipmentAuthorityDiagnostic';
 import type { SessionEnvironmentInput } from './sessionTrainingEnvironment';
+import { authenticatedPresentationVersion, legacySessionView } from './sessionPresentation';
 
 const PROFILE = 'modo_entrada,distribucion_semanal,especialidad,categoria';
 const domain = 'forge-session-contract-v1:';
@@ -45,7 +46,7 @@ export async function repairSessionWithinReceipt(session: Record<string, any>, c
   if (!parsed.ok) throw new Error('WEEK_REPAIR_PROPOSAL_INVALID');
   const checked = validateSessionAgainstTrainingContract(evidence.contract, parsed.proposal);
   if (!checked.ok) throw new Error('WEEK_REPAIR_CONTRACT_INVALID');
-  const rendered = renderContractSession(evidence.contract, checked.proposal);
+  const rendered = renderContractSession(evidence.contract, checked.proposal, authenticatedPresentationVersion(evidence.presentationVersion));
   const payload = Buffer.from(JSON.stringify({...evidence,proposal:checked.proposal})).toString('base64url');
   return {...rendered,sessionReceipt:`${payload}.${signature(payload)}`};
 }
@@ -109,12 +110,12 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
     const history = await db.from('weekly_plan').select('sessions').eq('user_codigo', userCodigo).order('week_start', { ascending: false }).limit(2);
     if (history.error || !Array.isArray(history.data)) return { ok: false as const, code: 'SESSION_HISTORY_READ_FAILED' };
     const recent = history.data.flatMap((p: any) => Array.isArray(p.sessions) ? p.sessions.filter((s: any) => s.completada && s.descripcion_real)
-      .map((s: any) => ({ titulo: s.titulo, descripcion_real: s.descripcion_real })) : []).slice(0, 5);
+      .map((s: any) => ({ titulo: legacySessionView(s).titulo, descripcion_real: s.descripcion_real })) : []).slice(0, 5);
     const result = await generateContractSession(prepared.contract, recent, complete,
-      JSON.stringify({ serverProfile: profile, requestContext: context }), planningRunId);
+      JSON.stringify({ serverProfile: profile, requestContext: context }), planningRunId, 'human_v2');
     if (!result.ok) return result;
     const payload = Buffer.from(JSON.stringify({ userCodigo, expiresAt: Date.now() + 30 * 60_000,
-      contract: result.contract, proposal: result.proposal, ...(weekly ? { weekly } : {}) })).toString('base64url');
+      contract: result.contract, proposal: result.proposal, presentationVersion: 'human_v2', ...(weekly ? { weekly } : {}) })).toString('base64url');
     const sessionReceipt = `${payload}.${signature(payload)}`;
     return { ok: true as const, trainingContract: result.contract, sesion: { ...result.session, sessionReceipt }, attempts: result.attempts, diagnostics: result.diagnostics };
   } catch (error: any) { return { ok: false as const, code: error.message?.startsWith('WEEKLY_') || error.message?.startsWith('CALENDAR_')
@@ -144,7 +145,7 @@ export function verifySessionReceipt(receipt: unknown, session: Record<string, a
     if (![2, 3].includes(c.contractVersion) || weeklyDigest(c.prescriptionScope) !== weeklyDigest(weekly.prescriptionScope))
       throw new Error('WEEKLY_SESSION_CHAIN_MISMATCH');
   }
-  const rendered = renderContractSession(evidence.contract, evidence.proposal);
+  const rendered = renderContractSession(evidence.contract, evidence.proposal, authenticatedPresentationVersion(evidence.presentationVersion));
   if (fields.some(k => !Object.is(session[k] ?? (k === 'debilidad_relacionada' ? null : undefined), rendered[k]))) throw new Error('SESSION_CONTENT_MISMATCH');
   for (const field of ['stimulusId', 'intent', 'structuredPrescription'] as const) {
     // Scalar-only mutation transports may restore absent metadata from verified evidence, never from prose.

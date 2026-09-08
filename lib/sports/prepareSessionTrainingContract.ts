@@ -3,6 +3,7 @@ import type { CanonicalRestrictions } from '../athlete/getCanonicalRestrictions'
 import { buildPrescriptionScope, canonicalDiscipline, normalizeTrainingKey, resolveProfileDisciplines, type TrainingSource } from './prescriptionScope';
 import { buildAllowedTrainingContract, EXPOSURE_LIMITATIONS, type ContractInput, type ContractResult, type ExternalLoadContext } from './allowedTrainingContract';
 import { buildExposureReport } from './exposureEngine';
+import { legacySessionView } from './sessionPresentation';
 import { normalizeTrainingAvailability } from './trainingAvailability';
 
 type StoredProfile = { modo_entrada?: string; especialidad?: string; categoria?: string; distribucion_semanal?: unknown };
@@ -54,7 +55,7 @@ export async function prepareSessionTrainingContext(db: any, userCodigo: string,
     const history = await db.from('weekly_plan').select('sessions').eq('user_codigo', userCodigo).order('week_start', { ascending: false }).limit(4);
     if (history.error || !Array.isArray(history.data)) return { ok: false, errors: ['EXPOSURE_READ_FAILED'] };
     const completed = history.data.flatMap((p: { sessions?: any[] }) => (p.sessions || []).filter(s => s.completada && s.descripcion_real)
-      .map(s => ({ fecha: s.dia, tipo: s.tipo, titulo: s.titulo || '', descripcionReal: s.descripcion_real })));
+      .map(s => ({ fecha: s.dia, tipo: s.tipo, titulo: legacySessionView(s).titulo || '', descripcionReal: s.descripcion_real })));
     const report = buildExposureReport(completed, discipline);
     return { ok: true, input: { prescriptionScope: scope.scope, targetWeekStart: request.targetWeekStart,
       targetDay: normalizeTrainingKey(request.day), discipline, stimulus: request.stimulus,

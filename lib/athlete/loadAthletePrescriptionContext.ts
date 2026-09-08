@@ -5,6 +5,7 @@ import { prepareRecoveryContext, assertRecoveryIdentity, type RecoveryContext } 
 import { validDate } from '../physiology/authority';
 import type { ReadinessResultado } from '../readiness/readinessEngine';
 import { buildExposureReport } from '../sports/exposureEngine';
+import { legacySessionView } from '../sports/sessionPresentation';
 import { resolveCompletionDate } from '../planning/recordCompletion';
 import { resolvePlanningStrategy } from './strategyResolution';
 
@@ -51,7 +52,7 @@ export async function loadAthletePrescriptionContext(db: any, userCodigo: string
       const date = week && week.weekStart === plan.week_start && index >= 0
         ? new Date(Date.parse(week.weekStart) + index * 86400000).toISOString().slice(0, 10) : null;
       return { source: 'weekly_plan.sessions', weekStart: plan.week_start, date, sessionId: s.session_id ?? null,
-        type: s.tipo ?? null, title: s.titulo ?? null, actualDescription: s.descripcion_real ?? null,
+        type: s.tipo ?? null, title: legacySessionView(s).titulo ?? null, actualDescription: s.descripcion_real ?? null,
         modified: s.modificado ?? null, modificationReason: s.motivo_modificacion ?? null };
     });
   }).filter(s => s.date === null || s.date <= options.asOfDate);

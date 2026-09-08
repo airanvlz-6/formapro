@@ -10,6 +10,8 @@ import { buildPrescriptionScope, canonicalDiscipline, resolveProfileDisciplines 
 import { aplicarTrainingFrequencySafetyNet, calcularFrecuenciaRealRelativa } from '../sports/trainingFrequencySafetyNet';
 import { calendarDays, calendarKey, calendarState, isExecutableCalendarState, validateWeeklyCalendar } from './weeklyCalendar';
 import { renderWeekObjective } from './canonicalWeekStrategy';
+import { humanWeeklyObjective } from '../sports/humanCoachingProjection';
+import { authenticatedPresentationVersion } from '../sports/sessionPresentation';
 
 export const weeklyDigest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const snapshotDigest = (snapshot: any) => weeklyDigest(snapshot ? { id: snapshot.id, revision: snapshot.revision, sessions: snapshot.sessions } : null);
@@ -71,7 +73,7 @@ export async function issueWeeklyCalendar(db: any, codigo: string, week: string,
         ...(option.protected && original && sessions.some(s => calendarKey(s.dia) === day
           && weeklyDigest(Object.fromEntries(Object.entries(s).filter(([key]) => key !== 'weeklyProtected'))) === weeklyDigest(original)) ? { protectedSessionDigest: weeklyDigest(original) } : {}) };
     });
-    authority = { protocolVersion: 2, contractVersion: contract.contractVersion, policyVersion: contract.policyVersion,
+    authority = { protocolVersion: 2, presentationVersion: 'human_v2', contractVersion: contract.contractVersion, policyVersion: contract.policyVersion,
       contractDigest: weeklyDigest(contract), contextDigest: contract.contextDigest, prescriptionScope: contract.prescriptionScope,
       admittedSlots, snapshotDigest: snapshotDigest(request.snapshot), generationDigest: weeklyDigest(generationToken),
       ...(contract.regeneration ? { regeneration: contract.regeneration } : {}),
@@ -98,13 +100,15 @@ export function verifyWeeklyCalendarReceipt(receipt: unknown, codigo: string, we
   if (evidence.codigo !== codigo || evidence.week !== week || !Number.isFinite(evidence.expires) || Date.now() > evidence.expires) throw new Error('CALENDAR_RECEIPT_EXPIRED');
   if (requireV2 && evidence.protocolVersion !== 2) rejectWeekly('WEEKLY_RECEIPT_UPGRADE_REQUIRED');
   if (evidence.protocolVersion !== undefined && evidence.protocolVersion !== 2) rejectWeekly('WEEKLY_PROTOCOL_UNSUPPORTED');
+  authenticatedPresentationVersion(evidence.presentationVersion);
   return evidence;
 }
 
 /** Save derives text from signed canonical strategy; legacy receipts retain their historical field. */
 export function admittedWeekObjective(receipt: unknown, codigo: string, week: string, legacy: string | null) {
   const evidence = verifyWeeklyCalendarReceipt(receipt, codigo, week, true);
-  return evidence.strategy ? renderWeekObjective(evidence.strategy) : legacy;
+  return evidence.strategy ? authenticatedPresentationVersion(evidence.presentationVersion) === 'human_v2'
+    ? humanWeeklyObjective(evidence.strategy) : renderWeekObjective(evidence.strategy) : legacy;
 }
 
 /** Current context once per admission, never per candidate option. No writes or expansion. */

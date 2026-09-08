@@ -1,5 +1,6 @@
 'use client';
 import { captureAthleteTestFacts } from '@/lib/athlete/testCapture';
+import { planBlockLabel } from '@/lib/sports/planPresentation';
 import type { WeeklyGenerationContext } from '@/lib/planning/weeklyGeneration';
 import { noWeeklyPrescription, weeklyGenerationOutcomeMessage } from '@/lib/planning/weeklyRegeneration';
 import { contextualPhysiology } from "@/lib/physiology/authority";
@@ -643,7 +644,7 @@ export default function Forge() {
         const planFocusInicial=await orquestarGeneracionSemana();
         if(planFocusInicial?.goalRequirement || planFocusInicial?.preflightRequirement){setGenerandoSemana(false);return;}
         const respuestaFocusInicial=planFocusInicial && planFocusInicial.ok!==false
-          ? `✅ **Semana generada y guardada.**\n\nBloque: ${planFocusInicial.block_name} — ${planFocusInicial.week_objective}\n\nRevisa el detalle completo en **Mi Plan**. ¿Alguna duda?`
+          ? `✅ **Semana generada y guardada.**\n\nBloque: ${planBlockLabel(planFocusInicial)} — ${planFocusInicial.week_objective}\n\nRevisa el detalle completo en **Mi Plan**. ¿Alguna duda?`
           : weeklyGenerationOutcomeMessage(planFocusInicial);
         setMensajes(prev=>[...prev,{role:"assistant",content:respuestaFocusInicial}]);
         setGenerandoSemana(false);
@@ -1767,7 +1768,7 @@ const forgeValidator=(texto:string):string=>{
       const plan=await orquestarGeneracionSemana(undefined,temporalAnswer,answeringQuestion);
       if(plan?.goalRequirement || plan?.preflightRequirement) return;
       const respuestaFinalGen=plan && plan.ok!==false
-        ? `✅ **Semana generada y guardada.**\n\nBloque: ${plan.block_name} — ${plan.week_objective}\n\nRevisa el detalle completo en **Mi Plan**.`
+        ? `✅ **Semana generada y guardada.**\n\nBloque: ${planBlockLabel(plan)} — ${plan.week_objective}\n\nRevisa el detalle completo en **Mi Plan**.`
         : weeklyGenerationOutcomeMessage(plan);
       setMensajes(prev=>[...prev,{role:"assistant",content:respuestaFinalGen}]);
       const histConGeneracion=[...historial,{role:"user",content:temporalAnswer||"Genera mi semana"},{role:"assistant",content:respuestaFinalGen}];

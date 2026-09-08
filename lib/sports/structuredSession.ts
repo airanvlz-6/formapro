@@ -9,6 +9,8 @@ import { normalizeTrainingKey } from './prescriptionScope';
 import { checkDoseExtension, checkFormatDose, validateSessionDose, type DoseIntensity, type FormatDose } from './sessionDose';
 import { resolvePrescriptionDataSufficiency } from './prescriptionDataSufficiency';
 import { renderProfessionalSession } from './sessionProfessionalRenderer';
+import { renderHumanSession } from './sessionHumanRenderer';
+import { authenticatedPresentationVersion, type PresentationVersion } from './sessionPresentation';
 
 export type MovementDose = { sets?: number; reps?: number; durationSeconds?: number; distanceMeters?: number; restSeconds?: number;
   intensity?: DoseIntensity; tempo?: [number, number, number, number]; perSide?: boolean };
@@ -128,9 +130,14 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
 
 const label = (id: string) => id.replaceAll('_', ' ');
 /** Rendering revalidates; untrusted explanation is deliberately not executable or persisted. */
-export function renderContractSession(contract: AllowedTrainingContract, proposal: StructuredSessionProposal) {
+export function renderContractSession(contract: AllowedTrainingContract, proposal: StructuredSessionProposal, presentationVersion: PresentationVersion = 'legacy') {
+  const version = authenticatedPresentationVersion(presentationVersion);
   const validation = validateSessionAgainstTrainingContract(contract, proposal);
   if (!validation.ok) throw new Error(`SESSION_CONTRACT_INVALID:${validation.violations.join(',')}`);
+  if (version === 'human_v2') {
+    if (contract.contractVersion !== 3) throw new Error('SESSION_PRESENTATION_CONTRACT_UNSUPPORTED');
+    return renderHumanSession(contract, proposal);
+  }
   if (contract.contractVersion === 3) return renderProfessionalSession(contract, proposal);
   const headings = { warmup: 'Calentamiento', main: 'Bloque principal', cooldown: 'Vuelta a la calma' };
   const units: Record<string, string> = { sets: 'series', reps: 'repeticiones', durationSeconds: 'segundos', distanceMeters: 'metros', restSeconds: 'segundos de descanso' };

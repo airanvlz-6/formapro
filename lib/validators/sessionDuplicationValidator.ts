@@ -2,10 +2,12 @@
 // ANTES de aceptar la sesion generada. Detecta si el LLM copio literalmente una sesion pasada en vez
 // de generar contenido nuevo. El LLM propone, el backend decide — nunca al reves.
 
+import { legacySessionView } from '../sports/sessionPresentation';
 export interface SesionParaComparar {
   titulo?: string;
   descripcion?: string;
   descripcion_real?: string; // el reporte REAL que el atleta hizo de una sesion pasada
+  structuredPrescription?: Parameters<typeof legacySessionView>[0]['structuredPrescription'];
 }
 
 function normalizarTexto(t: string): string {
@@ -36,6 +38,8 @@ export interface ResultadoDuplicacion {
 const UMBRAL_DUPLICADO = 0.55;
 
 export function detectarSesionDuplicada(sesionNueva: SesionParaComparar, sesionesRecientes: SesionParaComparar[]): ResultadoDuplicacion {
+  sesionNueva = legacySessionView(sesionNueva);
+  sesionesRecientes = sesionesRecientes.map(s => legacySessionView(s));
   const textoNuevo = `${sesionNueva.titulo || ""} ${sesionNueva.descripcion || ""}`;
   let similitudMaxima = 0;
   let sesionParecida: string | null = null;

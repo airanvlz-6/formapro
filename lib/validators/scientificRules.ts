@@ -3,6 +3,7 @@
 // y devuelve las sesiones ya corregidas (con notas de validador añadidas si aplica).
 // Activar/desactivar reglas es tan simple como comentar su linea en aplicarTodasLasReglas.
 
+import { legacySessionView } from '../sports/sessionPresentation';
 export interface ContextoValidacion {
   sesiones: any[];
   analisis: any; // salida del Block Analyzer
@@ -142,6 +143,8 @@ function regla010RepeticionExcesiva(ctx: ContextoValidacion) {
 
 // Registro central de reglas activas. Comentar una linea = desactivar esa regla.
 export function aplicarTodasLasReglas(ctx: ContextoValidacion) {
+  const original = ctx.sesiones;
+  ctx = { ...ctx, sesiones: ctx.sesiones.map(s => legacySessionView(s)) };
   regla001Deload(ctx);
   regla002Lumbar(ctx);
   regla003IntensidadConsecutiva(ctx);
@@ -152,5 +155,6 @@ export function aplicarTodasLasReglas(ctx: ContextoValidacion) {
   regla008ConsistenciaPlanner(ctx);
   regla009AthleteDevelopment(ctx);
   regla010RepeticionExcesiva(ctx);
-  return ctx.sesiones;
+  ctx.sesiones.forEach((s, i) => { if (s.notas_validador !== undefined) original[i].notas_validador = s.notas_validador; });
+  return original;
 }

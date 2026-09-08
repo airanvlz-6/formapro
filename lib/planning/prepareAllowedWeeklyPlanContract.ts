@@ -8,7 +8,8 @@ import type { ContractInput } from '../sports/allowedTrainingContract';
 import { buildAllowedWeeklyPlanContract, composeBoundedWeek, type WeeklyContractInput } from './allowedWeeklyPlanContract';
 import { admitSessionContent } from '../sports/sessionAuthority';
 import { loadAthletePrescriptionContext } from '../athlete/loadAthletePrescriptionContext';
-import { buildCanonicalWeekStrategy, renderWeekObjective } from './canonicalWeekStrategy';
+import { buildCanonicalWeekStrategy } from './canonicalWeekStrategy';
+import { humanWeeklyObjective } from '../sports/humanCoachingProjection';
 import { strategyDiagnostic } from './planningDiagnostics';
 import { resolveGoalAuthority, goalResolutionDiagnostic } from '../athlete/goalResolution';
 import { requireGoalAuthority } from '../athlete/goalAnswers';
@@ -135,7 +136,7 @@ export async function planBoundedWeek(db: any, codigo: string, request: Paramete
   return { ok: true as const, estructura: { weeklyContractVersion: 1, calendarProtocolVersion: 2, contractDigest, calendarReceipt,
     contextDigest: proposal.contract.contextDigest,
     strategy: { ...(proposal.contract.strategy ? { canonical: proposal.contract.strategy } : {}),
-      adaptacion_principal: proposal.contract.strategy ? renderWeekObjective(proposal.contract.strategy) : 'Estímulos genéricos seleccionados dentro del contrato autorizado.' },
+      adaptacion_principal: proposal.contract.strategy ? humanWeeklyObjective(proposal.contract.strategy) : 'Consulta las sesiones programadas para esta semana.' },
     sessions: sessions.map((s, i) => ('weeklyProtected' in s && s.weeklyProtected) ? s : ({ ...s, optionId: proposal.selected[calendarDays[i]].optionId,
       targetDate: new Date(new Date(request.targetWeekStart + 'T12:00:00Z').getTime() + i * 86400000).toISOString().slice(0, 10) })) }, attempts: proposal.attempts };
 }

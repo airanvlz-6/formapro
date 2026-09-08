@@ -7,6 +7,7 @@
 // los IDs conocidos de MOVEMENT_LIBRARY, nunca interpretacion del LLM.
 
 import { MOVEMENT_LIBRARY, Movimiento } from "./movementLibrary";
+import { legacySessionView } from './sessionPresentation';
 
 /** Structured sibling of the existing textual report. No text parsing or inferred executed reps.
  * Counts distinct sessions and keeps unknown repetitions separate from known subtotals. */
@@ -54,7 +55,7 @@ function movimientoApareceEnTexto(movimiento: Movimiento, textoNormalizado: stri
  * sesiones completadas en las últimas ~4 semanas (recibidas ya consultadas por el caller).
  */
 export function buildExposureReport(
-  sesionesCompletadas: { fecha: string; tipo: string; titulo: string; descripcionReal: string }[],
+  sesionesCompletadas: { fecha: string; tipo: string; titulo: string; descripcionReal: string; structuredPrescription?: Parameters<typeof legacySessionView>[0]['structuredPrescription'] }[],
   disciplina: string
 ): ExposureReport {
   const movimientosDisciplina = Object.values(MOVEMENT_LIBRARY).filter(m => m.discipline.some(d => d === disciplina));
@@ -62,7 +63,7 @@ export function buildExposureReport(
 
   movimientosDisciplina.forEach(mov => {
     const sesionesConEsteMovimiento = sesionesCompletadas.filter(s => {
-      const textoCompleto = normalizarTexto(`${s.titulo} ${s.descripcionReal}`);
+      const textoCompleto = normalizarTexto(`${legacySessionView(s).titulo} ${s.descripcionReal}`);
       return movimientoApareceEnTexto(mov, textoCompleto);
     });
 

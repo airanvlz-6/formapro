@@ -25,6 +25,7 @@ import { createClient } from "@supabase/supabase-js";
 import { render } from "@react-email/render";
 import { validateExtraction } from "@/lib/validators/extractionRules";
 import { buildExposureReport, exposureReportToPromptText } from "@/lib/sports/exposureEngine";
+import { legacySessionView, contextualSessionIntensity, legacyDurationMinutes } from '@/lib/sports/sessionPresentation';
 import { detectarDebilidadDuplicada } from "@/lib/validators/weaknessDeduplicationValidator";
 import { STIMULUS_LIBRARY } from "@/lib/sports/movementLibrary";
 import { generateTrainingSession, assertFreshSessionRestrictions, verifySessionReceipt, admitSessionContent, assertCurrentPrescriptionScope } from "@/lib/sports/sessionAuthority";
@@ -2043,7 +2044,7 @@ if (action === "analizar_bloque_semana") {
       const sesionesParaExposure: any[] = [];
       (planesParaExposure || []).forEach((p: any) => {
         (p.sessions || []).filter((s: any) => s.completada && s.descripcion_real).forEach((s: any) => {
-          sesionesParaExposure.push({ fecha: s.dia, tipo: s.tipo, titulo: s.titulo || "", descripcionReal: s.descripcion_real });
+          sesionesParaExposure.push({ fecha: s.dia, tipo: s.tipo, titulo: legacySessionView(s).titulo || "", descripcionReal: s.descripcion_real });
         });
       });
       const disciplinaParaExposure = focusContext.esModoFocus ? focusContext.disciplinasForge[0]?.disciplina : (usuarioAnalyzer?.categoria === "carrera" ? "carrera" : "box");
@@ -3568,7 +3569,8 @@ Mensaje: "${mensaje}"
       if (!respuestaNormalizada.includes(tituloNormalizado)) continue;
 
       // La respuesta menciona esta sesion real — verificar compatibilidad contra las hard constraints
-      const textoSesionFuturo = normalizarFuturo(`${sesion.titulo || ""} ${sesion.tipo || ""} ${sesion.descripcion || ""}`);
+      const comparison = legacySessionView(sesion);
+      const textoSesionFuturo = normalizarFuturo(`${comparison.titulo || ""} ${sesion.tipo || ""} ${comparison.descripcion || ""}`);
       for (const constraint of hardConstraintsFuturo) {
         const movimientoNorm = normalizarFuturo(constraint.movement || "");
         if (movimientoNorm && textoSesionFuturo.includes(movimientoNorm)) {
@@ -3766,9 +3768,7 @@ Mensaje: "${mensaje}"
     const diaSemanaToday = normalizarDiaTodayState(new Date().toLocaleDateString("es-ES", { weekday: "long", timeZone: "Europe/Madrid" }));
     const { data: planTodayState } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(1).maybeSingle();
     const sesionHoyTodayState = (planTodayState?.sessions || []).find((s: any) => normalizarDiaTodayState(s.dia).includes(diaSemanaToday));
-    const intensidadTodayState: 'baja' | 'moderada' | 'alta' | null = sesionHoyTodayState
-      ? (/alta|maxima|max|intenso/i.test(sesionHoyTodayState.descripcion || "") ? 'alta' : sesionHoyTodayState.tipo === "descanso" ? 'baja' : 'moderada')
-      : null;
+    const intensidadTodayState = contextualSessionIntensity(sesionHoyTodayState);
     const decisionTodayState = evaluarRelevanciaContextual(resultadoReadinessToday, intensidadTodayState);
 
     // Actividad reciente: ultimo entreno completado real (fuente de verdad: weekly_plan con completada=true)
@@ -3817,7 +3817,7 @@ Mensaje: "${mensaje}"
         // FIX: extraer del TITULO (ej: "...60min"), no de la descripcion completa que
         // contiene multiples menciones de minutos (calentamiento, bloque, vuelta a la calma)
         // y capturaba incorrectamente la primera (ej: "10 min" del calentamiento)
-        duracionMin: (sesionHoyTodayState.titulo || "").match(/(\d+)\s*min/)?.[1] || null,
+        duracionMin: legacyDurationMinutes(sesionHoyTodayState),
       } : null,
       recentActivity: ultimaActividadReal ? {
         titulo: ultimaActividadReal.titulo, tipo: ultimaActividadReal.tipo, dia: ultimaActividadReal.dia,
@@ -3852,9 +3852,7 @@ Mensaje: "${mensaje}"
     const diaSemanaDecision = normalizarDiaDecision(new Date().toLocaleDateString("es-ES", { weekday: "long", timeZone: "Europe/Madrid" }));
     const { data: planParaDecision } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(1).maybeSingle();
     const sesionHoyDecision = (planParaDecision?.sessions || []).find((s: any) => normalizarDiaDecision(s.dia).includes(diaSemanaDecision));
-    const intensidadHoyDecision: 'baja' | 'moderada' | 'alta' | null = sesionHoyDecision
-      ? (/alta|maxima|max|intenso/i.test(sesionHoyDecision.descripcion || "") ? 'alta' : sesionHoyDecision.tipo === "descanso" ? 'baja' : 'moderada')
-      : null;
+    const intensidadHoyDecision = contextualSessionIntensity(sesionHoyDecision);
     const decisionContextual = evaluarRelevanciaContextual(resultadoReadiness, intensidadHoyDecision);
 
     return NextResponse.json({ ...resultadoReadiness, physiology: preparedReadiness.physiology, forgeState, checkinSubjetivo: contextoCompleto.fatigaPercibida, hayDiscrepancia: contextoCompleto.hayDiscrepancia, mensajeDiscrepancia: contextoCompleto.mensajeDiscrepancia, decision: decisionContextual });

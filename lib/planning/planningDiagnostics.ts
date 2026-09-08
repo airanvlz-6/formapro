@@ -12,5 +12,6 @@ export function strategyDiagnostic(strategy: CanonicalWeekStrategy | undefined, 
     dailyIntents: Object.entries(selected).map(([day, option]) => ({ day, protected: !!option.protected, state: option.state,
       role: option.intent?.kind === 'adaptation' ? option.intent.role : null,
       adaptation: option.intent?.kind === 'adaptation' ? option.intent.adaptationId : null,
-      method: option.intent?.kind === 'adaptation' ? option.intent.methodId : null })) };
+      method: option.intent?.kind === 'adaptation' ? option.intent.methodId : null,
+      ...(option.intent?.kind === 'adaptation' && option.intent.transfer ? { transfer: option.intent.transfer } : {}) })) };
 }

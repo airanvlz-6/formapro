@@ -1,5 +1,6 @@
 import { noWeeklyPrescription, executablePrescriptionCounts, type RegenerationPolicy } from './weeklyRegeneration';
 import { emitRemainingDiagnostic } from './weeklyRemainingDiagnostic';
+import { resolveAuthorizedMethodCandidates, type CanonicalTransferPermissions } from './authorizedMethodCandidates';
 import { createHash } from 'node:crypto';
 import { normalizeWeeklyPlannerTransport } from './weeklyPlannerTransport';
 import { emitWeeklyPlannerDiagnostic, type PlannerCompletion, type PlannerMetadata } from './weeklyPlannerDiagnostics';
@@ -23,6 +24,7 @@ export type AllowedWeeklyPlanContract = {
   regeneration?: RegenerationPolicy;
 };
 export type WeeklyContractInput = {
+  transferPermissions?: CanonicalTransferPermissions;
   targetWeekStart: string; prescriptionScope: PrescriptionScope; maxExecutableDays: number;
   completeNewWeek: boolean; allowed: Record<string, string[]>;
   contexts: Record<string, ContractInput>;
@@ -36,7 +38,9 @@ const failure = (code: string, errors: string[]) => ({ ok: false as const, code,
 type Coverage = CanonicalWeekStrategy['coverage'][number];
 function covers(option: WeeklyOption, group: Coverage): boolean {
   const intent = option.intent;
-  return intent?.kind === 'adaptation' && (!group.adaptationId || intent.adaptationId === group.adaptationId)
+  return intent?.kind === 'adaptation' && (!group.adaptationId || (intent.transfer
+    ? intent.transfer.provenance === 'TRANSFER_EQUIVALENT' && intent.transfer.fromAdaptationId === group.adaptationId
+    : intent.adaptationId === group.adaptationId))
     && (!group.discipline || option.discipline === group.discipline) && (!group.weaknessId || intent.weaknessId === group.weaknessId);
 }
 /** Finite existence proof over seven days, count, rest and demand bits. No session dosing or interday physiology. */
@@ -58,6 +62,14 @@ function coverageFeasible(contract: AllowedWeeklyPlanContract, groups: Coverage[
 function bindStrategicCoverage(contract: AllowedWeeklyPlanContract) {
   const strategy = contract.strategy!;
   strategy.coverage = [];
+  const transfers = Object.values(contract.dayOptions).flat().flatMap(o => o.intent?.kind === 'adaptation' && o.intent.transfer ? [o.intent.transfer] : []);
+  if (transfers.length) strategy.transferCoverage = strategy.adaptations.map(a => ({ adaptationId: a.id,
+    statuses: [...new Set(Object.values(contract.dayOptions).flat().flatMap(o => {
+      const intent = o.intent;
+      return intent?.kind !== 'adaptation' ? [] : intent.transfer
+        ? intent.transfer.fromAdaptationId === a.id ? [intent.transfer.provenance] : []
+        : intent.adaptationId === a.id ? ['EXACT' as const] : [];
+    }))] }));
   const candidates: Coverage[] = strategy.adaptations.filter(a => a.role !== 'OPTIONAL').map(a => ({ id: `adaptation:${a.id}`, adaptationId: a.id }));
   candidates.push(...strategy.preferredEnvironments.map(discipline => ({ id: `environment:${discipline}`, discipline })));
   for (const group of candidates) {
@@ -66,6 +78,9 @@ function bindStrategicCoverage(contract: AllowedWeeklyPlanContract) {
       ? 'weekly_capacity_or_availability_conflict' : 'no_feasible_managed_method' });
   }
   for (const a of strategy.adaptations.filter(a => a.role === 'OPTIONAL')) strategy.deferred.push({ reference: a.id, reason: 'optional_not_required' });
+  for (const entry of strategy.transferCoverage ?? []) {
+    if (!strategy.coverage.some(c => c.adaptationId === entry.adaptationId)) entry.statuses.push('DEFERRED');
+  }
   strategy.diagnostics.push({ code: 'DAILY_INTENT_RESOLUTION', reason: strategy.goal.id ? 'feasible_methods_and_required_coverage' : 'stimulus_only_entire_week' });
 }
 
@@ -88,6 +103,14 @@ export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput, diagn
         continue;
       }
       const options: WeeklyOption[] = [{ optionId: `${day}:rest`, state: 'REST' }];
+      if (input.strategy?.goal.id) {
+        const candidates = resolveAuthorizedMethodCandidates(input, day);
+        if (!candidates.ok) return failure('WEEKLY_CONTEXT_INVALID', candidates.errors);
+        options.push(...candidates.options);
+        rejected.push(...candidates.rejected);
+        dayOptions[day] = options;
+        continue;
+      }
       for (const discipline of input.prescriptionScope.managedDisciplines) {
         const context = input.contexts[discipline];
         if (!context || JSON.stringify(context.prescriptionScope) !== JSON.stringify(input.prescriptionScope)

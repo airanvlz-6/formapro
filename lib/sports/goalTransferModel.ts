@@ -73,6 +73,27 @@ export const TRANSFER_METHODS: readonly TransferMethod[] = [
   method('box_technique', 'tecnica', 'tecnica', 'box', ['squat'], 'MAINTENANCE'),
 ];
 export function transferMethod(id: unknown) { return TRANSFER_METHODS.find(m => m.id === id); }
+export type MethodTransferRelation = {
+  id: string; fromAdaptationId: string; fromDiscipline: TransferMethod['discipline']; toMethodId: string;
+  transferKind: 'EQUIVALENT' | 'MAINTENANCE' | 'PARTIAL';
+  applicableStrategies: readonly GoalId[]; applicablePhases: readonly StrategicIntent['blockPhase'][];
+  requiredAvailabilityPermission: 'SAME_DISCIPLINE' | 'CROSS_TRAINING'; priority: number;
+};
+/** No equivalence is inferred from names, equipment or the legacy substitution map.
+ * Domain-reviewed relations can be added here; v1 deliberately ships without invented relationships. */
+export const METHOD_TRANSFER_RELATIONS: readonly MethodTransferRelation[] = [];
+export function validMethodTransferRelation(r: MethodTransferRelation): boolean {
+  const target = transferMethod(r.toMethodId);
+  return typeof r.id === 'string' && /^[a-z][a-z0-9_]{0,79}$/.test(r.id)
+    && Object.hasOwn(STIMULUS_LIBRARY, r.fromAdaptationId) && !!target
+    && TRANSFER_METHODS.some(m => m.adaptationId === r.fromAdaptationId && m.discipline === r.fromDiscipline)
+    && ['EQUIVALENT', 'MAINTENANCE', 'PARTIAL'].includes(r.transferKind)
+    && Array.isArray(r.applicableStrategies) && r.applicableStrategies.length > 0 && r.applicableStrategies.every(g => Object.hasOwn(GOAL_DEMANDS, g))
+    && Array.isArray(r.applicablePhases) && r.applicablePhases.length > 0 && r.applicablePhases.every(p => ['accumulation','intensification','realization','deload','unknown'].includes(p))
+    && (r.requiredAvailabilityPermission === 'SAME_DISCIPLINE' ? target.discipline === r.fromDiscipline
+      : r.requiredAvailabilityPermission === 'CROSS_TRAINING' && target.discipline !== r.fromDiscipline)
+    && Number.isSafeInteger(r.priority) && r.priority >= 0;
+}
 export function validateGoalTransferCatalog(): string[] {
   const errors: string[] = [];
   for (const d of Object.values(GOAL_DEMANDS).flat()) if (!Object.hasOwn(STIMULUS_LIBRARY, d.adaptationId)) errors.push(`ADAPTATION_UNKNOWN:${d.adaptationId}`);
@@ -87,17 +108,25 @@ export function validateGoalTransferCatalog(): string[] {
 
 export type StrategicIntent = { kind: 'adaptation'; goalId: GoalId; adaptationId: string; methodId: string; role: AdaptationRole;
   pattern: PatronMovimiento; blockPhase: 'accumulation' | 'intensification' | 'realization' | 'deload' | 'unknown';
-  blockWeek: number | null; weaknessId: string | null };
+  blockWeek: number | null; weaknessId: string | null;
+  transfer?: { relationId: string; fromAdaptationId: string; provenance: 'TRANSFER_EQUIVALENT' | 'TRANSFER_MAINTENANCE' | 'TRANSFER_PARTIAL' } };
 export function validateStrategicIntent(value: Record<string, unknown>): value is StrategicIntent {
   const fields = ['kind', 'goalId', 'adaptationId', 'methodId', 'role', 'pattern', 'blockPhase', 'blockWeek', 'weaknessId'];
   const m = transferMethod(value.methodId);
-  return Object.keys(value).length === fields.length && fields.every(f => Object.hasOwn(value, f)) && value.kind === 'adaptation'
+  const transfer = value.transfer as StrategicIntent['transfer'];
+  const relation = transfer && METHOD_TRANSFER_RELATIONS.find(r => r.id === transfer.relationId);
+  const transferValid = !Object.hasOwn(value, 'transfer') || (!!transfer && Object.keys(transfer).length === 3 && !!relation
+    && validMethodTransferRelation(relation) && relation.toMethodId === value.methodId
+    && relation.fromAdaptationId === transfer.fromAdaptationId && transfer.provenance === `TRANSFER_${relation.transferKind}`
+    && relation.applicableStrategies.includes(value.goalId as GoalId) && relation.applicablePhases.includes(value.blockPhase as StrategicIntent['blockPhase']));
+  const demand = transfer ? transfer.fromAdaptationId : value.adaptationId;
+  return transferValid && Object.keys(value).length === fields.length + Number(Object.hasOwn(value, 'transfer')) && fields.every(f => Object.hasOwn(value, f)) && value.kind === 'adaptation'
     && typeof value.goalId === 'string' && Object.hasOwn(GOAL_DEMANDS, value.goalId)
     && !!m && m.adaptationId === value.adaptationId && m.patterns.includes(value.pattern as PatronMovimiento)
     && ['PRIMARY', 'SUPPORTING', 'MAINTENANCE', 'OPTIONAL'].includes(String(value.role))
     && ['accumulation', 'intensification', 'realization', 'deload', 'unknown'].includes(String(value.blockPhase))
     && (value.blockWeek === null || Number.isSafeInteger(value.blockWeek) && Number(value.blockWeek) > 0)
     && (value.weaknessId === null || typeof value.weaknessId === 'string' && value.weaknessId.length > 0 && value.weaknessId.length <= 160)
-    && (GOAL_DEMANDS[value.goalId as GoalId].some(d => d.adaptationId === value.adaptationId)
-      || value.blockPhase === 'deload' && ['recuperacion_activa', 'tecnica'].includes(String(value.adaptationId)));
+    && (GOAL_DEMANDS[value.goalId as GoalId].some(d => d.adaptationId === demand)
+      || value.blockPhase === 'deload' && ['recuperacion_activa', 'tecnica'].includes(String(demand)));
 }

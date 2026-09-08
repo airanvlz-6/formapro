@@ -51,6 +51,8 @@ export async function repairSessionWithinReceipt(session: Record<string, any>, c
 export async function generateTrainingSession(db: any, userCodigo: string, request: Request,
   complete: (prompt: string) => Promise<string | BuilderCompletion>, context = '', planningRunId?: string) {
   try {
+    if (request.intent?.kind === 'adaptation' && request.intent.transfer && !request.weekly)
+      return { ok: false as const, code: 'TRANSFER_REQUIRES_WEEKLY_AUTHORITY' };
     let weekly: { calendarReceipt: string; optionId: string } | undefined;
     let weeklyContext: any;
     let strategicWeek: any = null, neighbours: any[] = [];

@@ -15,6 +15,7 @@ export type CanonicalWeekStrategy = {
   preferredEnvironments: string[]; methods: string[];
   deferred: { reference: string; reason: string }[];
   coverage: { id: string; adaptationId?: string; discipline?: string; weaknessId?: string }[];
+  transferCoverage?: { adaptationId: string; statuses: ('EXACT' | 'TRANSFER_EQUIVALENT' | 'TRANSFER_MAINTENANCE' | 'TRANSFER_PARTIAL' | 'DEFERRED')[] }[];
   volumeIntent: 'reduce' | 'unspecified'; intensityIntent: 'reduce' | 'unspecified';
   trainingDaysTarget: { maximum: number; minimum: 1 };
   diagnostics: StrategyDiagnostic[];

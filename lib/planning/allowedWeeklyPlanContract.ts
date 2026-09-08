@@ -1,4 +1,5 @@
 import { noWeeklyPrescription, executablePrescriptionCounts, type RegenerationPolicy } from './weeklyRegeneration';
+import { emitRemainingDiagnostic } from './weeklyRemainingDiagnostic';
 import { createHash } from 'node:crypto';
 import { normalizeWeeklyPlannerTransport } from './weeklyPlannerTransport';
 import { emitWeeklyPlannerDiagnostic, type PlannerCompletion, type PlannerMetadata } from './weeklyPlannerDiagnostics';
@@ -128,7 +129,10 @@ export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput, diagn
     }), input.maxExecutableDays, input.allowed);
     if (!fixedCalendar.ok) return failure('WEEKLY_CONTRACT_UNSATISFIABLE', fixedCalendar.errors);
     if (contract.regeneration) {
-      if (!coverageFeasible(contract, [])) return noWeeklyPrescription('NO_FEASIBLE_REMAINING_SELECTION');
+      emitRemainingDiagnostic(input, contract, rejected, diagnosticContext);
+      if (!coverageFeasible(contract, [])) {
+        return noWeeklyPrescription('NO_FEASIBLE_REMAINING_SELECTION');
+      }
     }
     // Finite DP over count/rest, not the Cartesian product of candidate sessions.
     let states = new Set(['0:0']);

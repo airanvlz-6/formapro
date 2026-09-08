@@ -18,6 +18,7 @@ import { resolvePlanningStrategy } from '../athlete/strategyResolution';
 export async function loadWeeklyPlanningContext(db: any, codigo: string, request: {
   targetWeekStart: string; today: string; empezarHoy: boolean; snapshot: { sessions: readonly any[] } | null;
   strategyVersion?: 1; strategyProposal?: unknown; planningRunId?: string; diagnosticTemporalDecision?: boolean | null;
+  confirmedAvailabilityDigest?: string | null;
 }) {
   const c = await loadWeeklyCalendarContext(db, codigo);
   if (request.strategyVersion !== undefined && request.strategyVersion !== 1) throw new Error('STRATEGY_VERSION_UNSUPPORTED');
@@ -84,18 +85,26 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
       fixed[day] = { state: calendarState(s), ...(['box', 'carrera'].includes(s.tipo) ? { discipline: s.tipo } : {}) };
     }
   }
+  let availabilityConfirmed = false;
+  try {
+    availabilityConfirmed = typeof request.confirmedAvailabilityDigest === 'string'
+      && request.confirmedAvailabilityDigest === weeklyDigest({ distribution: c.profile.distribucion_semanal, sources: c.sources, scope: c.scope });
+  } catch { /* Diagnostic metadata is never an admission requirement. */ }
   return { ok: true as const, input: { targetWeekStart: request.targetWeekStart, prescriptionScope: c.scope,
     maxExecutableDays: c.max, completeNewWeek: !request.snapshot && !hasPast, allowed: c.allowed, contexts, fixed,
     ...(activeRegeneration ? { regeneration: { pendingManagedDays: calendarDays.filter(day => !fixed[day]
       && c.scope.managedDisciplines.some(discipline => c.allowed[discipline].includes(day))) } } : {}),
     ...(strategy ? { strategy } : {}) },
-    fixedSessions: structuredClone(fixedSessions) };
+    fixedSessions: structuredClone(fixedSessions),
+    availabilityConfirmed };
 }
 
 export async function prepareAllowedWeeklyPlanContract(db: any, codigo: string, request: Parameters<typeof loadWeeklyPlanningContext>[2]) {
   const context = await loadWeeklyPlanningContext(db, codigo, request);
   if (!context.ok) return context;
   const built = buildAllowedWeeklyPlanContract(context.input, { planningRunId: request.planningRunId,
+    today: request.today, snapshot: request.snapshot,
+    availabilityConfirmed: context.availabilityConfirmed,
     temporalDecision: request.diagnosticTemporalDecision === undefined ? request.empezarHoy : request.diagnosticTemporalDecision });
   return built.ok ? { ...built, fixedSessions: context.fixedSessions } : built;
 }

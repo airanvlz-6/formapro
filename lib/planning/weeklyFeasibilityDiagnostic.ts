@@ -6,7 +6,9 @@ import { normalizeTrainingKey } from '../sports/prescriptionScope';
 import type { WeeklyContractInput, WeeklyOption } from './allowedWeeklyPlanContract';
 import { calendarDays } from './weeklyCalendar';
 
-export type WeeklyDiagnosticContext = { planningRunId?: string; temporalDecision?: boolean | null };
+export type WeeklyDiagnosticContext = { planningRunId?: string; temporalDecision?: boolean | null;
+  today?: string; snapshot?: { sessions: readonly { dia: string; tipo?: string; completada?: boolean; stimulusId?: string }[] } | null;
+  availabilityConfirmed?: boolean };
 const errorCodes = ['MOVEMENT_POOL_EMPTY', 'INTENT_POOL_EMPTY', 'STRUCTURE_POOL_EMPTY', 'STRUCTURE_SPACE_UNSATISFIABLE'] as const;
 const disciplines = new Set(['box', 'carrera']);
 const patterns = new Set<string>(Object.values(MOVEMENT_LIBRARY).map(m => m.movement_pattern));

@@ -1,5 +1,6 @@
 import { MOVEMENT_LIBRARY, type PatronMovimiento } from '../sports/movementLibrary';
 import { projectPrescriptionSignals } from './prescriptionSignals';
+import type { SessionEnvironmentInput } from '../sports/sessionTrainingEnvironment';
 
 /** Read projection only. Authority describes evidence, never permission to prescribe. */
 export type Evidence<T> = { value: T; source: string; updatedAt: string | null; observedAt?: string | null; authority: 'declared' | 'recorded'; raw: unknown };
@@ -104,7 +105,7 @@ function parseRunning(value: unknown, metric: string, unit: RunningReference['un
   return min > 0 && (max === null || max >= min) ? { metric, value: max === null ? min : { min, max }, unit } : null;
 }
 
-export function projectAthletePrescriptionProfile(user: Row, asOfDate?: string) {
+export function projectAthletePrescriptionProfile(user: Row, asOfDate?: string, session?: SessionEnvironmentInput) {
   const profile = record(user.perfil), test = record(user.test_atleta);
   const unparsed: { source: string; raw: unknown; reason: string }[] = [];
   const primary: Evidence<string>[] = [];
@@ -201,7 +202,7 @@ export function projectAthletePrescriptionProfile(user: Row, asOfDate?: string) 
     return evidence(value, `usuarios.ciclo_actual.${name}`, raw, cycle.updated_at);
   };
   return structuredClone({ version: 1 as const,
-    prescriptionSignals: projectPrescriptionSignals(profile, asOfDate),
+    prescriptionSignals: projectPrescriptionSignals(profile, asOfDate, session),
     athlete: Object.fromEntries(['modo_entrada', 'categoria', 'especialidad'].map(k => [k, evidence(user[k] ?? null, `usuarios.${k}`, user[k] ?? null)])),
     goals: { primary: resolveEvidence(primary), secondary, disciplineSpecific, competition,
       detail: profile.objetivo_detalle == null ? [] : [evidence(profile.objetivo_detalle, 'usuarios.perfil.objetivo_detalle', profile.objetivo_detalle, record(profile.objetivo_detalle).updated_at)] },

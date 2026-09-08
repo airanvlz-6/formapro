@@ -1,4 +1,5 @@
 import { projectAthletePrescriptionProfile, record } from './athletePrescriptionContext';
+import type { SessionEnvironmentInput } from '../sports/sessionTrainingEnvironment';
 import { getCanonicalRestrictions } from './getCanonicalRestrictions';
 import { prepareRecoveryContext, assertRecoveryIdentity, type RecoveryContext } from '../physiology/recoveryContext';
 import { validDate } from '../physiology/authority';
@@ -9,7 +10,7 @@ import { resolvePlanningStrategy } from './strategyResolution';
 
 export type PreparedPrescriptionReadiness = { userCodigo: string; effectiveDate: string;
   source: 'canonical_readiness_engine'; result: ReadinessResultado };
-export type PrescriptionReadOptions = { asOfDate: string; prescriptionDate?: string; recovery?: RecoveryContext; readiness?: PreparedPrescriptionReadiness };
+export type PrescriptionReadOptions = { asOfDate: string; prescriptionDate?: string; sessionEnvironment?: SessionEnvironmentInput; recovery?: RecoveryContext; readiness?: PreparedPrescriptionReadiness };
 export type AthletePrescriptionContext = Awaited<ReturnType<typeof loadAthletePrescriptionContext>>;
 
 /** One server read boundary. No scoring, writes, prompting, receipts or global cache.
@@ -19,6 +20,7 @@ export type AthletePrescriptionContext = Awaited<ReturnType<typeof loadAthletePr
 export async function loadAthletePrescriptionContext(db: any, userCodigo: string, options: PrescriptionReadOptions) {
   if (!userCodigo?.trim() || !validDate(options.asOfDate)) throw new Error('PRESCRIPTION_CONTEXT_INVALID_INPUT');
   if (options.prescriptionDate !== undefined && !validDate(options.prescriptionDate)) throw new Error('PRESCRIPTION_CONTEXT_INVALID_INPUT');
+  if (options.sessionEnvironment && options.sessionEnvironment.date !== (options.prescriptionDate || options.asOfDate)) throw new Error('SESSION_ENVIRONMENT_DATE_MISMATCH');
   if (options.recovery) assertRecoveryIdentity(options.recovery, userCodigo, options.asOfDate);
   if (options.readiness && (options.readiness.userCodigo !== userCodigo || options.readiness.effectiveDate !== options.asOfDate
     || options.readiness.source !== 'canonical_readiness_engine')) throw new Error('PRESCRIPTION_READINESS_IDENTITY_MISMATCH');
@@ -59,7 +61,7 @@ export async function loadAthletePrescriptionContext(db: any, userCodigo: string
   const fromDate = new Date(Date.parse(options.asOfDate) - 6 * 86400000).toISOString().slice(0, 10);
   const datedHistory = history.map(raw => ({ raw, effective: resolveCompletionDate(record(raw).fecha) }));
   const signals = recovery.objective;
-  const projected = projectAthletePrescriptionProfile(profile, options.prescriptionDate || options.asOfDate);
+  const projected = projectAthletePrescriptionProfile(profile, options.prescriptionDate || options.asOfDate, options.sessionEnvironment);
   return structuredClone({ ...projected, planningStrategy: resolvePlanningStrategy(projected), userCodigo, asOfDate: options.asOfDate,
     physiology: { source: 'prepareRecoveryContext', recovery, missingSignals: ['hrv', 'restingHr', 'sleepDuration', 'sleepScore']
       .filter(k => record(record(signals)[k]).status !== 'available') },

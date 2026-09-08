@@ -77,6 +77,8 @@ export async function issueWeeklyCalendar(db: any, codigo: string, week: string,
       ...(contract.regeneration ? { regeneration: contract.regeneration } : {}),
       ...(contract.strategy ? { strategy: contract.strategy } : {}),
       planning: { today: request.today, empezarHoy: request.empezarHoy,
+        ...(request.confirmedAvailabilityDigest === weeklyDigest({ distribution: c.profile.distribucion_semanal, sources: c.sources, scope: c.scope })
+          ? { confirmedAvailabilityDigest: request.confirmedAvailabilityDigest } : {}),
         ...(request.strategyVersion === 1 ? { strategyVersion: 1, ...(request.strategyProposal !== undefined ? { strategyProposal: request.strategyProposal } : {}) } : {}) } };
   }
   const payload = Buffer.from(JSON.stringify({ codigo, week, slots: result.slots, expires: Date.now() + 30 * 60_000, ...authority })).toString('base64url');
@@ -120,7 +122,7 @@ export async function assertFreshWeeklyAuthority(db: any, codigo: string, week: 
   if (!rebuilt.ok || rebuilt.contract.contextDigest !== evidence.contextDigest || weeklyDigest(rebuilt.contract) !== evidence.contractDigest
     || rebuilt.contract.policyVersion !== evidence.policyVersion || rebuilt.contract.contractVersion !== evidence.contractVersion)
     rejectWeekly('WEEKLY_CONTEXT_STALE');
-  return { evidence, contexts: current.input.contexts };
+  return { evidence, contexts: current.input.contexts, availabilityConfirmed: current.availabilityConfirmed, allowed: current.input.allowed };
 }
 
 /** Save uses the signed calendar's preservation decisions, never old type or client flags. */

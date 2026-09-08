@@ -1,3 +1,4 @@
+import { issueEnvironmentConfirmation, readEnvironmentConfirmation, ENVIRONMENT_CONFIRMATION_COOKIE, ENVIRONMENT_CONFIRMATION_TTL_SECONDS } from '@/lib/planning/sessionEnvironmentConfirmation';
 import { ensurePlanningSpecialty, hasCanonicalSpecialty, requiresPlanningSpecialty } from '@/lib/sports/canonicalSpecialty';
 import { weeklySaveAdmission } from "@/lib/planning/weeklyCalendarAuthority";
 import { planBoundedWeek } from "@/lib/planning/prepareAllowedWeeklyPlanContract";
@@ -799,6 +800,12 @@ export async function POST(req: NextRequest) {
 
 async function handlePost(req: NextRequest) {
   const { messages, system, model, max_tokens, action, codigo, datos, email, codigoConjunto, pendingId } = await req.json();
+  // Never accept a client boolean/raw digest as session-environment attestation.
+  if (action === 'planificar_semana' && datos && typeof datos === 'object') {
+    datos.confirmedAvailabilityDigest = readEnvironmentConfirmation(req.headers?.get('cookie'), {
+      user: codigo, weekStart: datos.targetWeekStart, generationToken: datos.generationToken,
+    });
+  }
   const disabled = disabledLegacyOperation(action);
   if (disabled) return NextResponse.json(disabled);
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -2242,6 +2249,7 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
         targetWeekStart: datos.targetWeekStart, today,
         empezarHoy: includeToday, snapshot: generation.snapshots[datos.targetWeekStart],
         strategyVersion: 1, strategyProposal: datos.analisis?.strategyProposal, planningRunId: generation.planningRunId,
+        confirmedAvailabilityDigest: datos.confirmedAvailabilityDigest,
       }, async (prompt: string) => {
         const response = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
@@ -5091,11 +5099,20 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
     try {
       const generation = resolveWeeklyGeneration(datos.generationToken, codigo);
       if (![generation.currentWeek, generation.nextWeek].includes(datos.targetWeekStart)) throw new Error('CALENDAR_TARGET_INVALID');
-      return NextResponse.json(await resolveWeeklyGenerationPreflight(supabase, codigo, {
+      const preflight = await resolveWeeklyGenerationPreflight(supabase, codigo, {
         targetWeekStart: datos.targetWeekStart, today: new Date().toLocaleDateString('en-CA', { timeZone: 'Atlantic/Canary' }),
         confirmedAvailabilityDigest: datos.confirmedAvailabilityDigest,
         snapshot: generation.snapshots[datos.targetWeekStart], temporalIntent: datos.temporalIntent, temporalReply: datos.temporalReply === true, planningRunId: generation.planningRunId,
-      }));
+      });
+      const response = NextResponse.json(preflight);
+      if (preflight.canContinue === true) {
+        const token = issueEnvironmentConfirmation({ user: codigo, weekStart: datos.targetWeekStart, generationToken: datos.generationToken }, datos.confirmedAvailabilityDigest);
+        if (token) response.cookies.set(ENVIRONMENT_CONFIRMATION_COOKIE, token, {
+          httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict',
+          path: '/api/chat', maxAge: ENVIRONMENT_CONFIRMATION_TTL_SECONDS,
+        });
+      }
+      return response;
     } catch { return NextResponse.json({ ok: false, canContinue: false, code: 'PREFLIGHT_CONTEXT_INVALID' }); }
   }
 

@@ -10,6 +10,8 @@ export type EnvironmentEvidence = {
   reason: 'catalog_selection' | 'unknown_or_mixed' | 'conflicting_selections';
   implicitEquipmentIds: readonly string[];
   inputPresence: { lugarEntreno: boolean; tipoSala: boolean; material: boolean };
+  sessionEnvironmentSource?: 'DATE_OVERRIDE' | 'SESSION_EXPLICIT' | 'SESSION_ASSIGNMENT' | 'PROFILE' | 'UNKNOWN';
+  assignedDiscipline?: string | null;
 };
 const key = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 // Canonical IDs and exact existing questionnaire options only. Mixed locations

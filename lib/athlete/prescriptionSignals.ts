@@ -1,5 +1,6 @@
 import { equipmentIds } from '../sports/equipmentCatalog';
 import { resolveTrainingEnvironment, type EnvironmentEvidence } from '../sports/trainingEnvironment';
+import { resolveSessionTrainingEnvironment, type SessionEnvironmentInput } from '../sports/sessionTrainingEnvironment';
 
 export type SignalState = 'available' | 'unavailable' | 'unknown' | 'ambiguous';
 export type PrescriptionSignal = { state: SignalState; source: string | null; updatedAt: string | null };
@@ -18,13 +19,13 @@ const materialAliases: Record<string, string[]> = {
   'skierg': ['ski_erg'], 'sled / trineo': ['sled'], 'remo / rowerg': ['remo'], 'wall balls': ['balon_medicinal'], 'sandbag': ['sandbag'],
 };
 /** Material, then environment capabilities, then persistent answers and date overrides. */
-export function projectPrescriptionSignals(raw: unknown, asOfDate?: string): PrescriptionSignals {
+export function projectPrescriptionSignals(raw: unknown, asOfDate?: string, session?: SessionEnvironmentInput): PrescriptionSignals {
   const profile = object(raw), signals: Record<string, PrescriptionSignal> = {};
   const set = (id: string, state: SignalState, source: string, updatedAt: string | null = null) => {
     if (signalIds.includes(id)) signals[id] = { state, source, updatedAt };
   };
   for (const id of signalIds) signals[id] = { state: 'unknown', source: null, updatedAt: null };
-  const environment = resolveTrainingEnvironment(profile);
+  const environment = session ? resolveSessionTrainingEnvironment(profile, session) : resolveTrainingEnvironment(profile);
   const materials = Array.isArray(profile.material) ? profile.material : typeof profile.material === 'string' ? [profile.material] : [];
   for (const value of materials) if (typeof value === 'string') {
     const key = normalized(value);

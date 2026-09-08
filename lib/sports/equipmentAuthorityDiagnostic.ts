@@ -21,6 +21,9 @@ export function emitEquipmentAuthorityDiagnostic(signals: PrescriptionSignals, m
       rawRoomTypePresent: env?.inputPresence?.tipoSala === true,
       rawMaterialPresent: env?.inputPresence?.material === true,
       resolvedEnvironment,
+      sessionEnvironmentSource: ['DATE_OVERRIDE', 'SESSION_EXPLICIT', 'SESSION_ASSIGNMENT', 'PROFILE', 'UNKNOWN'].includes(env?.sessionEnvironmentSource || '')
+        ? env!.sessionEnvironmentSource : resolvedEnvironment === 'UNKNOWN' ? 'UNKNOWN' : 'PROFILE',
+      assignedDiscipline: ['box', 'carrera', 'fuerza'].includes(env?.assignedDiscipline || '') ? env!.assignedDiscipline : null,
       resolutionReason: ['catalog_selection', 'unknown_or_mixed', 'conflicting_selections'].includes(env?.reason || '') ? env!.reason : 'unknown_or_mixed',
       totalCount: required.length, truncated: required.length > EQUIPMENT_DIAGNOSTIC_LIMIT,
     };
@@ -31,7 +34,7 @@ export function emitEquipmentAuthorityDiagnostic(signals: PrescriptionSignals, m
       const provenance = source === `usuarios.perfil.prescription_signals.equipment.${equipmentId}` ? 'explicit_persistent'
         : typeof source === 'string' && new RegExp(`^usuarios\\.perfil\\.prescription_access\\.\\d{4}-\\d{2}-\\d{2}\\.equipment\\.${equipmentId}$`).test(source) ? 'date_override'
         : source === 'usuarios.perfil.material' ? 'explicit_material'
-        : typeof source === 'string' && /^derived:training_environment:v2:STANDARD_(BOX|GYM):usuarios\.perfil\.(lugar_entreno|tipo_sala|material)$/.test(source) ? 'derived_environment' : 'unknown';
+        : typeof source === 'string' && /^derived:training_environment:v2:STANDARD_(BOX|GYM):(usuarios\.perfil\.(lugar_entreno|tipo_sala|material|prescription_access\.\d{4}-\d{2}-\d{2}\.environment)|weekly_calendar\.confirmed_assignment|session\.explicit_environment)$/.test(source) ? 'derived_environment' : 'unknown';
       emit({ event: 'EQUIPMENT_AUTHORITY_DETAIL', ...base, equipmentId,
         environmentCompatibility: equipmentCompatibility(equipmentId),
         availableByEnvironment: isEquipmentAvailableByEnvironment(equipmentId, resolvedEnvironment),

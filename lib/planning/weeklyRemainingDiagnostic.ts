@@ -69,7 +69,18 @@ export function buildRemainingDiagnostic(input: WeeklyContractInput, contract: A
   });
   const executable = Object.values(contract.dayOptions).flat().filter(o => isExecutableCalendarState(o.state));
   const counts = countRemainingSelections(contract);
+  // Identity only from already loaded canonical notes. Scope/status/type are not represented here.
+  const restrictionOrigins = safe.restrictionsProjection.flatMap(p => {
+    const snapshot = input.contexts[p.discipline].restrictionsSnapshot;
+    return snapshot.restrictions.concat(snapshot.reassessments).map(n => ({
+      discipline: p.discipline,
+      id: typeof n.id === 'string' && /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(n.id) ? n.id : null,
+      source: n.source === 'modification_ledger' || n.source === 'conversation' ? n.source : null,
+      constraint_level: n.constraint_level === 'hard' || n.constraint_level === 'reassessment' ? n.constraint_level : null,
+    }));
+  });
   return { ...safe, today, calendar, adaptations,
+    restrictionOrigins,
     phaseStageMeaning: 'CANONICAL_STRATEGY_METHODS_INCLUDING_ADAPTATION_AND_ROLE_FILTERS',
     minExecutableDays: contract.frequencyPolicy.minExecutableDays, maxExecutableDays: contract.frequencyPolicy.maxExecutableDays,
     preservedExecutableDays: executable.filter(o => o.protected).length,
@@ -119,6 +130,11 @@ function emitRemainingDetails(d: ReturnType<typeof buildRemainingDiagnostic>) {
   }))), 32, entry => entry);
   rows('WEEKLY_RESTRICTION_AREAS_DETAIL', d.restrictionsProjection, 2, p => ({
     discipline: p.discipline, asOfDate: p.asOfDate, ...csv('areasCsv', p.areas),
+  }));
+  rows('WEEKLY_RESTRICTION_ORIGIN_DETAIL', d.restrictionOrigins, 32, origin => ({
+    discipline: origin.discipline, ...(origin.id === null ? {} : { id: origin.id }),
+    ...(origin.source === null ? {} : { source: origin.source }),
+    ...(origin.constraint_level === null ? {} : { constraint_level: origin.constraint_level }),
   }));
   rows('WEEKLY_METHOD_PIPELINE_DETAIL', d.adaptations, 16, a => ({
     adaptationId: a.adaptationId, ...csv('initialMethodIdsCsv', a.candidateMethodsInitial),

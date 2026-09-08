@@ -81,6 +81,54 @@ export function buildRemainingDiagnostic(input: WeeklyContractInput, contract: A
 }
 
 export function emitRemainingDiagnostic(...args: Parameters<typeof buildRemainingDiagnostic>) {
-  try { console.info('WEEKLY_REMAINING_SELECTION_DIAGNOSTIC', buildRemainingDiagnostic(...args)); }
+  try {
+    const diagnostic = buildRemainingDiagnostic(...args);
+    try { console.info('WEEKLY_REMAINING_SELECTION_DIAGNOSTIC', diagnostic); }
+    catch { /* A failed aggregate sink must not suppress independent detail lines. */ }
+    emitRemainingDetails(diagnostic);
+  }
   catch { /* No diagnostic failure may alter planning admission. */ }
+}
+
+type SafeScalar = string | number | boolean | null;
+/** Only consumes the already allowlisted diagnostic. No domain reads, evaluation or reconstruction.
+ * Each detail is a single JSON string so Node/Vercel inspection cannot collapse nested values. */
+function emitRemainingDetails(d: ReturnType<typeof buildRemainingDiagnostic>) {
+  const line = (name: string, fields: Record<string, SafeScalar>) => {
+    try { console.info(`${name} ${JSON.stringify({ planningRunId: d.planningRunId, ...fields })}`); }
+    catch { /* Each serialization/sink failure is independently non-authoritative. */ }
+  };
+  const csv = (name: string, values: readonly string[]): Record<string, SafeScalar> => ({
+    [name]: values.slice(0, 32).join(','), [`${name}TotalCount`]: values.length, [`${name}Truncated`]: values.length > 32,
+  });
+  const rows = <T,>(name: string, values: readonly T[], limit: number, project: (v: T) => Record<string, SafeScalar>) => {
+    const metadata = { totalCount: values.length, truncated: values.length > limit };
+    for (const [index, value] of values.slice(0, limit).entries()) line(name, { ...metadata, index, ...project(value) });
+    line(`${name}_SUMMARY`, { ...metadata, emittedCount: Math.min(values.length, limit), limit });
+  };
+  rows('WEEKLY_FEASIBILITY_REJECTION_DETAIL', d.rejectedIntents, 32, r => ({
+    day: r.day, discipline: r.discipline, adaptationId: r.adaptationId, methodId: r.methodId,
+    requiredPattern: r.requiredPattern, feasible: r.feasible, ...csv('errorCodesCsv', r.errorCodes),
+  }));
+  // Entries retain the existing projection vocabulary; do not infer kind/status/scope or clinical reasons.
+  rows('WEEKLY_RESTRICTION_PROJECTION_DETAIL', d.restrictionsProjection.flatMap(p => p.entries.map((e): Record<string, SafeScalar> => ({
+    discipline: p.discipline, ...(p.asOfDate === null ? {} : { asOfDate: p.asOfDate }),
+    ...(e.movement === null ? {} : { movement: e.movement }),
+    prohibits_impact: e.prohibits_impact, prohibits_jump: e.prohibits_jump, prohibits_axial_load: e.prohibits_axial_load,
+    prohibits_deep_flexion: e.prohibits_deep_flexion, prohibits_overhead_load: e.prohibits_overhead_load,
+  }))), 32, entry => entry);
+  rows('WEEKLY_RESTRICTION_AREAS_DETAIL', d.restrictionsProjection, 2, p => ({
+    discipline: p.discipline, asOfDate: p.asOfDate, ...csv('areasCsv', p.areas),
+  }));
+  rows('WEEKLY_METHOD_PIPELINE_DETAIL', d.adaptations, 16, a => ({
+    adaptationId: a.adaptationId, ...csv('initialMethodIdsCsv', a.candidateMethodsInitial),
+    ...csv('afterManagedDisciplineIdsCsv', a.candidateMethodsAfterManagedDiscipline),
+    ...csv('afterPhaseIdsCsv', a.candidateMethodsAfterPhase),
+    ...csv('afterTemporalCalendarIdsCsv', a.candidateMethodsAfterTemporalCalendar),
+    ...csv('afterFeasibilityIdsCsv', a.candidateMethodsAfterFeasibility),
+  }));
+  rows('WEEKLY_CALENDAR_AVAILABILITY_DETAIL', d.calendar, 7, c => ({
+    day: c.day, date: c.date, protected: c.protected, replaceable: c.replaceable,
+    ...csv('allowedDisciplinesCsv', c.allowedDisciplines),
+  }));
 }

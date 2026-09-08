@@ -1,3 +1,4 @@
+import { ensurePlanningSpecialty, hasCanonicalSpecialty, requiresPlanningSpecialty } from '@/lib/sports/canonicalSpecialty';
 import { weeklySaveAdmission } from "@/lib/planning/weeklyCalendarAuthority";
 import { planBoundedWeek } from "@/lib/planning/prepareAllowedWeeklyPlanContract";
 import { admittedWeekObjective } from "@/lib/planning/weeklyCalendarAuthority";
@@ -865,12 +866,13 @@ const CAMPOS_REQUERIDOS_POR_MODO: Record<string, string[]> = {
 // FORGE ONBOARDING STATE MACHINE — calcula el estado REAL consultando las tablas canonicas
 // (usuarios, athlete_training_sources), nunca confiando en lo que el LLM "cree" completado.
 async function calcularEstadoOnboarding(supabase: any, codigo: string, mode: string) {
-  const { data: usuarioOnb } = await supabase.from("usuarios").select("perfil,categoria,objetivo_principal,distribucion_semanal").eq("codigo", codigo).maybeSingle();
+  const { data: usuarioOnb } = await supabase.from("usuarios").select("perfil,categoria,especialidad,objetivo_principal,distribucion_semanal").eq("codigo", codigo).maybeSingle();
   const { data: fuentesOnb } = await supabase.from("athlete_training_sources").select("*").eq("user_codigo", codigo).eq("activo", true);
 
   const perfilOnb = usuarioOnb?.perfil || {};
   const completedFields: Record<string, boolean> = {};
   completedFields.categoria = !!usuarioOnb?.categoria;
+  if (requiresPlanningSpecialty(mode)) completedFields.especialidad = hasCanonicalSpecialty(usuarioOnb?.especialidad);
   completedFields.objetivo = !!(usuarioOnb?.objetivo_principal?.descripcion || perfilOnb.objetivo_detalle);
   completedFields.edad = !!perfilOnb.edad;
   // FIX: distintas categorias usan IDs de campo distintos para "nivel" (nivel, nivel_cf,
@@ -890,7 +892,8 @@ async function calcularEstadoOnboarding(supabase: any, codigo: string, mode: str
   // (perfil.edad existe), sin exigir un dato que puede legitimamente no aplicar.
   completedFields.fc_max_o_metodo = !!perfilOnb.edad;
 
-  const camposRequeridos = CAMPOS_REQUERIDOS_POR_MODO[mode] || CAMPOS_REQUERIDOS_POR_MODO.supervision;
+  const baseFields = CAMPOS_REQUERIDOS_POR_MODO[mode] || CAMPOS_REQUERIDOS_POR_MODO.supervision;
+  const camposRequeridos = requiresPlanningSpecialty(mode) ? [...baseFields, 'especialidad'] : baseFields;
   const missingFields = camposRequeridos.filter(c => !completedFields[c]);
 
   return { completedFields, missingFields, camposRequeridos };
@@ -941,6 +944,8 @@ Extrae SOLO datos que el mensaje contenga explicitamente, nunca inventes valores
       }
 
       // Verificar si ya esta completo para ejecutar el cambio real
+      const specialtyIntegrity = await ensurePlanningSpecialty(supabase, codigo, targetMode);
+      if (!specialtyIntegrity.ok) return NextResponse.json({ ok: false, code: specialtyIntegrity.code }, { status: 422 });
       const { missingFields } = await calcularEstadoOnboarding(supabase, codigo, targetMode);
       if (missingFields.length === 0) {
         let nuevoCicloCaptura = null;
@@ -1038,6 +1043,8 @@ if (action === "verificar_cambio_modo") {
     if (!['supervision', 'focus', 'coach'].includes(targetMode)) {
       return NextResponse.json({ error: "Modo destino invalido" }, { status: 400 });
     }
+    const specialtyIntegrity = await ensurePlanningSpecialty(supabase, codigo, targetMode);
+    if (!specialtyIntegrity.ok) return NextResponse.json({ ok: false, code: specialtyIntegrity.code }, { status: 422 });
     const { missingFields } = await calcularEstadoOnboarding(supabase, codigo, targetMode);
     if (missingFields.length > 0) {
       return NextResponse.json({ error: "Faltan campos obligatorios para este modo", missingFields }, { status: 400 });
@@ -1107,6 +1114,8 @@ if (action === "verificar_cambio_modo") {
     // Confirmacion EXPLICITA del resumen final — solo aqui se marca completed. Guard determinista:
     // si aun faltan campos requeridos, se rechaza sin importar que el frontend lo intente.
     const { mode } = datos;
+    const specialtyIntegrity = await ensurePlanningSpecialty(supabase, codigo, mode);
+    if (!specialtyIntegrity.ok) return NextResponse.json({ ok: false, code: specialtyIntegrity.code }, { status: 422 });
     const { completedFields, missingFields } = await calcularEstadoOnboarding(supabase, codigo, mode);
     console.log("🔍 DEBUG confirmar_onboarding — codigo:", codigo, "mode:", mode, "completedFields:", JSON.stringify(completedFields), "missingFields:", JSON.stringify(missingFields));
     if (missingFields.length > 0) {
@@ -1251,9 +1260,12 @@ if (action === "verificar_cambio_modo") {
 
   // Guardar usuario nuevo
   if (action === "guardar_usuario") {
+    const creation = projectLegacyCreate(datos);
+    if (requiresPlanningSpecialty(creation.modo_entrada) && !hasCanonicalSpecialty(creation.especialidad))
+      return NextResponse.json({ ok: false, code: 'CANONICAL_SPECIALTY_REQUIRED' }, { status: 422 });
     const { data, error } = await supabase
       .from("usuarios")
-      .insert([projectLegacyCreate(datos)])
+      .insert([creation])
       .select()
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -2991,6 +3003,8 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
     if (!MODOS_VALIDOS.includes(nuevoModo)) {
       return NextResponse.json({ error: "Modo invalido" }, { status: 400 });
     }
+    const specialtyIntegrity = await ensurePlanningSpecialty(supabase, codigo, nuevoModo);
+    if (!specialtyIntegrity.ok) return NextResponse.json({ ok: false, code: specialtyIntegrity.code }, { status: 422 });
     await supabase.from("usuarios").update({ modo_entrada: nuevoModo }).eq("codigo", codigo);
     console.log(`MODO ENTRADA cambiado a "${nuevoModo}" para usuario ${codigo}`);
     return NextResponse.json({ ok: true, nuevoModo });

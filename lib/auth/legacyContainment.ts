@@ -1,3 +1,4 @@
+import { hasCanonicalSpecialty, specialtyFromCategory } from '../sports/canonicalSpecialty';
 /** AUTH-1B1 containment only. This is not authentication or athlete ownership. */
 export function disabledLegacyOperation(action: unknown) {
   const codes: Record<string, string> = {
@@ -36,5 +37,18 @@ function project(input: unknown, fields: readonly string[]): Record<string, any>
   }
   return result;
 }
-export const projectLegacyCreate = (input: unknown) => project(input, createFields);
-export const projectLegacyUpdate = (input: unknown) => project(input, updateFields);
+export function projectLegacyCreate(input: unknown) {
+  const result = project(input, createFields);
+  if (!hasCanonicalSpecialty(result.especialidad)) {
+    delete result.especialidad;
+    const specialty = specialtyFromCategory(result.categoria);
+    if (specialty) result.especialidad = specialty;
+  }
+  return result;
+}
+export function projectLegacyUpdate(input: unknown) {
+  const result = project(input, updateFields);
+  // Omitting the column preserves persisted authority without another DB read.
+  if (!hasCanonicalSpecialty(result.especialidad)) delete result.especialidad;
+  return result;
+}

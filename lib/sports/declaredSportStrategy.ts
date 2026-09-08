@@ -16,5 +16,7 @@ export function generalSportStrategy(specialty: unknown): GoalId | null {
 /** This questionnaire field is shared with triathlon. Only the running selection authorizes it. */
 export function structuredEventStrategy(specialty: unknown, distance: unknown): GoalId | null {
   if (specialty !== 'carrera') return null;
-  return distance === '10K' ? '10k' : distance === 'Media maratón (21K)' ? 'half_marathon' : null;
+  const canonical = typeof distance === 'string'
+    ? distance.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase() : null;
+  return canonical === '10k' ? '10k' : canonical === 'media maraton (21k)' ? 'half_marathon' : null;
 }

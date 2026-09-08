@@ -1,8 +1,10 @@
 import { MOVEMENT_LIBRARY } from '../sports/movementLibrary';
+import { resolveTrainingEnvironment, type EnvironmentEvidence } from '../sports/trainingEnvironment';
 
 export type SignalState = 'available' | 'unavailable' | 'unknown' | 'ambiguous';
 export type PrescriptionSignal = { state: SignalState; source: string | null; updatedAt: string | null };
 export type PrescriptionSignals = { version: 1; signals: Record<string, PrescriptionSignal>; location: unknown;
+  environment?: EnvironmentEvidence;
   maxHrMethod: 'declared_real' | 'estimated' | 'unknown' };
 export const equipmentIds = [...new Set([...Object.values(MOVEMENT_LIBRARY).flatMap(m => m.equipment), 'rack'])].sort();
 export const capabilityIds = ['canMeasureHeartRate', 'canMeasurePace', 'canMeasureDistance'] as const;
@@ -15,13 +17,16 @@ const materialAliases: Record<string, string[]> = {
   'barras y discos': ['barra'], 'barra': ['barra'], 'rack': ['rack'], 'banco': ['banco'],
   'skierg': ['ski_erg'], 'sled / trineo': ['sled'], 'remo / rowerg': ['remo'], 'wall balls': ['balon_medicinal'], 'sandbag': ['sandbag'],
 };
-/** Exact declared options only. Missing items are not negative answers; a gym is not an inventory. */
+/** Environment defaults precede explicit inventory, persistent answers and date overrides. */
 export function projectPrescriptionSignals(raw: unknown, asOfDate?: string): PrescriptionSignals {
   const profile = object(raw), signals: Record<string, PrescriptionSignal> = {};
   const set = (id: string, state: SignalState, source: string, updatedAt: string | null = null) => {
     if (signalIds.includes(id)) signals[id] = { state, source, updatedAt };
   };
   for (const id of signalIds) signals[id] = { state: 'unknown', source: null, updatedAt: null };
+  const environment = resolveTrainingEnvironment(profile);
+  for (const id of environment.implicitEquipmentIds)
+    set(`equipment.${id}`, 'available', `derived:training_environment:v1:${environment.capabilityProfile}:${environment.source}`);
   const materials = Array.isArray(profile.material) ? profile.material : typeof profile.material === 'string' ? [profile.material] : [];
   for (const value of materials) if (typeof value === 'string') {
     const key = normalized(value);
@@ -49,7 +54,7 @@ export function projectPrescriptionSignals(raw: unknown, asOfDate?: string): Pre
     if (daily && ['available', 'unavailable', 'ambiguous', 'unknown'].includes(daily.state))
       set(id, daily.state, `usuarios.perfil.prescription_access.${asOfDate}.${id}`, daily.updatedAt || null);
   }
-  return { version: 1, signals, location: profile.lugar_entreno ?? null,
+  return { version: 1, signals, location: profile.lugar_entreno ?? null, environment,
     maxHrMethod: profile.fc_max_metodo === 'formula_edad' ? 'estimated' : profile.fc_max_metodo === 'real' || (typeof profile.fc_max === 'number' && profile.fc_max > 0 && !profile.fc_max_metodo)
       || (typeof profile.fc_max === 'string' && /^\d+(?:\.\d+)?$/.test(profile.fc_max.trim()) && Number(profile.fc_max) > 0 && !profile.fc_max_metodo) ? 'declared_real' : 'unknown' };
 }

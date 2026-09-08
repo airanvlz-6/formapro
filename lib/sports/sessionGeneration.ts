@@ -1,4 +1,4 @@
-import { builderTrace, contractFailureStage, type BuilderCompletion } from './builderDiagnostics';
+import { builderTrace, contractFailureStage, sufficiencyFailure, type SufficiencyFailure, type BuilderCompletion } from './builderDiagnostics';
 import { intentMatchingMovementIds } from './prescriptionIntent';
 import { validateAllowedTrainingContract, type AllowedTrainingContract } from './allowedTrainingContract';
 import { parseStructuredSession, validateSessionAgainstTrainingContract, renderContractSession, STRUCTURED_SESSION_INSTRUCTIONS } from './structuredSession';
@@ -28,6 +28,7 @@ export async function generateContractSession(contract: AllowedTrainingContract,
     ? '\nLa banda temporal y minimumUsefulDurationSeconds de doseContext.timeAuthority pertenecen al servidor. Compón dentro de esa banda sin cambiar intent, pools ni intensidad autorizada. El máximo conservador estimado debe caber bajo hardMaximumSeconds; expectedSeconds es el punto medio operativo del rango, no una medición. No añadas descansos o transiciones artificiales para satisfacer la dosis.' : '';
   const prompt = `${authority.contractVersion === 3 ? STRUCTURED_DOSE_INSTRUCTIONS : STRUCTURED_SESSION_INSTRUCTIONS}${timeInstruction}\nCONTRACT:\n${JSON.stringify(authority)}${intentInstruction}\nContexto no autoritativo:\n${context}\nOpciones ejecutables resueltas por el servidor (solo sus referencias pueden usarse; sin distancia medible usa duración):\n${JSON.stringify(options)}\nHistorial para evitar duplicación:\n${JSON.stringify(recent)}`;
   let previousErrors: string[] = [];
+  let missingDetails: SufficiencyFailure[] = [];
   for (let attempt = 0; attempt < 2; attempt++) {
     trace.beginAttempt();
     let raw;
@@ -45,12 +46,14 @@ export async function generateContractSession(contract: AllowedTrainingContract,
       if (retry) continue;
       return { ok: false as const, code: 'SESSION_PROPOSAL_INVALID', violations: parsed.violations, diagnostics: trace.summary() };
     }
+    missingDetails = [];
     const validation = validateSessionAgainstTrainingContract(authority, parsed.proposal, (estimate, errors) =>
-      emitSessionDoseAuthority(authority, { ...estimate, expectedSeconds: estimate.expectedSeconds ?? null }, errors, trace.summary().planningRunId ?? undefined));
+      emitSessionDoseAuthority(authority, { ...estimate, expectedSeconds: estimate.expectedSeconds ?? null }, errors, trace.summary().planningRunId ?? undefined),
+      (signal, state, block, movement) => { missingDetails.push(sufficiencyFailure(signal, state, block, movement)); });
     if (!validation.ok) {
       previousErrors = validation.violations;
       const retry = !attempt && validation.violations.some(v => v.startsWith('PRESCRIPTION_DATA_') || v.startsWith('DOSE_') || v.startsWith('STRUCTURE_') || v.startsWith('SESSION_DOSE_') || v.startsWith('SESSION_BUDGET_') || v.startsWith('SESSION_DURATION_'));
-      trace.emit(attempt + 1, contractFailureStage(validation.violations), 'SESSION_CONTRACT_INVALID', validation.violations, !!retry, retry ? 'contract_rule_retry' : attempt ? 'attempt_limit' : 'contract_rule_not_retryable');
+      trace.emit(attempt + 1, contractFailureStage(validation.violations), 'SESSION_CONTRACT_INVALID', validation.violations, !!retry, retry ? 'contract_rule_retry' : attempt ? 'attempt_limit' : 'contract_rule_not_retryable', missingDetails);
       if (retry) continue;
       return { ok: false as const, code: 'SESSION_CONTRACT_INVALID', violations: validation.violations, diagnostics: trace.summary() };
     }

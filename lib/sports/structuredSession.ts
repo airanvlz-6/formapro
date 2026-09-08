@@ -90,7 +90,8 @@ export function parseStructuredSession(raw: unknown): SessionValidation {
 }
 
 export function validateSessionAgainstTrainingContract(contract: AllowedTrainingContract, value: unknown,
-  observeDose?: Parameters<typeof validateSessionDose>[2]): SessionValidation {
+  observeDose?: Parameters<typeof validateSessionDose>[2],
+  observeMissingSignal?: (signal: string, state: string, blockIndex: number, movementIndex: number) => void): SessionValidation {
   const checked = checkSessionShape(value);
   if (!checked.ok) return checked;
   const authority = validateAllowedTrainingContract(contract);
@@ -116,14 +117,17 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
       || notes.some(n => normalizeTrainingKey(n.movement) === m.id)) violations.push(`MOVEMENT_RESTRICTED:${m.id}`);
   }
   if (!violations.length) violations.push(...validateSessionDose(contract, p, observeDose));
-  if (!violations.length && contract.doseContext?.sufficiency) for (const block of p.blocks) for (const m of block.movements) {
+  if (!violations.length && contract.doseContext?.sufficiency) for (const [blockIndex, block] of p.blocks.entries()) for (const [movementIndex, m] of block.movements.entries()) {
     const intensity = m.prescription.intensity;
     const ref = intensity && 'referenceId' in intensity ? contract.doseContext.references.find(r => r.id === intensity.referenceId) : undefined;
     const decision = resolvePrescriptionDataSufficiency(contract.doseContext.sufficiency, contract.doseContext.references, {
       movementId: m.movementId, discipline: contract.discipline, distance: !!m.prescription.distanceMeters,
       intensity: intensity?.kind === 'percent_1rm' ? '1rm' : intensity?.kind === 'reference' ? ref?.unit === 'bpm' ? 'hr' : 'pace' : intensity?.kind,
       referenceId: ref?.id });
-    if (decision.status !== 'sufficient') violations.push(...decision.missingSignals.map(s => `PRESCRIPTION_DATA_MISSING:${s.signal}`));
+    if (decision.status !== 'sufficient') for (const s of decision.missingSignals) {
+      violations.push(`PRESCRIPTION_DATA_MISSING:${s.signal}`);
+      try { observeMissingSignal?.(s.signal, s.state, blockIndex, movementIndex); } catch { /* Observation is non-authoritative. */ }
+    }
   }
   return violations.length ? { ok: false, violations } : checked;
 }

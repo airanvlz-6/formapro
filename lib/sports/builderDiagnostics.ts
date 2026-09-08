@@ -1,4 +1,22 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { signalIds } from '../athlete/prescriptionSignals';
+import { referenceQuestionFields } from './prescriptionReferenceFields';
+
+export type SufficiencyFailure = { FAILED_RULE: 'PRESCRIPTION_DATA_MISSING'; FAILED_FIELD: string;
+  EXPECTED_KIND: 'available_signal' | 'executable_reference'; RECEIVED_TYPE_SAFE_SUMMARY: string; PROPOSAL_PATH: string;
+  MISSING_CATEGORY: 'capability' | 'equipment' | 'skill' | 'reference' | 'unresolved_signal' };
+/** Only catalog signals and structural indices; never serialize a reference value or arbitrary suffix. */
+export function sufficiencyFailure(signal: string, state: string, blockIndex: number, movementIndex: number): SufficiencyFailure {
+  const reference = signal.startsWith('reference.');
+  return { FAILED_RULE: 'PRESCRIPTION_DATA_MISSING',
+    FAILED_FIELD: signalIds.includes(signal) ? `doseContext.sufficiency.signals.${signal}.state`
+      : reference && Object.hasOwn(referenceQuestionFields, signal) ? `doseContext.references[${signal.slice(10)}]` : reference ? 'doseContext.references' : 'doseContext.sufficiency',
+    MISSING_CATEGORY: reference ? 'reference' : signalIds.includes(signal) && signal.startsWith('capability.') ? 'capability'
+      : signalIds.includes(signal) && signal.startsWith('equipment.') ? 'equipment' : signalIds.includes(signal) && signal.startsWith('skill.') ? 'skill' : 'unresolved_signal',
+    EXPECTED_KIND: reference ? 'executable_reference' : 'available_signal',
+    RECEIVED_TYPE_SAFE_SUMMARY: ['available', 'unavailable', 'unknown', 'ambiguous'].includes(state) ? `state_${state}` : 'invalid_state',
+    PROPOSAL_PATH: `blocks[${blockIndex}].movements[${movementIndex}].prescription` };
+}
 
 export type BuilderCompletion = { text: string; planningRunId?: string; metadata?: {
   stopReason?: unknown; outputTokens?: unknown; contentBlockCount?: unknown; contentBlockTypes?: unknown } };
@@ -30,15 +48,21 @@ export function builderTrace(contract: unknown, runId?: string) {
         truncationIndicated: m?.stopReason === 'max_tokens' };
       return raw;
     },
-    emit(attempt: number, stage: string, code: string, violations: string[], eligible: boolean, reason: string) {
+    emit(attempt: number, stage: string, code: string, violations: string[], eligible: boolean, reason: string, details: SufficiencyFailure[] = []) {
       const safe = safeViolations(violations);
       const event = { planningRunId, builderInvocationId, contractIdentity: identity, weekStart: c.targetWeekStart, day: c.targetDay,
         attempt, maxAttempts: 2, stage, result: code === 'PASS' ? 'pass' : 'fail', code, violations: safe,
         retryEligible: eligible, retryReason: reason, provider: { ...provider },
-        failures: safe.map(v => ({ FAILED_VALIDATOR: stage, FAILED_RULE: v.split(':')[0], FAILED_FIELD: v.includes(':') ? v.split(':')[1] : 'unknown',
+        failures: details.length ? details.slice(0, 32).map(detail => ({ FAILED_VALIDATOR: stage, ...detail })) : safe.map(v => ({ FAILED_VALIDATOR: stage, FAILED_RULE: v.split(':')[0], FAILED_FIELD: v.includes(':') ? v.split(':')[1] : 'unknown',
           EXPECTED: 'unknown', RECEIVED_TYPE_SAFE_SUMMARY: 'unknown' })) };
+      if (details.length > 32) Object.assign(event, { failuresTruncated: true, failureTotalCount: details.length });
       events.push(event);
       try { console.info?.('SESSION_BUILDER_ATTEMPT', event); } catch { /* Diagnostics cannot change admission. */ }
+      for (const detail of details.slice(0, 32)) {
+        try { console.info?.('SESSION_PRESCRIPTION_DATA_MISSING_DETAIL', JSON.stringify({ planningRunId, builderInvocationId,
+          contractIdentity: identity, day: c.targetDay, attempt, ...detail, totalCount: details.length, truncated: details.length > 32 })); }
+        catch { /* Flat diagnostics must also be non-authoritative. */ }
+      }
     },
     summary() { const last = events.at(-1); return { planningRunId, builderInvocationId, contractIdentity: identity,
       attemptCount: last?.attempt || 0, finalStage: last?.stage || 'preflight', finalViolations: last?.violations || [],

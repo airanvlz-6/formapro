@@ -1,3 +1,4 @@
+import { equipmentIds, isEquipmentAvailableByEnvironment } from './equipmentCatalog';
 /** Domain-owned defaults, not an inventory asserted by the athlete or an LLM. */
 export type TrainingEnvironment = 'BOX' | 'GYM' | 'HOME' | 'OUTDOOR' | 'UNKNOWN';
 export type EquipmentCapabilityProfile = 'STANDARD_BOX' | 'STANDARD_GYM' | 'EXPLICIT' | 'MINIMAL' | 'UNKNOWN';
@@ -8,11 +9,7 @@ export type EnvironmentEvidence = {
   source: string | null;
   reason: 'catalog_selection' | 'unknown_or_mixed' | 'conflicting_selections';
   implicitEquipmentIds: readonly string[];
-};
-const defaults: Readonly<Record<EquipmentCapabilityProfile, readonly string[]>> = {
-  STANDARD_BOX: ['mancuerna', 'kettlebell', 'barra', 'disco', 'bumper', 'rack', 'barra_dominadas', 'anillas', 'cajon', 'balon_medicinal', 'comba'],
-  STANDARD_GYM: ['mancuerna', 'barra', 'disco', 'rack', 'banco', 'barra_dominadas', 'bici_estatica'],
-  EXPLICIT: [], MINIMAL: [], UNKNOWN: [],
+  inputPresence: { lugarEntreno: boolean; tipoSala: boolean; material: boolean };
 };
 const key = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 // Canonical IDs and exact existing questionnaire options only. Mixed locations
@@ -47,5 +44,8 @@ export function resolveTrainingEnvironment(profile: EnvironmentInput): Environme
   return { version: 1, environment, capabilityProfile,
     source: environment === 'UNKNOWN' ? null : evidence[0].source,
     reason: distinct.size > 1 ? 'conflicting_selections' : environment === 'UNKNOWN' ? 'unknown_or_mixed' : 'catalog_selection',
-    implicitEquipmentIds: [...defaults[capabilityProfile]] };
+    implicitEquipmentIds: equipmentIds.filter(id => isEquipmentAvailableByEnvironment(id, environment)),
+    inputPresence: { lugarEntreno: profile.lugar_entreno != null && profile.lugar_entreno !== '',
+      tipoSala: profile.tipo_sala != null && profile.tipo_sala !== '',
+      material: Array.isArray(profile.material) ? profile.material.length > 0 : profile.material != null && profile.material !== '' } };
 }

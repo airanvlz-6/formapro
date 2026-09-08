@@ -1,4 +1,4 @@
-import { MOVEMENT_LIBRARY } from '../sports/movementLibrary';
+import { equipmentIds } from '../sports/equipmentCatalog';
 import { resolveTrainingEnvironment, type EnvironmentEvidence } from '../sports/trainingEnvironment';
 
 export type SignalState = 'available' | 'unavailable' | 'unknown' | 'ambiguous';
@@ -6,7 +6,7 @@ export type PrescriptionSignal = { state: SignalState; source: string | null; up
 export type PrescriptionSignals = { version: 1; signals: Record<string, PrescriptionSignal>; location: unknown;
   environment?: EnvironmentEvidence;
   maxHrMethod: 'declared_real' | 'estimated' | 'unknown' };
-export const equipmentIds = [...new Set([...Object.values(MOVEMENT_LIBRARY).flatMap(m => m.equipment), 'rack'])].sort();
+export { equipmentIds } from '../sports/equipmentCatalog';
 export const capabilityIds = ['canMeasureHeartRate', 'canMeasurePace', 'canMeasureDistance'] as const;
 export const signalIds = [...equipmentIds.map(id => `equipment.${id}`), ...capabilityIds.map(id => `capability.${id}`), 'skill.box.advanced', 'skill.carrera.advanced'];
 const normalized = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
@@ -17,7 +17,7 @@ const materialAliases: Record<string, string[]> = {
   'barras y discos': ['barra'], 'barra': ['barra'], 'rack': ['rack'], 'banco': ['banco'],
   'skierg': ['ski_erg'], 'sled / trineo': ['sled'], 'remo / rowerg': ['remo'], 'wall balls': ['balon_medicinal'], 'sandbag': ['sandbag'],
 };
-/** Environment defaults precede explicit inventory, persistent answers and date overrides. */
+/** Material, then environment capabilities, then persistent answers and date overrides. */
 export function projectPrescriptionSignals(raw: unknown, asOfDate?: string): PrescriptionSignals {
   const profile = object(raw), signals: Record<string, PrescriptionSignal> = {};
   const set = (id: string, state: SignalState, source: string, updatedAt: string | null = null) => {
@@ -25,13 +25,13 @@ export function projectPrescriptionSignals(raw: unknown, asOfDate?: string): Pre
   };
   for (const id of signalIds) signals[id] = { state: 'unknown', source: null, updatedAt: null };
   const environment = resolveTrainingEnvironment(profile);
-  for (const id of environment.implicitEquipmentIds)
-    set(`equipment.${id}`, 'available', `derived:training_environment:v1:${environment.capabilityProfile}:${environment.source}`);
   const materials = Array.isArray(profile.material) ? profile.material : typeof profile.material === 'string' ? [profile.material] : [];
   for (const value of materials) if (typeof value === 'string') {
     const key = normalized(value);
     for (const id of materialAliases[key] || (equipmentIds.includes(key) ? [key] : [])) set(`equipment.${id}`, 'available', 'usuarios.perfil.material');
   }
+  for (const id of environment.implicitEquipmentIds)
+    set(`equipment.${id}`, 'available', `derived:training_environment:v2:${environment.capabilityProfile}:${environment.source}`);
   const device = typeof profile.dispositivo === 'string' ? normalized(profile.dispositivo) : '';
   if (['si, reloj gps con pulsometro', 'si, solo pulsometro (banda o reloj basico)'].includes(device))
     set('capability.canMeasureHeartRate', 'available', 'usuarios.perfil.dispositivo');

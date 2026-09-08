@@ -15,6 +15,7 @@ import { buildSessionDoseContext } from './sessionDoseContext';
 import { resolvePrescriptionDataSufficiency } from './prescriptionDataSufficiency';
 import { intentMatchingMovementIds } from './prescriptionIntent';
 import { issuePrescriptionQuestion } from '../athlete/prescriptionAnswers';
+import { emitEquipmentAuthorityDiagnostic } from './equipmentAuthorityDiagnostic';
 
 const PROFILE = 'modo_entrada,distribucion_semanal,especialidad,categoria';
 const domain = 'forge-session-contract-v1:';
@@ -85,6 +86,7 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
     const canonical = await loadAthletePrescriptionContext(db, userCodigo, { asOfDate: restrictions.asOfDate,
       prescriptionDate: prescriptionDate(request.targetWeekStart, request.day) });
     const doseContext = buildSessionDoseContext(canonical, base.contract.intent, strategicWeek, neighbours, true);
+    emitEquipmentAuthorityDiagnostic(doseContext.sufficiency!, base.contract.allowedMovementIds, planningRunId, request.day);
     const prepared = buildAllowedTrainingContract({ ...base.contract, stimulus: base.contract.stimulusId, doseContext });
     if (!prepared.ok) {
       const ids = intentMatchingMovementIds(base.contract.intent || { kind: 'stimulus_only' }, base.contract.allowedMovementIds);

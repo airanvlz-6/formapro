@@ -54,7 +54,7 @@ export function resolveReferenceMovement(value: unknown): string | null {
 export type StrengthReference = { movementId: string | null; valueKg: number | null;
   referenceType: '1rm' | 'nrm' | 'unknown_rm' | 'pr' | 'non_comparable'; repsIfKnown: number | null; dateIfKnown: string | null };
 const testOneRm = new Set(['back_squat', 'deadlift', 'clean_jerk', 'snatch', 'front_squat', 'log_press']);
-function strengthReference(name: string, raw: unknown, source: string, sourceDate: unknown): Evidence<StrengthReference> {
+function strengthReference(name: string, raw: unknown, source: string, sourceDate: unknown, movementName = name): Evidence<StrengthReference> {
   const obj = record(raw), value = obj.valueKg ?? obj.valor ?? obj.value ?? raw;
   const s = typeof value === 'string' ? value.trim() : '';
   const rmClaims = [...`${obj.referenceType || ''} ${obj.tipo || ''} ${s}`.matchAll(/\b(\d+)\s*rm\b/gi)].map(m => Number(m[1]));
@@ -69,7 +69,7 @@ function strengthReference(name: string, raw: unknown, source: string, sourceDat
   const valueKg = unit && !/^kg$/i.test(unit) ? null : kg ? Number(kg[1].replace(',', '.'))
     : source.startsWith('usuarios.historial_marcas.') && !unit && obj.valueKg === undefined ? null : numericField;
   const validKg = valueKg !== null && Number.isFinite(valueKg) && valueKg > 0 ? valueKg : null;
-  const movementId = resolveReferenceMovement(name);
+  const movementId = resolveReferenceMovement(movementName);
   const rmConflict = [...rmClaims, ...(keyRm ? [Number(keyRm[1])] : []), ...(number(obj.repsIfKnown) !== null ? [number(obj.repsIfKnown)!] : [])]
     .some(n => n !== repsIfKnown);
   const referenceType = validKg === null || movementId === null || rmConflict || (repsIfKnown !== null && (!Number.isSafeInteger(repsIfKnown) || repsIfKnown < 1)) ? 'non_comparable' : repsIfKnown === 1 ? '1rm'
@@ -86,6 +86,9 @@ const runningFields: Record<string, [string, RunningReference['unit']]> = {
   vo2max: ['vo2max', 'ml/kg/min'], km_semana: ['weeklyDistance', 'km'],
   ...Object.fromEntries([1, 2, 3, 4, 5].flatMap(z => [[`z${z}_fc`, [`z${z}`, 'bpm']], [`z${z}`, [`z${z}`, 'bpm']]])) as Record<string, [string, 'bpm']>,
 };
+/** Exact editor keys; units, parsing and conflict resolution remain those of the existing metrics. */
+export const runningPerformanceAliases: Readonly<Record<string, string>> = { '5k': 'tiempo_5k', '10k': 'tiempo_10k' };
+const editorStrengthAliases: Readonly<Record<string, string>> = { bench: 'bench_press' };
 function parseRunning(value: unknown, metric: string, unit: RunningReference['unit']): RunningReference | null {
   if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
     // Bare pace/time numbers have no documented unit; preserve as unparsed.
@@ -135,11 +138,13 @@ export function projectAthletePrescriptionProfile(user: Row, asOfDate?: string, 
     const values = record(user[store]);
     for (const [name, raw] of Object.entries(values)) {
       const source = `usuarios.${store}.${name}`;
-      if (store !== 'perfil' && (resolveReferenceMovement(name) || /_\d+rm$/.test(name) || ['clean', 'log_press', 'farmer_carry'].includes(name))) {
-        strength.push(strengthReference(name, raw, source, values.fecha));
+      const movementName = store === 'marcas_especificas' && Object.hasOwn(editorStrengthAliases, name) ? editorStrengthAliases[name] : name;
+      if (store !== 'perfil' && (resolveReferenceMovement(movementName) || /_\d+rm$/.test(name) || ['clean', 'log_press', 'farmer_carry'].includes(name))) {
+        strength.push(strengthReference(name, raw, source, values.fecha, movementName));
       }
-      if (Object.hasOwn(runningFields, name)) {
-        const [metric, unit] = runningFields[name], obj = record(raw);
+      const runningName = store === 'marcas_especificas' && Object.hasOwn(runningPerformanceAliases, name) ? runningPerformanceAliases[name] : name;
+      if (Object.hasOwn(runningFields, runningName)) {
+        const [metric, unit] = runningFields[runningName], obj = record(raw);
         const explicitUnit = obj.unit ?? obj.unidad;
         const compatibleUnit = explicitUnit === undefined || explicitUnit === unit || (unit === 'bpm' && explicitUnit === 'ppm')
           || (unit === 'seconds_per_km' && explicitUnit === 'min/km');
@@ -152,7 +157,7 @@ export function projectAthletePrescriptionProfile(user: Row, asOfDate?: string, 
   if (Array.isArray(user.historial_marcas)) user.historial_marcas.forEach((raw, i) => {
     const row = record(raw), name = text(row.ejercicio);
     if (name) {
-      const metricKey = ({ '5k': 'tiempo_5k', '10k': 'tiempo_10k' } as Record<string, string>)[key(name)] || key(name);
+      const metricKey = Object.hasOwn(runningPerformanceAliases, key(name)) ? runningPerformanceAliases[key(name)] : key(name);
       if (Object.hasOwn(runningFields, metricKey)) {
         const [metric, unit] = runningFields[metricKey], parsed = parseRunning(row.valor, metric, unit);
         if (parsed) running.push({ ...evidence(parsed, `usuarios.historial_marcas.${i}`, raw, row.updated_at), observedAt: date(row.fecha) });
@@ -202,7 +207,7 @@ export function projectAthletePrescriptionProfile(user: Row, asOfDate?: string, 
     return evidence(value, `usuarios.ciclo_actual.${name}`, raw, cycle.updated_at);
   };
   return structuredClone({ version: 1 as const,
-    prescriptionSignals: projectPrescriptionSignals(profile, asOfDate, session),
+    prescriptionSignals: projectPrescriptionSignals(profile, asOfDate, session, user.especialidad),
     athlete: Object.fromEntries(['modo_entrada', 'categoria', 'especialidad'].map(k => [k, evidence(user[k] ?? null, `usuarios.${k}`, user[k] ?? null)])),
     goals: { primary: resolveEvidence(primary), secondary, disciplineSpecific, competition,
       detail: profile.objetivo_detalle == null ? [] : [evidence(profile.objetivo_detalle, 'usuarios.perfil.objetivo_detalle', profile.objetivo_detalle, record(profile.objetivo_detalle).updated_at)] },

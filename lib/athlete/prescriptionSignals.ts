@@ -3,7 +3,7 @@ import { resolveTrainingEnvironment, type EnvironmentEvidence } from '../sports/
 import { resolveSessionTrainingEnvironment, type SessionEnvironmentInput } from '../sports/sessionTrainingEnvironment';
 
 export type SignalState = 'available' | 'unavailable' | 'unknown' | 'ambiguous';
-export type PrescriptionSignal = { state: SignalState; source: string | null; updatedAt: string | null };
+export type PrescriptionSignal = { state: SignalState; source: string | null; updatedAt: string | null; sources?: string[] };
 export type PrescriptionSignals = { version: 1; signals: Record<string, PrescriptionSignal>; location: unknown;
   environment?: EnvironmentEvidence;
   maxHrMethod: 'declared_real' | 'estimated' | 'unknown' };
@@ -19,7 +19,7 @@ const materialAliases: Record<string, string[]> = {
   'skierg': ['ski_erg'], 'sled / trineo': ['sled'], 'remo / rowerg': ['remo'], 'wall balls': ['balon_medicinal'], 'sandbag': ['sandbag'],
 };
 /** Material, then environment capabilities, then persistent answers and date overrides. */
-export function projectPrescriptionSignals(raw: unknown, asOfDate?: string, session?: SessionEnvironmentInput): PrescriptionSignals {
+export function projectPrescriptionSignals(raw: unknown, asOfDate?: string, session?: SessionEnvironmentInput, specialty?: unknown): PrescriptionSignals {
   const profile = object(raw), signals: Record<string, PrescriptionSignal> = {};
   const set = (id: string, state: SignalState, source: string, updatedAt: string | null = null) => {
     if (signalIds.includes(id)) signals[id] = { state, source, updatedAt };
@@ -44,6 +44,21 @@ export function projectPrescriptionSignals(raw: unknown, asOfDate?: string, sess
     if (typeof level !== 'string') continue;
     if (['avanzado (+3 años)', 'avanzado (corro con frecuencia)', 'competidor'].map(normalized).includes(normalized(level))) set(`skill.${discipline}.advanced`, 'available', `usuarios.perfil.${field}`);
     else if (/^(principiante|intermedio)/.test(normalized(level))) set(`skill.${discipline}.advanced`, 'unavailable', `usuarios.perfil.${field}`);
+  }
+  // Only the Carrera questionnaire's exact options establish equivalence for generic "nivel".
+  // Another specialty's similarly named level must not authorize running skills.
+  if (specialty === 'carrera' && typeof profile.nivel === 'string') {
+    const levels: Record<string, SignalState> = { 'inicio ahora (0-3 meses)': 'unavailable',
+      'principiante (3-12 meses)': 'unavailable', 'intermedio (1-3 anos)': 'unavailable', 'avanzado (+3 anos)': 'available' };
+    const level = normalized(profile.nivel);
+    if (Object.hasOwn(levels, level)) {
+      const id = 'skill.carrera.advanced', source = 'usuarios.perfil.nivel', previous = signals[id];
+      if (profile.nivel_carrera !== undefined && profile.nivel_carrera !== null) {
+        const sources = ['usuarios.perfil.nivel_carrera', source];
+        signals[id] = { state: previous.state === levels[level] ? previous.state : 'ambiguous',
+          source: previous.source, sources, updatedAt: null };
+      } else set(id, levels[level], source);
+    }
   }
   // Explicit progressive answers replace the earlier declaration for that signal only.
   const stored = object(profile.prescription_signals);

@@ -1,4 +1,5 @@
 'use client';
+import { captureAthleteTestFacts } from '@/lib/athlete/testCapture';
 import type { WeeklyGenerationContext } from '@/lib/planning/weeklyGeneration';
 import { noWeeklyPrescription, weeklyGenerationOutcomeMessage } from '@/lib/planning/weeklyRegeneration';
 import { contextualPhysiology } from "@/lib/physiology/authority";
@@ -2344,6 +2345,10 @@ const registrarMarca=async()=>{
     const esp=espKey||categoria!;
     const testStr=Object.entries(testAtleta).map(([k,v])=>`${k}: ${Array.isArray(v)?v.join(", "):v}`).join("\n");
     try{
+      if(!codigoUsuario) throw new Error('ATHLETE_TEST_IDENTITY_REQUIRED');
+      const facts=captureAthleteTestFacts(testAtleta,TEST_ATLETA[esp]||[],new Date().toISOString());
+      const saved=await apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{test_atleta:facts}});
+      if(saved?.ok!==true) throw new Error('ATHLETE_TEST_SAVE_FAILED');
       const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:1500,
         system:`Eres un analizador de rendimiento deportivo. Analiza los datos del test de atleta y genera un informe JSON estructurado. Responde SOLO con JSON válido sin markdown.
 Disciplina: ${esp}
@@ -2370,10 +2375,8 @@ ${testStr}`}]});
       const informe=JSON.parse(clean);
       setResultadoTest(informe);
       if(codigoUsuario){
-        apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{
-          test_atleta:{...testAtleta,informe,fecha:new Date().toISOString()},
-          test_atleta_fecha:new Date().toISOString()
-        }});
+        const analysisSaved=await apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{test_atleta:{...facts,informe}}});
+        if(analysisSaved?.ok!==true) throw new Error('ATHLETE_TEST_ANALYSIS_SAVE_FAILED');
         const betaRes=await apiCall({action:"verificar_activar_beta",codigo:codigoUsuario});
         if(betaRes?.activado){
           setBetaFounderInfo({numero:betaRes.beta_number,maxSlots:betaRes.max_slots,meses:betaRes.meses_premium});

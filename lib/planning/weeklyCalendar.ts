@@ -9,7 +9,8 @@ export function calendarState(s: Record<string, any>): CalendarState {
   if (s.stimulusId === 'recuperacion_activa' || (s.tipo === 'carrera' && s.titulo?.startsWith('recuperacion activa · '))) return 'RECOVERY';
   return 'TRAIN';
 }
-export const isProtectedCalendarSession = (s: Record<string, any>) => s.completada === true || ['REST', 'RECOVERY', 'UNAVAILABLE'].includes(calendarState(s));
+export const isProtectedCalendarSession = (s: Record<string, any>, activeRegeneration = false, past = false) =>
+  s.completada === true || ((!activeRegeneration || past) && ['REST', 'RECOVERY', 'UNAVAILABLE'].includes(calendarState(s)));
 /** Existing identity admission accepts server-selected indices; never take these from the client. */
 export const protectedCalendarSessionIndices = (sessions: readonly Record<string, any>[]) =>
   sessions.flatMap((session, index) => isProtectedCalendarSession(session) ? [index] : []);

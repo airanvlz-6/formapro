@@ -1,3 +1,4 @@
+import { weeklyRegenerationOutcome } from './weeklyRegeneration';
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { buildAllowedWeeklyPlanContract, validateWeeklySelection, type AllowedWeeklyPlanContract } from './allowedWeeklyPlanContract';
 import { loadWeeklyPlanningContext } from './prepareAllowedWeeklyPlanContract';
@@ -67,11 +68,13 @@ export async function issueWeeklyCalendar(db: any, codigo: string, week: string,
         rejectWeekly('WEEKLY_SLOT_MISMATCH');
       const original = request.snapshot?.sessions.find(s => calendarKey(s.dia) === day);
       return { day, targetDate: date.toISOString().slice(0, 10), ...option,
-        ...(option.protected && original ? { protectedSessionDigest: weeklyDigest(original) } : {}) };
+        ...(option.protected && original && sessions.some(s => calendarKey(s.dia) === day
+          && weeklyDigest(Object.fromEntries(Object.entries(s).filter(([key]) => key !== 'weeklyProtected'))) === weeklyDigest(original)) ? { protectedSessionDigest: weeklyDigest(original) } : {}) };
     });
     authority = { protocolVersion: 2, contractVersion: contract.contractVersion, policyVersion: contract.policyVersion,
       contractDigest: weeklyDigest(contract), contextDigest: contract.contextDigest, prescriptionScope: contract.prescriptionScope,
       admittedSlots, snapshotDigest: snapshotDigest(request.snapshot), generationDigest: weeklyDigest(generationToken),
+      ...(contract.regeneration ? { regeneration: contract.regeneration } : {}),
       ...(contract.strategy ? { strategy: contract.strategy } : {}),
       planning: { today: request.today, empezarHoy: request.empezarHoy,
         ...(request.strategyVersion === 1 ? { strategyVersion: 1, ...(request.strategyProposal !== undefined ? { strategyProposal: request.strategyProposal } : {}) } : {}) } };
@@ -118,6 +121,15 @@ export async function assertFreshWeeklyAuthority(db: any, codigo: string, week: 
     || rebuilt.contract.policyVersion !== evidence.policyVersion || rebuilt.contract.contractVersion !== evidence.contractVersion)
     rejectWeekly('WEEKLY_CONTEXT_STALE');
   return { evidence, contexts: current.input.contexts };
+}
+
+/** Save uses the signed calendar's preservation decisions, never old type or client flags. */
+export function weeklySaveAdmission(receipt: unknown, codigo: string, week: string, sessions: readonly { dia: string }[]) {
+  const evidence = verifyWeeklyCalendarReceipt(receipt, codigo, week, true);
+  const outcome = weeklyRegenerationOutcome(evidence.regeneration, evidence.admittedSlots);
+  const survivorIndices = sessions.flatMap((session, index) => evidence.admittedSlots.some((slot: { day: string; protectedSessionDigest?: string }) =>
+    slot.day === calendarKey(session.dia) && slot.protectedSessionDigest === weeklyDigest(session)) ? [index] : []);
+  return { outcome, survivorIndices };
 }
 
 /** Request fields are comparisons only; returned values originate from the signed server option. */

@@ -1,4 +1,4 @@
-import { protectedCalendarSessionIndices } from "@/lib/planning/weeklyCalendar";
+import { weeklySaveAdmission } from "@/lib/planning/weeklyCalendarAuthority";
 import { planBoundedWeek } from "@/lib/planning/prepareAllowedWeeklyPlanContract";
 import { admittedWeekObjective } from "@/lib/planning/weeklyCalendarAuthority";
 import { issueWholeWeekReceipt } from "@/lib/planning/weeklyCalendarAuthority";
@@ -4515,8 +4515,15 @@ if (action === "obtener_daily_briefing") {
     const planExistente = generation.snapshots[plan.week_start];
     const operationType = planExistente ? "regenerate_week" : "create_week";
     let weeklyEntries;
+    let survivorIndices: number[] = [];
+    try {
+      const admission = weeklySaveAdmission(datos.calendarReceipt, codigo, plan.week_start, planExistente?.sessions || []);
+      if (admission.outcome) return NextResponse.json(admission.outcome);
+      survivorIndices = admission.survivorIndices;
+    } catch (error) { return NextResponse.json({ ok: false, code: error && typeof error === "object" && "message" in error && typeof error.message === "string"
+      ? error.message : "WEEKLY_SAVE_ADMISSION_FAILED", canContinue: false }); }
     try { weeklyEntries = prepareWeeklyEntries(plan.sessions, planExistente,
-      datos.weeklyContractVersion === 1 ? protectedCalendarSessionIndices(planExistente?.sessions || []) : []); }
+      survivorIndices); }
     catch (error: any) { return NextResponse.json({ ok: false, error: error.message, retryable: false }); }
     plan.sessions = weeklyEntries.map(entry => entrySession(entry, planExistente));
     // FORGE CANONICAL STATE — unico punto autorizado para incrementar ciclo_actual.semana: cuando se

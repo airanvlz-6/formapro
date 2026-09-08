@@ -47,6 +47,8 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
     || new Set(existing.map(s => calendarKey(s.dia))).size !== existing.length)
     return { ok: false as const, code: 'WEEKLY_CONTEXT_INVALID', errors: ['EXISTING_DAYS_INVALID'] };
   let hasPast = false;
+  const activeRegeneration = !!request.snapshot && request.today >= request.targetWeekStart
+    && Date.parse(request.today) < Date.parse(request.targetWeekStart) + 7 * 86400000;
   for (const [index, day] of calendarDays.entries()) {
     const date = new Date(request.targetWeekStart + 'T12:00:00Z'); date.setUTCDate(date.getUTCDate() + index);
     const civil = date.toISOString().slice(0, 10);
@@ -59,15 +61,15 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
       console.warn('WEEKLY_FUTURE_COMPLETION_REJECTED', diagnostic);
       return { ok: false as const, code: 'WEEKLY_CONTEXT_INVALID', errors: ['FUTURE_COMPLETION_NOT_ALLOWED'], diagnostic };
     }
-    // Existing protected states and completed prescriptions are never rewritten.
-    if (before && isProtectedCalendarSession(before)) fixedSessions[day] = before;
+    // Completed history survives; replaceable old states are re-enumerated in the active week.
+    if (before && isProtectedCalendarSession(before, activeRegeneration, past)) fixedSessions[day] = before;
     else if (past) fixedSessions[day] = { dia: day, tipo: 'sin_registrar', titulo: 'Sin registrar',
       por_que: 'Día anterior al inicio de esta planificación', descripcion: 'No aplica — esta planificación comienza a partir de hoy.' };
     const external = Object.values(contexts).flatMap(context => context.externalLoadContext.activities).filter(a => a.days.includes(day));
     const externalDisciplines = [...new Set(external.map(a => a.discipline))];
     if (externalDisciplines.length > 1) return { ok: false as const, code: 'WEEKLY_CONTRACT_UNSATISFIABLE', errors: ['EXTERNAL_DAY_AMBIGUOUS'] };
     if (externalDisciplines.length && !past) {
-      if (before && before.tipo !== 'external_blocked') return { ok: false as const, code: 'WEEKLY_CONTRACT_UNSATISFIABLE', errors: ['EXTERNAL_PROTECTED_CONFLICT'] };
+      if (before && before.tipo !== 'external_blocked' && (!activeRegeneration || fixedSessions[day] === before)) return { ok: false as const, code: 'WEEKLY_CONTRACT_UNSATISFIABLE', errors: ['EXTERNAL_PROTECTED_CONFLICT'] };
       fixedSessions[day] ??= admitSessionContent({ dia: day }, codigo, request.targetWeekStart, { externalDiscipline: externalDisciplines[0] });
     }
     if (before && fixedSessions[day] === before && calendarState(before) === 'RECOVERY' && !before.completada) {
@@ -84,6 +86,8 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
   }
   return { ok: true as const, input: { targetWeekStart: request.targetWeekStart, prescriptionScope: c.scope,
     maxExecutableDays: c.max, completeNewWeek: !request.snapshot && !hasPast, allowed: c.allowed, contexts, fixed,
+    ...(activeRegeneration ? { regeneration: { pendingManagedDays: calendarDays.filter(day => !fixed[day]
+      && c.scope.managedDisciplines.some(discipline => c.allowed[discipline].includes(day))) } } : {}),
     ...(strategy ? { strategy } : {}) },
     fixedSessions: structuredClone(fixedSessions) };
 }
@@ -106,7 +110,8 @@ export async function planBoundedWeek(db: any, codigo: string, request: Paramete
   const sessions = calendarDays.map(day => {
     const option = proposal.selected[day];
     if (option.protected) return { ...structuredClone(prepared.fixedSessions[day]),
-      weeklyProtected: !!request.snapshot?.sessions.some(s => calendarKey(s.dia) === day) };
+      weeklyProtected: !!request.snapshot?.sessions.some(s => calendarKey(s.dia) === day
+        && weeklyDigest(s) === weeklyDigest(prepared.fixedSessions[day])) };
     if (option.state === 'REST') return { dia: day, state: 'REST', tipo: 'descanso', titulo_breve: 'Descanso', focus: '' };
     return { dia: day, state: option.state, discipline: option.discipline, tipo: option.discipline,
       stimulusId: option.stimulusId, intent: option.intent, titulo_breve: option.stimulusId!.replaceAll('_', ' '), focus: option.stimulusId,

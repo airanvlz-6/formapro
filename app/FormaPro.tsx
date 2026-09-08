@@ -1,4 +1,5 @@
 'use client';
+import { noWeeklyPrescription, weeklyGenerationOutcomeMessage } from '@/lib/planning/weeklyRegeneration';
 import { contextualPhysiology } from "@/lib/physiology/authority";
 import { useState, useRef, useEffect } from "react";
 import { aplicarTodasLasReglas } from "@/lib/validators/scientificRules";
@@ -640,9 +641,9 @@ export default function Forge() {
         setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu primera semana paso a paso — analizando bloque, distribuyendo días y diseñando cada sesión..."}]);
         const planFocusInicial=await orquestarGeneracionSemana();
         if(planFocusInicial?.goalRequirement || planFocusInicial?.preflightRequirement){setGenerandoSemana(false);return;}
-        const respuestaFocusInicial=planFocusInicial
+        const respuestaFocusInicial=planFocusInicial && planFocusInicial.ok!==false
           ? `✅ **Semana generada y guardada.**\n\nBloque: ${planFocusInicial.block_name} — ${planFocusInicial.week_objective}\n\nRevisa el detalle completo en **Mi Plan**. ¿Alguna duda?`
-          : "No se ha confirmado una semana nueva. El plan guardado, si existe, sigue disponible; revisemos lo ocurrido antes de intentar otra generación.";
+          : weeklyGenerationOutcomeMessage(planFocusInicial);
         setMensajes(prev=>[...prev,{role:"assistant",content:respuestaFocusInicial}]);
         setGenerandoSemana(false);
       })();
@@ -966,7 +967,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
 
     const preflight=await apiCall({action:"preflight_generacion_semana",codigo:codigoUsuario,datos:{generationToken:weeklyGeneration.token,targetWeekStart:weekStartOrchestrator,temporalIntent:empezarHoy ?? temporalAnswer,temporalReply}});
     if(preflight?.goalRequirement || preflight?.preflightRequirement) return preflight;
-    if(!preflight?.canContinue || typeof preflight.temporalDecision?.includeToday!=="boolean") return null;
+    if(!preflight?.canContinue || typeof preflight.temporalDecision?.includeToday!=="boolean") return { ...preflight, ok:false, canContinue:false };
     empezarHoy=preflight.temporalDecision.includeToday;
 
 
@@ -980,7 +981,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     // The server owns the two-proposal budget; client never multiplies Planner retries.
     const plannerRes=await apiCall({action:"planificar_semana",codigo:codigoUsuario,datos:{weeklyContractVersion:1,analisis,generationToken:weeklyGeneration.token,targetWeekStart:weekStartOrchestrator,empezarHoy}});
     if(plannerRes?.goalRequirement) return {goalRequirement:plannerRes.goalRequirement};
-    if(!plannerRes?.ok || plannerRes.estructura?.weeklyContractVersion!==1) return null;
+    if(!plannerRes?.ok || plannerRes.estructura?.weeklyContractVersion!==1) return { ...plannerRes, ok:false, canContinue:false };
     const estructura=plannerRes.estructura;
 
     // FIX CRITICO DE RAIZ: calcular el weekStart REAL (con la logica de "si la semana actual ya
@@ -1035,6 +1036,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     });
 
     console.log("ORCHESTRATOR_BUILDER_TARGETS", {planningRunId:weeklyGeneration.planningRunId ?? null, count:diasAConstruir.length, days:diasAConstruir.map((d:any)=>d.dia)});
+    if(!diasAConstruir.length) return noWeeklyPrescription('EMPTY_BUILDER_TARGETS');
     const todasLasSesionesOrden=estructura.sessions||[];
     const resultadosParalelos=await Promise.all(
       diasAConstruir.map((diaEstructura:any)=>{
@@ -1087,7 +1089,11 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
       // no se inventan, se marcan simplemente como no disponibles para ese periodo.
       ...diasPasadosSinReportar.map((d:any)=>({dia:d.dia,tipo:d.tipo,titulo:"Sin registrar",por_que:"Día anterior al inicio de esta planificación",descripcion:"No aplica — esta planificación comienza a partir de hoy.",completada:false}))
     ];
-    console.log("ORCHESTRATOR: sesiones completas construidas:", sesionesCompletas.length, "de 7 esperadas");
+    console.log("ORCHESTRATOR_ASSEMBLY", { builderTargets:diasAConstruir.length,
+      builderSuccesses:resultadosParalelos.filter(r=>r?.ok && r.sesion).length,
+      preserved:diasYaCompletados.length, rest:sesionesCompletas.filter(s=>s.tipo==="descanso").length,
+      unavailable:sesionesCompletas.filter(s=>["external_blocked","sin_registrar","unavailable"].includes(s.tipo)).length,
+      assembledSlots:sesionesCompletas.length });
 
     // Diagnostic rules cannot mutate a prescription validated by the server.
     const esDeload=analisis.tipo_semana==="deload";
@@ -1135,7 +1141,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     const resultadoGuardado=await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planCompleto,generationToken:weeklyGeneration.token,calendarReceipt:estructura.calendarReceipt,weeklyContractVersion:estructura.weeklyContractVersion}});
     if(resultadoGuardado?.ok!==true){
       cargarPlanSemanal(codigoUsuario);
-      return null;
+      return { ...resultadoGuardado, ok:false, canContinue:false };
     }
 
     // The server receipt confirms persistence. Never replay this proposal after a write.
@@ -1295,6 +1301,10 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
             setMensajes(prev=>[...prev,{role:"assistant",content:result.question.text}]);
           }
           return weeklyGeneration ? {...result,weeklyGeneration} : result; }
+        if(body.action==="guardar_plan_semana") {
+          const result=await res.json();
+          return { ...result, ok:false, canContinue:false };
+        }
         intentos++;
         await new Promise(r=>setTimeout(r,1000));
       }catch(e:any){
@@ -1755,9 +1765,9 @@ const forgeValidator=(texto:string):string=>{
     try {
       const plan=await orquestarGeneracionSemana(undefined,temporalAnswer,answeringQuestion);
       if(plan?.goalRequirement || plan?.preflightRequirement) return;
-      const respuestaFinalGen=plan
+      const respuestaFinalGen=plan && plan.ok!==false
         ? `✅ **Semana generada y guardada.**\n\nBloque: ${plan.block_name} — ${plan.week_objective}\n\nRevisa el detalle completo en **Mi Plan**.`
-        : "No se ha confirmado una semana nueva. El plan guardado, si existe, sigue disponible; revisemos lo ocurrido antes de intentar otra generación.";
+        : weeklyGenerationOutcomeMessage(plan);
       setMensajes(prev=>[...prev,{role:"assistant",content:respuestaFinalGen}]);
       const histConGeneracion=[...historial,{role:"user",content:temporalAnswer||"Genera mi semana"},{role:"assistant",content:respuestaFinalGen}];
       setHistorial(histConGeneracion);
@@ -1778,9 +1788,9 @@ const forgeValidator=(texto:string):string=>{
           setPendingGoalQuestion(null);setGenerandoSemana(true);
           setMensajes(prev=>[...prev,{role:"assistant",content:"Objetivo principal guardado y comprobado. Continúo con la planificación."}]);
           const plan=await orquestarGeneracionSemana(pendingGoalQuestion.empezarHoy,pendingGoalQuestion.temporalAnswer,pendingGoalQuestion.temporalReply);
-          if(!plan?.goalRequirement && !plan?.preflightRequirement) setMensajes(prev=>[...prev,{role:"assistant",content:plan
+          if(!plan?.goalRequirement && !plan?.preflightRequirement) setMensajes(prev=>[...prev,{role:"assistant",content:plan && plan.ok!==false
             ? `✅ **Semana generada y guardada.**\n\n${plan.week_objective}\n\nRevisa el detalle en **Mi Plan**.`
-            : "No se ha confirmado una semana nueva. Puedes volver a solicitarla para comprobar el contexto actual."}]);
+            : weeklyGenerationOutcomeMessage(plan)}]);
         }else if(!result.goalRequirement){
           setPendingGoalQuestion(null);
           if(result.saved){setObjetivoPrincipal(result.primaryGoal);setRespuestas(result.profile);}

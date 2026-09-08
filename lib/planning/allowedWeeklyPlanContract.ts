@@ -1,3 +1,4 @@
+import { noWeeklyPrescription, executablePrescriptionCounts, type RegenerationPolicy } from './weeklyRegeneration';
 import { createHash } from 'node:crypto';
 import { normalizeWeeklyPlannerTransport } from './weeklyPlannerTransport';
 import { emitWeeklyPlannerDiagnostic, type PlannerCompletion, type PlannerMetadata } from './weeklyPlannerDiagnostics';
@@ -18,12 +19,14 @@ export type AllowedWeeklyPlanContract = {
   frequencyPolicy: { maxExecutableDays: number; minExecutableDays: 1; requireGenuineRest: boolean };
   dayOptions: Record<string, WeeklyOption[]>;
   strategy?: CanonicalWeekStrategy;
+  regeneration?: RegenerationPolicy;
 };
 export type WeeklyContractInput = {
   targetWeekStart: string; prescriptionScope: PrescriptionScope; maxExecutableDays: number;
   completeNewWeek: boolean; allowed: Record<string, string[]>;
   contexts: Record<string, ContractInput>;
   strategy?: CanonicalWeekStrategy;
+  regeneration?: RegenerationPolicy;
   // Only the server adapter derives these from protected history/external/past days.
   fixed: Record<string, { state: WeeklyOption['state']; discipline?: string }>;
 };
@@ -38,18 +41,18 @@ function covers(option: WeeklyOption, group: Coverage): boolean {
 /** Finite existence proof over seven days, count, rest and demand bits. No session dosing or interday physiology. */
 function coverageFeasible(contract: AllowedWeeklyPlanContract, groups: Coverage[]): boolean {
   const full = (1 << groups.length) - 1;
-  let states = new Set(['0:0:0']);
+  let states = new Set(['0:0:0:0']);
   for (const day of calendarDays) {
-    const signatures = [...new Set(contract.dayOptions[day].map(o => `${Number(isExecutableCalendarState(o.state))}:${Number(o.state === 'REST')}:${groups.reduce((mask, g, i) => mask | (covers(o, g) ? 1 << i : 0), 0)}`))];
+    const signatures = [...new Set(contract.dayOptions[day].map(o => `${Number(isExecutableCalendarState(o.state))}:${Number(o.state === 'REST')}:${groups.reduce((mask, g, i) => mask | (covers(o, g) ? 1 << i : 0), 0)}:${Number(!o.protected && isExecutableCalendarState(o.state))}`))];
     const next = new Set<string>();
     for (const state of states) for (const signature of signatures) {
-      const [n, rest, mask] = state.split(':').map(Number), [add, r, bits] = signature.split(':').map(Number);
-      if (n + add <= contract.frequencyPolicy.maxExecutableDays) next.add(`${n + add}:${rest | r}:${mask | bits}`);
+      const [n, rest, mask, fresh] = state.split(':').map(Number), [add, r, bits, addedFresh] = signature.split(':').map(Number);
+      if (n + add <= contract.frequencyPolicy.maxExecutableDays) next.add(`${n + add}:${rest | r}:${mask | bits}:${fresh | addedFresh}`);
     }
     states = next;
   }
-  return [...states].some(s => { const [n, rest, mask] = s.split(':').map(Number);
-    return n >= 1 && (!contract.frequencyPolicy.requireGenuineRest || !!rest) && mask === full; });
+  return [...states].some(s => { const [n, rest, mask, fresh] = s.split(':').map(Number);
+    return n >= 1 && (!contract.frequencyPolicy.requireGenuineRest || !!rest) && mask === full && (!contract.regeneration || !!fresh); });
 }
 function bindStrategicCoverage(contract: AllowedWeeklyPlanContract) {
   const strategy = contract.strategy!;
@@ -113,14 +116,20 @@ export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput, diagn
       prescriptionScope: structuredClone(input.prescriptionScope), contextDigest: createHash('sha256').update(JSON.stringify(input)).digest('hex'),
       frequencyPolicy: { maxExecutableDays: input.maxExecutableDays, minExecutableDays: 1,
         requireGenuineRest: input.completeNewWeek && Object.values(dayOptions).some(options => options.some(o => o.state === 'REST')) }, dayOptions,
+      ...(input.regeneration ? { regeneration: structuredClone(input.regeneration) } : {}),
       ...(input.strategy ? { strategy: structuredClone(input.strategy) } : {}),
     };
+    if (contract.regeneration && !contract.regeneration.pendingManagedDays.length)
+      return noWeeklyPrescription('NO_REMAINING_MANAGED_DAYS');
     const fixedCalendar = validateWeeklyCalendar(calendarDays.map(day => {
       const fixed = input.fixed[day];
       return { dia: day, tipo: fixed && isExecutableCalendarState(fixed.state) ? fixed.discipline : 'descanso',
         ...(fixed?.state === 'RECOVERY' ? { stimulusId: 'recuperacion_activa' } : {}) };
     }), input.maxExecutableDays, input.allowed);
     if (!fixedCalendar.ok) return failure('WEEKLY_CONTRACT_UNSATISFIABLE', fixedCalendar.errors);
+    if (contract.regeneration) {
+      if (!coverageFeasible(contract, [])) return noWeeklyPrescription('NO_FEASIBLE_REMAINING_SELECTION');
+    }
     // Finite DP over count/rest, not the Cartesian product of candidate sessions.
     let states = new Set(['0:0']);
     for (const day of calendarDays) {
@@ -160,17 +169,21 @@ export function validateWeeklySelection(contract: AllowedWeeklyPlanContract, pro
     selected[s.day] = option;
   }
   const options = Object.values(selected);
+  const prescriptionCounts = executablePrescriptionCounts(options);
+  if (contract.regeneration && !prescriptionCounts.newExecutableDays)
+    return noWeeklyPrescription('NO_NEW_EXECUTABLE_SELECTION');
   const count = options.filter(o => isExecutableCalendarState(o.state)).length;
   if (count > contract.frequencyPolicy.maxExecutableDays) return failure('WEEKLY_SELECTION_INVALID', ['WEEKLY_EXECUTABLE_LIMIT']);
   if (count < contract.frequencyPolicy.minExecutableDays) return failure('WEEKLY_SELECTION_INVALID', ['WEEKLY_NO_EXECUTABLE_SELECTION']);
   if (contract.frequencyPolicy.requireGenuineRest && !options.some(o => o.state === 'REST')) return failure('WEEKLY_SELECTION_INVALID', ['WEEKLY_REST_REQUIRED']);
   if (contract.strategy?.coverage.some(group => !options.some(option => covers(option, group))))
     return failure('WEEKLY_SELECTION_INVALID', ['WEEKLY_STRATEGY_COVERAGE_REQUIRED']);
-  return { ok: true as const, selected };
+  return { ok: true as const, selected, ...prescriptionCounts };
 }
 
 export function weeklyPlannerPrompt(contract: AllowedWeeklyPlanContract) {
   return `Selecciona una semana exclusivamente entre las opciones del contrato JSON. Disponibilidad es permiso, no obligación.
+Si regeneration está presente, selecciona al menos una opción ejecutable NO protegida; la historia preservada no satisface el trabajo pendiente.
 TRAIN y RECOVERY cuentan hacia maxExecutableDays. RECOVERY no sustituye REST. No inventes movimientos ni objetivos específicos.
 Si existe strategy, debes cubrir TODOS sus grupos coverage con las opciones seleccionadas. Respeta roles y métodos; deferred explica lo que no puede exigirse esta semana.
 Devuelve exclusivamente JSON RAW: el objeto directamente. El primer carácter de la respuesta DEBE ser { y el último carácter DEBE ser }.
@@ -211,9 +224,10 @@ export async function composeBoundedWeek(contract: AllowedWeeklyPlanContract, co
     }
     catch { errors = ['WEEKLY_JSON_INVALID']; report(raw, false, errors, raw.length > 32000 ? 'RAW_TOO_LONG' : 'JSON_PARSE_FAILED'); continue; }
     const result = validateWeeklySelection(immutable, parsed);
-    report(raw, true, result.ok ? [] : result.errors, null);
+    report(raw, true, result.ok ? [] : ('errors' in result ? result.errors : [result.code]), null);
     if (result.ok) return { ok: true as const, contract: immutable, selected: result.selected, attempts: attempt };
-    errors = result.errors;
+    errors = 'errors' in result ? result.errors : [result.code];
   }
+  if (errors.includes('NO_NEW_EXECUTABLE_PRESCRIPTION')) return noWeeklyPrescription('NO_NEW_EXECUTABLE_SELECTION');
   return failure('WEEKLY_PLANNER_REJECTED', errors);
 }

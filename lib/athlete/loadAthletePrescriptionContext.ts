@@ -9,6 +9,7 @@ import { legacySessionView } from '../sports/sessionPresentation';
 import { resolveCompletionDate } from '../planning/recordCompletion';
 import { resolvePlanningStrategy } from './strategyResolution';
 import { projectRunningDoseBaseline } from './runningDoseEvidence';
+import { admitRunningDoseEvidence } from '../sports/runningDoseEvidenceAuthority';
 
 export type PreparedPrescriptionReadiness = { userCodigo: string; effectiveDate: string;
   source: 'canonical_readiness_engine'; result: ReadinessResultado };
@@ -64,8 +65,9 @@ export async function loadAthletePrescriptionContext(db: any, userCodigo: string
   const datedHistory = history.map(raw => ({ raw, effective: resolveCompletionDate(record(raw).fecha) }));
   const signals = recovery.objective;
   const projected = projectAthletePrescriptionProfile(profile, options.prescriptionDate || options.asOfDate, options.sessionEnvironment);
+  const runningDoseBaseline = projectRunningDoseBaseline(profile, plans as unknown[], projected.running.references, options.asOfDate);
   return structuredClone({ ...projected, planningStrategy: resolvePlanningStrategy(projected), userCodigo, asOfDate: options.asOfDate,
-    runningDoseBaseline: projectRunningDoseBaseline(profile, plans as unknown[], projected.running.references, options.asOfDate),
+    runningDoseBaseline, runningDoseEvidenceAdmission: admitRunningDoseEvidence(runningDoseBaseline),
     physiology: { source: 'prepareRecoveryContext', recovery, missingSignals: ['hrv', 'restingHr', 'sleepDuration', 'sleepScore']
       .filter(k => record(record(signals)[k]).status !== 'available') },
     readiness: options.readiness ? { status: 'available' as const, ...options.readiness }

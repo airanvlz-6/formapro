@@ -5,6 +5,7 @@ import type { StructuredSessionProposal } from './structuredSession';
 import { checkDoseExtension } from './sessionDose';
 import { prescriptionGenerationOptions } from './prescriptionDataSufficiency';
 import { MOVEMENT_LIBRARY } from './movementLibrary';
+import { runningIntensityPolicy, INTENSITY_DIAGNOSTICS, type IntensityDiagnostic } from './runningIntensityPolicies';
 
 export type IntensityEvidence = {
   kind: 'DIRECT' | 'DERIVED' | 'ESTIMATED' | 'SUBJECTIVE';
@@ -20,15 +21,15 @@ export type IntensityTarget = { movementId: string; primary: DoseIntensity; evid
   secondary?: { metric: 'rpe' | 'rir'; value: number; max?: number; purpose: 'perception_guide'; evidence: IntensityEvidence } };
 /** A server policy supplies complete targets; the model never resolves their metric/range. Main scope is explicit. */
 export type MethodIntensityPolicy = { id: string; version: number; methodId: string; scope: 'main'; targets: IntensityTarget[] };
-export type MethodIntensityAuthority = { version: 1; methodId: string | null; scope: 'main'; sourceDigest: string } & (
+export type MethodIntensityAuthority = { version: 1 | 2; methodId: string | null; scope: 'main'; sourceDigest: string;
+  diagnostics?: IntensityDiagnostic[] } & (
   { status: 'UNRESOLVED'; reason: 'NO_METHOD_POLICY' | 'POLICY_NOT_EXECUTABLE'; policy: null; targets: [] }
   | { status: 'RESOLVED'; reason: 'AUTHORIZED_POLICY'; policy: { id: string; version: number }; targets: IntensityTarget[] });
 
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-const sourceDigest = (c: AllowedTrainingContract) => digest({ intent: c.intent ?? null, movements: c.allowedMovementIds,
-  references: c.doseContext?.references ?? [], signals: c.doseContext?.sufficiency ?? null });
-// C1 deliberately activates no sports ranges or metric priorities. Domain policies require separate authorization.
-const policies: readonly MethodIntensityPolicy[] = [];
+const sourceDigest = (c: AllowedTrainingContract, version: 1 | 2 = 1) => digest({ intent: c.intent ?? null, movements: c.allowedMovementIds,
+  references: c.doseContext?.references ?? [], signals: c.doseContext?.sufficiency ?? null,
+  ...(version === 2 ? { structures: c.allowedStructureIds, referenceResolution: c.doseContext?.referenceResolution ?? null } : {}) });
 
 function validEvidence(e: IntensityEvidence): boolean {
   return !!e && ['DIRECT', 'DERIVED', 'ESTIMATED', 'SUBJECTIVE'].includes(e.kind)
@@ -63,19 +64,25 @@ function executable(c: AllowedTrainingContract, target: IntensityTarget): boolea
 /** Optional policy argument is a server/domain composition boundary, never a Builder input. */
 export function resolveMethodIntensity(c: AllowedTrainingContract, policy?: MethodIntensityPolicy): MethodIntensityAuthority {
   const methodId = c.intent?.kind === 'adaptation' ? c.intent.methodId : null;
-  const selected = policy ?? policies.find(p => p.methodId === methodId);
-  const base = { version: 1 as const, methodId, scope: 'main' as const, sourceDigest: sourceDigest(c) };
-  if (!selected) return { ...base, status: 'UNRESOLVED', reason: 'NO_METHOD_POLICY', policy: null, targets: [] };
+  const domain = policy ? null : runningIntensityPolicy(c);
+  const selected = policy ?? domain?.policy;
+  const version = domain ? 2 as const : 1 as const;
+  const base = { version, methodId, scope: 'main' as const, sourceDigest: sourceDigest(c, version),
+    ...(domain ? { diagnostics: domain.diagnostics } : {}) };
+  if (!selected) return { ...base, status: 'UNRESOLVED', reason: domain ? 'POLICY_NOT_EXECUTABLE' : 'NO_METHOD_POLICY', policy: null, targets: [] };
   if (selected.methodId !== methodId || selected.scope !== 'main' || !selected.id || !Number.isSafeInteger(selected.version) || selected.version < 1
     || !selected.targets.length || new Set(selected.targets.map(t => t.movementId)).size !== selected.targets.length || !selected.targets.every(t => executable(c, t)))
-    return { ...base, status: 'UNRESOLVED', reason: 'POLICY_NOT_EXECUTABLE', policy: null, targets: [] };
+    return { ...base, ...(domain ? { diagnostics: ['METHOD_INTENSITY_POLICY_UNRESOLVED'] as IntensityDiagnostic[] } : {}),
+      status: 'UNRESOLVED', reason: 'POLICY_NOT_EXECUTABLE', policy: null, targets: [] };
   return { ...base, status: 'RESOLVED', reason: 'AUTHORIZED_POLICY', policy: { id: selected.id, version: selected.version }, targets: structuredClone(selected.targets) };
 }
 export function validMethodIntensity(c: AllowedTrainingContract): boolean {
   const a = c.intensityAuthority;
   if (a === undefined) return true; // Historical receipts have no C1 extension.
-  if (!a || a.version !== 1 || a.scope !== 'main' || a.sourceDigest !== sourceDigest(c)
+  if (!a || ![1, 2].includes(a.version) || a.scope !== 'main' || a.sourceDigest !== sourceDigest(c, a.version)
     || a.methodId !== (c.intent?.kind === 'adaptation' ? c.intent.methodId : null)) return false;
+  if (a.version === 2 && (!Array.isArray(a.diagnostics) || !a.diagnostics.length || a.diagnostics.length > INTENSITY_DIAGNOSTICS.length
+    || a.diagnostics.some(code => !INTENSITY_DIAGNOSTICS.includes(code)))) return false;
   if (a.status === 'UNRESOLVED') return ['NO_METHOD_POLICY', 'POLICY_NOT_EXECUTABLE'].includes(a.reason) && a.policy === null && Array.isArray(a.targets) && a.targets.length === 0;
   return a.status === 'RESOLVED' && a.reason === 'AUTHORIZED_POLICY' && !!a.methodId && !!a.policy?.id && Number.isSafeInteger(a.policy.version) && a.policy.version > 0
     && Array.isArray(a.targets) && a.targets.length > 0 && new Set(a.targets.map(t => t.movementId)).size === a.targets.length && a.targets.every(t => executable(c, t));

@@ -20,8 +20,9 @@ export async function generateContractSession(contract: AllowedTrainingContract,
   if (!preflight.ok) return { ok: false as const, code: 'TRAINING_CONTRACT_INVALID', violations: preflight.errors };
   const trace = builderTrace(authority, planningRunId);
   if (authority.intensityAuthority) {
-    try { console.info?.('METHOD_INTENSITY_AUTHORITY', { version: 1, status: authority.intensityAuthority.status,
-      reason: authority.intensityAuthority.reason, scope: 'main' }); } catch { /* Non-authoritative diagnostic. */ }
+    try { console.info?.('METHOD_INTENSITY_AUTHORITY', { version: authority.intensityAuthority.version, status: authority.intensityAuthority.status,
+      reason: authority.intensityAuthority.reason, scope: 'main',
+      ...(authority.intensityAuthority.version === 2 ? { codesCsv: authority.intensityAuthority.diagnostics?.join(',') } : {}) }); } catch { /* Non-authoritative diagnostic. */ }
   }
   const recent = structuredClone(history);
   const intentInstruction = authority.intent && authority.intent.kind !== 'stimulus_only'

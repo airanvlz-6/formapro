@@ -6,11 +6,14 @@ import { createHash } from 'node:crypto';
 import type { PrescriptionSignals } from '../athlete/prescriptionSignals';
 import type { SessionTimeDoseAuthority } from './sessionTimeDoseAuthority';
 import { timeAuthorityForIntent } from './sessionTimeDosePolicy';
+import type { IntensityEvidence } from './methodIntensityAuthority';
 
 export type DoseReference = { id: string; kind: '1rm' | 'running'; movementId?: string; metric?: string;
-  value: number | { min: number; max: number }; unit: 'kg' | 'bpm' | 'seconds_per_km'; source: string; observedAt: string | null };
+  value: number | { min: number; max: number }; unit: 'kg' | 'bpm' | 'seconds_per_km'; source: string; observedAt: string | null;
+  intensityEvidence?: IntensityEvidence };
 export type SessionDoseContext = { version: 1; policy: 'structured-dose-v1'; references: DoseReference[];
   sufficiency?: PrescriptionSignals;
+  referenceResolution?: { version: 1; running: Record<string, 'resolved' | 'unknown' | 'conflict'> };
   timeBudget: { maximumSeconds: number | null; minimumSeconds: number | null; status: string; source: string | null };
   timeAuthority?: SessionTimeDoseAuthority;
   weakness: { id: string; name: string | null; source: string } | null;
@@ -33,12 +36,16 @@ export function buildSessionDoseContext(context: AthletePrescriptionContext, int
   for (const [metric, r] of Object.entries(context.running.byMetric)) {
     const e = r.resolved; if (r.reason !== 'resolved' || !e) continue;
     const v = e.value;
+    const intensityEvidence: IntensityEvidence = { kind: 'DIRECT', resolution: 'RESOLVED', confidence: e.authority,
+      measurementBasis: 'DECLARED', source: e.source, inputs: [], algorithm: null, containsEstimatedData: false };
     if (['easyPace', 'thresholdPace', 'easyHr', 'thresholdHr', 'z1', 'z2', 'z3', 'z4', 'z5'].includes(metric)
       && ['bpm', 'seconds_per_km'].includes(v.unit)) references.push({ id: `running:${metric}`, kind: 'running', metric,
-      value: v.value, unit: v.unit as 'bpm' | 'seconds_per_km', source: e.source, observedAt: e.observedAt || null });
+      value: v.value, unit: v.unit as 'bpm' | 'seconds_per_km', source: e.source, observedAt: e.observedAt || null, intensityEvidence });
     if (['5k', '10k'].includes(metric) && v.unit === 'seconds' && typeof v.value === 'number')
       references.push({ id: `running:${metric}`, kind: 'running', metric, value: v.value / (metric === '5k' ? 5 : 10),
-        unit: 'seconds_per_km', source: e.source, observedAt: e.observedAt || null });
+        unit: 'seconds_per_km', source: e.source, observedAt: e.observedAt || null,
+        intensityEvidence: { ...intensityEvidence, kind: 'DERIVED', algorithm: { id: 'race_time_divided_by_kilometres', version: 1 },
+          inputs: [{ referenceId: `running:${metric}:time`, source: e.source, containsEstimatedData: false }] } });
   }
   const budget = context.sessionTimeBudget, time = budget.resolved;
   const weakness = intent?.kind === 'adaptation' && intent.weaknessId ? context.development.find(d =>
@@ -47,6 +54,9 @@ export function buildSessionDoseContext(context: AthletePrescriptionContext, int
   const timeBudget = { maximumSeconds: time?.value.maxMinutes != null ? time.value.maxMinutes * 60 : null,
     minimumSeconds: time?.value.minMinutes != null ? time.value.minMinutes * 60 : null, status: budget.reason, source: time?.source || null };
   return { version: 1, policy: 'structured-dose-v1', references,
+    referenceResolution: { version: 1, running: Object.fromEntries(Object.entries(context.running.byMetric)
+      .filter(([metric]) => ['easyPace', 'thresholdPace', 'easyHr', 'thresholdHr', 'z1', 'z2', 'z3', 'z4', 'z5', '5k', '10k'].includes(metric))
+      .map(([metric, resolution]) => [metric, resolution.reason])) },
     ...(enforceSufficiency ? { sufficiency: structuredClone(context.prescriptionSignals) } : {}),
     timeBudget, timeAuthority: timeAuthorityForIntent(timeBudget, intent),
     weakness: weakness ? { id: intent!.kind === 'adaptation' ? intent!.weaknessId! : '', name: weakness.value.nombre, source: weakness.source } : null,
@@ -59,6 +69,10 @@ export function buildSessionDoseContext(context: AthletePrescriptionContext, int
 
 export function validateDoseContext(c: SessionDoseContext): boolean {
   return !!c && c.version === 1 && c.policy === 'structured-dose-v1' && Array.isArray(c.references)
+    && (c.referenceResolution === undefined || c.referenceResolution.version === 1 && !!c.referenceResolution.running
+      && Object.entries(c.referenceResolution.running).every(([metric, state]) =>
+        ['easyPace', 'thresholdPace', 'easyHr', 'thresholdHr', 'z1', 'z2', 'z3', 'z4', 'z5', '5k', '10k'].includes(metric)
+        && ['resolved', 'unknown', 'conflict'].includes(state)))
     && (!Object.hasOwn(c, 'sufficiency') || !!c.sufficiency && c.sufficiency.version === 1 && !!c.sufficiency.signals
       && Object.values(c.sufficiency.signals).every(s => !!s && ['available', 'unavailable', 'unknown', 'ambiguous'].includes(s.state)
         && (s.source === null || typeof s.source === 'string')))

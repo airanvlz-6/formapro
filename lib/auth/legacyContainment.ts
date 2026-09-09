@@ -1,4 +1,5 @@
 import { hasCanonicalSpecialty, specialtyFromCategory } from '../sports/canonicalSpecialty';
+import { projectOnboardingAvailability } from '../athlete/onboardingAvailability';
 /** AUTH-1B1 containment only. This is not authentication or athlete ownership. */
 export function disabledLegacyOperation(action: unknown) {
   const codes: Record<string, string> = {
@@ -44,6 +45,8 @@ export function projectLegacyCreate(input: unknown) {
     const specialty = specialtyFromCategory(result.categoria);
     if (specialty) result.especialidad = specialty;
   }
+  if (Object.hasOwn(result, 'distribucion_semanal'))
+    result.distribucion_semanal = projectOnboardingAvailability(result);
   return result;
 }
 export function projectLegacyUpdate(input: unknown) {

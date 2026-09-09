@@ -140,9 +140,9 @@ export function renderContractSession(contract: AllowedTrainingContract, proposa
   const version = authenticatedPresentationVersion(presentationVersion);
   const validation = validateSessionAgainstTrainingContract(contract, proposal);
   if (!validation.ok) throw new Error(`SESSION_CONTRACT_INVALID:${validation.violations.join(',')}`);
-  if (version === 'human_v2') {
+  if (version === 'human_v2' || version === 'human_v3') {
     if (contract.contractVersion !== 3) throw new Error('SESSION_PRESENTATION_CONTRACT_UNSUPPORTED');
-    return renderHumanSession(contract, proposal);
+    return renderHumanSession(contract, proposal, version);
   }
   if (contract.contractVersion === 3) return renderProfessionalSession(contract, proposal);
   const headings = { warmup: 'Calentamiento', main: 'Bloque principal', cooldown: 'Vuelta a la calma' };

@@ -114,10 +114,10 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
     const recent = history.data.flatMap((p: any) => Array.isArray(p.sessions) ? p.sessions.filter((s: any) => s.completada && s.descripcion_real)
       .map((s: any) => ({ titulo: legacySessionView(s).titulo, descripcion_real: s.descripcion_real })) : []).slice(0, 5);
     const result = await generateContractSession(prepared.contract, recent, complete,
-      JSON.stringify({ serverProfile: profile, requestContext: context }), planningRunId, 'human_v2');
+      JSON.stringify({ serverProfile: profile, requestContext: context }), planningRunId, 'human_v3');
     if (!result.ok) return result;
     const payload = Buffer.from(JSON.stringify({ userCodigo, expiresAt: Date.now() + 30 * 60_000,
-      contract: result.contract, proposal: result.proposal, presentationVersion: 'human_v2', ...(weekly ? { weekly } : {}) })).toString('base64url');
+      contract: result.contract, proposal: result.proposal, presentationVersion: 'human_v3', ...(weekly ? { weekly } : {}) })).toString('base64url');
     const sessionReceipt = `${payload}.${signature(payload)}`;
     return { ok: true as const, trainingContract: result.contract, sesion: { ...result.session, sessionReceipt }, attempts: result.attempts, diagnostics: result.diagnostics };
   } catch (error: any) { return { ok: false as const, code: error.message?.startsWith('WEEKLY_') || error.message?.startsWith('CALENDAR_')

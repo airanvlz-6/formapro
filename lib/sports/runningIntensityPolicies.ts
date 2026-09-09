@@ -11,7 +11,7 @@ export const INTENSITY_DIAGNOSTICS: readonly IntensityDiagnostic[] = ['METHOD_IN
   'METHOD_INTENSITY_NO_CAPABILITY', 'METHOD_INTENSITY_NO_REFERENCE', 'METHOD_INTENSITY_REFERENCE_CONFLICT',
   'METHOD_INTENSITY_FALLBACK_RPE', 'METHOD_INTENSITY_POLICY_UNRESOLVED'];
 type DomainPolicy = {
-  id: string; version: 1; methodId: string; domain: string;
+  id: string; version: number; methodId: string; domain: string;
   compatiblePrimaryMetrics: readonly Metric[]; orderedMetricPreference: readonly Metric[];
   compatibleReferenceTypes: { hr: readonly string[]; pace: readonly string[] };
   perception: { value: number; max: number } | null;
@@ -32,11 +32,11 @@ export const RUNNING_INTENSITY_POLICIES: readonly DomainPolicy[] = [
     compatiblePrimaryMetrics: ['pace', 'hr', 'rpe'], orderedMetricPreference: ['pace', 'hr', 'rpe'],
     compatibleReferenceTypes: { hr: ['thresholdHr'], pace: ['thresholdPace'] }, perception: { value: 6, max: 7 },
     fallback: 'RPE', structures: ['intervalos_carrera', 'tempo_continuo'], requirements, provenance },
-  { id: 'running_specific_intensity', version: 1, methodId: 'running_specific', domain: 'goal_specific_endurance',
+  { id: 'running_specific_intensity', version: 2, methodId: 'running_specific', domain: 'goal_specific_endurance',
     compatiblePrimaryMetrics: ['pace', 'rpe'], orderedMetricPreference: ['pace', 'rpe'],
     compatibleReferenceTypes: { hr: [], pace: [] }, perception: null, fallback: 'RPE', structures: ['continuo_carrera'],
     goalVariants: { '10k': { pace: ['10k'], perception: { value: 6, max: 7 } },
-      half_marathon: { pace: [], perception: { value: 4, max: 5 } } }, requirements, provenance },
+      half_marathon: { pace: ['halfMarathon'], perception: { value: 4, max: 5 } } }, requirements, provenance },
   { id: 'running_vo2_intensity', version: 1, methodId: 'running_vo2', domain: 'high_aerobic_interval',
     compatiblePrimaryMetrics: ['rpe'], orderedMetricPreference: ['rpe'],
     compatibleReferenceTypes: { hr: [], pace: [] }, perception: { value: 8, max: 9 },

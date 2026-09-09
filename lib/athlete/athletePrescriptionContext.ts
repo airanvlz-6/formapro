@@ -78,16 +78,19 @@ function strengthReference(name: string, raw: unknown, source: string, sourceDat
   return evidence({ movementId, valueKg: validKg, referenceType, repsIfKnown, dateIfKnown: when }, source, raw, obj.updated_at ?? obj.updatedAt);
 }
 
-export type RunningReference = { metric: string; value: number | { min: number; max: number }; unit: 'bpm' | 'seconds_per_km' | 'seconds' | 'ml/kg/min' | 'km' };
+export type RunningReference = { metric: string; value: number | { min: number; max: number }; unit: 'bpm' | 'seconds_per_km' | 'seconds' | 'ml/kg/min' | 'km';
+  performanceRole?: 'UNCLASSIFIED_PERFORMANCE' | 'CURRENT_PERFORMANCE' | 'PERSONAL_BEST' | 'TARGET_PERFORMANCE' };
 const runningFields: Record<string, [string, RunningReference['unit']]> = {
   fc_max: ['maxHr', 'bpm'], fc_maxima: ['maxHr', 'bpm'], fc_reposo: ['restingHr', 'bpm'], umbral_fc: ['thresholdHr', 'bpm'],
   fc_suave: ['easyHr', 'bpm'], ritmo_suave: ['easyPace', 'seconds_per_km'], ritmo_z2: ['easyPace', 'seconds_per_km'],
   ritmo_umbral: ['thresholdPace', 'seconds_per_km'], tiempo_5k: ['5k', 'seconds'], tiempo_10k: ['10k', 'seconds'],
+  tiempo_media_maraton: ['halfMarathon', 'seconds'], tiempo_maraton: ['marathon', 'seconds'],
   vo2max: ['vo2max', 'ml/kg/min'], km_semana: ['weeklyDistance', 'km'],
   ...Object.fromEntries([1, 2, 3, 4, 5].flatMap(z => [[`z${z}_fc`, [`z${z}`, 'bpm']], [`z${z}`, [`z${z}`, 'bpm']]])) as Record<string, [string, 'bpm']>,
 };
 /** Exact editor keys; units, parsing and conflict resolution remain those of the existing metrics. */
-export const runningPerformanceAliases: Readonly<Record<string, string>> = { '5k': 'tiempo_5k', '10k': 'tiempo_10k' };
+export const runningPerformanceAliases: Readonly<Record<string, string>> = { '5k': 'tiempo_5k', '10k': 'tiempo_10k',
+  '21k': 'tiempo_media_maraton', '42k': 'tiempo_maraton' };
 const editorStrengthAliases: Readonly<Record<string, string>> = { bench: 'bench_press' };
 function parseRunning(value: unknown, metric: string, unit: RunningReference['unit']): RunningReference | null {
   if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
@@ -149,7 +152,15 @@ export function projectAthletePrescriptionProfile(user: Row, asOfDate?: string, 
         const compatibleUnit = explicitUnit === undefined || explicitUnit === unit || (unit === 'bpm' && explicitUnit === 'ppm')
           || (unit === 'seconds_per_km' && explicitUnit === 'min/km');
         const parsed = compatibleUnit ? parseRunning(obj.value ?? obj.valor ?? raw, metric, unit) : null;
-        if (parsed) running.push({ ...evidence(parsed, source, raw, obj.updated_at), observedAt: date(obj.fecha ?? values.fecha) });
+        if (parsed) {
+          if (unit === 'seconds' && Object.hasOwn(obj, 'performanceRole')) {
+            if (!['UNCLASSIFIED_PERFORMANCE', 'CURRENT_PERFORMANCE', 'PERSONAL_BEST', 'TARGET_PERFORMANCE'].includes(String(obj.performanceRole))) {
+              unparsed.push({ source, raw, reason: 'unknown_performance_role' }); continue;
+            }
+            parsed.performanceRole = obj.performanceRole as RunningReference['performanceRole'];
+          }
+          running.push({ ...evidence(parsed, source, raw, obj.updated_at), observedAt: date(obj.fecha ?? values.fecha) });
+        }
         else unparsed.push({ source, raw, reason: 'unknown_running_value_or_unit' });
       }
     }
@@ -160,7 +171,15 @@ export function projectAthletePrescriptionProfile(user: Row, asOfDate?: string, 
       const metricKey = Object.hasOwn(runningPerformanceAliases, key(name)) ? runningPerformanceAliases[key(name)] : key(name);
       if (Object.hasOwn(runningFields, metricKey)) {
         const [metric, unit] = runningFields[metricKey], parsed = parseRunning(row.valor, metric, unit);
-        if (parsed) running.push({ ...evidence(parsed, `usuarios.historial_marcas.${i}`, raw, row.updated_at), observedAt: date(row.fecha) });
+        if (parsed) {
+          if (unit === 'seconds' && Object.hasOwn(row, 'performanceRole')) {
+            if (!['UNCLASSIFIED_PERFORMANCE', 'CURRENT_PERFORMANCE', 'PERSONAL_BEST', 'TARGET_PERFORMANCE'].includes(String(row.performanceRole))) {
+              unparsed.push({ source: `usuarios.historial_marcas.${i}`, raw, reason: 'unknown_performance_role' }); return;
+            }
+            parsed.performanceRole = row.performanceRole as RunningReference['performanceRole'];
+          }
+          running.push({ ...evidence(parsed, `usuarios.historial_marcas.${i}`, raw, row.updated_at), observedAt: date(row.fecha) });
+        }
         else unparsed.push({ source: `usuarios.historial_marcas.${i}`, raw, reason: 'unknown_running_value_or_unit' });
       } else strength.push(strengthReference(name, row, `usuarios.historial_marcas.${i}`, row.fecha));
     }

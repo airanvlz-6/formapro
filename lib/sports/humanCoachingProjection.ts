@@ -25,7 +25,7 @@ export function humanWeeklyObjective(strategy: CanonicalWeekStrategy): string {
 }
 
 /** Pure, serializable editorial projection. Fallback events contain no input strings. */
-export function humanCoachingProjection(c: AllowedTrainingContract, p: StructuredSessionProposal) {
+export function humanCoachingProjection(c: AllowedTrainingContract, p: StructuredSessionProposal, showPerceptionGuide = false) {
   const fallbacks = new Set<string>();
   const label = (catalog: Readonly<Record<string, string>>, id: string | undefined, entity: string, fallback: string) => {
     if (id && Object.hasOwn(catalog, id)) return catalog[id];
@@ -58,7 +58,9 @@ export function humanCoachingProjection(c: AllowedTrainingContract, p: Structure
     if (i.kind === 'rpe' || i.kind === 'rir') return `${i.kind.toUpperCase()} ${range(i.value, i.max ?? i.value)}`;
     if (i.kind === 'percent_1rm') { const kg = calculatedLoad(c, d)!; return `${range(kg.minimumKg, kg.maximumKg)} kg (${range(i.value, i.max ?? i.value)}% 1RM)`; }
     const ref = doseReference(c, i)!;
-    const name = label(metricLabels, ref.metric, 'metric', 'Referencia prescrita');
+    const raceLabels: Readonly<Record<string, string>> = { halfMarathon: 'Ritmo medio de media maratón', marathon: 'Ritmo medio de maratón' };
+    const name = showPerceptionGuide && ref.metric && Object.hasOwn(raceLabels, ref.metric) ? raceLabels[ref.metric]
+      : label(metricLabels, ref.metric, 'metric', 'Referencia prescrita');
     const v = typeof ref.value === 'number' ? { min: ref.value, max: ref.value } : ref.value;
     return `${name} · ${ref.unit === 'bpm' ? `${range(v.min, v.max)} ppm` : v.min === v.max ? pace(v.min) : `${pace(v.min)}–${pace(v.max)}`}`;
   };
@@ -71,10 +73,13 @@ export function humanCoachingProjection(c: AllowedTrainingContract, p: Structure
       ...(format === 'complex' && f?.restSeconds !== undefined ? [`Descanso entre rondas: ${formatDuration(f.restSeconds)}`] : [])];
     return { heading: { warmup: 'CALENTAMIENTO', main: 'BLOQUE PRINCIPAL', cooldown: 'VUELTA A LA CALMA' }[b.blockType], formatLines,
       movements: b.movements.map(m => { const d = m.prescription;
+        const target = showPerceptionGuide && b.blockType === 'main' && c.intensityAuthority?.status === 'RESOLVED'
+          ? c.intensityAuthority.targets.find(t => t.movementId === m.movementId) : undefined;
+        const guide = target?.primary.kind === 'reference' ? target.secondary : undefined;
         const amount = d.reps ? `${d.reps}${d.perSide ? ' por lado' : ''}` : d.durationSeconds ? formatDuration(d.durationSeconds)
           : d.distanceMeters! >= 1000 ? `${num(d.distanceMeters! / 1000)} km` : `${num(d.distanceMeters!)} m`;
         return { name: label(movementLabels, m.movementId, 'movement', 'Ejercicio programado'),
-          dose: `${d.sets ? `${d.sets} × ` : ''}${amount} · ${intensity(d)}`,
+          dose: `${d.sets ? `${d.sets} × ` : ''}${amount} · ${intensity(d)}${guide ? ` · ${guide.metric.toUpperCase()} esperado ${range(guide.value, guide.max ?? guide.value)}` : ''}`,
           rest: d.restSeconds === undefined ? null : `${b.blockType === 'main' && format === 'intervals' ? 'Descanso entre intervalos' : 'Descanso'}: ${formatDuration(d.restSeconds)}`,
           tempo: d.tempo ? `Tempo: ${d.tempo.join('-')}` : null };
       }) };

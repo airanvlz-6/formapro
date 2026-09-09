@@ -1,5 +1,6 @@
 'use client';
 import { captureAthleteTestFacts } from '@/lib/athlete/testCapture';
+import { captureOnboardingGoal } from '@/lib/athlete/onboardingGoal';
 import { planBlockLabel } from '@/lib/sports/planPresentation';
 import type { WeeklyGenerationContext } from '@/lib/planning/weeklyGeneration';
 import { noWeeklyPrescription, weeklyGenerationOutcomeMessage } from '@/lib/planning/weeklyRegeneration';
@@ -52,7 +53,7 @@ const FORMULARIOS: Record<string, Pregunta[]> = {
     { id: "fc_max", label: "¿Conoces tu frecuencia cardíaca máxima real? (de un test o competición)", tipo: "texto", placeholder: "Ej: 190 — déjalo en blanco si no la conoces", condicionDe: "dispositivo", condicionValor: /pulsómetro/i },
     { id: "fc_reposo", label: "¿Conoces tu frecuencia cardíaca en reposo?", tipo: "texto", placeholder: "Ej: 55 — déjalo en blanco si no la conoces", condicionDe: "dispositivo", condicionValor: /pulsómetro/i },
     { id: "lesiones", label: "¿Tienes lesiones o molestias?", tipo: "texto", placeholder: "Ej: periostitis, fascitis, rodilla... o ninguna" },
-    { id: "objetivo_detalle", label: "¿Qué quieres conseguir exactamente?", tipo: "texto", placeholder: "Ej: completar mi primer 10K en junio, bajar de 45 min..." },
+    { id: "objetivo_detalle", goalRole: "PRIMARY", label: "¿Qué quieres conseguir exactamente?", tipo: "texto", placeholder: "Ej: completar mi primer 10K en junio, bajar de 45 min..." },
   ],
   funcional: [
     { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Más de 50"] },
@@ -78,7 +79,7 @@ const FORMULARIOS: Record<string, Pregunta[]> = {
     { id: "fc_max", label: "¿Conoces tu frecuencia cardíaca máxima real? (de un test o competición)", tipo: "texto", placeholder: "Ej: 190 — déjalo en blanco si no la conoces", condicionDe: "dispositivo", condicionValor: /pulsómetro/i },
     { id: "fc_reposo", label: "¿Conoces tu frecuencia cardíaca en reposo?", tipo: "texto", placeholder: "Ej: 55 — déjalo en blanco si no la conoces", condicionDe: "dispositivo", condicionValor: /pulsómetro/i },
     { id: "lesiones", label: "¿Lesiones o limitaciones actuales?", tipo: "texto", placeholder: "Ej: hombro, muñecas, lumbar... o ninguna" },
-    { id: "objetivo_detalle", label: "¿Qué quieres conseguir?", tipo: "texto", placeholder: "Ej: mejorar mi Fran, conseguir el muscle-up, competir en Open..." },
+    { id: "objetivo_detalle", goalRole: "PRIMARY", label: "¿Qué quieres conseguir?", tipo: "texto", placeholder: "Ej: mejorar mi Fran, conseguir el muscle-up, competir en Open..." },
   ],
   funcional_calistenia: [
     { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Más de 50"] },
@@ -91,7 +92,7 @@ const FORMULARIOS: Record<string, Pregunta[]> = {
     { id: "material", label: "¿Con qué equipamiento cuentas?", tipo: "multi", opciones: ["Barra de dominadas", "Paralelas / dips", "Anillas", "Parque de calistenia", "Solo suelo"] },
     { id: "objetivo_fisico", label: "¿Tienes también un objetivo físico?", tipo: "opciones", opciones: ["Solo skills y fuerza relativa", "Ganar algo de músculo", "Perder grasa mientras gano fuerza", "Solo mantenimiento y skills"] },
     { id: "lesiones", label: "¿Lesiones o limitaciones actuales?", tipo: "texto", placeholder: "Ej: hombro, codo, muñeca, lumbar... o ninguna" },
-    { id: "objetivo_detalle", label: "¿Qué quieres conseguir exactamente?", tipo: "texto", placeholder: "Ej: conseguir el front lever en 4 meses, dominar el handstand..." },
+    { id: "objetivo_detalle", goalRole: "PRIMARY", label: "¿Qué quieres conseguir exactamente?", tipo: "texto", placeholder: "Ej: conseguir el front lever en 4 meses, dominar el handstand..." },
   ],
   hibrido_hyrox: [
     { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Más de 50"] },
@@ -106,7 +107,7 @@ const FORMULARIOS: Record<string, Pregunta[]> = {
     { id: "fc_max", label: "¿Conoces tu frecuencia cardíaca máxima real? (de un test o competición)", tipo: "texto", placeholder: "Ej: 190 — déjalo en blanco si no la conoces", condicionDe: "dispositivo", condicionValor: /pulsómetro/i },
     { id: "fc_reposo", label: "¿Conoces tu frecuencia cardíaca en reposo?", tipo: "texto", placeholder: "Ej: 55 — déjalo en blanco si no la conoces", condicionDe: "dispositivo", condicionValor: /pulsómetro/i },
     { id: "lesiones", label: "¿Lesiones o limitaciones?", tipo: "texto", placeholder: "Ej: rodilla, hombro, lumbar... o ninguna" },
-    { id: "objetivo_detalle", label: "¿Cuál es tu objetivo principal?", tipo: "texto", placeholder: "Ej: terminar mi primer Hyrox, bajar de 1h30 en categoría Open..." },
+    { id: "objetivo_detalle", goalRole: "PRIMARY", label: "¿Cuál es tu objetivo principal?", tipo: "texto", placeholder: "Ej: terminar mi primer Hyrox, bajar de 1h30 en categoría Open..." },
   ],
   hibrido_general: [
     { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Más de 50"] },
@@ -122,7 +123,7 @@ const FORMULARIOS: Record<string, Pregunta[]> = {
     { id: "fc_max", label: "¿Conoces tu frecuencia cardíaca máxima real? (de un test o competición)", tipo: "texto", placeholder: "Ej: 190 — déjalo en blanco si no la conoces", condicionDe: "dispositivo", condicionValor: /pulsómetro/i },
     { id: "fc_reposo", label: "¿Conoces tu frecuencia cardíaca en reposo?", tipo: "texto", placeholder: "Ej: 55 — déjalo en blanco si no la conoces", condicionDe: "dispositivo", condicionValor: /pulsómetro/i },
     { id: "lesiones", label: "Lesiones o limitaciones relevantes?", tipo: "texto", placeholder: "Ej: hombro derecho limitado, lumbar recurrente, o ninguna" },
-    { id: "objetivo_detalle", label: "¿Qué quieres lograr en los próximos 3-6 meses?", tipo: "texto", placeholder: "Ej: aumentar peso muerto y correr 10K en menos de 50min..." },
+    { id: "objetivo_detalle", goalRole: "PRIMARY", label: "¿Qué quieres lograr en los próximos 3-6 meses?", tipo: "texto", placeholder: "Ej: aumentar peso muerto y correr 10K en menos de 50min..." },
   ],
   hibrido_ocr: [
     { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Más de 50"] },
@@ -137,7 +138,7 @@ const FORMULARIOS: Record<string, Pregunta[]> = {
     { id: "material", label: "¿Con qué equipamiento cuentas?", tipo: "multi", opciones: ["Barra de dominadas", "Anillas / TRX", "Kettlebells / sacos", "Cuerda de escalada", "Acceso a terreno trail", "Gimnasio completo", "Solo cuerpo y parque"] },
     { id: "proxima_carrera", label: "¿Tienes carrera próxima?", tipo: "opciones", opciones: ["Sí, en menos de 6 semanas", "Sí, en 6-12 semanas", "Sí, en más de 3 meses", "No tengo fecha aún"] },
     { id: "lesiones", label: "¿Lesiones o limitaciones actuales?", tipo: "texto", placeholder: "Ej: hombro, rodilla, muñeca... o ninguna" },
-    { id: "objetivo_detalle", label: "¿Cuál es tu objetivo principal?", tipo: "texto", placeholder: "Ej: terminar mi primer Spartan Beast, mejorar en obstáculos de agarre..." },
+    { id: "objetivo_detalle", goalRole: "PRIMARY", label: "¿Cuál es tu objetivo principal?", tipo: "texto", placeholder: "Ej: terminar mi primer Spartan Beast, mejorar en obstáculos de agarre..." },
   ],
   hibrido_triatlon: [
     { id: "edad", label: "¿Cuántos años tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Más de 50"] },
@@ -153,7 +154,7 @@ const FORMULARIOS: Record<string, Pregunta[]> = {
     { id: "fc_max", label: "¿Conoces tu frecuencia cardíaca máxima real? (de un test o competición)", tipo: "texto", placeholder: "Ej: 190 — déjalo en blanco si no la conoces", condicionDe: "dispositivo", condicionValor: /pulsómetro/i },
     { id: "fc_reposo", label: "¿Conoces tu frecuencia cardíaca en reposo?", tipo: "texto", placeholder: "Ej: 55 — déjalo en blanco si no la conoces", condicionDe: "dispositivo", condicionValor: /pulsómetro/i },
     { id: "lesiones", label: "¿Lesiones o limitaciones actuales?", tipo: "texto", placeholder: "Ej: hombro de nadador, rodilla ciclismo, fascitis... o ninguna" },
-    { id: "objetivo_detalle", label: "¿Cuál es tu objetivo principal?", tipo: "texto", placeholder: "Ej: terminar mi primer triatlón sprint, bajar de 5h en un Half..." },
+    { id: "objetivo_detalle", goalRole: "PRIMARY", label: "¿Cuál es tu objetivo principal?", tipo: "texto", placeholder: "Ej: terminar mi primer triatlón sprint, bajar de 5h en un Half..." },
   ],
   fuerza: [
     { id: "edad", label: "¿Cuántos anos tienes?", tipo: "opciones", opciones: ["Menos de 20", "20-30", "31-40", "41-50", "Mas de 50"] },
@@ -166,7 +167,7 @@ const FORMULARIOS: Record<string, Pregunta[]> = {
     { id: "duracion", label: "¿Cuánto tiempo por sesión?", tipo: "opciones", opciones: ["Hasta 1 hora", "Hasta 1h 30min", "Hasta 2 horas", "Mas de 2 horas"] },
     { id: "puntos_debiles", label: "¿Cuál es tu eslabón más débil?", tipo: "texto", placeholder: "Ej: cajon bajo en sentadilla, lockout en press banca..." },
     { id: "lesiones", label: "¿Lesiones o limitaciones?", tipo: "texto", placeholder: "Ej: muñecas limitadas, lumbar sensible, o ninguna" },
-    { id: "objetivo_detalle", label: "¿Qué quieres lograr exactamente?", tipo: "texto", placeholder: "Ej: romper 1RM en sentadilla, clasificarme para campeonato..." },
+    { id: "objetivo_detalle", goalRole: "PRIMARY", label: "¿Qué quieres lograr exactamente?", tipo: "texto", placeholder: "Ej: romper 1RM en sentadilla, clasificarme para campeonato..." },
   ],
   grupos_crossfit: [
     { id: "nombre_box", label: "¿Cómo se llama tu box?", tipo: "texto", placeholder: "Ej: CrossFit Tenerife, Box Canarias..." },
@@ -564,7 +565,7 @@ const FREE_LIMIT = 8;
 const generarCodigo = () => { const c = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let r = "FP-"; for(let i=0;i<5;i++) r+=c[Math.floor(Math.random()*c.length)]; return r; };
 
 type Categoria = typeof CATEGORIAS[0];
-type Pregunta = {id: string; label: string; tipo: string; opciones?: string[]; placeholder?: string; condicionDe?: string; condicionValor?: RegExp};
+type Pregunta = {id: string; label: string; tipo: string; goalRole?: 'PRIMARY'; opciones?: string[]; placeholder?: string; condicionDe?: string; condicionValor?: RegExp};
 type Marca = {fecha: string; valor: string};
 type UsuarioData = {codigo: string; categoria: string; especialidad: string; perfil: Record<string, string | string[]>; rutina: string; historial: {role: string; content: string}[]; marcas: Marca[]; email?: string; [key: string]: unknown};
 
@@ -1470,7 +1471,7 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
         };
         distribucionAutoFocus=JSON.stringify(distribucionObj);
       }
-      const savedOnboarding=await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:espKey||categoria,perfil,rutina:texto,historial:hist,marcas:[],email:email||null,admin:false,premium:false,modo_entrada:modoEntrada,distribucion_semanal:distribucionAutoFocus||undefined}});
+      const savedOnboarding=await apiCall({action:"guardar_usuario",datos:{codigo,categoria,especialidad:espKey||categoria,perfil,onboardingGoalCapture:captureOnboardingGoal(preguntas),rutina:texto,historial:hist,marcas:[],email:email||null,admin:false,premium:false,modo_entrada:modoEntrada,distribucion_semanal:distribucionAutoFocus||undefined}});
       // FIX: actualizar el estado de React inmediatamente tras guardar — antes se guardaba
       // correctamente en Supabase pero el frontend seguia con el valor vacio original en memoria,
       // causando que guardar_plan_semana preguntara "no tengo tu disponibilidad" aunque ya existiera.

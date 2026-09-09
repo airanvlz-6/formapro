@@ -18,6 +18,7 @@ import { issuePrescriptionQuestion } from '../athlete/prescriptionAnswers';
 import { emitEquipmentAuthorityDiagnostic } from './equipmentAuthorityDiagnostic';
 import type { SessionEnvironmentInput } from './sessionTrainingEnvironment';
 import { authenticatedPresentationVersion, legacySessionView } from './sessionPresentation';
+import { resolveMethodIntensity } from './methodIntensityAuthority';
 
 const PROFILE = 'modo_entrada,distribucion_semanal,especialidad,categoria';
 const domain = 'forge-session-contract-v1:';
@@ -103,6 +104,7 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
       return { ok: false as const, code: 'PRESCRIPTION_DATA_MISSING', errors: prepared.errors, sufficiency, question,
         questionToken: question ? issuePrescriptionQuestion(userCodigo, base.contract.discipline, question) : undefined };
     }
+    prepared.contract.intensityAuthority = resolveMethodIntensity(prepared.contract);
     if (weekly && (weeklyDigest(prepared.contract.restrictionsSnapshot) !== weeklyDigest(weeklyContext.restrictionsSnapshot)
       || weeklyDigest(prepared.contract.prescriptionScope) !== weeklyDigest(weeklyContext.prescriptionScope)
       || weeklyDigest(prepared.contract.availableDays) !== weeklyDigest(weeklyContext.availableDays)))

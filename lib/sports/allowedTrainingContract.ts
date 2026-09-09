@@ -9,6 +9,7 @@ import { evaluateTrainingFeasibility, feasibilityInputErrors, resolveTrainingSti
 import { validateDoseContext, type SessionDoseContext } from './sessionDoseContext';
 import { timeAuthorityForIntent } from './sessionTimeDosePolicy';
 import { sameSessionTimeDoseAuthority } from './sessionTimeDoseAuthority';
+import { validMethodIntensity, type MethodIntensityAuthority } from './methodIntensityAuthority';
 
 export { STRUCTURES_BY_STIMULUS } from './workoutStructureLibrary';
 export { resolveTrainingStimulus, type StimulusResolution } from './trainingFeasibility';
@@ -34,6 +35,7 @@ export type ContractInput = {
   source: 'weekly_session_builder';
 };
 export type AllowedTrainingContract = Omit<ContractInput, 'stimulus'> & {
+  intensityAuthority?: MethodIntensityAuthority;
   contractVersion: 1 | 2 | 3;
   stimulusId: string;
   allowedMovementIds: string[];
@@ -65,6 +67,7 @@ export function validateAllowedTrainingContract(contract: AllowedTrainingContrac
   try {
     const input: ContractInput = { ...contract, stimulus: contract.stimulusId };
     const errors = feasibilityInputErrors(input);
+    if (!validMethodIntensity(contract)) errors.push('METHOD_INTENSITY_AUTHORITY_INVALID');
     if (![1, 2, 3].includes(contract.contractVersion)) errors.push('CONTRACT_VERSION_INVALID');
     if (contract.contractVersion === 3 ? !validateDoseContext(contract.doseContext!) : Object.hasOwn(contract, 'doseContext')) errors.push('DOSE_CONTEXT_VERSION_INVALID');
     if (contract.doseContext?.timeAuthority && !sameSessionTimeDoseAuthority(contract.doseContext.timeAuthority,

@@ -11,6 +11,7 @@ import { resolvePrescriptionDataSufficiency } from './prescriptionDataSufficienc
 import { renderProfessionalSession } from './sessionProfessionalRenderer';
 import { renderHumanSession } from './sessionHumanRenderer';
 import { authenticatedPresentationVersion, type PresentationVersion } from './sessionPresentation';
+import { validateMethodIntensity } from './methodIntensityAuthority';
 
 export type MovementDose = { sets?: number; reps?: number; durationSeconds?: number; distanceMeters?: number; restSeconds?: number;
   intensity?: DoseIntensity; tempo?: [number, number, number, number]; perSide?: boolean };
@@ -129,6 +130,7 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
       try { observeMissingSignal?.(s.signal, s.state, blockIndex, movementIndex); } catch { /* Observation is non-authoritative. */ }
     }
   }
+  if (!violations.length) violations.push(...validateMethodIntensity(contract, p));
   return violations.length ? { ok: false, violations } : checked;
 }
 

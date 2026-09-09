@@ -19,6 +19,10 @@ export async function generateContractSession(contract: AllowedTrainingContract,
   const preflight = validateAllowedTrainingContract(authority);
   if (!preflight.ok) return { ok: false as const, code: 'TRAINING_CONTRACT_INVALID', violations: preflight.errors };
   const trace = builderTrace(authority, planningRunId);
+  if (authority.intensityAuthority) {
+    try { console.info?.('METHOD_INTENSITY_AUTHORITY', { version: 1, status: authority.intensityAuthority.status,
+      reason: authority.intensityAuthority.reason, scope: 'main' }); } catch { /* Non-authoritative diagnostic. */ }
+  }
   const recent = structuredClone(history);
   const intentInstruction = authority.intent && authority.intent.kind !== 'stimulus_only'
     ? `\nIntent canónico: el bloque main debe incluir al menos un ID de ${JSON.stringify(intentMatchingMovementIds(authority.intent, authority.allowedMovementIds))}. Otros IDs permitidos pueden acompañarlo. Un movimiento solo en warmup/cooldown no satisface el intent.` : '';
@@ -28,7 +32,12 @@ export async function generateContractSession(contract: AllowedTrainingContract,
     ? '\nLa banda temporal y minimumUsefulDurationSeconds de doseContext.timeAuthority pertenecen al servidor. Compón dentro de esa banda sin cambiar intent, pools ni intensidad autorizada. El máximo conservador estimado debe caber bajo hardMaximumSeconds; expectedSeconds es el punto medio operativo del rango, no una medición. No añadas descansos o transiciones artificiales para satisfacer la dosis.' : '';
   const representationInstruction = '\nCada movementId aparece como máximo una vez DENTRO de cada bloque, también en carrera/cíclicos. Puede repetirse ENTRE warmup, main y cooldown con su dosis propia. Para intervalos homogéneos usa la dosis estructurada sets/durationSeconds/restSeconds; no una entrada duplicada por intervalo. No combines dosis heterogéneas ni inventes cantidades para evitar esta regla.';
   const intensityInstruction = options ? '\nSELECCIÓN DE INTENSIDAD: doseContext.references contiene referencias conocidas, no permiso para medirlas. Para cada movimiento, referenceId debe pertenecer a SU executableReferenceIds. HR exige además canMeasureHeartRate available; unknown/unavailable/ambiguous no autorizan HR. Un dispositivo disponible no crea una referencia. Respeta las opciones existentes y el intent; no inventes equivalencias entre HR, ritmo y RPE.' : '';
-  const prompt = `${authority.contractVersion === 3 ? STRUCTURED_DOSE_INSTRUCTIONS : STRUCTURED_SESSION_INSTRUCTIONS}${timeInstruction}${representationInstruction}${intensityInstruction}\nCONTRACT:\n${JSON.stringify(authority)}${intentInstruction}\nContexto no autoritativo:\n${context}\nOpciones ejecutables resueltas por el servidor (solo sus referencias pueden usarse; sin distancia medible usa duración):\n${JSON.stringify(options)}\nHistorial para evitar duplicación:\n${JSON.stringify(recent)}`;
+  const methodInstruction = authority.intensityAuthority?.status === 'RESOLVED'
+    ? `\nMETHOD INTENSITY RESOLVED: en main solo admite los movementId de intensityAuthority.targets. Copia EXACTAMENTE su primary a prescription.intensity. No elijas otra métrica, referencia o rango. secondary es una guía separada ya autorizada del servidor; no la añadas al schema de la propuesta. Esta autoridad tiene precedencia sobre las opciones generales de referencias.`
+    : authority.intensityAuthority ? '\nMETHOD INTENSITY UNRESOLVED: no existe selección deportiva determinista. Conserva las reglas de ejecutabilidad existentes; no declares compatibilidad fisiológica resuelta.' : '';
+  const builderOptions = authority.intensityAuthority?.status === 'RESOLVED'
+    ? { main: authority.intensityAuthority.targets, preparationOnly: options } : options;
+  const prompt = `${authority.contractVersion === 3 ? STRUCTURED_DOSE_INSTRUCTIONS : STRUCTURED_SESSION_INSTRUCTIONS}${timeInstruction}${representationInstruction}${intensityInstruction}${methodInstruction}\nCONTRACT:\n${JSON.stringify(authority)}${intentInstruction}\nContexto no autoritativo:\n${context}\nOpciones ejecutables por alcance (preparationOnly nunca amplía main):\n${JSON.stringify(builderOptions)}\nHistorial para evitar duplicación:\n${JSON.stringify(recent)}`;
   let previousErrors: string[] = [];
   let missingDetails: SufficiencyFailure[] = [];
   for (let attempt = 0; attempt < 2; attempt++) {

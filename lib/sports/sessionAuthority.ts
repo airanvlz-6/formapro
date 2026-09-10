@@ -16,6 +16,7 @@ import { resolvePrescriptionDataSufficiency } from './prescriptionDataSufficienc
 import { intentMatchingMovementIds } from './prescriptionIntent';
 import { issuePrescriptionQuestion } from '../athlete/prescriptionAnswers';
 import { emitEquipmentAuthorityDiagnostic } from './equipmentAuthorityDiagnostic';
+import { emitPreBuilderPrescriptionDiagnostic } from './preBuilderPrescriptionDiagnostic';
 import type { SessionEnvironmentInput } from './sessionTrainingEnvironment';
 import { authenticatedPresentationVersion, legacySessionView } from './sessionPresentation';
 import { resolveMethodIntensity } from './methodIntensityAuthority';
@@ -99,10 +100,12 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
     const prepared = buildAllowedTrainingContract({ ...base.contract, stimulus: base.contract.stimulusId, doseContext });
     if (!prepared.ok) {
       const ids = intentMatchingMovementIds(base.contract.intent || { kind: 'stimulus_only' }, base.contract.allowedMovementIds);
-      const decisions = ids.map(movementId => resolvePrescriptionDataSufficiency(doseContext.sufficiency!, doseContext.references,
-        { movementId, discipline: base.contract.discipline })).filter(d => d.status === 'missing_required_data')
-        .sort((a, b) => Number(!a.questions.length) - Number(!b.questions.length) || a.missingSignals.length - b.missingSignals.length);
-      const sufficiency = decisions[0], question = sufficiency?.questions[0];
+      const candidates = ids.map(movementId => ({ movementId, decision: resolvePrescriptionDataSufficiency(doseContext.sufficiency!, doseContext.references,
+        { movementId, discipline: base.contract.discipline }) }));
+      const decisions = candidates.filter(c => c.decision.status === 'missing_required_data')
+        .sort((a, b) => Number(!a.decision.questions.length) - Number(!b.decision.questions.length) || a.decision.missingSignals.length - b.decision.missingSignals.length);
+      const sufficiency = decisions[0]?.decision, question = sufficiency?.questions[0];
+      emitPreBuilderPrescriptionDiagnostic(base.contract, candidates, decisions[0], question, prepared.errors, planningRunId);
       return { ok: false as const, code: 'PRESCRIPTION_DATA_MISSING', errors: prepared.errors, sufficiency, question,
         questionToken: question ? issuePrescriptionQuestion(userCodigo, base.contract.discipline, question) : undefined };
     }

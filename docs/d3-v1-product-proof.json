@@ -1,0 +1,1952 @@
+{
+  "fixtureNote": "Representative historical rows plus separate explicit 45-minute habitual declaration, not inferred legacy units",
+  "decision": {
+    "version": 1,
+    "discipline": "carrera",
+    "eventType": "half_marathon",
+    "eventId": "cd18f71e94e7d4418e14129a0c92ec59b9eeadbf8eeeac86ef175dfbd93efffe",
+    "referenceDate": "2026-09-10",
+    "eventDate": "2026-11-15",
+    "daysRemaining": 66,
+    "preparationState": "BASE_BUILD",
+    "longitudinalState": "ESTABLISHED_CURRENT",
+    "longitudinalDecision": "MAINTAIN",
+    "evidenceSummary": {
+      "establishedContinuity": true,
+      "executionCount": 16,
+      "activeWeeks": 9,
+      "recentSessions": 9,
+      "lastDate": "2026-09-08",
+      "longRuns": 3,
+      "qualitySessions": 4,
+      "exposureCounts": {
+        "easy": 8,
+        "recovery": 1,
+        "long_run": 3,
+        "quality": 4
+      },
+      "longRunExposure": [
+        {
+          "executionId": "938fa61afb695b3befcb3cb389420c85888f3f9653b0de9638dc703feec39de1",
+          "date": "2026-07-12",
+          "provenance": "LEGACY_STRUCTURED",
+          "legacyType": "rodaje_largo_progresivo"
+        },
+        {
+          "executionId": "543a5462b4114cbb78bbde56d850b041d9a301456af71f7e4ecb057b21b93bb6",
+          "date": "2026-08-02",
+          "provenance": "LEGACY_STRUCTURED",
+          "legacyType": "carrera_larga"
+        },
+        {
+          "executionId": "a6f950c8cbdb477eebb45cb832f9049a1f098bedcc339aa5da39bd3e77db4279",
+          "date": "2026-08-09",
+          "provenance": "LEGACY_STRUCTURED",
+          "legacyType": "rodaje_largo_z2"
+        }
+      ],
+      "qualityExposure": [
+        {
+          "executionId": "0565cf6ce0c5aee390e7dbf1a511817b0f35afee2192ac7aa5029f011341849c",
+          "date": "2026-07-09",
+          "provenance": "LEGACY_STRUCTURED",
+          "hint": "intervals",
+          "legacyType": "z2_intervalos"
+        },
+        {
+          "executionId": "385700faa733b68af1d7982222a8cbeb40e54457ab157b1da3515392eee43158",
+          "date": "2026-07-23",
+          "provenance": "LEGACY_STRUCTURED",
+          "hint": "intervals",
+          "legacyType": "intervalos_z3_cortos"
+        },
+        {
+          "executionId": "9e45a8cddadf62d0499ffd1fe3a67b54912eb5c871343adb6324112265e9e267",
+          "date": "2026-07-30",
+          "provenance": "LEGACY_STRUCTURED",
+          "hint": "intervals",
+          "legacyType": "carrera_series"
+        },
+        {
+          "executionId": "ea32af423c71772fea633489c4baba7bdf9cf115858eca873db8b3ffcaa3b7d5",
+          "date": "2026-08-26",
+          "provenance": "LEGACY_STRUCTURED",
+          "hint": "intervals",
+          "legacyType": "series"
+        }
+      ],
+      "numericDoseCoverage": "UNKNOWN"
+    },
+    "reasons": [
+      "temporal_policy_v1:BASE_BUILD",
+      "established_running_continuity",
+      "no_active_restrictions"
+    ],
+    "restrictionsApplied": false,
+    "historyCompleteness": "UNKNOWN",
+    "weeklyIntent": {
+      "preserveEasyExposure": true,
+      "allowQualityExposure": true,
+      "allowLongRunExposure": true,
+      "recoveryRequired": false,
+      "eventSpecificEmphasis": false,
+      "progressionAllowed": false,
+      "numericDoseAuthority": "B3",
+      "intensityAuthority": "C2",
+      "taperNoOverload": false,
+      "raceDayProtected": false
+    },
+    "constraints": {
+      "version": 1,
+      "easy": "REQUIRED",
+      "recovery": "ALLOWED",
+      "longRun": "ALLOWED",
+      "quality": "ALLOWED",
+      "eventSpecific": "FORBIDDEN",
+      "progression": "FORBIDDEN",
+      "overload": "FORBIDDEN",
+      "protectedDate": "2026-11-15"
+    },
+    "managed": true,
+    "decisionDigest": "912c5942a4b58e5e71f50c0aa18d871fd9cadf81679a9fb687724e8ec9c77d9c"
+  },
+  "weeklyContract": {
+    "runningEventPreparation": {
+      "version": 1,
+      "discipline": "carrera",
+      "eventType": "half_marathon",
+      "eventId": "cd18f71e94e7d4418e14129a0c92ec59b9eeadbf8eeeac86ef175dfbd93efffe",
+      "referenceDate": "2026-09-10",
+      "eventDate": "2026-11-15",
+      "daysRemaining": 66,
+      "preparationState": "BASE_BUILD",
+      "longitudinalState": "ESTABLISHED_CURRENT",
+      "longitudinalDecision": "MAINTAIN",
+      "evidenceSummary": {
+        "establishedContinuity": true,
+        "executionCount": 16,
+        "activeWeeks": 9,
+        "recentSessions": 9,
+        "lastDate": "2026-09-08",
+        "longRuns": 3,
+        "qualitySessions": 4,
+        "exposureCounts": {
+          "easy": 8,
+          "recovery": 1,
+          "long_run": 3,
+          "quality": 4
+        },
+        "longRunExposure": [
+          {
+            "executionId": "938fa61afb695b3befcb3cb389420c85888f3f9653b0de9638dc703feec39de1",
+            "date": "2026-07-12",
+            "provenance": "LEGACY_STRUCTURED",
+            "legacyType": "rodaje_largo_progresivo"
+          },
+          {
+            "executionId": "543a5462b4114cbb78bbde56d850b041d9a301456af71f7e4ecb057b21b93bb6",
+            "date": "2026-08-02",
+            "provenance": "LEGACY_STRUCTURED",
+            "legacyType": "carrera_larga"
+          },
+          {
+            "executionId": "a6f950c8cbdb477eebb45cb832f9049a1f098bedcc339aa5da39bd3e77db4279",
+            "date": "2026-08-09",
+            "provenance": "LEGACY_STRUCTURED",
+            "legacyType": "rodaje_largo_z2"
+          }
+        ],
+        "qualityExposure": [
+          {
+            "executionId": "0565cf6ce0c5aee390e7dbf1a511817b0f35afee2192ac7aa5029f011341849c",
+            "date": "2026-07-09",
+            "provenance": "LEGACY_STRUCTURED",
+            "hint": "intervals",
+            "legacyType": "z2_intervalos"
+          },
+          {
+            "executionId": "385700faa733b68af1d7982222a8cbeb40e54457ab157b1da3515392eee43158",
+            "date": "2026-07-23",
+            "provenance": "LEGACY_STRUCTURED",
+            "hint": "intervals",
+            "legacyType": "intervalos_z3_cortos"
+          },
+          {
+            "executionId": "9e45a8cddadf62d0499ffd1fe3a67b54912eb5c871343adb6324112265e9e267",
+            "date": "2026-07-30",
+            "provenance": "LEGACY_STRUCTURED",
+            "hint": "intervals",
+            "legacyType": "carrera_series"
+          },
+          {
+            "executionId": "ea32af423c71772fea633489c4baba7bdf9cf115858eca873db8b3ffcaa3b7d5",
+            "date": "2026-08-26",
+            "provenance": "LEGACY_STRUCTURED",
+            "hint": "intervals",
+            "legacyType": "series"
+          }
+        ],
+        "numericDoseCoverage": "UNKNOWN"
+      },
+      "reasons": [
+        "temporal_policy_v1:BASE_BUILD",
+        "established_running_continuity",
+        "no_active_restrictions"
+      ],
+      "restrictionsApplied": false,
+      "historyCompleteness": "UNKNOWN",
+      "weeklyIntent": {
+        "preserveEasyExposure": true,
+        "allowQualityExposure": true,
+        "allowLongRunExposure": true,
+        "recoveryRequired": false,
+        "eventSpecificEmphasis": false,
+        "progressionAllowed": false,
+        "numericDoseAuthority": "B3",
+        "intensityAuthority": "C2",
+        "taperNoOverload": false,
+        "raceDayProtected": false
+      },
+      "constraints": {
+        "version": 1,
+        "easy": "REQUIRED",
+        "recovery": "ALLOWED",
+        "longRun": "ALLOWED",
+        "quality": "ALLOWED",
+        "eventSpecific": "FORBIDDEN",
+        "progression": "FORBIDDEN",
+        "overload": "FORBIDDEN",
+        "protectedDate": "2026-11-15"
+      },
+      "managed": true,
+      "decisionDigest": "912c5942a4b58e5e71f50c0aa18d871fd9cadf81679a9fb687724e8ec9c77d9c"
+    },
+    "contractVersion": 1,
+    "policyVersion": "executable-ceiling-rest-v1",
+    "targetWeekStart": "2026-09-14",
+    "prescriptionScope": {
+      "mode": "coach",
+      "prescriptionAllowed": true,
+      "managedDisciplines": [
+        "carrera"
+      ],
+      "externalDisciplines": []
+    },
+    "contextDigest": "28be84f618b2a7b57af865eeff72eb882329fc5e9acecbc9b7fa11e62833c407",
+    "frequencyPolicy": {
+      "maxExecutableDays": 5,
+      "minExecutableDays": 1,
+      "requireGenuineRest": true
+    },
+    "dayOptions": {
+      "lunes": [
+        {
+          "optionId": "lunes:rest",
+          "state": "REST"
+        },
+        {
+          "optionId": "lunes:carrera:base_aerobica:running_base:run",
+          "state": "TRAIN",
+          "discipline": "carrera",
+          "stimulusId": "base_aerobica",
+          "intent": {
+            "kind": "adaptation",
+            "goalId": "half_marathon",
+            "adaptationId": "base_aerobica",
+            "methodId": "running_base",
+            "role": "PRIMARY",
+            "pattern": "run",
+            "blockPhase": "unknown",
+            "blockWeek": null,
+            "weaknessId": null
+          }
+        }
+      ],
+      "martes": [
+        {
+          "optionId": "martes:rest",
+          "state": "REST"
+        }
+      ],
+      "miercoles": [
+        {
+          "optionId": "miercoles:rest",
+          "state": "REST"
+        },
+        {
+          "optionId": "miercoles:carrera:base_aerobica:running_base:run",
+          "state": "TRAIN",
+          "discipline": "carrera",
+          "stimulusId": "base_aerobica",
+          "intent": {
+            "kind": "adaptation",
+            "goalId": "half_marathon",
+            "adaptationId": "base_aerobica",
+            "methodId": "running_base",
+            "role": "PRIMARY",
+            "pattern": "run",
+            "blockPhase": "unknown",
+            "blockWeek": null,
+            "weaknessId": null
+          }
+        }
+      ],
+      "jueves": [
+        {
+          "optionId": "jueves:rest",
+          "state": "REST"
+        }
+      ],
+      "viernes": [
+        {
+          "optionId": "viernes:rest",
+          "state": "REST"
+        },
+        {
+          "optionId": "viernes:carrera:base_aerobica:running_base:run",
+          "state": "TRAIN",
+          "discipline": "carrera",
+          "stimulusId": "base_aerobica",
+          "intent": {
+            "kind": "adaptation",
+            "goalId": "half_marathon",
+            "adaptationId": "base_aerobica",
+            "methodId": "running_base",
+            "role": "PRIMARY",
+            "pattern": "run",
+            "blockPhase": "unknown",
+            "blockWeek": null,
+            "weaknessId": null
+          }
+        }
+      ],
+      "sabado": [
+        {
+          "optionId": "sabado:rest",
+          "state": "REST"
+        }
+      ],
+      "domingo": [
+        {
+          "optionId": "domingo:rest",
+          "state": "REST"
+        }
+      ]
+    },
+    "strategy": {
+      "version": 1,
+      "policy": "goal-transfer-v1",
+      "goal": {
+        "id": "half_marathon",
+        "sources": [
+          "usuarios.objetivo_principal"
+        ],
+        "evidenceDigest": "0b5613866612a926955a459a8a5c6047d6e8656d6d96061fc838a36e62cd9bc3"
+      },
+      "eventAuthority": {
+        "version": 1,
+        "asOfDate": "2026-09-10",
+        "planningMode": "EVENT_PREPARATION",
+        "validity": "VALID",
+        "prescriptionAllowed": true,
+        "eventId": "cd18f71e94e7d4418e14129a0c92ec59b9eeadbf8eeeac86ef175dfbd93efffe",
+        "eventDate": "2026-11-15",
+        "targetEvent": {
+          "version": 1,
+          "revision": 1,
+          "eventId": "cd18f71e94e7d4418e14129a0c92ec59b9eeadbf8eeeac86ef175dfbd93efffe",
+          "goalId": "half_marathon",
+          "discipline": "carrera",
+          "eventType": "race",
+          "eventDate": "2026-11-15",
+          "priority": "primary",
+          "status": "active",
+          "provenance": {
+            "source": "structured_event_form",
+            "athleteId": "u",
+            "legacySources": []
+          },
+          "confirmation": "CONFIRMED",
+          "createdAt": "2026-09-10T12:00:00Z",
+          "confirmedAt": "2026-09-10T12:00:00Z",
+          "digest": "a2a1f08a23fb0247c463d87ab6880249bf1cef1b924ca30c04bc2607827db639"
+        },
+        "daysRemaining": 66,
+        "weeksRemaining": 9.428571428571429,
+        "eventDigest": "a2a1f08a23fb0247c463d87ab6880249bf1cef1b924ca30c04bc2607827db639",
+        "scopeDigest": "458d79152e9ccc25d2611b0cb15f5d9b69f25aa03f7628b45269b5a27088fcb4",
+        "goalId": "half_marathon",
+        "confirmationRequired": false,
+        "periodizationAuthority": false,
+        "digest": "1797dfc03915c04af6b4c3f7ef7cb40738efaebef2daac0ffc3130e9e79668d6"
+      },
+      "block": {
+        "phase": "unknown",
+        "week": null,
+        "totalWeeks": null,
+        "evidenceDigest": "b546bc3dd551adc572a85101863d9f5ad74bce2f15641d2d3e26a27d5deb3d6c"
+      },
+      "adaptations": [
+        {
+          "id": "base_aerobica",
+          "role": "PRIMARY",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "umbral",
+          "role": "PRIMARY",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "resistencia_especifica",
+          "role": "PRIMARY",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "fuerza_general",
+          "role": "SUPPORTING",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "economia_carrera",
+          "role": "SUPPORTING",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "cadena_posterior",
+          "role": "OPTIONAL",
+          "weaknessIds": [],
+          "requiredPattern": null
+        },
+        {
+          "id": "potencia",
+          "role": "OPTIONAL",
+          "weaknessIds": [],
+          "requiredPattern": null
+        }
+      ],
+      "preferredEnvironments": [
+        "carrera"
+      ],
+      "methods": [
+        "running_base",
+        "running_threshold",
+        "running_specific",
+        "running_economy",
+        "runner_support_strength",
+        "runner_posterior",
+        "runner_power"
+      ],
+      "deferred": [
+        {
+          "reference": "umbral:running_threshold",
+          "reason": "dose_missing_compatible_evidence",
+          "blockers": [
+            "DOSE_EVIDENCE_MISSING",
+            "DOSE_POLICY_NOT_ESTABLISHED",
+            "DOSE_COMPOSITION_NOT_ESTABLISHED",
+            "NO_COMPATIBLE_EXECUTION"
+          ]
+        },
+        {
+          "reference": "economia_carrera:running_economy",
+          "reason": "dose_policy_not_established",
+          "blockers": [
+            "DOSE_EVIDENCE_MISSING",
+            "DOSE_POLICY_NOT_ESTABLISHED",
+            "DOSE_COMPOSITION_NOT_ESTABLISHED",
+            "DOSE_INTENSITY_UNRESOLVED",
+            "NO_COMPATIBLE_EXECUTION"
+          ]
+        },
+        {
+          "reference": "resistencia_especifica:running_specific",
+          "reason": "dose_missing_compatible_evidence",
+          "blockers": [
+            "DOSE_EVIDENCE_MISSING",
+            "DOSE_POLICY_NOT_ESTABLISHED",
+            "DOSE_COMPOSITION_NOT_ESTABLISHED",
+            "DOSE_INTENSITY_UNRESOLVED",
+            "NO_COMPATIBLE_EXECUTION"
+          ]
+        },
+        {
+          "reference": "adaptation:umbral",
+          "reason": "no_feasible_managed_method"
+        },
+        {
+          "reference": "adaptation:resistencia_especifica",
+          "reason": "no_feasible_managed_method"
+        },
+        {
+          "reference": "adaptation:fuerza_general",
+          "reason": "no_feasible_managed_method"
+        },
+        {
+          "reference": "adaptation:economia_carrera",
+          "reason": "no_feasible_managed_method"
+        },
+        {
+          "reference": "cadena_posterior",
+          "reason": "optional_not_required"
+        },
+        {
+          "reference": "potencia",
+          "reason": "optional_not_required"
+        }
+      ],
+      "coverage": [
+        {
+          "id": "adaptation:base_aerobica",
+          "adaptationId": "base_aerobica"
+        },
+        {
+          "id": "environment:carrera",
+          "discipline": "carrera"
+        }
+      ],
+      "volumeIntent": "unspecified",
+      "intensityIntent": "unspecified",
+      "trainingDaysTarget": {
+        "maximum": 5,
+        "minimum": 1
+      },
+      "diagnostics": [
+        {
+          "code": "GOAL_DEMAND_RESOLUTION",
+          "reason": "resolved"
+        },
+        {
+          "code": "CANONICAL_WEEK_STRATEGY",
+          "reason": "unknown"
+        },
+        {
+          "code": "ADAPTATION_PRIORITY",
+          "reason": "discrete_goal_roles_and_canonical_weakness"
+        },
+        {
+          "code": "TRANSFER_RESOLUTION",
+          "reason": "managed_scope_intersection"
+        },
+        {
+          "code": "TRANSFER_RESOLUTION",
+          "reason": "time_typical_ranges_not_hard_bounds"
+        },
+        {
+          "code": "TRANSFER_RESOLUTION",
+          "reason": "equipment_inventory_and_all_vs_any_requirements_not_canonical"
+        },
+        {
+          "code": "TRANSFER_RESOLUTION",
+          "reason": "level_and_readiness_not_new_authority"
+        },
+        {
+          "code": "TRANSFER_RESOLUTION",
+          "reason": "interday_interference_not_established_by_structure_metadata"
+        },
+        {
+          "code": "DAILY_INTENT_RESOLUTION",
+          "reason": "feasible_methods_and_required_coverage"
+        }
+      ]
+    }
+  },
+  "doseCapabilities": {
+    "version": 1,
+    "entries": [
+      {
+        "methodId": "running_base",
+        "family": "AEROBIC_CONTINUOUS",
+        "variant": "running_base",
+        "pattern": "run",
+        "longitudinalDose": {
+          "version": 1,
+          "decisionDigest": "912c5942a4b58e5e71f50c0aa18d871fd9cadf81679a9fb687724e8ec9c77d9c",
+          "longitudinalIntent": "MAINTAIN",
+          "numericProgressionAuthorized": false,
+          "reason": "EXISTING_SAFE_DOSE_ONLY",
+          "selectedDose": {
+            "metric": "duration",
+            "unit": "seconds",
+            "selectedTarget": {
+              "minimum": 2700,
+              "maximum": 2700
+            },
+            "maximumAuthorized": 2700,
+            "minimumUseful": null,
+            "compositionTolerance": null,
+            "allowedMovementIds": [
+              "rodaje_z2"
+            ],
+            "composition": "SINGLE_CONTINUOUS_TOTAL",
+            "structures": [
+              "continuo_carrera"
+            ],
+            "structureConstraints": {
+              "mode": "continuous",
+              "efforts": null,
+              "bout": null,
+              "recoverySeconds": null
+            }
+          }
+        },
+        "weeklyIntensityEligibility": "ALLOWED",
+        "evidenceStatus": "DECLARATIONS_AVAILABLE",
+        "policyStatus": "ESTABLISHED",
+        "blockers": [],
+        "executionIntegrityStatus": "NO_COMPATIBLE_EXECUTION",
+        "weeklyContextStatus": "NOT_EVALUATED",
+        "compositionStatus": "RESOLVED",
+        "intensityStatus": "RESOLVED",
+        "timeStatus": "FITS",
+        "prescriptionBlockReason": null,
+        "doseCapability": "QUANTIFIABLE",
+        "prescriptionAllowed": true,
+        "missingRequirements": [],
+        "evidenceRefs": [
+          "abbc3f5a90d1a79ac320eec5a0719e15d88ef18356d651fbce0e7846a87aa943",
+          "fe8ec896ad323990f1dfcc56b67c9482acb3200dae5cfacf9463a89a8f130b1a"
+        ],
+        "diagnostics": [
+          "RUNNING_DOSE_CAPABILITY_EVIDENCE_READY",
+          "RUNNING_HABITUAL_EASY_DURATION_AVAILABLE",
+          "RUNNING_HABITUAL_FREQUENCY_AVAILABLE"
+        ]
+      },
+      {
+        "methodId": "running_recovery",
+        "family": "RECOVERY",
+        "variant": "running_recovery",
+        "pattern": "run",
+        "longitudinalDose": {
+          "version": 1,
+          "decisionDigest": "912c5942a4b58e5e71f50c0aa18d871fd9cadf81679a9fb687724e8ec9c77d9c",
+          "longitudinalIntent": "MAINTAIN",
+          "numericProgressionAuthorized": false,
+          "reason": "NO_CANONICAL_NUMERIC_BASELINE",
+          "selectedDose": null
+        },
+        "weeklyIntensityEligibility": "ALLOWED",
+        "evidenceStatus": "MISSING",
+        "policyStatus": "NOT_ESTABLISHED",
+        "blockers": [
+          "DOSE_EVIDENCE_MISSING",
+          "DOSE_POLICY_NOT_ESTABLISHED",
+          "DOSE_COMPOSITION_NOT_ESTABLISHED",
+          "DOSE_INTENSITY_UNRESOLVED",
+          "NO_COMPATIBLE_EXECUTION"
+        ],
+        "executionIntegrityStatus": "NO_COMPATIBLE_EXECUTION",
+        "weeklyContextStatus": "NOT_EVALUATED",
+        "compositionStatus": "NOT_ESTABLISHED",
+        "intensityStatus": "UNRESOLVED",
+        "timeStatus": "NOT_EVALUATED",
+        "prescriptionBlockReason": "MISSING_COMPATIBLE_EVIDENCE",
+        "doseCapability": "MISSING_EVIDENCE",
+        "prescriptionAllowed": false,
+        "missingRequirements": [
+          "COMPATIBLE_METHOD_WORK_QUANTITY",
+          "NUMERIC_DOSE_POLICY"
+        ],
+        "evidenceRefs": [],
+        "diagnostics": [
+          "RUNNING_DOSE_CAPABILITY_MISSING_EVIDENCE",
+          "RUNNING_DOSE_CAPABILITY_POLICY_MISSING"
+        ]
+      },
+      {
+        "methodId": "running_threshold",
+        "family": "THRESHOLD_WORK",
+        "variant": "running_threshold",
+        "pattern": "run",
+        "longitudinalDose": {
+          "version": 1,
+          "decisionDigest": "912c5942a4b58e5e71f50c0aa18d871fd9cadf81679a9fb687724e8ec9c77d9c",
+          "longitudinalIntent": "MAINTAIN",
+          "numericProgressionAuthorized": false,
+          "reason": "NO_CANONICAL_NUMERIC_BASELINE",
+          "selectedDose": null
+        },
+        "weeklyIntensityEligibility": "ALLOWED",
+        "evidenceStatus": "MISSING",
+        "policyStatus": "NOT_ESTABLISHED",
+        "blockers": [
+          "DOSE_EVIDENCE_MISSING",
+          "DOSE_POLICY_NOT_ESTABLISHED",
+          "DOSE_COMPOSITION_NOT_ESTABLISHED",
+          "NO_COMPATIBLE_EXECUTION"
+        ],
+        "executionIntegrityStatus": "NO_COMPATIBLE_EXECUTION",
+        "weeklyContextStatus": "NOT_EVALUATED",
+        "compositionStatus": "NOT_ESTABLISHED",
+        "intensityStatus": "RESOLVED",
+        "timeStatus": "NOT_EVALUATED",
+        "prescriptionBlockReason": "MISSING_COMPATIBLE_EVIDENCE",
+        "doseCapability": "MISSING_EVIDENCE",
+        "prescriptionAllowed": false,
+        "missingRequirements": [
+          "COMPATIBLE_METHOD_WORK_QUANTITY",
+          "NUMERIC_DOSE_POLICY"
+        ],
+        "evidenceRefs": [],
+        "diagnostics": [
+          "RUNNING_DOSE_CAPABILITY_MISSING_EVIDENCE",
+          "RUNNING_DOSE_CAPABILITY_POLICY_MISSING"
+        ]
+      },
+      {
+        "methodId": "running_vo2",
+        "family": "VO2_INTERVAL",
+        "variant": "running_vo2",
+        "pattern": "run",
+        "longitudinalDose": {
+          "version": 1,
+          "decisionDigest": "912c5942a4b58e5e71f50c0aa18d871fd9cadf81679a9fb687724e8ec9c77d9c",
+          "longitudinalIntent": "MAINTAIN",
+          "numericProgressionAuthorized": false,
+          "reason": "NO_CANONICAL_NUMERIC_BASELINE",
+          "selectedDose": null
+        },
+        "weeklyIntensityEligibility": "ALLOWED",
+        "evidenceStatus": "MISSING",
+        "policyStatus": "NOT_ESTABLISHED",
+        "blockers": [
+          "DOSE_EVIDENCE_MISSING",
+          "DOSE_POLICY_NOT_ESTABLISHED",
+          "DOSE_COMPOSITION_NOT_ESTABLISHED",
+          "DOSE_INTENSITY_UNRESOLVED",
+          "NO_COMPATIBLE_EXECUTION"
+        ],
+        "executionIntegrityStatus": "NO_COMPATIBLE_EXECUTION",
+        "weeklyContextStatus": "NOT_EVALUATED",
+        "compositionStatus": "NOT_ESTABLISHED",
+        "intensityStatus": "UNRESOLVED",
+        "timeStatus": "NOT_EVALUATED",
+        "prescriptionBlockReason": "MISSING_COMPATIBLE_EVIDENCE",
+        "doseCapability": "MISSING_EVIDENCE",
+        "prescriptionAllowed": false,
+        "missingRequirements": [
+          "COMPATIBLE_METHOD_WORK_QUANTITY",
+          "NUMERIC_DOSE_POLICY"
+        ],
+        "evidenceRefs": [],
+        "diagnostics": [
+          "RUNNING_DOSE_CAPABILITY_MISSING_EVIDENCE",
+          "RUNNING_DOSE_CAPABILITY_POLICY_MISSING"
+        ]
+      },
+      {
+        "methodId": "running_specific",
+        "family": "EVENT_SPECIFIC",
+        "variant": "half_marathon:run",
+        "pattern": "run",
+        "longitudinalDose": {
+          "version": 1,
+          "decisionDigest": "912c5942a4b58e5e71f50c0aa18d871fd9cadf81679a9fb687724e8ec9c77d9c",
+          "longitudinalIntent": "MAINTAIN",
+          "numericProgressionAuthorized": false,
+          "reason": "NO_CANONICAL_NUMERIC_BASELINE",
+          "selectedDose": null
+        },
+        "weeklyIntensityEligibility": "FORBIDDEN",
+        "evidenceStatus": "MISSING",
+        "policyStatus": "NOT_ESTABLISHED",
+        "blockers": [
+          "DOSE_EVIDENCE_MISSING",
+          "DOSE_POLICY_NOT_ESTABLISHED",
+          "DOSE_COMPOSITION_NOT_ESTABLISHED",
+          "DOSE_INTENSITY_UNRESOLVED",
+          "NO_COMPATIBLE_EXECUTION"
+        ],
+        "executionIntegrityStatus": "NO_COMPATIBLE_EXECUTION",
+        "weeklyContextStatus": "NOT_EVALUATED",
+        "compositionStatus": "NOT_ESTABLISHED",
+        "intensityStatus": "UNRESOLVED",
+        "timeStatus": "NOT_EVALUATED",
+        "prescriptionBlockReason": "MISSING_COMPATIBLE_EVIDENCE",
+        "doseCapability": "MISSING_EVIDENCE",
+        "prescriptionAllowed": false,
+        "missingRequirements": [
+          "COMPATIBLE_METHOD_WORK_QUANTITY",
+          "NUMERIC_DOSE_POLICY"
+        ],
+        "evidenceRefs": [],
+        "diagnostics": [
+          "RUNNING_DOSE_CAPABILITY_MISSING_EVIDENCE",
+          "RUNNING_DOSE_CAPABILITY_POLICY_MISSING"
+        ]
+      },
+      {
+        "methodId": "running_economy",
+        "family": "TECHNICAL_EXPOSURE",
+        "variant": "run",
+        "pattern": "run",
+        "longitudinalDose": {
+          "version": 1,
+          "decisionDigest": "912c5942a4b58e5e71f50c0aa18d871fd9cadf81679a9fb687724e8ec9c77d9c",
+          "longitudinalIntent": "MAINTAIN",
+          "numericProgressionAuthorized": false,
+          "reason": "NO_CANONICAL_NUMERIC_BASELINE",
+          "selectedDose": null
+        },
+        "weeklyIntensityEligibility": "FORBIDDEN",
+        "evidenceStatus": "MISSING",
+        "policyStatus": "NOT_ESTABLISHED",
+        "blockers": [
+          "DOSE_EVIDENCE_MISSING",
+          "DOSE_POLICY_NOT_ESTABLISHED",
+          "DOSE_COMPOSITION_NOT_ESTABLISHED",
+          "DOSE_INTENSITY_UNRESOLVED",
+          "NO_COMPATIBLE_EXECUTION"
+        ],
+        "executionIntegrityStatus": "NO_COMPATIBLE_EXECUTION",
+        "weeklyContextStatus": "NOT_EVALUATED",
+        "compositionStatus": "NOT_ESTABLISHED",
+        "intensityStatus": "UNRESOLVED",
+        "timeStatus": "NOT_EVALUATED",
+        "prescriptionBlockReason": "POLICY_NOT_ESTABLISHED",
+        "doseCapability": "MISSING_EVIDENCE",
+        "prescriptionAllowed": false,
+        "missingRequirements": [
+          "COMPATIBLE_METHOD_WORK_QUANTITY",
+          "NUMERIC_DOSE_POLICY"
+        ],
+        "evidenceRefs": [],
+        "diagnostics": [
+          "RUNNING_DOSE_CAPABILITY_MISSING_EVIDENCE",
+          "RUNNING_DOSE_CAPABILITY_POLICY_MISSING"
+        ]
+      },
+      {
+        "methodId": "running_economy",
+        "family": "TECHNICAL_EXPOSURE",
+        "variant": "jump",
+        "pattern": "jump",
+        "longitudinalDose": {
+          "version": 1,
+          "decisionDigest": "912c5942a4b58e5e71f50c0aa18d871fd9cadf81679a9fb687724e8ec9c77d9c",
+          "longitudinalIntent": "MAINTAIN",
+          "numericProgressionAuthorized": false,
+          "reason": "NO_CANONICAL_NUMERIC_BASELINE",
+          "selectedDose": null
+        },
+        "weeklyIntensityEligibility": "FORBIDDEN",
+        "evidenceStatus": "MISSING",
+        "policyStatus": "NOT_ESTABLISHED",
+        "blockers": [
+          "DOSE_EVIDENCE_MISSING",
+          "DOSE_POLICY_NOT_ESTABLISHED",
+          "DOSE_COMPOSITION_NOT_ESTABLISHED",
+          "DOSE_INTENSITY_UNRESOLVED",
+          "NO_COMPATIBLE_EXECUTION"
+        ],
+        "executionIntegrityStatus": "NO_COMPATIBLE_EXECUTION",
+        "weeklyContextStatus": "NOT_EVALUATED",
+        "compositionStatus": "NOT_ESTABLISHED",
+        "intensityStatus": "UNRESOLVED",
+        "timeStatus": "NOT_EVALUATED",
+        "prescriptionBlockReason": "POLICY_NOT_ESTABLISHED",
+        "doseCapability": "MISSING_EVIDENCE",
+        "prescriptionAllowed": false,
+        "missingRequirements": [
+          "COMPATIBLE_METHOD_WORK_QUANTITY",
+          "NUMERIC_DOSE_POLICY"
+        ],
+        "evidenceRefs": [],
+        "diagnostics": [
+          "RUNNING_DOSE_CAPABILITY_MISSING_EVIDENCE",
+          "RUNNING_DOSE_CAPABILITY_POLICY_MISSING"
+        ]
+      }
+    ],
+    "requirement": null
+  },
+  "builderContract": {
+    "prescriptionScope": {
+      "mode": "coach",
+      "prescriptionAllowed": true,
+      "managedDisciplines": [
+        "carrera"
+      ],
+      "externalDisciplines": []
+    },
+    "targetWeekStart": "2026-09-14",
+    "targetDay": "lunes",
+    "discipline": "carrera",
+    "restrictionsSnapshot": {
+      "asOfDate": "2026-09-10",
+      "state": null,
+      "areas": [],
+      "restrictions": [],
+      "reassessments": [],
+      "active": false
+    },
+    "externalLoadContext": {
+      "source": "server_training_sources_and_records",
+      "policy": "read_only_context",
+      "activities": [],
+      "records": []
+    },
+    "exposureContext": {
+      "source": "legacy_completed_weekly_rows",
+      "report": {
+        "disciplina": "carrera",
+        "exposiciones": [],
+        "estimulosSubexpuestos": [
+          "fuerza_general",
+          "tecnica",
+          "fuerza_corredor",
+          "cadena_posterior",
+          "coordinacion",
+          "hipertrofia",
+          "potencia",
+          "potencia_carrera",
+          "economia_carrera",
+          "velocidad",
+          "recuperacion_activa",
+          "base_aerobica",
+          "resistencia_especifica",
+          "umbral",
+          "vo2max"
+        ],
+        "estimulosSobreexpuestos": []
+      },
+      "limitations": [
+        "last_four_rows_not_date_window",
+        "textual_completed_sessions",
+        "pattern_modality_counts_not_unique_sessions",
+        "parallel_week_not_reserved"
+      ]
+    },
+    "availableDays": [
+      "lunes",
+      "miercoles",
+      "viernes"
+    ],
+    "source": "weekly_session_builder",
+    "runningEventPreparation": {
+      "version": 1,
+      "discipline": "carrera",
+      "eventType": "half_marathon",
+      "eventId": "cd18f71e94e7d4418e14129a0c92ec59b9eeadbf8eeeac86ef175dfbd93efffe",
+      "referenceDate": "2026-09-10",
+      "eventDate": "2026-11-15",
+      "daysRemaining": 66,
+      "preparationState": "BASE_BUILD",
+      "longitudinalState": "ESTABLISHED_CURRENT",
+      "longitudinalDecision": "MAINTAIN",
+      "evidenceSummary": {
+        "establishedContinuity": true,
+        "executionCount": 16,
+        "activeWeeks": 9,
+        "recentSessions": 9,
+        "lastDate": "2026-09-08",
+        "longRuns": 3,
+        "qualitySessions": 4,
+        "exposureCounts": {
+          "easy": 8,
+          "recovery": 1,
+          "long_run": 3,
+          "quality": 4
+        },
+        "longRunExposure": [
+          {
+            "executionId": "938fa61afb695b3befcb3cb389420c85888f3f9653b0de9638dc703feec39de1",
+            "date": "2026-07-12",
+            "provenance": "LEGACY_STRUCTURED",
+            "legacyType": "rodaje_largo_progresivo"
+          },
+          {
+            "executionId": "543a5462b4114cbb78bbde56d850b041d9a301456af71f7e4ecb057b21b93bb6",
+            "date": "2026-08-02",
+            "provenance": "LEGACY_STRUCTURED",
+            "legacyType": "carrera_larga"
+          },
+          {
+            "executionId": "a6f950c8cbdb477eebb45cb832f9049a1f098bedcc339aa5da39bd3e77db4279",
+            "date": "2026-08-09",
+            "provenance": "LEGACY_STRUCTURED",
+            "legacyType": "rodaje_largo_z2"
+          }
+        ],
+        "qualityExposure": [
+          {
+            "executionId": "0565cf6ce0c5aee390e7dbf1a511817b0f35afee2192ac7aa5029f011341849c",
+            "date": "2026-07-09",
+            "provenance": "LEGACY_STRUCTURED",
+            "hint": "intervals",
+            "legacyType": "z2_intervalos"
+          },
+          {
+            "executionId": "385700faa733b68af1d7982222a8cbeb40e54457ab157b1da3515392eee43158",
+            "date": "2026-07-23",
+            "provenance": "LEGACY_STRUCTURED",
+            "hint": "intervals",
+            "legacyType": "intervalos_z3_cortos"
+          },
+          {
+            "executionId": "9e45a8cddadf62d0499ffd1fe3a67b54912eb5c871343adb6324112265e9e267",
+            "date": "2026-07-30",
+            "provenance": "LEGACY_STRUCTURED",
+            "hint": "intervals",
+            "legacyType": "carrera_series"
+          },
+          {
+            "executionId": "ea32af423c71772fea633489c4baba7bdf9cf115858eca873db8b3ffcaa3b7d5",
+            "date": "2026-08-26",
+            "provenance": "LEGACY_STRUCTURED",
+            "hint": "intervals",
+            "legacyType": "series"
+          }
+        ],
+        "numericDoseCoverage": "UNKNOWN"
+      },
+      "reasons": [
+        "temporal_policy_v1:BASE_BUILD",
+        "established_running_continuity",
+        "no_active_restrictions"
+      ],
+      "restrictionsApplied": false,
+      "historyCompleteness": "UNKNOWN",
+      "weeklyIntent": {
+        "preserveEasyExposure": true,
+        "allowQualityExposure": true,
+        "allowLongRunExposure": true,
+        "recoveryRequired": false,
+        "eventSpecificEmphasis": false,
+        "progressionAllowed": false,
+        "numericDoseAuthority": "B3",
+        "intensityAuthority": "C2",
+        "taperNoOverload": false,
+        "raceDayProtected": false
+      },
+      "constraints": {
+        "version": 1,
+        "easy": "REQUIRED",
+        "recovery": "ALLOWED",
+        "longRun": "ALLOWED",
+        "quality": "ALLOWED",
+        "eventSpecific": "FORBIDDEN",
+        "progression": "FORBIDDEN",
+        "overload": "FORBIDDEN",
+        "protectedDate": "2026-11-15"
+      },
+      "managed": true,
+      "decisionDigest": "912c5942a4b58e5e71f50c0aa18d871fd9cadf81679a9fb687724e8ec9c77d9c"
+    },
+    "intent": {
+      "kind": "adaptation",
+      "goalId": "half_marathon",
+      "adaptationId": "base_aerobica",
+      "methodId": "running_base",
+      "role": "PRIMARY",
+      "pattern": "run",
+      "blockPhase": "unknown",
+      "blockWeek": null,
+      "weaknessId": null
+    },
+    "doseContext": {
+      "version": 1,
+      "policy": "structured-dose-v1",
+      "references": [],
+      "runningReferenceAuthority": {
+        "version": 1,
+        "policy": "running_reference_v1",
+        "entries": [
+          {
+            "referenceId": "running:evidence:easyPace",
+            "type": "easyPace",
+            "status": "UNRESOLVED",
+            "value": null,
+            "unit": null,
+            "performanceRole": "NOT_PERFORMANCE",
+            "observedAt": null,
+            "freshness": "NOT_ASSESSED",
+            "evidence": null
+          },
+          {
+            "referenceId": "running:evidence:thresholdPace",
+            "type": "thresholdPace",
+            "status": "UNRESOLVED",
+            "value": null,
+            "unit": null,
+            "performanceRole": "NOT_PERFORMANCE",
+            "observedAt": null,
+            "freshness": "NOT_ASSESSED",
+            "evidence": null
+          },
+          {
+            "referenceId": "running:evidence:easyHr",
+            "type": "easyHr",
+            "status": "UNRESOLVED",
+            "value": null,
+            "unit": null,
+            "performanceRole": "NOT_PERFORMANCE",
+            "observedAt": null,
+            "freshness": "NOT_ASSESSED",
+            "evidence": null
+          },
+          {
+            "referenceId": "running:evidence:thresholdHr",
+            "type": "thresholdHr",
+            "status": "UNRESOLVED",
+            "value": null,
+            "unit": null,
+            "performanceRole": "NOT_PERFORMANCE",
+            "observedAt": null,
+            "freshness": "NOT_ASSESSED",
+            "evidence": null
+          },
+          {
+            "referenceId": "running:evidence:z1",
+            "type": "z1",
+            "status": "UNRESOLVED",
+            "value": null,
+            "unit": null,
+            "performanceRole": "NOT_PERFORMANCE",
+            "observedAt": null,
+            "freshness": "NOT_ASSESSED",
+            "evidence": null
+          },
+          {
+            "referenceId": "running:evidence:z2",
+            "type": "z2",
+            "status": "UNRESOLVED",
+            "value": null,
+            "unit": null,
+            "performanceRole": "NOT_PERFORMANCE",
+            "observedAt": null,
+            "freshness": "NOT_ASSESSED",
+            "evidence": null
+          },
+          {
+            "referenceId": "running:evidence:z3",
+            "type": "z3",
+            "status": "UNRESOLVED",
+            "value": null,
+            "unit": null,
+            "performanceRole": "NOT_PERFORMANCE",
+            "observedAt": null,
+            "freshness": "NOT_ASSESSED",
+            "evidence": null
+          },
+          {
+            "referenceId": "running:evidence:z4",
+            "type": "z4",
+            "status": "UNRESOLVED",
+            "value": null,
+            "unit": null,
+            "performanceRole": "NOT_PERFORMANCE",
+            "observedAt": null,
+            "freshness": "NOT_ASSESSED",
+            "evidence": null
+          },
+          {
+            "referenceId": "running:evidence:z5",
+            "type": "z5",
+            "status": "UNRESOLVED",
+            "value": null,
+            "unit": null,
+            "performanceRole": "NOT_PERFORMANCE",
+            "observedAt": null,
+            "freshness": "NOT_ASSESSED",
+            "evidence": null
+          },
+          {
+            "referenceId": "running:evidence:5k",
+            "type": "5k",
+            "status": "UNRESOLVED",
+            "value": null,
+            "unit": null,
+            "performanceRole": "UNCLASSIFIED_PERFORMANCE",
+            "observedAt": null,
+            "freshness": "NOT_ASSESSED",
+            "evidence": null
+          },
+          {
+            "referenceId": "running:evidence:10k",
+            "type": "10k",
+            "status": "UNRESOLVED",
+            "value": null,
+            "unit": null,
+            "performanceRole": "UNCLASSIFIED_PERFORMANCE",
+            "observedAt": null,
+            "freshness": "NOT_ASSESSED",
+            "evidence": null
+          },
+          {
+            "referenceId": "running:evidence:halfMarathon",
+            "type": "halfMarathon",
+            "status": "UNRESOLVED",
+            "value": null,
+            "unit": null,
+            "performanceRole": "UNCLASSIFIED_PERFORMANCE",
+            "observedAt": null,
+            "freshness": "NOT_ASSESSED",
+            "evidence": null
+          },
+          {
+            "referenceId": "running:evidence:marathon",
+            "type": "marathon",
+            "status": "UNRESOLVED",
+            "value": null,
+            "unit": null,
+            "performanceRole": "UNCLASSIFIED_PERFORMANCE",
+            "observedAt": null,
+            "freshness": "NOT_ASSESSED",
+            "evidence": null
+          },
+          {
+            "referenceId": "running:evidence:maxHr",
+            "type": "maxHr",
+            "status": "UNRESOLVED",
+            "value": null,
+            "unit": null,
+            "performanceRole": "NOT_PERFORMANCE",
+            "observedAt": null,
+            "freshness": "NOT_ASSESSED",
+            "evidence": null
+          },
+          {
+            "referenceId": "running:evidence:restingHr",
+            "type": "restingHr",
+            "status": "UNRESOLVED",
+            "value": null,
+            "unit": null,
+            "performanceRole": "NOT_PERFORMANCE",
+            "observedAt": null,
+            "freshness": "NOT_ASSESSED",
+            "evidence": null
+          },
+          {
+            "referenceId": "running:evidence:vo2max",
+            "type": "vo2max",
+            "status": "UNRESOLVED",
+            "value": null,
+            "unit": null,
+            "performanceRole": "NOT_PERFORMANCE",
+            "observedAt": null,
+            "freshness": "NOT_ASSESSED",
+            "evidence": null
+          },
+          {
+            "referenceId": "running:evidence:weeklyDistance",
+            "type": "weeklyDistance",
+            "status": "UNRESOLVED",
+            "value": null,
+            "unit": null,
+            "performanceRole": "NOT_PERFORMANCE",
+            "observedAt": null,
+            "freshness": "NOT_ASSESSED",
+            "evidence": null
+          }
+        ],
+        "references": [],
+        "sourceDigest": "f54f2f5c59d7faa6d629e6adfb01d5ce0504126265fe411cc367b781e94209ab",
+        "limitations": [
+          "race_recency_and_current_vs_personal_best_not_established",
+          "no_race_prediction_policy",
+          "hrr_requires_confirmed_zone_system",
+          "no_hrmax_estimation",
+          "economy_requires_execution_guidance"
+        ]
+      },
+      "referenceResolution": {
+        "version": 1,
+        "running": {}
+      },
+      "sufficiency": {
+        "version": 1,
+        "signals": {
+          "equipment.anillas": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.anillas",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.assault_bike": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.assault_bike",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.balon_medicinal": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.balon_medicinal",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.banco": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.banco",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.barra": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.barra",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.barra_dominadas": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.barra_dominadas",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.bici_estatica": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.bici_estatica",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.bumper": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.bumper",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.cajon": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.cajon",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.comba": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.comba",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.cuerda": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.cuerda",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.disco": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.disco",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.echo_bike": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.echo_bike",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.ghd": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.ghd",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.kettlebell": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.kettlebell",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.leg_press": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.leg_press",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.mancuerna": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.mancuerna",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.paralelas": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.paralelas",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.rack": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.rack",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.remo": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.remo",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.sandbag": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.sandbag",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.ski_erg": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.ski_erg",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.sled": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.sled",
+            "updatedAt": "2026-09-01"
+          },
+          "equipment.yoke": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.equipment.yoke",
+            "updatedAt": "2026-09-01"
+          },
+          "capability.canMeasureHeartRate": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.capability.canMeasureHeartRate",
+            "updatedAt": "2026-09-01"
+          },
+          "capability.canMeasurePace": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.capability.canMeasurePace",
+            "updatedAt": "2026-09-01"
+          },
+          "capability.canMeasureDistance": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.capability.canMeasureDistance",
+            "updatedAt": "2026-09-01"
+          },
+          "skill.box.advanced": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.skill.box.advanced",
+            "updatedAt": "2026-09-01"
+          },
+          "skill.carrera.advanced": {
+            "state": "available",
+            "source": "usuarios.perfil.prescription_signals.skill.carrera.advanced",
+            "updatedAt": "2026-09-01"
+          }
+        },
+        "location": null,
+        "environment": {
+          "version": 1,
+          "environment": "UNKNOWN",
+          "capabilityProfile": "UNKNOWN",
+          "source": null,
+          "reason": "unknown_or_mixed",
+          "implicitEquipmentIds": [],
+          "inputPresence": {
+            "lugarEntreno": false,
+            "tipoSala": false,
+            "material": false
+          }
+        },
+        "maxHrMethod": "unknown"
+      },
+      "timeBudget": {
+        "maximumSeconds": 3600,
+        "minimumSeconds": null,
+        "status": "resolved",
+        "source": "usuarios.perfil.duracion"
+      },
+      "timeAuthority": {
+        "version": 1,
+        "availableTime": {
+          "maximumSeconds": 3600,
+          "minimumSeconds": null,
+          "status": "resolved",
+          "source": "usuarios.perfil.duracion"
+        },
+        "hardMaximumSeconds": 3600,
+        "targetDuration": null,
+        "minimumUsefulDurationSeconds": null,
+        "overTargetToleranceSeconds": 0,
+        "policyId": null,
+        "provenance": null,
+        "resolution": "UNRESOLVED"
+      },
+      "weakness": null,
+      "weekStrategy": {
+        "version": 1,
+        "policy": "goal-transfer-v1",
+        "goal": {
+          "id": "half_marathon",
+          "sources": [
+            "usuarios.objetivo_principal"
+          ],
+          "evidenceDigest": "0b5613866612a926955a459a8a5c6047d6e8656d6d96061fc838a36e62cd9bc3"
+        },
+        "eventAuthority": {
+          "version": 1,
+          "asOfDate": "2026-09-10",
+          "planningMode": "EVENT_PREPARATION",
+          "validity": "VALID",
+          "prescriptionAllowed": true,
+          "eventId": "cd18f71e94e7d4418e14129a0c92ec59b9eeadbf8eeeac86ef175dfbd93efffe",
+          "eventDate": "2026-11-15",
+          "targetEvent": {
+            "version": 1,
+            "revision": 1,
+            "eventId": "cd18f71e94e7d4418e14129a0c92ec59b9eeadbf8eeeac86ef175dfbd93efffe",
+            "goalId": "half_marathon",
+            "discipline": "carrera",
+            "eventType": "race",
+            "eventDate": "2026-11-15",
+            "priority": "primary",
+            "status": "active",
+            "provenance": {
+              "source": "structured_event_form",
+              "athleteId": "u",
+              "legacySources": []
+            },
+            "confirmation": "CONFIRMED",
+            "createdAt": "2026-09-10T12:00:00Z",
+            "confirmedAt": "2026-09-10T12:00:00Z",
+            "digest": "a2a1f08a23fb0247c463d87ab6880249bf1cef1b924ca30c04bc2607827db639"
+          },
+          "daysRemaining": 66,
+          "weeksRemaining": 9.428571428571429,
+          "eventDigest": "a2a1f08a23fb0247c463d87ab6880249bf1cef1b924ca30c04bc2607827db639",
+          "scopeDigest": "458d79152e9ccc25d2611b0cb15f5d9b69f25aa03f7628b45269b5a27088fcb4",
+          "goalId": "half_marathon",
+          "confirmationRequired": false,
+          "periodizationAuthority": false,
+          "digest": "1797dfc03915c04af6b4c3f7ef7cb40738efaebef2daac0ffc3130e9e79668d6"
+        },
+        "block": {
+          "phase": "unknown",
+          "week": null,
+          "totalWeeks": null,
+          "evidenceDigest": "b546bc3dd551adc572a85101863d9f5ad74bce2f15641d2d3e26a27d5deb3d6c"
+        },
+        "adaptations": [
+          {
+            "id": "base_aerobica",
+            "role": "PRIMARY",
+            "weaknessIds": [],
+            "requiredPattern": null
+          },
+          {
+            "id": "umbral",
+            "role": "PRIMARY",
+            "weaknessIds": [],
+            "requiredPattern": null
+          },
+          {
+            "id": "resistencia_especifica",
+            "role": "PRIMARY",
+            "weaknessIds": [],
+            "requiredPattern": null
+          },
+          {
+            "id": "fuerza_general",
+            "role": "SUPPORTING",
+            "weaknessIds": [],
+            "requiredPattern": null
+          },
+          {
+            "id": "economia_carrera",
+            "role": "SUPPORTING",
+            "weaknessIds": [],
+            "requiredPattern": null
+          },
+          {
+            "id": "cadena_posterior",
+            "role": "OPTIONAL",
+            "weaknessIds": [],
+            "requiredPattern": null
+          },
+          {
+            "id": "potencia",
+            "role": "OPTIONAL",
+            "weaknessIds": [],
+            "requiredPattern": null
+          }
+        ],
+        "preferredEnvironments": [
+          "carrera"
+        ],
+        "methods": [
+          "running_base",
+          "running_threshold",
+          "running_specific",
+          "running_economy",
+          "runner_support_strength",
+          "runner_posterior",
+          "runner_power"
+        ],
+        "deferred": [],
+        "coverage": [],
+        "volumeIntent": "unspecified",
+        "intensityIntent": "unspecified",
+        "trainingDaysTarget": {
+          "maximum": 5,
+          "minimum": 1
+        },
+        "diagnostics": [
+          {
+            "code": "GOAL_DEMAND_RESOLUTION",
+            "reason": "resolved"
+          },
+          {
+            "code": "CANONICAL_WEEK_STRATEGY",
+            "reason": "unknown"
+          },
+          {
+            "code": "ADAPTATION_PRIORITY",
+            "reason": "discrete_goal_roles_and_canonical_weakness"
+          },
+          {
+            "code": "TRANSFER_RESOLUTION",
+            "reason": "managed_scope_intersection"
+          },
+          {
+            "code": "TRANSFER_RESOLUTION",
+            "reason": "time_typical_ranges_not_hard_bounds"
+          },
+          {
+            "code": "TRANSFER_RESOLUTION",
+            "reason": "equipment_inventory_and_all_vs_any_requirements_not_canonical"
+          },
+          {
+            "code": "TRANSFER_RESOLUTION",
+            "reason": "level_and_readiness_not_new_authority"
+          },
+          {
+            "code": "TRANSFER_RESOLUTION",
+            "reason": "interday_interference_not_established_by_structure_metadata"
+          }
+        ]
+      },
+      "neighbours": [],
+      "evidenceDigest": "6a237b01ff31dbd581f4024a93fbe73b47340ce715634a920468fbadedbdf378",
+      "diagnostics": [
+        {
+          "code": "BENCHMARK_RESOLUTION",
+          "reason": "resolved_references_only_no_nrm_conversion"
+        },
+        {
+          "code": "SESSION_DOSE_RESOLUTION",
+          "reason": "equipment_capability_skill_required_plate_increments_unknown"
+        }
+      ]
+    },
+    "contractVersion": 3,
+    "stimulusId": "base_aerobica",
+    "allowedMovementIds": [
+      "progresivo",
+      "rodaje_largo",
+      "rodaje_z2"
+    ],
+    "allowedStructureIds": [
+      "continuo_carrera"
+    ],
+    "rankedCandidates": [
+      {
+        "movementId": "rodaje_z2",
+        "recentExposures": 0
+      },
+      {
+        "movementId": "rodaje_largo",
+        "recentExposures": 0
+      },
+      {
+        "movementId": "progresivo",
+        "recentExposures": 0
+      }
+    ],
+    "restrictionFiltering": [],
+    "gaps": [
+      "external_load_context_only_no_physiological_rule",
+      "equipment_plate_increments_unknown"
+    ],
+    "runningMethodDose": {
+      "version": 2,
+      "methodId": "running_base",
+      "context": {
+        "kind": "adaptation",
+        "goalId": "half_marathon",
+        "adaptationId": "base_aerobica",
+        "methodId": "running_base",
+        "role": "PRIMARY",
+        "pattern": "run",
+        "blockPhase": "unknown",
+        "blockWeek": null,
+        "weaknessId": null
+      },
+      "evidence": {
+        "version": 2,
+        "family": "AEROBIC_CONTINUOUS",
+        "variant": "running_base",
+        "habitualConfirmation": {
+          "planningRunId": "d3-positive",
+          "targetWeekStart": "2026-09-14",
+          "durationFactDigest": "7691429a78db457fbc4fb5c2d761ac41e6eba666c5b3003f57e7062f6e328ad9",
+          "confirmedAt": "2026-09-10T12:00:00Z"
+        },
+        "habitualDeclarations": {
+          "facts": [
+            {
+              "field": "habitualEasyRunningDurationMinutes",
+              "authority": "DECLARED",
+              "status": "AVAILABLE",
+              "value": 45,
+              "unit": "minutes",
+              "semantics": "HABITUAL_EASY_RUN_DURATION",
+              "source": "usuarios.perfil.runningHabitualDeclarations.habitualEasyRunningDurationMinutes",
+              "confirmedAt": "2026-09-10T12:00:00Z",
+              "freshness": "UNKNOWN"
+            },
+            {
+              "field": "habitualRunningSessionsPerWeek",
+              "authority": "DECLARED",
+              "status": "AVAILABLE",
+              "value": 3,
+              "unit": "sessions_per_week",
+              "semantics": "HABITUAL_RUNNING_FREQUENCY",
+              "source": "usuarios.perfil.runningHabitualDeclarations.habitualRunningSessionsPerWeek",
+              "confirmedAt": "2026-09-10T12:00:00Z",
+              "freshness": "UNKNOWN"
+            }
+          ],
+          "conflicts": []
+        },
+        "status": "DECLARED",
+        "captureCompleteness": "UNKNOWN",
+        "window": {
+          "startDate": "2026-08-14",
+          "endDate": "2026-09-10"
+        },
+        "habitualDeclaredVolume": [],
+        "observedActivities": [],
+        "observedWindows": {
+          "7": {
+            "startDate": "2026-09-04",
+            "endDate": "2026-09-10",
+            "duration": {
+              "value": null,
+              "unit": "s",
+              "status": "UNKNOWN",
+              "knownActivities": 0,
+              "evidenceRefs": []
+            },
+            "distance": {
+              "value": null,
+              "unit": "m",
+              "status": "UNKNOWN",
+              "knownActivities": 0,
+              "evidenceRefs": []
+            }
+          },
+          "28": {
+            "startDate": "2026-08-14",
+            "endDate": "2026-09-10",
+            "duration": {
+              "value": null,
+              "unit": "s",
+              "status": "UNKNOWN",
+              "knownActivities": 0,
+              "evidenceRefs": []
+            },
+            "distance": {
+              "value": null,
+              "unit": "m",
+              "status": "UNKNOWN",
+              "knownActivities": 0,
+              "evidenceRefs": []
+            }
+          }
+        },
+        "longestObservedRun": {
+          "startDate": "2026-08-14",
+          "endDate": "2026-09-10",
+          "duration": {
+            "value": null,
+            "unit": "s",
+            "status": "UNKNOWN",
+            "knownActivities": 0,
+            "evidenceRefs": []
+          },
+          "distance": {
+            "value": null,
+            "unit": "m",
+            "status": "UNKNOWN",
+            "knownActivities": 0,
+            "evidenceRefs": []
+          }
+        },
+        "plannedMethodAssociations": [],
+        "compatibleMethodQuantities": {
+          "status": "UNKNOWN",
+          "reason": "EXECUTED_METHOD_IDENTITY_NOT_MODELED"
+        },
+        "structuredMethodExecution": {
+          "status": "UNKNOWN",
+          "authority": "STRUCTURED_SELF_REPORTED",
+          "records": [],
+          "integrityStatus": "NO_COMPATIBLE_EXECUTION",
+          "missing": []
+        },
+        "conflicts": [],
+        "missingSignals": [
+          "COMPLETE_EXECUTION_CAPTURE",
+          "EXECUTED_DISTANCE",
+          "EXECUTED_DURATION",
+          "EXECUTED_MAIN_WORK_QUANTITY",
+          "EXECUTED_METHOD_IDENTITY",
+          "IDENTIFIED_RUNNING_EXECUTION",
+          "METHOD_WORK_QUANTITY",
+          "SELECTED_TARGET_POLICY"
+        ],
+        "evidenceRefs": [
+          "abbc3f5a90d1a79ac320eec5a0719e15d88ef18356d651fbce0e7846a87aa943",
+          "fe8ec896ad323990f1dfcc56b67c9482acb3200dae5cfacf9463a89a8f130b1a"
+        ]
+      },
+      "sourceDigest": "397aa8d3c822e71629792a629b4ab9aa06be154da2d65df7f6f14cb6a9783c08",
+      "evidenceRefs": [
+        "abbc3f5a90d1a79ac320eec5a0719e15d88ef18356d651fbce0e7846a87aa943",
+        "fe8ec896ad323990f1dfcc56b67c9482acb3200dae5cfacf9463a89a8f130b1a"
+      ],
+      "policy": {
+        "id": "running_base_declared_habitual_duration_v1",
+        "version": 2,
+        "family": "AEROBIC_CONTINUOUS",
+        "variant": "running_base"
+      },
+      "status": "RESOLVED",
+      "reason": "POLICY_SELECTED_TARGET",
+      "dose": {
+        "metric": "duration",
+        "unit": "seconds",
+        "selectedTarget": {
+          "minimum": 2700,
+          "maximum": 2700
+        },
+        "maximumAuthorized": 2700,
+        "minimumUseful": null,
+        "compositionTolerance": null,
+        "allowedMovementIds": [
+          "rodaje_z2"
+        ],
+        "composition": "SINGLE_CONTINUOUS_TOTAL",
+        "structures": [
+          "continuo_carrera"
+        ],
+        "structureConstraints": {
+          "mode": "continuous",
+          "efforts": null,
+          "bout": null,
+          "recoverySeconds": null
+        }
+      },
+      "diagnostics": [
+        "RUNNING_METHOD_DOSE_RESOLVED"
+      ]
+    },
+    "intensityAuthority": {
+      "version": 2,
+      "methodId": "running_base",
+      "scope": "main",
+      "sourceDigest": "29424806bf6a61c53904b2882ce8ca94120cdab73aa7286641767583d484c75e",
+      "diagnostics": [
+        "METHOD_INTENSITY_FALLBACK_RPE",
+        "METHOD_INTENSITY_NO_REFERENCE",
+        "METHOD_INTENSITY_RESOLVED"
+      ],
+      "status": "RESOLVED",
+      "reason": "AUTHORIZED_POLICY",
+      "policy": {
+        "id": "running_base_intensity",
+        "version": 1
+      },
+      "targets": [
+        {
+          "movementId": "progresivo",
+          "primary": {
+            "kind": "rpe",
+            "value": 2,
+            "max": 3
+          },
+          "evidence": {
+            "kind": "SUBJECTIVE",
+            "resolution": "RESOLVED",
+            "confidence": "declared",
+            "measurementBasis": "UNKNOWN",
+            "source": "running_base_intensity",
+            "inputs": [],
+            "algorithm": null,
+            "containsEstimatedData": false
+          }
+        },
+        {
+          "movementId": "rodaje_largo",
+          "primary": {
+            "kind": "rpe",
+            "value": 2,
+            "max": 3
+          },
+          "evidence": {
+            "kind": "SUBJECTIVE",
+            "resolution": "RESOLVED",
+            "confidence": "declared",
+            "measurementBasis": "UNKNOWN",
+            "source": "running_base_intensity",
+            "inputs": [],
+            "algorithm": null,
+            "containsEstimatedData": false
+          }
+        },
+        {
+          "movementId": "rodaje_z2",
+          "primary": {
+            "kind": "rpe",
+            "value": 2,
+            "max": 3
+          },
+          "evidence": {
+            "kind": "SUBJECTIVE",
+            "resolution": "RESOLVED",
+            "confidence": "declared",
+            "measurementBasis": "UNKNOWN",
+            "source": "running_base_intensity",
+            "inputs": [],
+            "algorithm": null,
+            "containsEstimatedData": false
+          }
+        }
+      ]
+    }
+  },
+  "candidate": {
+    "schemaVersion": 2,
+    "stimulusId": "base_aerobica",
+    "structureId": "continuo_carrera",
+    "blocks": [
+      {
+        "blockType": "main",
+        "movements": [
+          {
+            "movementId": "rodaje_z2",
+            "prescription": {
+              "durationSeconds": 2700,
+              "intensity": {
+                "kind": "rpe",
+                "value": 2,
+                "max": 3
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "validation": {
+    "ok": true,
+    "proposal": {
+      "schemaVersion": 2,
+      "stimulusId": "base_aerobica",
+      "structureId": "continuo_carrera",
+      "blocks": [
+        {
+          "blockType": "main",
+          "movements": [
+            {
+              "movementId": "rodaje_z2",
+              "prescription": {
+                "durationSeconds": 2700,
+                "intensity": {
+                  "kind": "rpe",
+                  "value": 2,
+                  "max": 3
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

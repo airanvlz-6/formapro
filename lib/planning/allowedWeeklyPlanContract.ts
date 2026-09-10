@@ -1,4 +1,5 @@
 import type { DoseCapabilityProfile } from '../sports/doseCapabilityProfile';
+import { runningEventMethodAllowed, type RunningEventPreparationDecisionV1 } from '../sports/runningEventPreparation';
 import type { PrescriptionSignals } from '../athlete/prescriptionSignals';
 import { noWeeklyPrescription, executablePrescriptionCounts, type RegenerationPolicy } from './weeklyRegeneration';
 import { emitRemainingDiagnostic } from './weeklyRemainingDiagnostic';
@@ -18,6 +19,7 @@ import { projectRejectedWeeklyIntent, emitWeeklyFeasibilityDiagnostic, type Week
 export type WeeklyOption = { optionId: string; state: 'TRAIN' | 'RECOVERY' | 'REST' | 'UNAVAILABLE';
   discipline?: string; stimulusId?: string; intent?: PrescriptionIntent; protected?: true };
 export type AllowedWeeklyPlanContract = {
+  runningEventPreparation?: RunningEventPreparationDecisionV1;
   contractVersion: 1; policyVersion: 'executable-ceiling-rest-v1'; targetWeekStart: string;
   prescriptionScope: PrescriptionScope; contextDigest: string;
   frequencyPolicy: { maxExecutableDays: number; minExecutableDays: 1; requireGenuineRest: boolean };
@@ -26,6 +28,7 @@ export type AllowedWeeklyPlanContract = {
   regeneration?: RegenerationPolicy;
 };
 export type WeeklyContractInput = {
+  runningEventPreparation?: RunningEventPreparationDecisionV1;
   /** Server-projected date/assignment evidence; absent only for legacy pure callers. */
   daySufficiency?: Record<string, Record<string, PrescriptionSignals>>;
   doseCapabilities?: DoseCapabilityProfile;
@@ -146,6 +149,27 @@ export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput, diagn
       }
       dayOptions[day] = options;
     }
+    if (input.runningEventPreparation) {
+      // No existing B3 selector authorizes a dedicated long-run purpose. Never relabel an easy dose.
+      if(input.runningEventPreparation.constraints.longRun==='REQUIRED')
+        return failure('WEEKLY_CONTRACT_UNSATISFIABLE',['D3_REQUIRED_LONG_RUN_NO_AUTHORIZED_SELECTOR']);
+      for (const [index, day] of calendarDays.entries()) {
+        const date = new Date(Date.parse(input.targetWeekStart) + index * 86400000).toISOString().slice(0,10);
+        if (date === input.runningEventPreparation.constraints.protectedDate) {
+          if (dayOptions[day].some(o => o.protected && isExecutableCalendarState(o.state)))
+            return failure('WEEKLY_CONTRACT_UNSATISFIABLE', ['D3_PROTECTED_EVENT_CONFLICT']);
+          dayOptions[day] = [{optionId:day+':event-protected',state:'REST'}];
+        } else dayOptions[day] = dayOptions[day].filter(o => o.protected || o.discipline !== 'carrera'
+          || o.intent?.kind === 'adaptation' && runningEventMethodAllowed(input.runningEventPreparation!,o.intent.methodId));
+      }
+      for (const [category,method] of [['easy','running_base'],['recovery','running_recovery']] as const) {
+        if (input.runningEventPreparation.constraints[category] === 'REQUIRED'
+          && !Object.values(dayOptions).flat().some(o => !o.protected && o.intent?.kind === 'adaptation' && o.intent.methodId === method))
+          return failure('WEEKLY_CONTRACT_UNSATISFIABLE', ['D3_REQUIRED_'+category.toUpperCase()+'_UNAVAILABLE']);
+      }
+      if(input.runningEventPreparation.constraints.quality==='REQUIRED' && !Object.values(dayOptions).flat().some(o=>o.intent?.kind==='adaptation' && ['running_threshold','running_vo2'].includes(o.intent.methodId)))
+        return failure('WEEKLY_CONTRACT_UNSATISFIABLE',['D3_REQUIRED_QUALITY_UNAVAILABLE']);
+    }
     const deferredDoseDemands = [...new Map(doseUnavailable.map(d => [JSON.stringify(d), d])).values()];
     if (doseUnavailable.length && !Object.values(dayOptions).flat().some(o => !o.protected && isExecutableCalendarState(o.state)))
       return { ok: false as const, canContinue: false as const, retryable: false as const, code: doseUnavailable.some(d=>d.reason==='SESSION_DOSE_TIME_INFEASIBLE') ? 'SESSION_DOSE_TIME_INFEASIBLE' : 'RUNNING_DOSE_CAPABILITY_INSUFFICIENT', errors: ['NO_EXECUTABLE_DOSE_CAPABLE_METHOD'],
@@ -153,6 +177,7 @@ export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput, diagn
     if (input.strategy && doseUnavailable.length) input = { ...input, strategy: { ...input.strategy,
       deferred: [...input.strategy.deferred, ...deferredDoseDemands.map(d => ({ reference: d.adaptationId + ':' + d.methodId, reason: 'dose_' + d.reason.toLowerCase(), blockers: d.blockers }))] } };
     const contract: AllowedWeeklyPlanContract = {
+      ...(input.runningEventPreparation ? {runningEventPreparation:structuredClone(input.runningEventPreparation)} : {}),
       contractVersion: 1, policyVersion: 'executable-ceiling-rest-v1', targetWeekStart: input.targetWeekStart,
       prescriptionScope: structuredClone(input.prescriptionScope), contextDigest: createHash('sha256').update(JSON.stringify(input)).digest('hex'),
       frequencyPolicy: { maxExecutableDays: input.maxExecutableDays, minExecutableDays: 1,
@@ -213,6 +238,14 @@ export function validateWeeklySelection(contract: AllowedWeeklyPlanContract, pro
     selected[s.day] = option;
   }
   const options = Object.values(selected);
+  if(contract.runningEventPreparation?.constraints.longRun==='REQUIRED') return failure('WEEKLY_SELECTION_INVALID',['D3_REQUIRED_LONG_RUN_NO_AUTHORIZED_SELECTOR']);
+  if(contract.runningEventPreparation?.constraints.quality==='REQUIRED' && !options.some(o=>o.intent?.kind==='adaptation' && ['running_threshold','running_vo2'].includes(o.intent.methodId)))
+    return failure('WEEKLY_SELECTION_INVALID',['D3_REQUIRED_QUALITY_MISSING']);
+  for (const [category,method] of [['easy','running_base'],['recovery','running_recovery']] as const) {
+    if (contract.runningEventPreparation?.constraints[category] === 'REQUIRED'
+      && !options.some(o => !o.protected && o.intent?.kind === 'adaptation' && o.intent.methodId === method))
+      return failure('WEEKLY_SELECTION_INVALID', ['D3_REQUIRED_'+category.toUpperCase()+'_MISSING']);
+  }
   const prescriptionCounts = executablePrescriptionCounts(options);
   if (contract.regeneration && !prescriptionCounts.newExecutableDays)
     return noWeeklyPrescription('NO_NEW_EXECUTABLE_SELECTION');

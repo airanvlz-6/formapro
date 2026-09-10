@@ -1,4 +1,5 @@
 import { AEROBIC_CONTINUITY_POLICY, aerobicContinuityRejection } from './aerobicContinuityPolicy';
+import type { RunningEventPreparationDecisionV1 } from './runningEventPreparation';
 import type { StrategicIntent } from './goalTransferModel';
 import type { PrescriptionIntent } from './prescriptionIntent';
 import type { AllowedTrainingContract } from './allowedTrainingContract';
@@ -29,6 +30,14 @@ export type RunningMethodDoseV2 = { version: 2; methodId: string; context: Strat
   evidence: CompatibleRunningDoseEvidence; sourceDigest: string; evidenceRefs: string[];
   dose: RunningDoseSelection | null; diagnostics: string[] };
 export type AuthorizedRunningMethodDose = RunningMethodDoseV2 | legacy.AuthorizedRunningMethodDose;
+/** Acknowledges intent without adding an unsupported progression selector. */
+export function resolveLongitudinalRunningDose(authority: RunningMethodDoseV2, decision: RunningEventPreparationDecisionV1) {
+  return {version:1 as const, decisionDigest:decision.decisionDigest, longitudinalIntent:decision.longitudinalDecision,
+    numericProgressionAuthorized:false as const,
+    reason:authority.status !== 'RESOLVED' ? 'NO_CANONICAL_NUMERIC_BASELINE'
+      : decision.longitudinalDecision === 'PROGRESS' ? 'PROGRESSION_SELECTOR_NOT_ESTABLISHED' : 'EXISTING_SAFE_DOSE_ONLY',
+    selectedDose:authority.dose};
+}
 export const isRunningDoseMethod = (intent?: PrescriptionIntent) => intent?.kind === 'adaptation'
   && RUNNING_METHOD_DOSE_POLICIES.some(p => p.methodId === intent.methodId);
 

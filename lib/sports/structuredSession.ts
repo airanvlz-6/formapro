@@ -100,6 +100,12 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
   if (!authority.ok) return { ok: false, violations: authority.errors.map(e => `CONTRACT:${e}`) };
   const p = checked.proposal;
   const violations: string[] = [];
+  if(contract.runningEventPreparation && contract.discipline==='carrera') {
+    if(contract.intensityAuthority?.status !== 'RESOLVED') violations.push('D3_C2_INTENSITY_UNRESOLVED');
+    if(contract.runningMethodDose?.status !== 'RESOLVED') violations.push('D3_B3_DOSE_UNRESOLVED');
+    if(contract.runningEventPreparation.constraints.longRun==='FORBIDDEN' && p.blocks.some(b=>b.movements.some(m=>m.movementId==='rodaje_largo')))
+      violations.push('D3_LONG_RUN_FORBIDDEN');
+  }
   if (p.stimulusId !== contract.stimulusId) violations.push('STIMULUS_MISMATCH');
   const structure = Object.hasOwn(WORKOUT_STRUCTURE_LIBRARY, p.structureId) ? WORKOUT_STRUCTURE_LIBRARY[p.structureId] : undefined;
   if (!structure || !contract.allowedStructureIds.includes(p.structureId) || structure.discipline !== contract.discipline) violations.push('STRUCTURE_NOT_ALLOWED');

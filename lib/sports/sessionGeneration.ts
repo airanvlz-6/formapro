@@ -19,6 +19,10 @@ export async function generateContractSession(contract: AllowedTrainingContract,
   const authority = freeze(structuredClone(contract));
   const preflight = validateAllowedTrainingContract(authority);
   if (!preflight.ok) return { ok: false as const, code: 'TRAINING_CONTRACT_INVALID', violations: preflight.errors };
+  if(authority.runningEventPreparation && authority.discipline==='carrera' && authority.intensityAuthority?.status !== 'RESOLVED')
+    return {ok:false as const,code:'D3_C2_INTENSITY_UNRESOLVED',violations:['D3_C2_INTENSITY_UNRESOLVED']};
+  if(authority.runningEventPreparation && authority.discipline==='carrera' && authority.runningMethodDose?.status !== 'RESOLVED')
+    return {ok:false as const,code:'D3_B3_DOSE_UNRESOLVED',violations:['D3_B3_DOSE_UNRESOLVED']};
   // Current server issuance attaches B.3.2B before this composition boundary. Keep historical
   // contracts without the extension usable by existing isolated/legacy contract consumers.
   if (authority.runningMethodDose && authority.runningMethodDose.status !== 'RESOLVED') return { ok: false as const,

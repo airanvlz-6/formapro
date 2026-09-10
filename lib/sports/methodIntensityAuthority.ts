@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { runningEventMethodAllowed } from './runningEventPreparation';
 import type { AllowedTrainingContract } from './allowedTrainingContract';
 import type { DoseIntensity } from './sessionDose';
 import type { StructuredSessionProposal } from './structuredSession';
@@ -31,6 +32,7 @@ export type MethodIntensityAuthority = { version: 1 | 2; methodId: string | null
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const sourceDigest = (c: AllowedTrainingContract, version: 1 | 2 = 1) => digest({ intent: c.intent ?? null, movements: c.allowedMovementIds,
   references: c.doseContext?.references ?? [], signals: c.doseContext?.sufficiency ?? null,
+  ...(c.runningEventPreparation ? {weeklyEligibility:c.runningEventPreparation.constraints,decisionDigest:c.runningEventPreparation.decisionDigest} : {}),
   ...(version === 2 ? { structures: c.allowedStructureIds, referenceResolution: c.doseContext?.referenceResolution ?? null } : {}) });
 
 function validEvidence(e: IntensityEvidence): boolean {
@@ -67,10 +69,14 @@ function executable(c: AllowedTrainingContract, target: IntensityTarget): boolea
 export function resolveMethodIntensity(c: AllowedTrainingContract, policy?: MethodIntensityPolicy): MethodIntensityAuthority {
   const methodId = c.intent?.kind === 'adaptation' ? c.intent.methodId : null;
   const domain = policy ? null : runningIntensityPolicy(c);
-  const selected = policy ?? domain?.policy;
+  const candidate = policy ?? domain?.policy;
+  const selected = candidate && c.runningEventPreparation?.constraints.longRun === 'FORBIDDEN'
+    ? {...candidate,targets:candidate.targets.filter(t=>t.movementId!=='rodaje_largo')} : candidate;
   const version = domain ? 2 as const : 1 as const;
   const base = { version, methodId, scope: 'main' as const, sourceDigest: sourceDigest(c, version),
     ...(domain ? { diagnostics: domain.diagnostics } : {}) };
+  if(c.runningEventPreparation && c.discipline==='carrera' && (!methodId || !runningEventMethodAllowed(c.runningEventPreparation,methodId)))
+    return {...base,status:'UNRESOLVED',reason:'POLICY_NOT_EXECUTABLE',policy:null,targets:[]};
   if (!selected) return { ...base, status: 'UNRESOLVED', reason: domain ? 'POLICY_NOT_EXECUTABLE' : 'NO_METHOD_POLICY', policy: null, targets: [] };
   if (selected.methodId !== methodId || selected.scope !== 'main' || !selected.id || !Number.isSafeInteger(selected.version) || selected.version < 1
     || !selected.targets.length || new Set(selected.targets.map(t => t.movementId)).size !== selected.targets.length || !selected.targets.every(t => executable(c, t)))

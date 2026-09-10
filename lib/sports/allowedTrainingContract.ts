@@ -1,4 +1,5 @@
 import type { PrescriptionIntent } from './prescriptionIntent';
+import { runningEventMethodAllowed, type RunningEventPreparationDecisionV1 } from './runningEventPreparation';
 import type { CanonicalRestrictions } from '../athlete/getCanonicalRestrictions';
 import { MOVEMENT_LIBRARY } from './movementLibrary';
 import { WORKOUT_STRUCTURE_LIBRARY } from './workoutStructureLibrary';
@@ -21,6 +22,7 @@ export type ExternalLoadContext = {
   records: { fecha: string; disciplina: string; duracion?: number | null; intensidad_percibida?: number | null; fatiga_post?: number | null }[];
 };
 export type ContractInput = {
+  runningEventPreparation?: RunningEventPreparationDecisionV1;
   prescriptionScope: PrescriptionScope;
   targetWeekStart: string;
   targetDay: string;
@@ -69,6 +71,12 @@ export function validateAllowedTrainingContract(contract: AllowedTrainingContrac
   try {
     const input: ContractInput = { ...contract, stimulus: contract.stimulusId };
     const errors = feasibilityInputErrors(input);
+    if (contract.runningEventPreparation && contract.discipline === 'carrera') {
+      if (contract.intent?.kind !== 'adaptation' || !runningEventMethodAllowed(contract.runningEventPreparation,contract.intent.methodId)) errors.push('D3_METHOD_FORBIDDEN');
+      const index=['lunes','martes','miercoles','jueves','viernes','sabado','domingo'].indexOf(contract.targetDay);
+      const date=new Date(Date.parse(contract.targetWeekStart)+index*86400000).toISOString().slice(0,10);
+      if(date===contract.runningEventPreparation.constraints.protectedDate) errors.push('D3_EVENT_DATE_PROTECTED');
+    }
     if (!validMethodIntensity(contract)) errors.push('METHOD_INTENSITY_AUTHORITY_INVALID');
     if (!validRunningMethodDose(contract)) errors.push('RUNNING_METHOD_DOSE_AUTHORITY_INVALID');
     if (![1, 2, 3].includes(contract.contractVersion)) errors.push('CONTRACT_VERSION_INVALID');

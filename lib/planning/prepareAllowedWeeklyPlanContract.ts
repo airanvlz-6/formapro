@@ -42,7 +42,11 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
     if (!admitted) return { ok: false as const, code: resolution.status, retryable: false,
       goalRequirement: await requireGoalAuthority(db, codigo) };
   }
-  const strategy = athlete ? buildCanonicalWeekStrategy(athlete, c.scope, c.max, request.strategyProposal) : undefined;
+  const event = athlete ? resolveEventAuthority(athlete.eventInput, athlete.planningStrategy.strategyId, c.scope, request.today, codigo) : null;
+  const eventCycle = athlete && event?.targetEvent?.goalId === 'half_marathon' && event.targetEvent.status === 'active'
+    ? {...athlete,cycle:{...athlete.cycle,
+      block:{...athlete.cycle.block,value:null},week:{...athlete.cycle.week,value:null},totalWeeks:{...athlete.cycle.totalWeeks,value:null}}} : athlete;
+  const strategy = eventCycle ? buildCanonicalWeekStrategy(eventCycle, c.scope, c.max, request.strategyProposal) : undefined;
   const runningEventPreparation = athlete && strategy ? decideRunningEventPreparation({
     eventAuthority: resolveEventAuthority(athlete.eventInput, strategy.goal.id, c.scope, request.today, codigo),
     runningHistory: athlete.runningHistory, scope: c.scope, restrictions: athlete.restrictions.value, referenceDate: request.today,
@@ -112,6 +116,8 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
         : habitualRunningRequirement([]),
     };
   }
+  if (runningEventPreparation?.managed && runningEventPreparation.preparationState !== 'GENERAL_DEVELOPMENT' && strategy?.goal.id === 'half_marathon' && contexts.carrera)
+    contexts.carrera.runningEventPreparation = runningEventPreparation;
   let availabilityConfirmed = false;
   try {
     availabilityConfirmed = typeof request.confirmedAvailabilityDigest === 'string'
@@ -122,8 +128,9 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
     daySufficiency: projectWeeklyPrescriptionSignals(c.profile, request.targetWeekStart, c.scope.managedDisciplines, c.allowed, availabilityConfirmed),
     ...(activeRegeneration ? { regeneration: { pendingManagedDays: calendarDays.filter(day => !fixed[day]
       && c.scope.managedDisciplines.some(discipline => c.allowed[discipline].includes(day))) } } : {}),
+    ...(runningEventPreparation?.managed && runningEventPreparation.preparationState !== 'GENERAL_DEVELOPMENT' && strategy?.goal.id === 'half_marathon' ? { runningEventPreparation } : {}),
     ...(strategy ? { strategy, doseCapabilities: buildDoseCapabilityProfile(athlete!.runningDoseEvidenceAdmission, c.scope,
-      { goalId: strategy.goal.id, blockPhase: strategy.block.phase, blockWeek: strategy.block.week, athlete, contexts }) } : {}) },
+      { ...(runningEventPreparation?.managed && runningEventPreparation.preparationState !== 'GENERAL_DEVELOPMENT' && strategy.goal.id === 'half_marathon' ? {runningEventPreparation} : {}), goalId: strategy.goal.id, blockPhase: strategy.block.phase, blockWeek: strategy.block.week, athlete, contexts }) } : {}) },
     fixedSessions: structuredClone(fixedSessions),
     runningHistoryContext: athlete ? scopeRunningHistory(athlete.runningHistory, c.scope) : null,
     runningEventPreparation,
@@ -137,7 +144,7 @@ export async function prepareAllowedWeeklyPlanContract(db: any, codigo: string, 
     today: request.today, snapshot: request.snapshot,
     availabilityConfirmed: context.availabilityConfirmed,
     temporalDecision: request.diagnosticTemporalDecision === undefined ? request.empezarHoy : request.diagnosticTemporalDecision });
-  return built.ok ? { ...built, fixedSessions: context.fixedSessions, runningHistoryContext: context.runningHistoryContext } : built;
+  return built.ok ? { ...built, fixedSessions: context.fixedSessions, runningHistoryContext: context.runningHistoryContext, runningEventPreparation: context.runningEventPreparation } : built;
 }
 
 /** Server resolves selections. Model prose never becomes an executable objective. */

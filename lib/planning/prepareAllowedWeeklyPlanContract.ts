@@ -18,6 +18,8 @@ import { buildCanonicalWeekStrategy } from './canonicalWeekStrategy';
 import { humanWeeklyObjective } from '../sports/humanCoachingProjection';
 import { strategyDiagnostic } from './planningDiagnostics';
 import { resolveGoalAuthority, goalResolutionDiagnostic } from '../athlete/goalResolution';
+import { resolveEventAuthority } from '../athlete/eventAuthority';
+import { decideRunningEventPreparation } from '../sports/runningEventPreparation';
 import { requireGoalAuthority } from '../athlete/goalAnswers';
 import { resolvePlanningStrategy } from '../athlete/strategyResolution';
 
@@ -41,6 +43,11 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
       goalRequirement: await requireGoalAuthority(db, codigo) };
   }
   const strategy = athlete ? buildCanonicalWeekStrategy(athlete, c.scope, c.max, request.strategyProposal) : undefined;
+  const runningEventPreparation = athlete && strategy ? decideRunningEventPreparation({
+    eventAuthority: resolveEventAuthority(athlete.eventInput, strategy.goal.id, c.scope, request.today, codigo),
+    runningHistory: athlete.runningHistory, scope: c.scope, restrictions: athlete.restrictions.value, referenceDate: request.today,
+    availability: c.profile.distribucion_semanal,
+  }) : null;
   const restrictions = await getCanonicalRestrictions(db, codigo);
   const contexts: Record<string, ContractInput> = {};
   for (const discipline of c.scope.managedDisciplines) {
@@ -119,6 +126,7 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
       { goalId: strategy.goal.id, blockPhase: strategy.block.phase, blockWeek: strategy.block.week, athlete, contexts }) } : {}) },
     fixedSessions: structuredClone(fixedSessions),
     runningHistoryContext: athlete ? scopeRunningHistory(athlete.runningHistory, c.scope) : null,
+    runningEventPreparation,
     availabilityConfirmed };
 }
 

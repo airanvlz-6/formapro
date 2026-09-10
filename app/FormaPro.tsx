@@ -1,5 +1,6 @@
 'use client';
 import { RunningHrBootstrap } from '@/components/RunningHrBootstrap';
+import { TargetEventForm } from '@/components/TargetEventForm';
 import { RunningExecutionReport } from '@/components/RunningExecutionReport';
 import { captureAthleteTestFacts } from '@/lib/athlete/testCapture';
 import { captureOnboardingGoal } from '@/lib/athlete/onboardingGoal';
@@ -382,10 +383,7 @@ REGLA CRÍTICA: Esta disponibilidad NO es una sugerencia, es una restricción f�
 ${objetivo?.descripcion?`
 OBJETIVO PRINCIPAL DEL ATLETA:
 - Descripción: ${objetivo.descripcion}
-- Fecha objetivo: ${objetivo.fecha||"sin fecha definida"}
-- Tipo: ${objetivo.tipo||"rendimiento"}
-- Semanas restantes: ${objetivo.fecha?Math.max(0,Math.round((new Date(objetivo.fecha).getTime()-new Date().getTime())/(7*24*60*60*1000))):"desconocido"}
-IMPORTANTE: Toda la planificación debe orientarse hacia este objetivo. Si la fecha se acerca, ajusta la periodización (taper, realización). Si hay mucho tiempo, prioriza base y acumulación. Menciona el objetivo cuando sea relevante para motivar al atleta.`:""}
+Solo EVENT_AUTHORITY del servidor acredita fecha, horizonte y modo. Sin esa autoridad, habla de desarrollo general. No calcules semanas ni prometas taper, semana de carrera o pico de rendimiento; D1 solo aporta referencia temporal.`:""}
 DISPOSITIVO DE MEDICIÓN DEL ATLETA — ADAPTA TU COMUNICACIÓN: Consulta el campo "dispositivo" en el perfil del atleta. Si indica que NO tiene reloj GPS ni pulsómetro (solo RPE/sensación), NUNCA prescribas zonas de FC en ppm ni ritmos exactos por km como referencia principal — usa RPE (escala 1-10 o descripción de sensación: "conversacional", "moderado", "duro") como referencia principal. Si tiene pulsómetro básico o reloj GPS, sí puedes usar zonas de FC/ritmo con confianza. Independientemente del dispositivo, cuando el atleta reporte una sesión, si mencionas que puede compartir capturas de pantalla de su reloj/app para un análisis más preciso, hazlo de forma natural y solo si aporta valor real, no en cada mensaje.
 PRINCIPIOS Y METODOLOGÍA CIENTÍFICA:
 - Periodización por bloques: acumulación (volumen alto, intensidad baja) → intensificación (volumen medio, intensidad alta) → realización (volumen bajo, intensidad máxima) → deload
@@ -909,6 +907,7 @@ const [errorPerfil,setErrorPerfil]=useState("");
 const [editandoPerfil,setEditandoPerfil]=useState(false);
 const [perfilEdit,setPerfilEdit]=useState<Record<string,string>>({});
 const [hrBootstrapUser, setHrBootstrapUser] = useState<string | null>(null);
+const [targetEventUser, setTargetEventUser] = useState<string | null>(null);
 const [editandoEspecialidad,setEditandoEspecialidad]=useState(false);
 const [email,setEmail]=useState("");
 const [codigoPersonal,setCodigoPersonal]=useState("");
@@ -1504,6 +1503,7 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
       // chat, y puede completarse mas adelante desde Mi Atleta.
       apiCall({action:"confirmar_onboarding",codigo,datos:{mode:modoEntrada}});
       if (categoria === 'carrera') setHrBootstrapUser(codigo);
+      setTargetEventUser(codigo);
     }catch{setMensajes([{role:"assistant",content:"Error de conexion. Por favor recarga."}]);}
     finally{setGenerando(false);setTimeout(()=>inputRef.current?.focus(),300);}
   };
@@ -2439,6 +2439,7 @@ ${testStr}`}]});
   return (
     <div style={{minHeight:"100dvh",background:C.bg,fontFamily:"'DM Sans', sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 16px",paddingTop:"max(24px, env(safe-area-inset-top))",paddingBottom:"max(24px, env(safe-area-inset-bottom))"}}>
       {hrBootstrapUser && <RunningHrBootstrap request={datos => apiCall({ action: 'hr_zone_bootstrap', codigo: hrBootstrapUser, datos })} onDone={() => setHrBootstrapUser(null)} />}
+      {targetEventUser && !hrBootstrapUser && <TargetEventForm request={datos => apiCall({ action: 'target_event', codigo: targetEventUser, datos })} onDone={() => setTargetEventUser(null)} />}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@700;800&display=swap');
         *{box-sizing:border-box;margin:0;padding:0;}
@@ -3244,6 +3245,7 @@ ${testStr}`}]});
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                 <p style={{color:C.ink,fontSize:13,fontWeight:600}}>Datos del perfil</p>
                 {categoria === 'carrera' && <button onClick={() => setHrBootstrapUser(codigoUsuario)}>Revisar zonas de FC</button>}
+                <button onClick={() => setTargetEventUser(codigoUsuario)}>Fecha de mi prueba</button>
                 <button onClick={()=>{setEditandoPerfil(!editandoPerfil);setPerfilEdit({...respuestas as Record<string,string>});}} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,padding:"4px 10px",fontSize:12,color:C.muted,cursor:"pointer"}}>
                   {editandoPerfil?"Cancelar":"Editar"}
                 </button>

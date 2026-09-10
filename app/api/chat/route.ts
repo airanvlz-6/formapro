@@ -1,3 +1,5 @@
+import { eventAction, loadEventContext, canonicalEventPrompt } from '@/lib/athlete/eventActions';
+import { eventAuthorityText, boundEventAnalysis } from '@/lib/athlete/eventAuthority';
 import { saveHabitualRunningAnswer, type HabitualRunningProfileStore } from '@/lib/athlete/runningHabitualDeclarations';
 import { issueEnvironmentConfirmation, readEnvironmentConfirmation, ENVIRONMENT_CONFIRMATION_COOKIE, ENVIRONMENT_CONFIRMATION_TTL_SECONDS } from '@/lib/planning/sessionEnvironmentConfirmation';
 import { ensurePlanningSpecialty, hasCanonicalSpecialty, requiresPlanningSpecialty } from '@/lib/sports/canonicalSpecialty';
@@ -1223,12 +1225,13 @@ if (action === "verificar_cambio_modo") {
 
       const systemPrompt = buildPrompt(ctx.catObj, ctx.perfil, ctx.marcas, ctx.resumen, ctx.memoriaCoach, ctx.cicloActual, ctx.perfilPsicologico, ctx.esPremiumOAdmin, ctx.athleteState, ctx.datosEntrenamiento, ctx.estadoFisiologico, ctx.historialFisiologico, ctx.distribucionSemanal, ctx.objetivoPrincipal, ctx.planSemanal, ctx.debilidades, ctx.blockOutcomes, ctx.estadoCanonico);
 
+      const eventPrompt = await canonicalEventPrompt(supabase, codigo);
       const mensajesParaAPI = [...(ctx.historial || []).slice(-3), { role: "user", content: mensajeConFecha }];
 
       const coachRes = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 4000, system: systemPrompt, messages: mensajesParaAPI }),
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 4000, system: systemPrompt + '\n' + eventPrompt, messages: mensajesParaAPI }),
       });
       const coachData = await coachRes.json();
       const respuestaTexto = coachData.content?.map((b: any) => b.text || "").join("") || "Error al conectar.";
@@ -1312,6 +1315,8 @@ if (action === "verificar_cambio_modo") {
       }
       delete profilePatch.perfil.hrZoneBootstrap;
       if (current.data.perfil?.hrZoneBootstrap !== undefined) profilePatch.perfil.hrZoneBootstrap = current.data.perfil.hrZoneBootstrap;
+      delete profilePatch.perfil.targetEvent;
+      if (current.data.perfil?.targetEvent !== undefined) profilePatch.perfil.targetEvent = current.data.perfil.targetEvent;
     }
     if (!Object.keys(profilePatch).length) return NextResponse.json({ ok: true, changed: false });
     let physiologyResult: PhysiologyResult | undefined;
@@ -2161,7 +2166,10 @@ const { data: exposicionesParaSeguimiento } = await supabase.from("weakness_expo
 
     // FIX CRITICO DE RAIZ: el Block Analyzer nunca recibia especialidad ni objetivo del atleta,
     // generando estructuras genericas sin anclaje a la disciplina real (ej: CrossFit/halterofilia).
-    const analyzerPrompt = `Eres un analizador de bloques de entrenamiento. Tu ÚNICA tarea es devolver un JSON pequeño describiendo la estructura de la PRÓXIMA semana. NO generes entrenamientos ni sesiones detalladas.
+    const eventContext = await loadEventContext(supabase, codigo, new Date().toLocaleDateString('en-CA', { timeZone: 'Atlantic/Canary' }));
+    const analyzerPrompt = `EVENT_AUTHORITY (solo lectura): ${JSON.stringify(eventContext.authority)}
+${eventAuthorityText(eventContext.authority)} No inventes fecha, identidad, horizonte o planningMode. D1 no autoriza taper, carrera ni pico de rendimiento.
+Eres un analizador de bloques de entrenamiento. Tu ÚNICA tarea es devolver un JSON pequeño describiendo la estructura de la PRÓXIMA semana. NO generes entrenamientos ni sesiones detalladas.
 
 CONTEXTO OBLIGATORIO — RESPETAR SIEMPRE:
 Categoría/especialidad del atleta: ${usuarioAnalyzer?.especialidad || usuarioAnalyzer?.categoria || "no especificada"} (práctica declarada; no amplía disciplinas gestionadas ni sustituye el objetivo canónico)
@@ -2203,7 +2211,7 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
       const analyzerClean = analyzerTexto.replace(/```json|```/g, "").trim();
       const analyzerMatch = analyzerClean.match(/\{[\s\S]*\}/);
       if (!analyzerMatch) throw new Error("Block Analyzer no devolvio JSON valido");
-      const analisisBloque = JSON.parse(analyzerMatch[0]);
+      const analisisBloque = boundEventAnalysis(JSON.parse(analyzerMatch[0]), eventContext.authority);
       analisisBloque.strategyProposal = normalizeStrategyProposal(analisisBloque.strategyProposal, allowedAdaptations);
 
       // FORGE TRAINING FREQUENCY SAFETY NET — barrera determinista, NUNCA deja al LLM decidir si
@@ -5102,6 +5110,10 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
     catch { return NextResponse.json({ ok: false, code: 'RUNNING_HABITUAL_CAPTURE_FAILED' }); }
   }
 
+  if (action === "target_event") {
+    try { return NextResponse.json(await eventAction(supabase, codigo, datos?.operation, datos ?? {}, new Date().toLocaleDateString('en-CA', { timeZone: 'Atlantic/Canary' }))); }
+    catch (error) { return NextResponse.json({ ok: false, code: error instanceof Error ? error.message : 'EVENT_INVALID' }, { status: 422 }); }
+  }
   if (action === "hr_zone_bootstrap") {
     try { return NextResponse.json(await hrZoneAction(supabase, codigo, datos.operation, datos)); }
     catch (error) { return NextResponse.json({ ok: false, code: error instanceof Error ? error.message : 'HR_ZONE_INVALID' }, { status: 422 }); }
@@ -5429,7 +5441,7 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
       },
-      body: JSON.stringify({ model, max_tokens, system, messages }),
+      body: JSON.stringify({ model, max_tokens, system: system + '\n' + await canonicalEventPrompt(supabase, codigo), messages }),
       signal: controller.signal,
     });
   } catch (err: any) {

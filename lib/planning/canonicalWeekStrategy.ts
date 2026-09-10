@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { resolveEventAuthority, type EventAuthority } from '../athlete/eventAuthority';
 import type { AthletePrescriptionContext } from '../athlete/loadAthletePrescriptionContext';
 import { GOAL_DEMANDS, GOAL_DEFINITIONS, TRANSFER_METHODS, type GoalId, type AdaptationRole, type StrategicIntent } from '../sports/goalTransferModel';
 import { resolvePlanningStrategy } from '../athlete/strategyResolution';
@@ -9,6 +10,7 @@ export type StrategyDiagnostic = { code: 'GOAL_DEMAND_RESOLUTION' | 'ADAPTATION_
   reason: string; reference?: string };
 export type StrategyProposal = { version: 1; preferredAdaptations: string[] };
 export type CanonicalWeekStrategy = {
+  eventAuthority?: EventAuthority;
   version: 1; policy: 'goal-transfer-v1'; goal: { id: GoalId | null; sources: string[]; evidenceDigest: string };
   block: { phase: StrategicIntent['blockPhase']; week: number | null; totalWeeks: number | null; evidenceDigest: string };
   adaptations: { id: string; role: AdaptationRole; weaknessIds: string[]; requiredPattern: PatronMovimiento | null }[];
@@ -84,6 +86,7 @@ export function buildCanonicalWeekStrategy(context: AthletePrescriptionContext, 
     { code: 'TRANSFER_RESOLUTION', reason: 'level_and_readiness_not_new_authority' },
     { code: 'TRANSFER_RESOLUTION', reason: 'interday_interference_not_established_by_structure_metadata' });
   return { version: 1, policy: 'goal-transfer-v1', goal: { id: goalId, sources: resolvePlanningStrategy(context).sources, evidenceDigest: digest(resolvePlanningStrategy(context)) },
+    ...(context.asOfDate ? { eventAuthority: resolveEventAuthority(context.eventInput ?? {}, goalId, scope, context.asOfDate, context.userCodigo) } : {}),
     block: { phase, week: typeof context.cycle.week.value === 'number' ? context.cycle.week.value : null,
       totalWeeks: typeof context.cycle.totalWeeks.value === 'number' ? context.cycle.totalWeeks.value : null, evidenceDigest: digest(context.cycle) },
     adaptations, preferredEnvironments, methods, deferred, coverage: [],

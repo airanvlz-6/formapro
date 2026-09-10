@@ -31,6 +31,7 @@ import { detectarDebilidadDuplicada } from "@/lib/validators/weaknessDeduplicati
 import { STIMULUS_LIBRARY } from "@/lib/sports/movementLibrary";
 import { generateTrainingSession, assertFreshSessionRestrictions, verifySessionReceipt, admitSessionContent, assertCurrentPrescriptionScope } from "@/lib/sports/sessionAuthority";
 import { savePrescriptionAnswer } from "@/lib/athlete/prescriptionAnswers";
+import { hrZoneAction } from "@/lib/athlete/hrZoneActions";
 import { saveGoalAnswer } from "@/lib/athlete/goalAnswers";
 import { resolveWeeklyGenerationPreflight } from "@/lib/planning/weeklyGenerationPreflight";
 import { loadTrainingLoad } from "@/lib/trainingLoad/loadTrainingLoad";
@@ -1309,6 +1310,8 @@ if (action === "verificar_cambio_modo") {
         delete profilePatch.perfil[field];
         if (current.data.perfil?.[field] !== undefined) profilePatch.perfil[field] = current.data.perfil[field];
       }
+      delete profilePatch.perfil.hrZoneBootstrap;
+      if (current.data.perfil?.hrZoneBootstrap !== undefined) profilePatch.perfil.hrZoneBootstrap = current.data.perfil.hrZoneBootstrap;
     }
     if (!Object.keys(profilePatch).length) return NextResponse.json({ ok: true, changed: false });
     let physiologyResult: PhysiologyResult | undefined;
@@ -5099,6 +5102,10 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
     catch { return NextResponse.json({ ok: false, code: 'RUNNING_HABITUAL_CAPTURE_FAILED' }); }
   }
 
+  if (action === "hr_zone_bootstrap") {
+    try { return NextResponse.json(await hrZoneAction(supabase, codigo, datos.operation, datos)); }
+    catch (error) { return NextResponse.json({ ok: false, code: error instanceof Error ? error.message : 'HR_ZONE_INVALID' }, { status: 422 }); }
+  }
   if (action === "responder_dato_prescripcion") {
     try { return NextResponse.json(await savePrescriptionAnswer(supabase, codigo, datos.questionToken, datos.answer)); }
     catch (error: any) { return NextResponse.json({ ok: false, code: error.message }); }

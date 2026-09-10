@@ -41,6 +41,9 @@ function project(input: unknown, fields: readonly string[]): Record<string, any>
 }
 export function projectLegacyCreate(input: unknown) {
   const result = project(input, createFields);
+  if (result.perfil && typeof result.perfil === 'object' && Object.hasOwn(result.perfil, 'hrZoneBootstrap')) {
+    result.perfil = { ...result.perfil }; delete result.perfil.hrZoneBootstrap;
+  }
   if (!hasCanonicalSpecialty(result.especialidad)) {
     delete result.especialidad;
     const specialty = specialtyFromCategory(result.categoria);

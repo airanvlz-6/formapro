@@ -8,6 +8,8 @@ import { MOVEMENT_LIBRARY } from './movementLibrary';
 import { runningIntensityPolicy, INTENSITY_DIAGNOSTICS, type IntensityDiagnostic } from './runningIntensityPolicies';
 
 export type IntensityEvidence = {
+  zoneCompatibility?: { zoneSystemId: string; sourceZone: string; policyId: string; version: number;
+    range: { min: number; max: number }; origin: string; proposalDigest: string };
   kind: 'DIRECT' | 'DERIVED' | 'ESTIMATED' | 'SUBJECTIVE';
   resolution: 'RESOLVED' | 'UNRESOLVED';
   confidence: 'declared' | 'recorded' | 'estimated' | 'unknown';

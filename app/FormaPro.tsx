@@ -1,4 +1,5 @@
 'use client';
+import { RunningHrBootstrap } from '@/components/RunningHrBootstrap';
 import { RunningExecutionReport } from '@/components/RunningExecutionReport';
 import { captureAthleteTestFacts } from '@/lib/athlete/testCapture';
 import { captureOnboardingGoal } from '@/lib/athlete/onboardingGoal';
@@ -907,6 +908,7 @@ const [mensajePerfil,setMensajePerfil]=useState("");
 const [errorPerfil,setErrorPerfil]=useState("");
 const [editandoPerfil,setEditandoPerfil]=useState(false);
 const [perfilEdit,setPerfilEdit]=useState<Record<string,string>>({});
+const [hrBootstrapUser, setHrBootstrapUser] = useState<string | null>(null);
 const [editandoEspecialidad,setEditandoEspecialidad]=useState(false);
 const [email,setEmail]=useState("");
 const [codigoPersonal,setCodigoPersonal]=useState("");
@@ -1266,6 +1268,7 @@ const [equipoSeleccionado,setEquipoSeleccionado]=useState<any>(null);
     return p.condicionValor?p.condicionValor.test(valorCondicion):true;
   });
   const pregActual=preguntas[pregIdx];
+  const optionalHrField = categoria === 'carrera' && ['fc_max', 'fc_reposo'].includes(pregActual?.id);
   const diasPrueba=10;
   const diasUsados=fechaRegistro?Math.floor((new Date().getTime()-new Date(fechaRegistro).getTime())/(1000*60*60*24)):0;
   const bloqueado=!esPremium&&!esAdmin&&fechaRegistro!==null&&diasUsados>=diasPrueba;
@@ -1417,7 +1420,7 @@ const elegirEspecialidad=(label:string)=>{
 
   const avanzar=()=>{
     const val=(pregActual.tipo==="multi"||pregActual.tipo==="dias_semana")?selMulti:pregActual.tipo==="texto"?textoTemp:respuestas[pregActual.id];
-    if(!val||(Array.isArray(val)&&val.length===0)||(typeof val==="string"&&!val.trim())) return;
+    if(!optionalHrField && (!val||(Array.isArray(val)&&val.length===0)||(typeof val==="string"&&!val.trim()))) return;
     const nuevas={...respuestas,[pregActual.id]:val};
     setRespuestas(nuevas);setSelMulti([]);setTextoTemp("");
     if(pregIdx<preguntas.length-1){setPregIdx(pregIdx+1);}else{setRespuestas(nuevas);setPantalla("final");}
@@ -1500,6 +1503,7 @@ const esRehab=(espKey||categoria)==="rehabilitacion_general";
       // motivo faltara algo real, el usuario simplemente sigue en modo "in_progress" sin bloquear el
       // chat, y puede completarse mas adelante desde Mi Atleta.
       apiCall({action:"confirmar_onboarding",codigo,datos:{mode:modoEntrada}});
+      if (categoria === 'carrera') setHrBootstrapUser(codigo);
     }catch{setMensajes([{role:"assistant",content:"Error de conexion. Por favor recarga."}]);}
     finally{setGenerando(false);setTimeout(()=>inputRef.current?.focus(),300);}
   };
@@ -2434,6 +2438,7 @@ ${testStr}`}]});
 
   return (
     <div style={{minHeight:"100dvh",background:C.bg,fontFamily:"'DM Sans', sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 16px",paddingTop:"max(24px, env(safe-area-inset-top))",paddingBottom:"max(24px, env(safe-area-inset-bottom))"}}>
+      {hrBootstrapUser && <RunningHrBootstrap request={datos => apiCall({ action: 'hr_zone_bootstrap', codigo: hrBootstrapUser, datos })} onDone={() => setHrBootstrapUser(null)} />}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@700;800&display=swap');
         *{box-sizing:border-box;margin:0;padding:0;}
@@ -2974,6 +2979,7 @@ ${testStr}`}]});
               {pregActual.opciones?.map(op=><Chip key={op} active={selMulti.includes(op)} color={accentColor} onClick={()=>toggleMulti(op)}>{op}</Chip>)}
             </div></>
           )}
+          {optionalHrField && <p>Si conoces estos datos, Forge podrá utilizarlos para estimar tus zonas de frecuencia cardíaca. Podrás revisarlas antes de usarlas en tus entrenamientos. Puedes dejar este campo en blanco.</p>}
           {pregActual.tipo==="texto"&&(
             <textarea value={textoTemp} onChange={e=>setTextoTemp(e.target.value)} rows={3} placeholder={pregActual.placeholder}
               style={{width:"100%",border:`2px solid ${C.border}`,borderRadius:14,padding:"13px 15px",fontSize:14,color:C.ink,background:C.card,lineHeight:1.65,marginBottom:28,transition:"border-color 0.15s"}}
@@ -2988,8 +2994,8 @@ ${testStr}`}]});
             </div>
           )}
           <button className="btn-main" onClick={avanzar}
-            disabled={(pregActual.tipo==="opciones"&&!respuestas[pregActual.id])||((pregActual.tipo==="multi"||pregActual.tipo==="dias_semana")&&selMulti.length===0)||(pregActual.tipo==="texto"&&!textoTemp.trim())}
-            style={{width:"100%",background:accentColor,color:"#fff",border:"none",borderRadius:14,padding:"15px",fontSize:15,fontWeight:600,cursor:"pointer",opacity:((pregActual.tipo==="opciones"&&!respuestas[pregActual.id])||((pregActual.tipo==="multi"||pregActual.tipo==="dias_semana")&&selMulti.length===0)||(pregActual.tipo==="texto"&&!textoTemp.trim()))?0.35:1}}>
+            disabled={(pregActual.tipo==="opciones"&&!respuestas[pregActual.id])||((pregActual.tipo==="multi"||pregActual.tipo==="dias_semana")&&selMulti.length===0)||(pregActual.tipo==="texto"&&!optionalHrField&&!textoTemp.trim())}
+            style={{width:"100%",background:accentColor,color:"#fff",border:"none",borderRadius:14,padding:"15px",fontSize:15,fontWeight:600,cursor:"pointer",opacity:((pregActual.tipo==="opciones"&&!respuestas[pregActual.id])||((pregActual.tipo==="multi"||pregActual.tipo==="dias_semana")&&selMulti.length===0)||(pregActual.tipo==="texto"&&!optionalHrField&&!textoTemp.trim()))?0.35:1}}>
            
 {pregIdx<preguntas.length-1?"Siguiente":"Generar mi programa"}
           </button>
@@ -3237,6 +3243,7 @@ ${testStr}`}]});
             <div style={{borderTop:`1px solid ${C.border}`,paddingTop:12}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                 <p style={{color:C.ink,fontSize:13,fontWeight:600}}>Datos del perfil</p>
+                {categoria === 'carrera' && <button onClick={() => setHrBootstrapUser(codigoUsuario)}>Revisar zonas de FC</button>}
                 <button onClick={()=>{setEditandoPerfil(!editandoPerfil);setPerfilEdit({...respuestas as Record<string,string>});}} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,padding:"4px 10px",fontSize:12,color:C.muted,cursor:"pointer"}}>
                   {editandoPerfil?"Cancelar":"Editar"}
                 </button>

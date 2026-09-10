@@ -26,7 +26,7 @@ const provenance = ['olympiatoppen_2024_v2', 'hofmann_tschakert_2017', 'forge_c2
 export const RUNNING_INTENSITY_POLICIES: readonly DomainPolicy[] = [
   { id: 'running_base_intensity', version: 1, methodId: 'running_base', domain: 'easy_aerobic',
     compatiblePrimaryMetrics: ['hr', 'pace', 'rpe'], orderedMetricPreference: ['hr', 'pace', 'rpe'],
-    compatibleReferenceTypes: { hr: ['easyHr'], pace: ['easyPace'] }, perception: { value: 2, max: 3 },
+    compatibleReferenceTypes: { hr: ['easyHr', 'confirmedBaseZone'], pace: ['easyPace'] }, perception: { value: 2, max: 3 },
     fallback: 'RPE', structures: ['continuo_carrera'], requirements, provenance },
   { id: 'running_threshold_intensity', version: 1, methodId: 'running_threshold', domain: 'individual_threshold',
     compatiblePrimaryMetrics: ['pace', 'hr', 'rpe'], orderedMetricPreference: ['pace', 'hr', 'rpe'],

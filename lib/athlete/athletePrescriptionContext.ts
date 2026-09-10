@@ -227,6 +227,7 @@ export function projectAthletePrescriptionProfile(user: Row, asOfDate?: string, 
   };
   return structuredClone({ version: 1 as const,
     prescriptionSignals: projectPrescriptionSignals(profile, asOfDate, session, user.especialidad),
+    hrZoneBootstrap: profile.hrZoneBootstrap,
     athlete: Object.fromEntries(['modo_entrada', 'categoria', 'especialidad'].map(k => [k, evidence(user[k] ?? null, `usuarios.${k}`, user[k] ?? null)])),
     goals: { primary: resolveEvidence(primary), secondary, disciplineSpecific, competition,
       detail: profile.objetivo_detalle == null ? [] : [evidence(profile.objetivo_detalle, 'usuarios.perfil.objetivo_detalle', profile.objetivo_detalle, record(profile.objetivo_detalle).updated_at)] },

@@ -55,7 +55,7 @@ export function resolveRunningMethodDose(evidence: CompatibleRunningDoseEvidence
   const fail = (status: 'UNRESOLVED' | 'CONFLICT', reason: string): RunningMethodDoseV2 => ({ ...base, status, reason, dose: null,
     diagnostics: [...new Set([`RUNNING_METHOD_DOSE_${status}`, `RUNNING_METHOD_DOSE_${reason}`,
       ...(!p?.selectDose ? ['RUNNING_METHOD_DOSE_POLICY_NOT_ESTABLISHED'] : [])])] });
-  if (evidence.status === 'CONFLICT' || evidence.conflicts.length) return fail('CONFLICT', 'CONFLICTING_EVIDENCE');
+  if (evidence.status === 'CONFLICT' || evidence.conflicts.length || evidence.structuredMethodExecution?.status === 'CONFLICT') return fail('CONFLICT', 'CONFLICTING_EVIDENCE');
   if (!p || p.family !== evidence.family) return fail('UNRESOLVED', 'DOMAIN_UNSUPPORTED');
   if (p.policyId === AEROBIC_CONTINUITY_POLICY) {
     const reason = aerobicContinuityRejection(evidence, context);

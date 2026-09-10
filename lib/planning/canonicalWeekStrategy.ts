@@ -13,7 +13,7 @@ export type CanonicalWeekStrategy = {
   block: { phase: StrategicIntent['blockPhase']; week: number | null; totalWeeks: number | null; evidenceDigest: string };
   adaptations: { id: string; role: AdaptationRole; weaknessIds: string[]; requiredPattern: PatronMovimiento | null }[];
   preferredEnvironments: string[]; methods: string[];
-  deferred: { reference: string; reason: string }[];
+  deferred: { reference: string; reason: string; blockers?: string[] }[];
   coverage: { id: string; adaptationId?: string; discipline?: string; weaknessId?: string }[];
   transferCoverage?: { adaptationId: string; statuses: ('EXACT' | 'TRANSFER_EQUIVALENT' | 'TRANSFER_MAINTENANCE' | 'TRANSFER_PARTIAL' | 'DEFERRED')[] }[];
   volumeIntent: 'reduce' | 'unspecified'; intensityIntent: 'reduce' | 'unspecified';

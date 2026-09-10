@@ -1,4 +1,5 @@
 import type { RunningHabitualConfirmation } from './runningHabitualConfirmation';
+import type { RunningExecutionEvidence } from '../execution/runningExecution';
 import { normalizeHabitualRunningFacts, type HabitualRunningDeclaration } from './runningHabitualDeclarations';
 import { resolveCompletionDate } from '../planning/recordCompletion';
 import { transferMethod } from '../sports/goalTransferModel';
@@ -27,6 +28,7 @@ type WindowMetrics = {
   recentSessionFrequency: Metric;
 };
 export type RunningDoseBaseline = {
+  structuredExecutions?: RunningExecutionEvidence;
   habitualConfirmation?: RunningHabitualConfirmation;
   habitualDeclarations?: ReturnType<typeof normalizeHabitualRunningFacts>;
   version: 1; status: 'SUFFICIENT' | 'PARTIAL' | 'UNKNOWN' | 'CONFLICT';

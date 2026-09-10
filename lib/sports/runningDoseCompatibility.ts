@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { compatibleRunningExecutions } from './runningExecutionCompatibility';
 import type { RunningDoseEvidenceAdmission } from './runningDoseEvidenceAuthority';
 import type { StrategicIntent } from './goalTransferModel';
 import { RUNNING_METHOD_DOSE_POLICIES, type RunningDosePolicyFamily } from './runningMethodDosePolicies';
@@ -22,6 +23,7 @@ export type CompatibleRunningDoseEvidence = {
   plannedMethodAssociations: { methodId: string; occurrenceCount: number; startDate: string; endDate: string;
     semantics: 'COMPLETED_PLAN_ASSOCIATION'; quantityKnown: false; evidenceRefs: string[] }[];
   compatibleMethodQuantities: { status: 'UNKNOWN'; reason: 'EXECUTED_METHOD_IDENTITY_NOT_MODELED' };
+  structuredMethodExecution?: ReturnType<typeof compatibleRunningExecutions>;
   conflicts: { activityRef: string; date: string | null; metric: string }[];
   missingSignals: string[]; evidenceRefs: string[];
 };
@@ -54,9 +56,12 @@ export function resolveCompatibleRunningDoseEvidence(a: RunningDoseEvidenceAdmis
     plannedMethodAssociations: stable(a.basis.methodExposure.filter(m => m.methodId === context.methodId).map(m => ({
       methodId: m.methodId, occurrenceCount: m.occurrenceCount, startDate: m.startDate, endDate: m.endDate,
       semantics: m.semantics, quantityKnown: false as const, evidenceRefs: references(m.evidenceIndices) }))),
+    // Legacy OBSERVED metrics remain method-unknown. New self-reported execution is separate.
     compatibleMethodQuantities: { status: 'UNKNOWN', reason: 'EXECUTED_METHOD_IDENTITY_NOT_MODELED' },
+    ...(a.basis.structuredExecutions ? {structuredMethodExecution:compatibleRunningExecutions(a.basis.structuredExecutions,context)} : {}),
     conflicts: stable(a.conflicts.map(c => ({ activityRef: runningDoseDigest(c.identity), date: c.date, metric: c.metric }))),
     missingSignals: [...new Set([...a.missingSignals, ...(family === 'TECHNICAL_EXPOSURE'
       ? ['VARIANT_NUMERIC_POLICY_NOT_ESTABLISHED'] : ['EXECUTED_METHOD_IDENTITY', 'METHOD_WORK_QUANTITY', 'SELECTED_TARGET_POLICY'])])].sort(),
-    evidenceRefs: [...new Set([...refs.values(), ...(family === 'AEROBIC_CONTINUOUS' ? (a.basis.habitualDeclarations?.facts ?? []).map(runningDoseDigest) : [])])].sort() };
+    evidenceRefs: [...new Set([...refs.values(), ...(family === 'AEROBIC_CONTINUOUS' ? (a.basis.habitualDeclarations?.facts ?? []).map(runningDoseDigest) : []),
+      ...(a.basis.structuredExecutions ? compatibleRunningExecutions(a.basis.structuredExecutions,context).records.map(runningDoseDigest) : [])])].sort() };
 }

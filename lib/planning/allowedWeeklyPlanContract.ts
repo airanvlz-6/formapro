@@ -89,7 +89,7 @@ function bindStrategicCoverage(contract: AllowedWeeklyPlanContract) {
 /** Pure option enumeration. Generic catalog stimuli are code-owned objectives, not text promises. */
 export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput, diagnosticContext?: WeeklyDiagnosticContext) {
   const rejected: ReturnType<typeof projectRejectedWeeklyIntent>[] = [];
-  const doseUnavailable: { methodId: string; adaptationId: string; reason: string }[] = [];
+  const doseUnavailable: { methodId: string; adaptationId: string; reason: string; blockers: string[] }[] = [];
   try {
     if (input.strategy) assertStrategyShape(input.strategy);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(input.targetWeekStart) || new Date(input.targetWeekStart).getUTCDay() !== 1
@@ -144,7 +144,7 @@ export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput, diagn
       return { ok: false as const, canContinue: false as const, retryable: false as const, code: doseUnavailable.some(d=>d.reason==='SESSION_DOSE_TIME_INFEASIBLE') ? 'SESSION_DOSE_TIME_INFEASIBLE' : 'RUNNING_DOSE_CAPABILITY_INSUFFICIENT', errors: ['NO_EXECUTABLE_DOSE_CAPABLE_METHOD'],
         doseCapabilities: input.doseCapabilities, deferredDoseDemands, runningHabitualRequirement: input.doseCapabilities?.requirement };
     if (input.strategy && doseUnavailable.length) input = { ...input, strategy: { ...input.strategy,
-      deferred: [...input.strategy.deferred, ...deferredDoseDemands.map(d => ({ reference: d.adaptationId + ':' + d.methodId, reason: 'dose_' + d.reason.toLowerCase() }))] } };
+      deferred: [...input.strategy.deferred, ...deferredDoseDemands.map(d => ({ reference: d.adaptationId + ':' + d.methodId, reason: 'dose_' + d.reason.toLowerCase(), blockers: d.blockers }))] } };
     const contract: AllowedWeeklyPlanContract = {
       contractVersion: 1, policyVersion: 'executable-ceiling-rest-v1', targetWeekStart: input.targetWeekStart,
       prescriptionScope: structuredClone(input.prescriptionScope), contextDigest: createHash('sha256').update(JSON.stringify(input)).digest('hex'),

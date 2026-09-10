@@ -1,4 +1,5 @@
 'use client';
+import { RunningExecutionReport } from '@/components/RunningExecutionReport';
 import { captureAthleteTestFacts } from '@/lib/athlete/testCapture';
 import { captureOnboardingGoal } from '@/lib/athlete/onboardingGoal';
 import { planBlockLabel } from '@/lib/sports/planPresentation';
@@ -3671,6 +3672,7 @@ ${testStr}`}]});
                   )}
                 </button>
               </div>
+              <RunningExecutionReport />
               {sesionPendiente&&(
                 <div style={{background:"#1A2A1A",border:"1px solid #4CAF50",borderRadius:12,padding:"12px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
                   <div>

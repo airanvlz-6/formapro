@@ -14,7 +14,7 @@ export type CanonicalTransferPermissions = { version: 1; source: 'canonical_avai
 export function resolveAuthorizedMethodCandidates(input: WeeklyContractInput, day: string) {
   const options: WeeklyOption[] = [], rejected: ReturnType<typeof projectRejectedWeeklyIntent>[] = [];
   const strategy = input.strategy!;
-  const doseUnavailable: { methodId: string; adaptationId: string; reason: string }[] = [];
+  const doseUnavailable: { methodId: string; adaptationId: string; reason: string; blockers: string[] }[] = [];
   const relations = METHOD_TRANSFER_RELATIONS;
   // One hop only. Reject oversized/conflicting domain catalogs rather than silently dropping candidates.
   if (relations.length > 128 || relations.some(r => !validMethodTransferRelation(r))) return { ok: false as const, errors: ['TRANSFER_CATALOG_INVALID'] };
@@ -38,7 +38,8 @@ export function resolveAuthorizedMethodCandidates(input: WeeklyContractInput, da
     const context = input.contexts[discipline];
     const capability = input.doseCapabilities?.entries.find(e => e.methodId === intent.methodId && e.pattern === intent.pattern);
     if (capability && (!capability.prescriptionAllowed || capability.doseCapability !== 'QUANTIFIABLE')) {
-      doseUnavailable.push({ methodId: intent.methodId, adaptationId: intent.adaptationId, reason: capability.prescriptionBlockReason ?? capability.doseCapability });
+      doseUnavailable.push({ methodId: intent.methodId, adaptationId: intent.adaptationId,
+        reason: capability.prescriptionBlockReason ?? capability.doseCapability, blockers: [...(capability.blockers ?? [])] });
       return null;
     }
     const result = evaluateTrainingFeasibility({ ...context, targetWeekStart: input.targetWeekStart, targetDay: day, stimulus, intent,

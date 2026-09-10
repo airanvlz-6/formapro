@@ -11,6 +11,8 @@ import { resolveCompletionDate } from '../planning/recordCompletion';
 import { resolvePlanningStrategy } from './strategyResolution';
 import { projectRunningDoseBaseline } from './runningDoseEvidence';
 import { admitRunningDoseEvidence } from '../sports/runningDoseEvidenceAuthority';
+import { readRunningExecutions } from '../execution/runningExecutionStore';
+import { RUNNING_DOSE_WINDOWS } from './runningDoseBaseline';
 
 export type PreparedPrescriptionReadiness = { userCodigo: string; effectiveDate: string;
   source: 'canonical_readiness_engine'; result: ReadinessResultado };
@@ -34,7 +36,7 @@ export async function loadAthletePrescriptionContext(db: any, userCodigo: string
       throw new Error(`PRESCRIPTION_CONTEXT_READ_FAILED:${table}`);
     return result.data;
   };
-  const [user, plans, modifications, restrictions, recovery] = await Promise.all([
+  const [user, plans, modifications, restrictions, recovery, executions] = await Promise.all([
     rows('usuarios', db.from('usuarios').select('modo_entrada,categoria,especialidad,perfil,objetivo_principal,test_atleta,marcas_especificas,historial_marcas,datos_entrenamiento,athlete_development,ciclo_actual,debilidades,workout_history')
       .eq('codigo', userCodigo).single(), true),
     rows('weekly_plan', db.from('weekly_plan').select('week_start,sessions').eq('user_codigo', userCodigo)
@@ -44,6 +46,7 @@ export async function loadAthletePrescriptionContext(db: any, userCodigo: string
       .order('created_at', { ascending: false }).limit(30)),
     getCanonicalRestrictions(db, userCodigo, new Date(`${options.asOfDate}T12:00:00Z`)),
     options.recovery ?? prepareRecoveryContext(db, userCodigo, options.asOfDate),
+    readRunningExecutions(db, userCodigo, {startDate:new Date(Date.parse(options.asOfDate) - (RUNNING_DOSE_WINDOWS[1] - 1) * 86400000).toISOString().slice(0,10),endDate:options.asOfDate}),
   ]);
   const profile = record(user);
   const completedSessions = (plans as unknown[]).flatMap(raw => {
@@ -67,6 +70,8 @@ export async function loadAthletePrescriptionContext(db: any, userCodigo: string
   const signals = recovery.objective;
   const projected = projectAthletePrescriptionProfile(profile, options.prescriptionDate || options.asOfDate, options.sessionEnvironment);
   const runningDoseBaseline = projectRunningDoseBaseline(profile, plans as unknown[], projected.running.references, options.asOfDate);
+  runningDoseBaseline.structuredExecutions = { ...executions, records: executions.records.filter(r =>
+    r.occurredAt >= runningDoseBaseline.coverage.startDate && r.occurredAt <= options.asOfDate) };
   const habitualConfirmation = readRunningHabitualConfirmation(record(profile.perfil).runningHabitualConfirmation, userCodigo, options.runningHabitualInteraction, runningDoseBaseline.habitualDeclarations?.facts ?? []);
   if (habitualConfirmation) runningDoseBaseline.habitualConfirmation = habitualConfirmation;
   return structuredClone({ ...projected, planningStrategy: resolvePlanningStrategy(projected), userCodigo, asOfDate: options.asOfDate,

@@ -1,4 +1,5 @@
 import { RUNNING_METHOD_DOSE_POLICIES } from '../sports/runningMethodDosePolicies';
+import { scopeRunningHistory } from '../execution/historicalRunning';
 import { projectWeeklyPrescriptionSignals } from './weeklyPrescriptionSignals';
 import { AEROBIC_CONTINUITY_POLICY } from '../sports/aerobicContinuityPolicy';
 import { habitualRunningRequirement } from '../athlete/runningHabitualDeclarations';
@@ -117,6 +118,7 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
     ...(strategy ? { strategy, doseCapabilities: buildDoseCapabilityProfile(athlete!.runningDoseEvidenceAdmission, c.scope,
       { goalId: strategy.goal.id, blockPhase: strategy.block.phase, blockWeek: strategy.block.week, athlete, contexts }) } : {}) },
     fixedSessions: structuredClone(fixedSessions),
+    runningHistoryContext: athlete ? scopeRunningHistory(athlete.runningHistory, c.scope) : null,
     availabilityConfirmed };
 }
 
@@ -127,7 +129,7 @@ export async function prepareAllowedWeeklyPlanContract(db: any, codigo: string, 
     today: request.today, snapshot: request.snapshot,
     availabilityConfirmed: context.availabilityConfirmed,
     temporalDecision: request.diagnosticTemporalDecision === undefined ? request.empezarHoy : request.diagnosticTemporalDecision });
-  return built.ok ? { ...built, fixedSessions: context.fixedSessions } : built;
+  return built.ok ? { ...built, fixedSessions: context.fixedSessions, runningHistoryContext: context.runningHistoryContext } : built;
 }
 
 /** Server resolves selections. Model prose never becomes an executable objective. */

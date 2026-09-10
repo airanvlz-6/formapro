@@ -11,7 +11,8 @@ import { resolveCompletionDate } from '../planning/recordCompletion';
 import { resolvePlanningStrategy } from './strategyResolution';
 import { projectRunningDoseBaseline } from './runningDoseEvidence';
 import { admitRunningDoseEvidence } from '../sports/runningDoseEvidenceAuthority';
-import { readRunningExecutions } from '../execution/runningExecutionStore';
+import { readRunningExecutionViews } from '../execution/runningExecutionStore';
+import { mergeRunningHistory } from '../execution/historicalRunning';
 import { RUNNING_DOSE_WINDOWS } from './runningDoseBaseline';
 
 export type PreparedPrescriptionReadiness = { userCodigo: string; effectiveDate: string;
@@ -46,7 +47,7 @@ export async function loadAthletePrescriptionContext(db: any, userCodigo: string
       .order('created_at', { ascending: false }).limit(30)),
     getCanonicalRestrictions(db, userCodigo, new Date(`${options.asOfDate}T12:00:00Z`)),
     options.recovery ?? prepareRecoveryContext(db, userCodigo, options.asOfDate),
-    readRunningExecutions(db, userCodigo, {startDate:new Date(Date.parse(options.asOfDate) - (RUNNING_DOSE_WINDOWS[1] - 1) * 86400000).toISOString().slice(0,10),endDate:options.asOfDate}),
+    readRunningExecutionViews(db, userCodigo, {startDate:new Date(Date.parse(options.asOfDate) - (RUNNING_DOSE_WINDOWS[1] - 1) * 86400000).toISOString().slice(0,10),endDate:options.asOfDate}),
   ]);
   const profile = record(user);
   const completedSessions = (plans as unknown[]).flatMap(raw => {
@@ -70,11 +71,12 @@ export async function loadAthletePrescriptionContext(db: any, userCodigo: string
   const signals = recovery.objective;
   const projected = projectAthletePrescriptionProfile(profile, options.prescriptionDate || options.asOfDate, options.sessionEnvironment);
   const runningDoseBaseline = projectRunningDoseBaseline(profile, plans as unknown[], projected.running.references, options.asOfDate);
-  runningDoseBaseline.structuredExecutions = { ...executions, records: executions.records.filter(r =>
+  runningDoseBaseline.structuredExecutions = { ...executions.window, records: executions.window.records.filter(r =>
     r.occurredAt >= runningDoseBaseline.coverage.startDate && r.occurredAt <= options.asOfDate) };
   const habitualConfirmation = readRunningHabitualConfirmation(record(profile.perfil).runningHabitualConfirmation, userCodigo, options.runningHabitualInteraction, runningDoseBaseline.habitualDeclarations?.facts ?? []);
   if (habitualConfirmation) runningDoseBaseline.habitualConfirmation = habitualConfirmation;
   return structuredClone({ ...projected, planningStrategy: resolvePlanningStrategy(projected), userCodigo, asOfDate: options.asOfDate,
+    runningHistory: mergeRunningHistory(userCodigo, profile.workout_history, executions.history, options.asOfDate),
     runningDoseBaseline, runningDoseEvidenceAdmission: admitRunningDoseEvidence(runningDoseBaseline),
     physiology: { source: 'prepareRecoveryContext', recovery, missingSignals: ['hrv', 'restingHr', 'sleepDuration', 'sleepScore']
       .filter(k => record(record(signals)[k]).status !== 'available') },

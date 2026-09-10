@@ -35,6 +35,10 @@ export async function writeRunningExecution(db: ExecutionDatabase, athlete: stri
 }
 /** Bounded read fails closed rather than silently dropping conflicts/older records. No log of payloads. */
 export async function readRunningExecutions(db: ExecutionDatabase, athlete: string, window?: {startDate:string;endDate:string}) {
+  return (await readRunningExecutionViews(db, athlete, window)).window;
+}
+/** Same verified read, two projections: existing B3 window and historical continuity. */
+export async function readRunningExecutionViews(db: ExecutionDatabase, athlete: string, window?: {startDate:string;endDate:string}) {
   const result = await db.from('running_execution_records').select('record,signature,content_digest').eq('user_codigo', athlete)
     .order('created_at', { ascending: false }).limit(1001);
   if (result.error || !Array.isArray(result.data)) throw new ExecutionError('EXECUTION_READ_FAILED', 503);
@@ -51,5 +55,6 @@ export async function readRunningExecutions(db: ExecutionDatabase, athlete: stri
   // If any version intersects the window, compare every version of that identity. A conflicting
   // date cannot hide a contradiction; unrelated old executions do not block the current window.
   const relevantIds = window ? new Set(records.filter(r => r.occurredAt >= window.startDate && r.occurredAt <= window.endDate).map(r=>r.executionId)) : null;
-  return reconcileRunningExecutions(relevantIds ? records.filter(r=>relevantIds.has(r.executionId)) : records);
+  return { window: reconcileRunningExecutions(relevantIds ? records.filter(r=>relevantIds.has(r.executionId)) : records),
+    history: reconcileRunningExecutions(records) };
 }

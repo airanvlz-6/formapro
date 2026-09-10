@@ -54,6 +54,7 @@ const method = (id: string, adaptationId: string, stimulusId: string, discipline
   ({ id, adaptationId, stimulusId, discipline, patterns, role });
 export const TRANSFER_METHODS: readonly TransferMethod[] = [
   method('running_base', 'base_aerobica', 'base_aerobica', 'carrera', ['run'], 'DIRECT'),
+  method('running_long_run', 'base_aerobica', 'base_aerobica', 'carrera', ['run'], 'DIRECT'),
   method('box_aerobic', 'base_aerobica', 'capacidad_aerobica', 'box', ['cyclic'], 'CONDITIONAL'),
   method('running_threshold', 'umbral', 'umbral', 'carrera', ['run'], 'DIRECT'),
   method('running_specific', 'resistencia_especifica', 'resistencia_especifica', 'carrera', ['run'], 'DIRECT'),
@@ -128,5 +129,6 @@ export function validateStrategicIntent(value: Record<string, unknown>): value i
     && (value.blockWeek === null || Number.isSafeInteger(value.blockWeek) && Number(value.blockWeek) > 0)
     && (value.weaknessId === null || typeof value.weaknessId === 'string' && value.weaknessId.length > 0 && value.weaknessId.length <= 160)
     && (GOAL_DEMANDS[value.goalId as GoalId].some(d => d.adaptationId === demand)
+      || value.methodId === 'running_recovery' && value.role === 'MAINTENANCE'
       || value.blockPhase === 'deload' && ['recuperacion_activa', 'tecnica'].includes(String(demand)));
 }

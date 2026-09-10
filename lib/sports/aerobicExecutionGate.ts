@@ -3,8 +3,11 @@ import { validateSessionTimeDose } from './sessionTimeDoseAuthority';
 /** Exact total selected upstream. This gate never clips, selects intensity or invents preparation. */
 export function aerobicExecutionGate(c: AllowedTrainingContract) {
   const a=c.runningMethodDose;
-  const target=a?.version===2 && a.status==='RESOLVED' && a.dose?.composition==='SINGLE_CONTINUOUS_TOTAL'
-    ? a.dose.selectedTarget : null;
+  const d = a?.version === 2 && a.status === 'RESOLVED' ? a.dose : null;
+  const work = d?.selectedTarget;
+  const recovery = d?.composition === 'SINGLE_INTERVAL_MAIN'
+    ? (d.structureConstraints.efforts!.maximum - 1) * d.structureConstraints.recoverySeconds!.maximum : 0;
+  const target = d?.composition && work ? {minimum:work.minimum + recovery, maximum:work.maximum + recovery} : null;
   const compositionStatus=target ? 'RESOLVED' : 'UNRESOLVED';
   const intensityStatus=c.intensityAuthority?.status==='RESOLVED' && c.intensityAuthority.targets.some(t=>c.allowedMovementIds.includes(t.movementId) && (a?.version!==2 || !a.dose?.allowedMovementIds || a.dose.allowedMovementIds.includes(t.movementId))) ? 'RESOLVED' : 'UNRESOLVED';
   const time=c.doseContext?.timeAuthority, maximum=c.doseContext?.timeBudget.maximumSeconds;

@@ -150,8 +150,8 @@ export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput, diagn
       dayOptions[day] = options;
     }
     if (input.runningEventPreparation) {
-      // No existing B3 selector authorizes a dedicated long-run purpose. Never relabel an easy dose.
-      if(input.runningEventPreparation.constraints.longRun==='REQUIRED')
+      // Dedicated long-run identity; easy numeric evidence is never relabelled.
+      if(input.runningEventPreparation.constraints.longRun==='REQUIRED' && !Object.values(dayOptions).flat().some(o=>!o.protected && o.intent?.kind==='adaptation' && o.intent.methodId==='running_long_run'))
         return failure('WEEKLY_CONTRACT_UNSATISFIABLE',['D3_REQUIRED_LONG_RUN_NO_AUTHORIZED_SELECTOR']);
       for (const [index, day] of calendarDays.entries()) {
         const date = new Date(Date.parse(input.targetWeekStart) + index * 86400000).toISOString().slice(0,10);
@@ -165,7 +165,8 @@ export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput, diagn
       for (const [category,method] of [['easy','running_base'],['recovery','running_recovery']] as const) {
         if (input.runningEventPreparation.constraints[category] === 'REQUIRED'
           && !Object.values(dayOptions).flat().some(o => !o.protected && o.intent?.kind === 'adaptation' && o.intent.methodId === method))
-          return failure('WEEKLY_CONTRACT_UNSATISFIABLE', ['D3_REQUIRED_'+category.toUpperCase()+'_UNAVAILABLE']);
+          return { ...failure('WEEKLY_CONTRACT_UNSATISFIABLE', ['D3_REQUIRED_'+category.toUpperCase()+'_UNAVAILABLE']),
+            missingAuthorityRequest: input.doseCapabilities?.entries.find(e=>e.methodId===method)?.missingAuthorityRequest ?? null };
       }
       if(input.runningEventPreparation.constraints.quality==='REQUIRED' && !Object.values(dayOptions).flat().some(o=>o.intent?.kind==='adaptation' && ['running_threshold','running_vo2'].includes(o.intent.methodId)))
         return failure('WEEKLY_CONTRACT_UNSATISFIABLE',['D3_REQUIRED_QUALITY_UNAVAILABLE']);
@@ -238,7 +239,7 @@ export function validateWeeklySelection(contract: AllowedWeeklyPlanContract, pro
     selected[s.day] = option;
   }
   const options = Object.values(selected);
-  if(contract.runningEventPreparation?.constraints.longRun==='REQUIRED') return failure('WEEKLY_SELECTION_INVALID',['D3_REQUIRED_LONG_RUN_NO_AUTHORIZED_SELECTOR']);
+  if(contract.runningEventPreparation?.constraints.longRun==='REQUIRED' && !options.some(o=>!o.protected && o.intent?.kind==='adaptation' && o.intent.methodId==='running_long_run')) return failure('WEEKLY_SELECTION_INVALID',['D3_REQUIRED_LONG_RUN_MISSING']);
   if(contract.runningEventPreparation?.constraints.quality==='REQUIRED' && !options.some(o=>o.intent?.kind==='adaptation' && ['running_threshold','running_vo2'].includes(o.intent.methodId)))
     return failure('WEEKLY_SELECTION_INVALID',['D3_REQUIRED_QUALITY_MISSING']);
   for (const [category,method] of [['easy','running_base'],['recovery','running_recovery']] as const) {

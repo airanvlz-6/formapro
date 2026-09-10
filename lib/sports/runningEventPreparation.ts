@@ -2,6 +2,7 @@ import { canonicalDigest } from '../execution/executionIntegrity';
 import type { PrescriptionScope } from './prescriptionScope';
 import { civilDay, type EventAuthority } from '../athlete/eventAuthority';
 import type { RunningHistory } from '../execution/historicalRunning';
+import type { StrategicIntent } from './goalTransferModel';
 
 export const RUNNING_EVENT_PREPARATION_V1 = {
   version: 1 as const, discipline: 'carrera', eventType: 'half_marathon',
@@ -92,7 +93,17 @@ export type RunningEventPreparationDecisionV1 = ReturnType<typeof decideRunningE
 
 /** Catalog eligibility only. Numerical targets remain selected and validated by B3/C2. */
 export function runningEventMethodAllowed(decision: RunningEventPreparationDecisionV1, methodId: string) {
-  const category = methodId === 'running_base' ? 'easy' : methodId === 'running_recovery' ? 'recovery'
+  const category = methodId === 'running_base' ? 'easy' : methodId === 'running_long_run' ? 'longRun' : methodId === 'running_recovery' ? 'recovery'
     : ['running_threshold','running_vo2'].includes(methodId) ? 'quality' : methodId === 'running_specific' ? 'eventSpecific' : null;
   return category !== null && decision.constraints[category] !== 'FORBIDDEN';
+}
+
+/** Translate D3 requirements into catalog intents, independently of legacy cycle labels.
+ * Shared candidate enumeration still applies B3, C2, availability and feasibility. */
+export function runningEventRequiredCandidates(decision: RunningEventPreparationDecisionV1 | undefined,
+  context: { goalId: StrategicIntent['goalId'] | null; methods: string[]; blockPhase: StrategicIntent['blockPhase']; blockWeek: number | null }) {
+  if (decision?.constraints.recovery !== 'REQUIRED' || context.methods.includes('running_recovery') || !context.goalId) return [];
+  const intent: StrategicIntent = { kind: 'adaptation', goalId: context.goalId, methodId: 'running_recovery',
+    adaptationId: 'recuperacion_activa', role: 'MAINTENANCE', pattern: 'run', blockPhase: context.blockPhase, blockWeek: context.blockWeek, weaknessId: null };
+  return [{ discipline: 'carrera', stimulus: 'recuperacion_activa', intent }];
 }

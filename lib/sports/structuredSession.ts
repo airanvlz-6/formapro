@@ -109,7 +109,7 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
   if (p.stimulusId !== contract.stimulusId) violations.push('STIMULUS_MISMATCH');
   const structure = Object.hasOwn(WORKOUT_STRUCTURE_LIBRARY, p.structureId) ? WORKOUT_STRUCTURE_LIBRARY[p.structureId] : undefined;
   if (!structure || !contract.allowedStructureIds.includes(p.structureId) || structure.discipline !== contract.discipline) violations.push('STRUCTURE_NOT_ALLOWED');
-  if (p.blocks.length === 1 && !(contract.runningMethodDose?.version === 2 && contract.runningMethodDose.dose?.composition === 'SINGLE_CONTINUOUS_TOTAL'))
+  if (p.blocks.length === 1 && !(contract.runningMethodDose?.version === 2 && ['SINGLE_CONTINUOUS_TOTAL','SINGLE_INTERVAL_MAIN'].includes(contract.runningMethodDose.dose?.composition ?? '')))
     violations.push('SINGLE_BLOCK_COMPOSITION_NOT_AUTHORIZED');
   const main = p.blocks.find(b => b.blockType === 'main')!.movements;
   violations.push(...validateStructureSemantics(structure, main));

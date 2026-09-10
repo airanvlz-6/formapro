@@ -24,6 +24,12 @@ const provenance = ['olympiatoppen_2024_v2', 'hofmann_tschakert_2017', 'forge_c2
 /** Sports knowledge lives here, never in the exact-target validator. See docs/c2-running-intensity-policies.md.
  * RPE bands are prescription guides, not measured thresholds or inferred personal zones. */
 export const RUNNING_INTENSITY_POLICIES: readonly DomainPolicy[] = [
+  // Same existing easy-aerobic domain already authorized for rodaje_largo under running_base.
+  // Dedicated method identity separates numeric long-run evidence without deriving new intensity.
+  { id: 'running_long_run_intensity', version: 1, methodId: 'running_long_run', domain: 'easy_aerobic',
+    compatiblePrimaryMetrics: ['hr', 'pace', 'rpe'], orderedMetricPreference: ['hr', 'pace', 'rpe'],
+    compatibleReferenceTypes: { hr: ['easyHr', 'confirmedBaseZone'], pace: ['easyPace'] }, perception: { value: 2, max: 3 },
+    fallback: 'RPE', structures: ['continuo_carrera'], requirements, provenance },
   { id: 'running_base_intensity', version: 1, methodId: 'running_base', domain: 'easy_aerobic',
     compatiblePrimaryMetrics: ['hr', 'pace', 'rpe'], orderedMetricPreference: ['hr', 'pace', 'rpe'],
     compatibleReferenceTypes: { hr: ['easyHr', 'confirmedBaseZone'], pace: ['easyPace'] }, perception: { value: 2, max: 3 },

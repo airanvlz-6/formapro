@@ -1,4 +1,5 @@
 import { METHOD_TRANSFER_RELATIONS, transferMethod, validMethodTransferRelation, type StrategicIntent } from '../sports/goalTransferModel';
+import { runningEventRequiredCandidates } from '../sports/runningEventPreparation';
 import { STIMULUS_LIBRARY } from '../sports/movementLibrary';
 import { evaluateTrainingFeasibility } from '../sports/trainingFeasibility';
 import { calendarState } from './weeklyCalendar';
@@ -62,6 +63,11 @@ export function resolveAuthorizedMethodCandidates(input: WeeklyContractInput, da
       return { ok: false as const, errors: ['DISCIPLINE_CONTEXT_MISMATCH'] };
     if (!Array.isArray(input.allowed[discipline])) return { ok: false as const, errors: ['AVAILABILITY_REQUIRED'] };
     if (!input.allowed[discipline].includes(day)) continue;
+    for (const candidate of runningEventRequiredCandidates(input.runningEventPreparation, { goalId:strategy.goal.id,
+      methods:strategy.methods, blockPhase:strategy.block.phase, blockWeek:strategy.block.week }).filter(c=>c.discipline===discipline)) {
+      const errors = evaluate(discipline, candidate.stimulus, candidate.intent);
+      if (errors) return { ok: false as const, errors };
+    }
     for (const stimulus of Object.values(STIMULUS_LIBRARY).filter(s => s.discipline === discipline)) {
       for (const intent of strategicIntents(strategy, discipline, stimulus.id)) {
         const errors = evaluate(discipline, stimulus.id, intent);

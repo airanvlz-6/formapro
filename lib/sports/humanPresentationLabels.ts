@@ -21,7 +21,7 @@ export const movementLabels: Readonly<Record<string, string>> = {
   rodaje_z1: 'Rodaje en Z1', rodaje_z2: 'Rodaje en Z2', rodaje_largo: 'Rodaje largo', tempo_run: 'Carrera de umbral', series_umbral: 'Series de umbral', series_vo2max: 'Series de VO₂ máx.', fartlek: 'Fartlek', cuestas: 'Carrera en cuestas', sprint: 'Esprints', drills_tecnica: 'Ejercicios de técnica de carrera', progresivo: 'Carrera progresiva', regenerativo: 'Rodaje regenerativo',
 };
 export const methodLabels: Readonly<Record<string, string>> = {
-  running_base: 'Rodaje aeróbico', running_threshold: 'Umbral', running_specific: 'Resistencia específica', running_economy: 'Técnica de carrera', running_vo2: 'Intervalos de VO₂ máx.', running_recovery: 'Rodaje regenerativo',
+  running_base: 'Rodaje aeróbico', running_long_run: 'Rodaje largo aeróbico', running_threshold: 'Umbral', running_specific: 'Resistencia específica', running_economy: 'Técnica de carrera', running_vo2: 'Intervalos de VO₂ máx.', running_recovery: 'Rodaje regenerativo',
   runner_support_strength: 'Fuerza para carrera', runner_posterior: 'Cadena posterior para carrera', runner_power: 'Potencia para carrera', box_aerobic: 'Trabajo aeróbico', box_support_strength: 'Fuerza de apoyo', box_max_strength: 'Fuerza máxima', box_posterior: 'Cadena posterior', box_power: 'Potencia', box_gymnastics: 'Trabajo gimnástico', box_mixed: 'Trabajo metabólico', box_weightlifting: 'Técnica de halterofilia', box_technique: 'Práctica técnica',
 };
 export const adaptationLabels: Readonly<Record<string, string>> = {

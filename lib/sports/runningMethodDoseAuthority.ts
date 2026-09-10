@@ -1,4 +1,5 @@
 import { AEROBIC_CONTINUITY_POLICY, aerobicContinuityRejection } from './aerobicContinuityPolicy';
+import { RUNNING_REUSE_POLICIES, runningReuseSelection } from './runningExecutionReusePolicies';
 import type { RunningEventPreparationDecisionV1 } from './runningEventPreparation';
 import type { StrategicIntent } from './goalTransferModel';
 import type { PrescriptionIntent } from './prescriptionIntent';
@@ -14,7 +15,7 @@ export { resolveCompatibleRunningDoseEvidence, runningDoseDigest } from './runni
 
 type Range = { minimum: number; maximum: number };
 export type RunningDoseSelection = {
-  composition?: 'SINGLE_CONTINUOUS_TOTAL';
+  composition?: 'SINGLE_CONTINUOUS_TOTAL' | 'SINGLE_INTERVAL_MAIN';
   allowedMovementIds?: string[];
   metric: 'duration' | 'distance' | 'work_duration' | 'work_distance' | 'repetitions';
   unit: 'seconds' | 'meters' | 'repetitions';
@@ -28,6 +29,8 @@ export type RunningMethodDoseV2 = { version: 2; methodId: string; context: Strat
   status: 'RESOLVED' | 'UNRESOLVED' | 'CONFLICT'; reason: string;
   policy: { id: string; version: 2; family: RunningDosePolicyFamily | null; variant: string };
   evidence: CompatibleRunningDoseEvidence; sourceDigest: string; evidenceRefs: string[];
+  reuse?: { baseline: NonNullable<CompatibleRunningDoseEvidence['structuredMethodExecution']>['records'][number];
+    reason: 'EXACT_COMPLETED_METHOD_REUSE'; numericProgressionAuthorized: false };
   dose: RunningDoseSelection | null; diagnostics: string[] };
 export type AuthorizedRunningMethodDose = RunningMethodDoseV2 | legacy.AuthorizedRunningMethodDose;
 /** Acknowledges intent without adding an unsupported progression selector. */
@@ -70,11 +73,19 @@ export function resolveRunningMethodDose(evidence: CompatibleRunningDoseEvidence
     const reason = aerobicContinuityRejection(evidence, context);
     if (reason) return fail(reason === 'CONFLICTING_EVIDENCE' ? 'CONFLICT' : 'UNRESOLVED', reason);
   }
+  let reuse: RunningMethodDoseV2['reuse'];
+  if (p.policyId === RUNNING_REUSE_POLICIES[context.methodId as keyof typeof RUNNING_REUSE_POLICIES]?.id) {
+    const result = runningReuseSelection(evidence, context);
+    if (!result.dose) return fail(result.reason === 'AMBIGUOUS_LATEST_METHOD_EXECUTION' ? 'CONFLICT' : 'UNRESOLVED', result.reason);
+    reuse = { baseline: structuredClone(evidence.structuredMethodExecution!.records.find(r=>r.executionId===result.executionId)!),
+      reason: 'EXACT_COMPLETED_METHOD_REUSE', numericProgressionAuthorized: false };
+  }
   const selected = p.selectDose?.(evidence, context) ?? null;
   if (!selected) return fail('UNRESOLVED', p.family === 'TECHNICAL_EXPOSURE'
     ? 'POLICY_NOT_ESTABLISHED' : 'MISSING_COMPATIBLE_EVIDENCE');
   if (!validSelection(selected)) return fail('UNRESOLVED', 'SELECTED_TARGET_NOT_ESTABLISHED');
   return { ...base, status: 'RESOLVED', reason: 'POLICY_SELECTED_TARGET', dose: structuredClone(selected),
+    ...(reuse ? {reuse} : {}),
     diagnostics: ['RUNNING_METHOD_DOSE_RESOLVED'] };
 }
 
@@ -104,6 +115,8 @@ export function validateRunningMethodDose(c: AllowedTrainingContract, proposal: 
   if (main.formatDose) errors.push('RUNNING_METHOD_DOSE_FORMAT_OVERRIDE');
   if (d.composition === 'SINGLE_CONTINUOUS_TOTAL' && (proposal.blocks.length !== 1 || proposal.blocks[0].blockType !== 'main'))
     errors.push('RUNNING_METHOD_DOSE_SINGLE_CONTINUOUS_TOTAL_REQUIRED');
+  if (d.composition === 'SINGLE_INTERVAL_MAIN' && (proposal.blocks.length !== 1 || main.movements.length !== 1))
+    errors.push('RUNNING_METHOD_DOSE_SINGLE_INTERVAL_MAIN_REQUIRED');
   let total = 0, efforts = 0;
   const inside = (value: number, range: Range) => value >= range.minimum && value <= range.maximum;
   for (const m of main.movements) {

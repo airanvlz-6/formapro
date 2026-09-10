@@ -1,4 +1,4 @@
-import { AEROBIC_CONTINUITY_POLICY } from './aerobicContinuityPolicy';
+import { runningReuseRequirement } from './runningExecutionReusePolicies';
 import { runningEventMethodAllowed, type RunningEventPreparationDecisionV1 } from './runningEventPreparation';
 import { resolveLongitudinalRunningDose } from './runningMethodDoseAuthority';
 import { aerobicExecutionGate } from './aerobicExecutionGate';
@@ -18,7 +18,7 @@ export function buildDoseCapabilityProfile(admission: RunningDoseEvidenceAdmissi
   context: { runningEventPreparation?: RunningEventPreparationDecisionV1; goalId: GoalId | null; blockPhase: StrategicIntent['blockPhase']; blockWeek: number | null; athlete?: AthletePrescriptionContext; contexts?: Record<string, ContractInput> }) {
   const entries = RUNNING_METHOD_DOSE_POLICIES.flatMap(policy => transferMethod(policy.methodId)!.patterns.map(pattern => {
     const intent: StrategicIntent = { kind: 'adaptation', methodId: policy.methodId,
-      adaptationId: transferMethod(policy.methodId)!.adaptationId, role: 'PRIMARY', pattern,
+      adaptationId: transferMethod(policy.methodId)!.adaptationId, role: policy.methodId === 'running_recovery' ? 'MAINTENANCE' : 'PRIMARY', pattern,
       goalId: context.goalId ?? 'running_general', blockPhase: context.blockPhase, blockWeek: context.blockWeek, weaknessId: null };
     const evidence = resolveCompatibleRunningDoseEvidence(admission, intent), authority = resolveRunningMethodDose(evidence, intent);
     const eligible = !context.runningEventPreparation || runningEventMethodAllowed(context.runningEventPreparation,policy.methodId);
@@ -36,7 +36,7 @@ export function buildDoseCapabilityProfile(admission: RunningDoseEvidenceAdmissi
     const doseCapability = conflict ? 'CONFLICT' as const : authority.status === 'RESOLVED' ? 'QUANTIFIABLE' as const
       : authority.reason === 'HABITUAL_RECONFIRMATION_REQUIRED' ? 'RECONFIRMATION_REQUIRED' as const
       : ready ? (policy.selectDose ? 'EVIDENCE_READY_POLICY_UNRESOLVED' as const : 'EVIDENCE_READY_POLICY_MISSING' as const) : 'MISSING_EVIDENCE' as const;
-    const continuity = policy.policyId === AEROBIC_CONTINUITY_POLICY;
+    const continuity = authority.dose?.composition === 'SINGLE_CONTINUOUS_TOTAL' || authority.dose?.composition === 'SINGLE_INTERVAL_MAIN';
     let execution = {compositionStatus: 'NOT_ESTABLISHED', intensityStatus: 'NOT_EVALUATED', timeStatus: 'NOT_EVALUATED', errors: [] as string[]};
     if (continuity && authority.status === 'RESOLVED') {
       execution = {compositionStatus:'RESOLVED',intensityStatus:'UNRESOLVED',timeStatus:'UNRESOLVED',errors:['SESSION_EXECUTION_CONTEXT_REQUIRED']};
@@ -69,6 +69,8 @@ export function buildDoseCapabilityProfile(admission: RunningDoseEvidenceAdmissi
       ...(!scope.prescriptionAllowed || !scope.managedDisciplines.includes('carrera') ? ['PRESCRIPTION_SCOPE_DENIED'] : []),
     ])].filter(b => b !== 'SERVER_VALIDATED_SELF_REPORT');
     return { methodId: policy.methodId, family: policy.family, variant: evidence.variant, pattern,
+      ...(authority.status !== 'RESOLVED' && eligible && context.runningEventPreparation?.constraints.recovery === 'REQUIRED' && policy.methodId === 'running_recovery'
+        ? { missingAuthorityRequest: runningReuseRequirement(policy.methodId,authority.reason) } : {}),
       ...(context.runningEventPreparation ? {longitudinalDose:resolveLongitudinalRunningDose(authority,context.runningEventPreparation),weeklyIntensityEligibility:eligible?'ALLOWED':'FORBIDDEN'} : {}),
       evidenceStatus: conflict ? 'CONFLICT' as const : duration?.status === 'AVAILABLE' ? 'DECLARATIONS_AVAILABLE' as const
         : factual.status === 'AVAILABLE' ? 'STRUCTURED_EXECUTION_AVAILABLE' as const : factual.status === 'PARTIAL' ? 'PARTIAL' as const : 'MISSING' as const,

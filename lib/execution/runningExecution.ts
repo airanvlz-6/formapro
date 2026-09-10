@@ -62,7 +62,7 @@ export function validateRunningExecution(input: unknown, athlete: string, today:
     const s = object(r.structure); keys(s, ['mode','bouts','recoveries']);
     if (!['continuous','intervals','technical'].includes(String(s.mode)) || !Array.isArray(s.bouts) || s.bouts.length > 256)
       throw new ExecutionError('EXECUTION_STRUCTURE_INVALID');
-    const methodModes: Record<string, string[]> = {running_base:['continuous'],running_recovery:['continuous'],
+    const methodModes: Record<string, string[]> = {running_base:['continuous'],running_long_run:['continuous'],running_recovery:['continuous'],
       running_threshold:['continuous','intervals'],running_vo2:['intervals'],running_specific:['continuous'],running_economy:['technical']};
     if (identity.methodId && !methodModes[identity.methodId].includes(String(s.mode))) throw new ExecutionError('EXECUTION_METHOD_STRUCTURE_INCOMPATIBLE');
     const bouts = s.bouts.map(raw => {

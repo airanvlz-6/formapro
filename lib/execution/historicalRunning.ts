@@ -133,7 +133,8 @@ export function mergeRunningHistory(athlete: string, history: unknown, modern: R
       if(m.quantities[key]!==undefined)metrics[target]={value:m.quantities[key]!,sources:[source+'.quantities.'+key],confidence:'SERVER_VALIDATED_SELF_REPORT'};
     if(m.intensityObservation)metrics.rpe={value:m.intensityObservation.value,sources:[source+'.intensityObservation'],confidence:'SERVER_VALIDATED_SELF_REPORT'};
     records.push({executionId:m.executionId!,athlete,date:m.occurredAt,discipline:'carrera',reference:m.planAssociation?.sessionId??null,identity:'EXPLICIT',
-      hint:['running_threshold','running_vo2','running_specific'].includes(m.executionIdentity.methodId??'')?'quality':null,exposure:['running_threshold','running_vo2','running_specific'].includes(m.executionIdentity.methodId??'')?'quality':'easy',legacyType:null,methodId:m.executionIdentity.methodId??null,
+      hint:m.executionIdentity.methodId==='running_long_run'?'long_run':['running_threshold','running_vo2','running_specific'].includes(m.executionIdentity.methodId??'')?'quality':null,
+      exposure:m.executionIdentity.methodId==='running_long_run'?'long_run':m.executionIdentity.methodId==='running_recovery'?'recovery':['running_threshold','running_vo2','running_specific'].includes(m.executionIdentity.methodId??'')?'quality':'easy',legacyType:null,methodId:m.executionIdentity.methodId??null,
       metrics:dateConflict?{}:metrics,sensation:null,completion:m.completeness,provenance:'MODERN_STRUCTURED',sourceRecords:[source,...matches.flatMap(r=>r.sourceRecords)],
       diagnostics:dateConflict?['IDENTITY_DATE_CONFLICT']:matches.length?['MODERN_SUPERSEDES_LEGACY']:[],countable:!dateConflict});
   }

@@ -19,6 +19,7 @@ import { emitEquipmentAuthorityDiagnostic } from './equipmentAuthorityDiagnostic
 import type { SessionEnvironmentInput } from './sessionTrainingEnvironment';
 import { authenticatedPresentationVersion, legacySessionView } from './sessionPresentation';
 import { resolveMethodIntensity } from './methodIntensityAuthority';
+import { isRunningDoseMethod, resolveCompatibleRunningDoseEvidence, resolveRunningMethodDose, refreshRunningMethodDose, runningDoseDigest } from './runningMethodDoseAuthority';
 
 const PROFILE = 'modo_entrada,distribucion_semanal,especialidad,categoria';
 const domain = 'forge-session-contract-v1:';
@@ -105,6 +106,8 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
         questionToken: question ? issuePrescriptionQuestion(userCodigo, base.contract.discipline, question) : undefined };
     }
     prepared.contract.intensityAuthority = resolveMethodIntensity(prepared.contract);
+    if (prepared.contract.discipline === 'carrera' && prepared.contract.intent?.kind === 'adaptation' && isRunningDoseMethod(prepared.contract.intent))
+      prepared.contract.runningMethodDose = resolveRunningMethodDose(resolveCompatibleRunningDoseEvidence(canonical.runningDoseEvidenceAdmission, prepared.contract.intent), prepared.contract.intent);
     if (weekly && (weeklyDigest(prepared.contract.restrictionsSnapshot) !== weeklyDigest(weeklyContext.restrictionsSnapshot)
       || weeklyDigest(prepared.contract.prescriptionScope) !== weeklyDigest(weeklyContext.prescriptionScope)
       || weeklyDigest(prepared.contract.availableDays) !== weeklyDigest(weeklyContext.availableDays)))
@@ -183,6 +186,9 @@ export async function assertFreshSessionRestrictions(db: any, userCodigo: string
       prescriptionDate: date, sessionEnvironment });
     const now = buildSessionDoseContext(canonical, contract.intent, contract.doseContext.weekStrategy, contract.doseContext.neighbours, !!contract.doseContext.sufficiency);
     if (now.evidenceDigest !== contract.doseContext.evidenceDigest) throw new Error('SESSION_DOSE_CONTEXT_CHANGED_REGENERATE');
+    if (contract.runningMethodDose && runningDoseDigest(contract.runningMethodDose) !== runningDoseDigest(
+      refreshRunningMethodDose(canonical.runningDoseEvidenceAdmission, contract.intent, contract.runningMethodDose)))
+      throw new Error('RUNNING_METHOD_DOSE_CONTEXT_CHANGED_REGENERATE');
   }
 }
 

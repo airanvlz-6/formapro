@@ -84,6 +84,6 @@ export function contractFailureStage(violations: string[]) {
   // This reflects the real ordered short-circuit validators, not a second validation pass.
   if (violations.some(v => v.startsWith('PRESCRIPTION_DATA_'))) return 'validateSessionAgainstTrainingContract/data_sufficiency';
   if (violations.some(v => /^SESSION_(BUDGET|DURATION)_/.test(v))) return 'validateSessionAgainstTrainingContract/budget';
-  if (violations.some(v => /^(DOSE_|SESSION_DOSE_)/.test(v))) return 'validateSessionAgainstTrainingContract/dose';
+  if (violations.some(v => /^(DOSE_|SESSION_DOSE_|RUNNING_METHOD_DOSE_)/.test(v))) return 'validateSessionAgainstTrainingContract/dose';
   return 'validateSessionAgainstTrainingContract';
 }

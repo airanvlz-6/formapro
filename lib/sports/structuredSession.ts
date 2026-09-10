@@ -12,6 +12,7 @@ import { renderProfessionalSession } from './sessionProfessionalRenderer';
 import { renderHumanSession } from './sessionHumanRenderer';
 import { authenticatedPresentationVersion, type PresentationVersion } from './sessionPresentation';
 import { validateMethodIntensity } from './methodIntensityAuthority';
+import { validateRunningMethodDose } from './runningMethodDoseAuthority';
 
 export type MovementDose = { sets?: number; reps?: number; durationSeconds?: number; distanceMeters?: number; restSeconds?: number;
   intensity?: DoseIntensity; tempo?: [number, number, number, number]; perSide?: boolean };
@@ -117,6 +118,7 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
     if (!evaluateMovementRestrictions(m, flags).allowed || restrictions.areas.some(a => m.avoid_with?.includes(a))
       || notes.some(n => normalizeTrainingKey(n.movement) === m.id)) violations.push(`MOVEMENT_RESTRICTED:${m.id}`);
   }
+  if (!violations.length) violations.push(...validateRunningMethodDose(contract, p));
   if (!violations.length) violations.push(...validateSessionDose(contract, p, observeDose));
   if (!violations.length && contract.doseContext?.sufficiency) for (const [blockIndex, block] of p.blocks.entries()) for (const [movementIndex, m] of block.movements.entries()) {
     const intensity = m.prescription.intensity;

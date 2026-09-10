@@ -1,3 +1,4 @@
+import { readRunningHabitualConfirmation, type RunningHabitualInteraction } from './runningHabitualConfirmation';
 import { projectAthletePrescriptionProfile, record } from './athletePrescriptionContext';
 import type { SessionEnvironmentInput } from '../sports/sessionTrainingEnvironment';
 import { getCanonicalRestrictions } from './getCanonicalRestrictions';
@@ -13,7 +14,7 @@ import { admitRunningDoseEvidence } from '../sports/runningDoseEvidenceAuthority
 
 export type PreparedPrescriptionReadiness = { userCodigo: string; effectiveDate: string;
   source: 'canonical_readiness_engine'; result: ReadinessResultado };
-export type PrescriptionReadOptions = { asOfDate: string; prescriptionDate?: string; sessionEnvironment?: SessionEnvironmentInput; recovery?: RecoveryContext; readiness?: PreparedPrescriptionReadiness };
+export type PrescriptionReadOptions = { runningHabitualInteraction?: RunningHabitualInteraction; asOfDate: string; prescriptionDate?: string; sessionEnvironment?: SessionEnvironmentInput; recovery?: RecoveryContext; readiness?: PreparedPrescriptionReadiness };
 export type AthletePrescriptionContext = Awaited<ReturnType<typeof loadAthletePrescriptionContext>>;
 
 /** One server read boundary. No scoring, writes, prompting, receipts or global cache.
@@ -66,6 +67,8 @@ export async function loadAthletePrescriptionContext(db: any, userCodigo: string
   const signals = recovery.objective;
   const projected = projectAthletePrescriptionProfile(profile, options.prescriptionDate || options.asOfDate, options.sessionEnvironment);
   const runningDoseBaseline = projectRunningDoseBaseline(profile, plans as unknown[], projected.running.references, options.asOfDate);
+  const habitualConfirmation = readRunningHabitualConfirmation(record(profile.perfil).runningHabitualConfirmation, userCodigo, options.runningHabitualInteraction, runningDoseBaseline.habitualDeclarations?.facts ?? []);
+  if (habitualConfirmation) runningDoseBaseline.habitualConfirmation = habitualConfirmation;
   return structuredClone({ ...projected, planningStrategy: resolvePlanningStrategy(projected), userCodigo, asOfDate: options.asOfDate,
     runningDoseBaseline, runningDoseEvidenceAdmission: admitRunningDoseEvidence(runningDoseBaseline),
     physiology: { source: 'prepareRecoveryContext', recovery, missingSignals: ['hrv', 'restingHr', 'sleepDuration', 'sleepScore']

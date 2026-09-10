@@ -92,6 +92,7 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
     if (!base.ok) return { ok: false as const, code: 'TRAINING_CONTRACT_INVALID', errors: base.errors };
     const canonical = await loadAthletePrescriptionContext(db, userCodigo, { asOfDate: restrictions.asOfDate,
       prescriptionDate: prescriptionDate(request.targetWeekStart, request.day),
+      runningHabitualInteraction: planningRunId ? {planningRunId,targetWeekStart:request.targetWeekStart} : undefined,
       sessionEnvironment: { date: prescriptionDate(request.targetWeekStart, request.day), assignedDiscipline: request.discipline, confirmedAssignment } });
     const doseContext = buildSessionDoseContext(canonical, base.contract.intent, strategicWeek, neighbours, true);
     emitEquipmentAuthorityDiagnostic(doseContext.sufficiency!, base.contract.allowedMovementIds, planningRunId, request.day);
@@ -116,8 +117,11 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
     if (history.error || !Array.isArray(history.data)) return { ok: false as const, code: 'SESSION_HISTORY_READ_FAILED' };
     const recent = history.data.flatMap((p: any) => Array.isArray(p.sessions) ? p.sessions.filter((s: any) => s.completada && s.descripcion_real)
       .map((s: any) => ({ titulo: legacySessionView(s).titulo, descripcion_real: s.descripcion_real })) : []).slice(0, 5);
+    const builderProfile = { ...profile, perfil: { ...profile.perfil } };
+    delete builderProfile.perfil.runningHabitualDeclarations;
+    delete builderProfile.perfil.runningHabitualConfirmation;
     const result = await generateContractSession(prepared.contract, recent, complete,
-      JSON.stringify({ serverProfile: profile, requestContext: context }), planningRunId, 'human_v3');
+      JSON.stringify({ serverProfile: builderProfile, requestContext: context }), planningRunId, 'human_v3');
     if (!result.ok) return result;
     const payload = Buffer.from(JSON.stringify({ userCodigo, expiresAt: Date.now() + 30 * 60_000,
       contract: result.contract, proposal: result.proposal, presentationVersion: 'human_v3', ...(weekly ? { weekly } : {}) })).toString('base64url');
@@ -183,7 +187,7 @@ export async function assertFreshSessionRestrictions(db: any, userCodigo: string
       }
     }
     const canonical = await loadAthletePrescriptionContext(db, userCodigo, { asOfDate: current.asOfDate,
-      prescriptionDate: date, sessionEnvironment });
+      prescriptionDate: date, sessionEnvironment, runningHabitualInteraction: contract.runningMethodDose?.evidence?.habitualConfirmation });
     const now = buildSessionDoseContext(canonical, contract.intent, contract.doseContext.weekStrategy, contract.doseContext.neighbours, !!contract.doseContext.sufficiency);
     if (now.evidenceDigest !== contract.doseContext.evidenceDigest) throw new Error('SESSION_DOSE_CONTEXT_CHANGED_REGENERATE');
     if (contract.runningMethodDose && runningDoseDigest(contract.runningMethodDose) !== runningDoseDigest(

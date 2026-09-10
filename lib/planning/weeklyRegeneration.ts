@@ -21,6 +21,7 @@ export function weeklyRegenerationOutcome(policy: RegenerationPolicy | undefined
 }
 /** Presentation only. All decisions originate in the shared server contract. */
 export function weeklyGenerationOutcomeMessage(result: { code?: string; reason?: string } | null | undefined) {
+  if (result?.code === 'SESSION_DOSE_TIME_INFEASIBLE') return 'El rodaje habitual confirmado no cabe en el tiempo disponible. La duración seleccionada se conserva; revisa la disponibilidad antes de planificarlo.';
   if (result?.code === 'RUNNING_DOSE_CAPABILITY_INSUFFICIENT') return 'La planificación de carrera queda pendiente: todavía no hay una dosis autorizada compatible con la evidencia disponible. Guardar tu rutina habitual no autoriza por sí solo una dosis.';
   if (result?.code === 'NO_NEW_EXECUTABLE_PRESCRIPTION') return 'No se ha obtenido una nueva prescripción válida con el contrato actual. Conservo el plan anterior; no se ha consumido una generación.';
   if (result?.code === 'WEEKLY_REGENERATION_NO_OP') return 'No quedan días gestionados pendientes de planificación. Conservo el plan actual sin generar otra versión.';

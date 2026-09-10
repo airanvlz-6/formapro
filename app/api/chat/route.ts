@@ -1305,7 +1305,7 @@ if (action === "verificar_cambio_modo") {
       const current = await supabase.from('usuarios').select('perfil').eq('codigo', codigo).single();
       if (current.error || !current.data) return NextResponse.json({ ok: false, code: 'PRESCRIPTION_PROFILE_READ_FAILED' });
       // Progressive declarations belong to dedicated validated answer paths, not generic extraction or stale UI copies.
-      for (const field of ['prescription_signals', 'prescription_access', 'runningHabitualDeclarations']) {
+      for (const field of ['prescription_signals', 'prescription_access', 'runningHabitualDeclarations', 'runningHabitualConfirmation']) {
         delete profilePatch.perfil[field];
         if (current.data.perfil?.[field] !== undefined) profilePatch.perfil[field] = current.data.perfil[field];
       }
@@ -5090,7 +5090,12 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
   }
 
   if (action === "responder_habito_carrera") {
-    try { return NextResponse.json(await saveHabitualRunningAnswer(supabase as unknown as HabitualRunningProfileStore, codigo, datos?.field, datos?.answer)); }
+    try {
+      const generation=datos?.generationToken ? resolveWeeklyGeneration(datos.generationToken,codigo) : null;
+      if (generation && ![generation.currentWeek,generation.nextWeek].includes(datos.targetWeekStart)) throw new Error('CALENDAR_TARGET_INVALID');
+      return NextResponse.json(await saveHabitualRunningAnswer(supabase as unknown as HabitualRunningProfileStore, codigo, datos?.field, datos?.answer,
+        new Date().toISOString(), generation?.planningRunId ? {planningRunId:generation.planningRunId,targetWeekStart:datos.targetWeekStart} : undefined, datos?.expectedDurationMinutes));
+    }
     catch { return NextResponse.json({ ok: false, code: 'RUNNING_HABITUAL_CAPTURE_FAILED' }); }
   }
 

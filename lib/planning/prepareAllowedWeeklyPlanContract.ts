@@ -1,3 +1,6 @@
+import { RUNNING_METHOD_DOSE_POLICIES } from '../sports/runningMethodDosePolicies';
+import { AEROBIC_CONTINUITY_POLICY } from '../sports/aerobicContinuityPolicy';
+import { habitualRunningRequirement } from '../athlete/runningHabitualDeclarations';
 import { buildDoseCapabilityProfile } from '../sports/doseCapabilityProfile';
 import { evaluateTrainingFeasibility } from '../sports/trainingFeasibility';
 import type { PlannerCompletion } from './weeklyPlannerDiagnostics';
@@ -24,7 +27,7 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
 }) {
   const c = await loadWeeklyCalendarContext(db, codigo);
   if (request.strategyVersion !== undefined && request.strategyVersion !== 1) throw new Error('STRATEGY_VERSION_UNSUPPORTED');
-  const athlete = request.strategyVersion === 1 ? await loadAthletePrescriptionContext(db, codigo, { asOfDate: request.today }) : undefined;
+  const athlete = request.strategyVersion === 1 ? await loadAthletePrescriptionContext(db, codigo, { asOfDate: request.today, runningHabitualInteraction: request.planningRunId ? {planningRunId:request.planningRunId,targetWeekStart:request.targetWeekStart} : undefined }) : undefined;
   if (athlete) {
     const goal = resolveGoalAuthority(athlete), resolution = resolvePlanningStrategy(athlete), admitted = resolution.status === 'STRATEGY_RESOLVED';
     console.log('GOAL_RESOLUTION_DIAGNOSTIC', goalResolutionDiagnostic(goal));
@@ -87,6 +90,19 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
       fixed[day] = { state: calendarState(s), ...(['box', 'carrera'].includes(s.tipo) ? { discipline: s.tipo } : {}) };
     }
   }
+  // Only a current validated generation supplies planningRunId. Never infer freshness from a date.
+  if (RUNNING_METHOD_DOSE_POLICIES.some(p=>p.policyId===AEROBIC_CONTINUITY_POLICY) && request.planningRunId && strategy?.methods.includes('running_base') && c.scope.managedDisciplines.includes('carrera')
+    && calendarDays.some(day=>!fixed[day] && c.allowed.carrera?.includes(day))
+    && !athlete!.runningDoseEvidenceAdmission.basis.habitualConfirmation) {
+    const declarations=athlete!.runningDoseEvidenceAdmission.basis.habitualDeclarations;
+    const duration=declarations?.facts.find(f=>f.field==='habitualEasyRunningDurationMinutes');
+    if (!declarations?.conflicts.length && duration?.status!=='NO_HABITUAL_EASY_RUN') return {
+      ok:false as const,canContinue:false as const,code:'RUNNING_HABITUAL_RECONFIRMATION_REQUIRED',
+      runningHabitualRequirement: duration ? {field:duration.field,unit:duration.unit,currentDurationMinutes:duration.value,
+        text:`¿Sigue siendo tu rodaje fácil habitual de ${duration.value} minutos? Responde CONFIRMAR o escribe el número de minutos actual.`}
+        : habitualRunningRequirement([]),
+    };
+  }
   let availabilityConfirmed = false;
   try {
     availabilityConfirmed = typeof request.confirmedAvailabilityDigest === 'string'
@@ -97,7 +113,7 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
     ...(activeRegeneration ? { regeneration: { pendingManagedDays: calendarDays.filter(day => !fixed[day]
       && c.scope.managedDisciplines.some(discipline => c.allowed[discipline].includes(day))) } } : {}),
     ...(strategy ? { strategy, doseCapabilities: buildDoseCapabilityProfile(athlete!.runningDoseEvidenceAdmission, c.scope,
-      { goalId: strategy.goal.id, blockPhase: strategy.block.phase, blockWeek: strategy.block.week }) } : {}) },
+      { goalId: strategy.goal.id, blockPhase: strategy.block.phase, blockWeek: strategy.block.week, athlete, contexts }) } : {}) },
     fixedSessions: structuredClone(fixedSessions),
     availabilityConfirmed };
 }

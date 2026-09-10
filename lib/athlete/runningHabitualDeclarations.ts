@@ -1,3 +1,4 @@
+import { issueRunningHabitualConfirmation, type RunningHabitualInteraction } from './runningHabitualConfirmation';
 export const habitualRunningFields = ['habitualEasyRunningDurationMinutes', 'habitualRunningSessionsPerWeek'] as const;
 export type HabitualRunningField = typeof habitualRunningFields[number];
 export type HabitualRunningDeclaration = { field: HabitualRunningField; authority: 'DECLARED';
@@ -55,19 +56,23 @@ export type HabitualRunningProfileStore = { from(table: 'usuarios'): {
   select(columns: 'perfil'): { eq(column: 'codigo', user: string): { single(): PromiseLike<{ data: { perfil: unknown } | null; error: unknown }> } };
   update(value: { perfil: Record<string, unknown> }): { eq(column: 'codigo', user: string): PromiseLike<{ error: unknown }> };
 } };
-export async function saveHabitualRunningAnswer(db: HabitualRunningProfileStore, user: string, field: HabitualRunningField, answer: unknown, confirmedAt = new Date().toISOString()) {
+export async function saveHabitualRunningAnswer(db: HabitualRunningProfileStore, user: string, field: HabitualRunningField, answer: unknown, confirmedAt = new Date().toISOString(), interaction?: RunningHabitualInteraction, expectedDurationMinutes?: unknown) {
   if (typeof user !== 'string' || !user.trim()) throw new Error('RUNNING_HABITUAL_USER_REQUIRED');
-  const value = parseHabitualRunningAnswer(field, answer);
+  const reconfirm = field === 'habitualEasyRunningDurationMinutes' && answer === 'CONFIRMAR';
+  const value = reconfirm ? null : parseHabitualRunningAnswer(field, answer);
   if (!Number.isFinite(Date.parse(confirmedAt))) throw new Error('RUNNING_HABITUAL_DATE_INVALID');
   const current = await db.from('usuarios').select('perfil').eq('codigo', user).single();
   if (current.error || !current.data) throw new Error('RUNNING_HABITUAL_READ_FAILED');
   const profile = row(current.data.perfil), stored = row(profile.runningHabitualDeclarations);
-  const fact = habitualRunningFact(field, value, confirmedAt);
   const previous = projectHabitualRunningDeclarations(profile).find(d => d.field === field);
-  const selected = previous?.status === fact.status && previous.value === fact.value ? previous : fact;
+  if (reconfirm && (!interaction || previous?.status !== 'AVAILABLE' || expectedDurationMinutes !== previous.value)) throw new Error('RUNNING_RECONFIRMATION_INVALID');
+  const fact = habitualRunningFact(field, reconfirm ? previous!.value! : value!, confirmedAt);
+  const selected = !interaction && previous?.status === fact.status && previous.value === fact.value ? previous : fact;
   const next = { ...profile, runningHabitualDeclarations: { ...stored, [field]: selected } };
+  if (interaction && field === 'habitualEasyRunningDurationMinutes')
+    Object.assign(next, {runningHabitualConfirmation:issueRunningHabitualConfirmation(user,interaction,selected)});
   const saved = await db.from('usuarios').update({ perfil: next }).eq('codigo', user);
   if (saved.error) throw new Error('RUNNING_HABITUAL_SAVE_FAILED');
-  return { ok: true, requirement: habitualRunningRequirement(projectHabitualRunningDeclarations(next)),
-    message: 'Declaración guardada. Describe tu rutina; no autoriza todavía una dosis de entrenamiento.' };
+  return { ok: true, requirement: interaction ? null : habitualRunningRequirement(projectHabitualRunningDeclarations(next)),
+    message: interaction ? 'Rodaje habitual confirmado para esta planificación. Comprobaré la dosis, intensidad y tiempo disponibles.' : 'Declaración guardada. Describe tu rutina; requiere confirmación para usarla en una planificación.' };
 }

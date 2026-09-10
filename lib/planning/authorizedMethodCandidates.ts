@@ -38,7 +38,7 @@ export function resolveAuthorizedMethodCandidates(input: WeeklyContractInput, da
     const context = input.contexts[discipline];
     const capability = input.doseCapabilities?.entries.find(e => e.methodId === intent.methodId && e.pattern === intent.pattern);
     if (capability && (!capability.prescriptionAllowed || capability.doseCapability !== 'QUANTIFIABLE')) {
-      doseUnavailable.push({ methodId: intent.methodId, adaptationId: intent.adaptationId, reason: capability.doseCapability });
+      doseUnavailable.push({ methodId: intent.methodId, adaptationId: intent.adaptationId, reason: capability.prescriptionBlockReason ?? capability.doseCapability });
       return null;
     }
     const result = evaluateTrainingFeasibility({ ...context, targetWeekStart: input.targetWeekStart, targetDay: day, stimulus, intent,

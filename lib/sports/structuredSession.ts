@@ -41,8 +41,8 @@ export function checkSessionShape(value: unknown): SessionValidation {
     || !['stimulusId', 'structureId', 'blocks'].every(k => Object.hasOwn(value, k))
     || typeof value.stimulusId !== 'string' || !value.stimulusId || typeof value.structureId !== 'string' || !value.structureId
     || (value.explanation !== undefined && (typeof value.explanation !== 'string' || value.explanation.length > 2000))
-    || !Array.isArray(value.blocks) || (modern ? ![2, 3].includes(value.blocks.length) : value.blocks.length !== 3)) return { ok: false, violations: ['PROPOSAL_SHAPE_INVALID'] };
-  const blockTypes = ['warmup', 'main', 'cooldown'];
+    || !Array.isArray(value.blocks) || (modern ? ![1, 2, 3].includes(value.blocks.length) : value.blocks.length !== 3)) return { ok: false, violations: ['PROPOSAL_SHAPE_INVALID'] };
+  const blockTypes = modern && value.blocks.length === 1 ? ['main'] : ['warmup', 'main', 'cooldown'];
   value.blocks.forEach((block: unknown, index: number) => {
     if (!object(block) || !keys(block, ['blockType', 'movements', ...(modern ? ['formatDose'] : [])]) || block.blockType !== blockTypes[index]
       || !['blockType', 'movements'].every(k => Object.hasOwn(block, k))
@@ -103,7 +103,9 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
   if (p.stimulusId !== contract.stimulusId) violations.push('STIMULUS_MISMATCH');
   const structure = Object.hasOwn(WORKOUT_STRUCTURE_LIBRARY, p.structureId) ? WORKOUT_STRUCTURE_LIBRARY[p.structureId] : undefined;
   if (!structure || !contract.allowedStructureIds.includes(p.structureId) || structure.discipline !== contract.discipline) violations.push('STRUCTURE_NOT_ALLOWED');
-  const main = p.blocks[1].movements;
+  if (p.blocks.length === 1 && !(contract.runningMethodDose?.version === 2 && contract.runningMethodDose.dose?.composition === 'SINGLE_CONTINUOUS_TOTAL'))
+    violations.push('SINGLE_BLOCK_COMPOSITION_NOT_AUTHORIZED');
+  const main = p.blocks.find(b => b.blockType === 'main')!.movements;
   violations.push(...validateStructureSemantics(structure, main));
   if (contract.intent && contract.intent.kind !== 'stimulus_only' && !intentMatchingMovementIds(contract.intent,
     main.map(m => m.movementId).filter(id => contract.allowedMovementIds.includes(id))).length) violations.push('INTENT_NOT_SATISFIED');

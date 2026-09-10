@@ -1,3 +1,4 @@
+import { AEROBIC_CONTINUITY_POLICY, aerobicContinuityRejection } from './aerobicContinuityPolicy';
 import type { StrategicIntent } from './goalTransferModel';
 import type { PrescriptionIntent } from './prescriptionIntent';
 import type { AllowedTrainingContract } from './allowedTrainingContract';
@@ -12,6 +13,8 @@ export { resolveCompatibleRunningDoseEvidence, runningDoseDigest } from './runni
 
 type Range = { minimum: number; maximum: number };
 export type RunningDoseSelection = {
+  composition?: 'SINGLE_CONTINUOUS_TOTAL';
+  allowedMovementIds?: string[];
   metric: 'duration' | 'distance' | 'work_duration' | 'work_distance' | 'repetitions';
   unit: 'seconds' | 'meters' | 'repetitions';
   selectedTarget: Range | null; maximumAuthorized: number | null; minimumUseful: number | null;
@@ -54,6 +57,10 @@ export function resolveRunningMethodDose(evidence: CompatibleRunningDoseEvidence
       ...(!p?.selectDose ? ['RUNNING_METHOD_DOSE_POLICY_NOT_ESTABLISHED'] : [])])] });
   if (evidence.status === 'CONFLICT' || evidence.conflicts.length) return fail('CONFLICT', 'CONFLICTING_EVIDENCE');
   if (!p || p.family !== evidence.family) return fail('UNRESOLVED', 'DOMAIN_UNSUPPORTED');
+  if (p.policyId === AEROBIC_CONTINUITY_POLICY) {
+    const reason = aerobicContinuityRejection(evidence, context);
+    if (reason) return fail(reason === 'CONFLICTING_EVIDENCE' ? 'CONFLICT' : 'UNRESOLVED', reason);
+  }
   const selected = p.selectDose?.(evidence, context) ?? null;
   if (!selected) return fail('UNRESOLVED', p.family === 'TECHNICAL_EXPOSURE'
     ? 'POLICY_NOT_ESTABLISHED' : 'MISSING_COMPATIBLE_EVIDENCE');
@@ -86,9 +93,12 @@ export function validateRunningMethodDose(c: AllowedTrainingContract, proposal: 
   if (!main) return ['RUNNING_METHOD_DOSE_MAIN_REQUIRED'];
   if (!d.structures.includes(proposal.structureId)) errors.push('RUNNING_METHOD_DOSE_STRUCTURE_MISMATCH');
   if (main.formatDose) errors.push('RUNNING_METHOD_DOSE_FORMAT_OVERRIDE');
+  if (d.composition === 'SINGLE_CONTINUOUS_TOTAL' && (proposal.blocks.length !== 1 || proposal.blocks[0].blockType !== 'main'))
+    errors.push('RUNNING_METHOD_DOSE_SINGLE_CONTINUOUS_TOTAL_REQUIRED');
   let total = 0, efforts = 0;
   const inside = (value: number, range: Range) => value >= range.minimum && value <= range.maximum;
   for (const m of main.movements) {
+    if (d.allowedMovementIds && !d.allowedMovementIds.includes(m.movementId)) errors.push('RUNNING_METHOD_DOSE_MOVEMENT_NOT_AUTHORIZED');
     const q = m.prescription, sets = q.sets ?? 1;
     const workUnit = d.unit === 'repetitions' ? d.structureConstraints.bout?.unit : d.unit;
     const work = workUnit === 'meters' ? q.distanceMeters : q.durationSeconds;

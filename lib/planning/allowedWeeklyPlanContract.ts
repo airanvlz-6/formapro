@@ -141,7 +141,7 @@ export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput, diagn
     }
     const deferredDoseDemands = [...new Map(doseUnavailable.map(d => [JSON.stringify(d), d])).values()];
     if (doseUnavailable.length && !Object.values(dayOptions).flat().some(o => !o.protected && isExecutableCalendarState(o.state)))
-      return { ok: false as const, canContinue: false as const, retryable: false as const, code: 'RUNNING_DOSE_CAPABILITY_INSUFFICIENT', errors: ['NO_DOSE_QUANTIFIABLE_RUNNING_METHOD'],
+      return { ok: false as const, canContinue: false as const, retryable: false as const, code: doseUnavailable.some(d=>d.reason==='SESSION_DOSE_TIME_INFEASIBLE') ? 'SESSION_DOSE_TIME_INFEASIBLE' : 'RUNNING_DOSE_CAPABILITY_INSUFFICIENT', errors: ['NO_EXECUTABLE_DOSE_CAPABLE_METHOD'],
         doseCapabilities: input.doseCapabilities, deferredDoseDemands, runningHabitualRequirement: input.doseCapabilities?.requirement };
     if (input.strategy && doseUnavailable.length) input = { ...input, strategy: { ...input.strategy,
       deferred: [...input.strategy.deferred, ...deferredDoseDemands.map(d => ({ reference: d.adaptationId + ':' + d.methodId, reason: 'dose_' + d.reason.toLowerCase() }))] } };

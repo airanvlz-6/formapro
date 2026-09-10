@@ -35,7 +35,7 @@ function movement(c: AllowedTrainingContract, id: string, d: MovementDose): stri
     + (d.tempo ? `\n  Tempo: ${d.tempo.join('-')}` : '');
 }
 function formatTitle(p: StructuredSessionProposal): string {
-  const format = WORKOUT_STRUCTURE_LIBRARY[p.structureId].formato, f = p.blocks[1].formatDose;
+  const format = WORKOUT_STRUCTURE_LIBRARY[p.structureId].formato, f = p.blocks.find(b => b.blockType === 'main')!.formatDose;
   const title = ({ amrap: 'AMRAP', emom: 'EMOM', e2mom: 'Cada 2 min', for_time: 'For Time', strength_sets: 'Series de fuerza',
     complex: 'Complejo', continuous: 'Continuo', intervals: 'Intervalos', skill_practice: 'Práctica técnica' } as Record<string, string>)[format] || label(format);
   return `${f?.rounds ? `${f.rounds} rondas · ` : ''}${title}${f?.durationSeconds ? ` ${formatDuration(f.durationSeconds)}` : ''}`

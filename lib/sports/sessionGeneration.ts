@@ -1,3 +1,4 @@
+import { aerobicExecutionGate } from './aerobicExecutionGate';
 import { builderTrace, contractFailureStage, sufficiencyFailure, type SufficiencyFailure, type BuilderCompletion } from './builderDiagnostics';
 import { intentMatchingMovementIds } from './prescriptionIntent';
 import { validateAllowedTrainingContract, type AllowedTrainingContract } from './allowedTrainingContract';
@@ -23,6 +24,11 @@ export async function generateContractSession(contract: AllowedTrainingContract,
   if (authority.runningMethodDose && authority.runningMethodDose.status !== 'RESOLVED') return { ok: false as const,
     code: authority.runningMethodDose.status === 'CONFLICT' ? 'RUNNING_METHOD_DOSE_CONFLICT' : 'RUNNING_METHOD_DOSE_UNRESOLVED',
     violations: authority.runningMethodDose.diagnostics };
+  const singleContinuous = authority.runningMethodDose?.version === 2 && authority.runningMethodDose.dose?.composition === 'SINGLE_CONTINUOUS_TOTAL';
+  if (singleContinuous) {
+    const gate = aerobicExecutionGate(authority);
+    if (gate.errors.length) return {ok:false as const,code:gate.errors[0],violations:gate.errors};
+  }
   const trace = builderTrace(authority, planningRunId);
   if (authority.intensityAuthority) {
     try { console.info?.('METHOD_INTENSITY_AUTHORITY', { version: authority.intensityAuthority.version, status: authority.intensityAuthority.status,
@@ -44,7 +50,8 @@ export async function generateContractSession(contract: AllowedTrainingContract,
   const builderOptions = authority.intensityAuthority?.status === 'RESOLVED'
     ? { main: authority.intensityAuthority.targets, preparationOnly: options } : options;
   const doseInstruction = authority.runningMethodDose ? '\nRUNNING METHOD DOSE: runningMethodDose.dose es autoridad inmutable del servidor. main debe respetar métrica, selectedTarget y límites explícitos de la versión recibida, estructuras, número de esfuerzos, límites por esfuerzo y descansos. Un máximo no selecciona un target. Suma el trabajo de TODOS los movimientos main multiplicado por sets. No conviertas distancia a tiempo, no cambies intensidad autorizada y no añadas trabajo a preparación para eludir la dosis. La preparación requiere su propia autoridad de composición; no hereda permisos de main. timeBudget es solo un techo; no lo rellenes.' : '';
-  const prompt = `${authority.contractVersion === 3 ? STRUCTURED_DOSE_INSTRUCTIONS : STRUCTURED_SESSION_INSTRUCTIONS}${timeInstruction}${representationInstruction}${intensityInstruction}${methodInstruction}${doseInstruction}\nCONTRACT:\n${JSON.stringify(authority)}${intentInstruction}\nContexto no autoritativo:\n${context}\nOpciones ejecutables por alcance (preparationOnly nunca amplía main):\n${JSON.stringify(builderOptions)}\nHistorial para evitar duplicación:\n${JSON.stringify(recent)}`;
+  const compositionInstruction = singleContinuous ? '\nCOMPOSITION AUTHORITY: replaces the default block layout. blocks must contain exactly ONE main block, ONE continuous running movement from runningMethodDose.dose.allowedMovementIds, with the exact selected total seconds and primary easy intensity. NO warmup, cooldown, extra preparation, intervals or other movements. The selected duration is the ENTIRE outing.' : '';
+  const prompt = `${authority.contractVersion === 3 ? STRUCTURED_DOSE_INSTRUCTIONS : STRUCTURED_SESSION_INSTRUCTIONS}${timeInstruction}${representationInstruction}${intensityInstruction}${methodInstruction}${doseInstruction}${compositionInstruction}\nCONTRACT:\n${JSON.stringify(authority)}${intentInstruction}\nContexto no autoritativo:\n${context}\nOpciones ejecutables por alcance (preparationOnly nunca amplía main):\n${JSON.stringify(builderOptions)}\nHistorial para evitar duplicación:\n${JSON.stringify(recent)}`;
   let previousErrors: string[] = [];
   let missingDetails: SufficiencyFailure[] = [];
   for (let attempt = 0; attempt < 2; attempt++) {

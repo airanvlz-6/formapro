@@ -965,7 +965,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     const weekStartOrchestrator=continuation.targetWeekStart;
 
     const preflight=await apiCall({action:"preflight_generacion_semana",codigo:codigoUsuario,datos:{generationToken:weeklyGeneration.token,targetWeekStart:weekStartOrchestrator,confirmedAvailabilityDigest:availabilityConfirmationRef.current,temporalIntent:empezarHoy ?? temporalAnswer,temporalReply}});
-    if(preflight?.preflightRequirement){weeklyPlanningContinuationRef.current=continuation;return preflight;}
+    if(preflight?.preflightRequirement || preflight?.runningHabitualRequirement){weeklyPlanningContinuationRef.current=continuation;return preflight;}
     weeklyPlanningContinuationRef.current=null;
     if(preflight?.goalRequirement || preflight?.runningHabitualRequirement) return preflight;
     if(!preflight?.canContinue || typeof preflight.temporalDecision?.includeToday!=="boolean") return { ...preflight, ok:false, canContinue:false };
@@ -1270,7 +1270,7 @@ const [equipoSeleccionado,setEquipoSeleccionado]=useState<any>(null);
   const bloqueado=!esPremium&&!esAdmin&&fechaRegistro!==null&&diasUsados>=diasPrueba;
   const accentColor=cat?.color||C.accent;
 
-const [pendingRunningHabitualQuestion,setPendingRunningHabitualQuestion]=useState<{codigo:string;field:string}|null>(null);
+const [pendingRunningHabitualQuestion,setPendingRunningHabitualQuestion]=useState<{codigo:string;field:string;expectedDurationMinutes?:number;generationToken?:string;targetWeekStart?:string;includeToday?:boolean}|null>(null);
 const [pendingPrescriptionQuestion,setPendingPrescriptionQuestion]=useState<{codigo:string;token:string}|null>(null);
 const [pendingGoalQuestion,setPendingGoalQuestion]=useState<{codigo:string;token:string;empezarHoy?:boolean;temporalAnswer?:string;temporalReply?:boolean}|null>(null);
 const weeklyTemporalIntentRef=useRef<{text?:string;answeringQuestion:boolean}>({answeringQuestion:false});
@@ -1293,7 +1293,9 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
             setMensajes(prev=>[...prev,{role:"assistant",content:result.preflightRequirement.text}]);
           }
           if(result.runningHabitualRequirement?.text){
-            setPendingRunningHabitualQuestion({codigo:codigoUsuario,field:result.runningHabitualRequirement.field});
+            setPendingRunningHabitualQuestion({codigo:codigoUsuario,field:result.runningHabitualRequirement.field,
+              generationToken:(body.datos as {generationToken?:string})?.generationToken,targetWeekStart:(body.datos as {targetWeekStart?:string})?.targetWeekStart,
+              includeToday:result.temporalDecision?.includeToday,expectedDurationMinutes:result.runningHabitualRequirement.currentDurationMinutes});
             setMensajes(prev=>[...prev,{role:"assistant",content:result.runningHabitualRequirement.text}]);
           }
           if(result.goalRequirement?.questionToken && result.goalRequirement.question?.text){
@@ -1813,12 +1815,18 @@ const forgeValidator=(texto:string):string=>{
       if(pendingRunningHabitualQuestion.codigo!==codigoUsuario){setPendingRunningHabitualQuestion(null);return;}
       setCargando(true);setInput("");setMensajes(prev=>[...prev,{role:"user",content:texto}]);
       try{
-        const result=await apiCall({action:"responder_habito_carrera",codigo:codigoUsuario,datos:{field:pendingRunningHabitualQuestion.field,answer:texto}});
+        const result=await apiCall({action:"responder_habito_carrera",codigo:codigoUsuario,datos:{field:pendingRunningHabitualQuestion.field,answer:texto,expectedDurationMinutes:pendingRunningHabitualQuestion.expectedDurationMinutes,generationToken:pendingRunningHabitualQuestion.generationToken,targetWeekStart:pendingRunningHabitualQuestion.targetWeekStart}});
         if(result.ok){
           setPendingRunningHabitualQuestion(result.requirement ? {codigo:codigoUsuario,field:result.requirement.field} : null);
           setMensajes(prev=>[...prev,{role:"assistant",content:result.requirement?.text || result.message}]);
+          if(!result.requirement && pendingRunningHabitualQuestion.generationToken){
+            setGenerandoSemana(true);
+            const plan=await orquestarGeneracionSemana(pendingRunningHabitualQuestion.includeToday);
+            if(!plan?.preflightRequirement && !plan?.goalRequirement && !plan?.runningHabitualRequirement)
+              setMensajes(prev=>[...prev,{role:"assistant",content:plan && plan.ok!==false ? "Semana generada y guardada. Revisa Mi Plan." : weeklyGenerationOutcomeMessage(plan)}]);
+          }
         }else setMensajes(prev=>[...prev,{role:"assistant",content:"No he podido guardar el dato. Responde con un número entero o, para el rodaje fácil, «No tengo un rodaje fácil habitual»."}]);
-      }finally{setCargando(false);}
+      }finally{setCargando(false);setGenerandoSemana(false);}
       return;
     }
     if(pendingPrescriptionQuestion){

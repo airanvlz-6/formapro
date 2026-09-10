@@ -11,6 +11,7 @@ export type RunningDoseEvidenceAdmission = {
   status: RunningDoseEvidenceClass | 'UNKNOWN' | 'CONFLICT';
   coverage: RunningDoseBaseline['coverage'];
   basis: {
+    habitualConfirmation?: RunningDoseBaseline['habitualConfirmation'];
     habitualDeclarations?: RunningDoseBaseline['habitualDeclarations'];
     windows: Record<string, Window & { observedDuration: BasisMetric; observedDistance: BasisMetric;
       identifiedOccurrenceCount: BasisMetric }>;
@@ -101,7 +102,7 @@ export function admitRunningDoseEvidence(baseline: RunningDoseBaseline): Running
     coverage: { startDate: baseline.coverage.startDate, endDate: baseline.coverage.endDate,
       observedDays: baseline.coverage.observedDays, completedRunningSessions: baseline.coverage.completedRunningSessions,
       captureCompleteness: 'UNKNOWN' },
-    basis: { ...(habitualDeclarations.facts.length ? { habitualDeclarations } : {}), windows, declaredWeeklyDistance, longestObservedRun: { ...window,
+    basis: { ...(baseline.habitualConfirmation ? {habitualConfirmation: structuredClone(baseline.habitualConfirmation)} : {}), ...(habitualDeclarations.facts.length ? { habitualDeclarations } : {}), windows, declaredWeeklyDistance, longestObservedRun: { ...window,
       duration: metric(baseline.metrics.longestRecentRunDurationSeconds), distance: metric(baseline.metrics.longestRecentRunDistanceMeters) },
       averageObservedRunDuration: { ...window, ...metric(baseline.metrics.recentAverageRunDurationSeconds) }, methodExposure },
     admissibleEvidence, excludedEvidence,

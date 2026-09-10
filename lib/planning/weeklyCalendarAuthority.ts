@@ -79,6 +79,7 @@ export async function issueWeeklyCalendar(db: any, codigo: string, week: string,
       ...(contract.regeneration ? { regeneration: contract.regeneration } : {}),
       ...(contract.strategy ? { strategy: contract.strategy } : {}),
       planning: { today: request.today, empezarHoy: request.empezarHoy,
+        ...(request.planningRunId ? {planningRunId:request.planningRunId} : {}),
         ...(request.confirmedAvailabilityDigest === weeklyDigest({ distribution: c.profile.distribucion_semanal, sources: c.sources, scope: c.scope })
           ? { confirmedAvailabilityDigest: request.confirmedAvailabilityDigest } : {}),
         ...(request.strategyVersion === 1 ? { strategyVersion: 1, ...(request.strategyProposal !== undefined ? { strategyProposal: request.strategyProposal } : {}) } : {}) } };

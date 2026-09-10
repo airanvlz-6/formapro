@@ -1,5 +1,9 @@
 -- Apply before deploying the B.3.2C reader/writer. Not executed by this change.
--- Dedicated immutable factual storage; no profile JSON lost-update or plan mutation.
+-- One-time transactional deployment; existing objects must fail visibly.
+-- Immutable append-only factual storage; no profile or plan mutation.
+-- Roll back application code without deleting stored execution evidence.
+BEGIN;
+
 create table public.running_execution_records (
   user_codigo text not null,
   execution_id text not null,
@@ -14,6 +18,14 @@ create table public.running_execution_records (
 );
 create index running_execution_user_created on public.running_execution_records(user_codigo, created_at desc);
 alter table public.running_execution_records enable row level security;
-revoke all on public.running_execution_records from anon, authenticated;
-grant select, insert on public.running_execution_records to service_role;
-revoke update, delete on public.running_execution_records from service_role;
+-- Ordinary clients receive no direct table privileges.
+revoke all privileges
+  on table public.running_execution_records
+  from public, anon, authenticated, service_role;
+
+-- service_role receives SELECT + INSERT only.
+grant select, insert
+  on table public.running_execution_records
+  to service_role;
+
+COMMIT;

@@ -1,4 +1,5 @@
 import { RUNNING_METHOD_DOSE_POLICIES } from '../sports/runningMethodDosePolicies';
+import { projectWeeklyPrescriptionSignals } from './weeklyPrescriptionSignals';
 import { AEROBIC_CONTINUITY_POLICY } from '../sports/aerobicContinuityPolicy';
 import { habitualRunningRequirement } from '../athlete/runningHabitualDeclarations';
 import { buildDoseCapabilityProfile } from '../sports/doseCapabilityProfile';
@@ -110,6 +111,7 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
   } catch { /* Diagnostic metadata is never an admission requirement. */ }
   return { ok: true as const, input: { targetWeekStart: request.targetWeekStart, prescriptionScope: c.scope,
     maxExecutableDays: c.max, completeNewWeek: !request.snapshot && !hasPast, allowed: c.allowed, contexts, fixed,
+    daySufficiency: projectWeeklyPrescriptionSignals(c.profile, request.targetWeekStart, c.scope.managedDisciplines, c.allowed, availabilityConfirmed),
     ...(activeRegeneration ? { regeneration: { pendingManagedDays: calendarDays.filter(day => !fixed[day]
       && c.scope.managedDisciplines.some(discipline => c.allowed[discipline].includes(day))) } } : {}),
     ...(strategy ? { strategy, doseCapabilities: buildDoseCapabilityProfile(athlete!.runningDoseEvidenceAdmission, c.scope,

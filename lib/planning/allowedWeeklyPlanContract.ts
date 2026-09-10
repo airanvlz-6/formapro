@@ -1,4 +1,5 @@
 import type { DoseCapabilityProfile } from '../sports/doseCapabilityProfile';
+import type { PrescriptionSignals } from '../athlete/prescriptionSignals';
 import { noWeeklyPrescription, executablePrescriptionCounts, type RegenerationPolicy } from './weeklyRegeneration';
 import { emitRemainingDiagnostic } from './weeklyRemainingDiagnostic';
 import { resolveAuthorizedMethodCandidates, type CanonicalTransferPermissions } from './authorizedMethodCandidates';
@@ -25,6 +26,8 @@ export type AllowedWeeklyPlanContract = {
   regeneration?: RegenerationPolicy;
 };
 export type WeeklyContractInput = {
+  /** Server-projected date/assignment evidence; absent only for legacy pure callers. */
+  daySufficiency?: Record<string, Record<string, PrescriptionSignals>>;
   doseCapabilities?: DoseCapabilityProfile;
   transferPermissions?: CanonicalTransferPermissions;
   targetWeekStart: string; prescriptionScope: PrescriptionScope; maxExecutableDays: number;
@@ -106,6 +109,10 @@ export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput, diagn
         continue;
       }
       const options: WeeklyOption[] = [{ optionId: `${day}:rest`, state: 'REST' }];
+      if (input.daySufficiency && input.prescriptionScope.managedDisciplines.some(discipline =>
+        !input.daySufficiency?.[day]?.[discipline] || input.daySufficiency[day][discipline].version !== 1
+        || !input.daySufficiency[day][discipline].signals))
+        return failure('WEEKLY_CONTEXT_INVALID', ['DAY_SUFFICIENCY_REQUIRED']);
       if (input.strategy?.goal.id) {
         const candidates = resolveAuthorizedMethodCandidates(input, day);
         if (!candidates.ok) return failure('WEEKLY_CONTEXT_INVALID', candidates.errors);
@@ -125,7 +132,7 @@ export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput, diagn
           const intents: PrescriptionIntent[] = input.strategy?.goal.id ? strategicIntents(input.strategy, discipline, stimulus.id)
             : [Object.hasOwn(context, 'intent') ? context.intent! : { kind: 'stimulus_only' }];
           for (const intent of intents) {
-          const feasible = evaluateTrainingFeasibility({ ...context, targetWeekStart: input.targetWeekStart, targetDay: day, stimulus: stimulus.id, intent });
+          const feasible = evaluateTrainingFeasibility({ ...context, targetWeekStart: input.targetWeekStart, targetDay: day, stimulus: stimulus.id, intent }, input.daySufficiency?.[day]?.[discipline]);
           if (!feasible.resolved) return failure('WEEKLY_CONTEXT_INVALID', feasible.errors);
           if (!feasible.feasible) {
             try { rejected.push(projectRejectedWeeklyIntent(day, discipline, intent, feasible)); }

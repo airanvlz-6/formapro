@@ -44,7 +44,7 @@ export function resolveAuthorizedMethodCandidates(input: WeeklyContractInput, da
     }
     const result = evaluateTrainingFeasibility({ ...context, targetWeekStart: input.targetWeekStart, targetDay: day, stimulus, intent,
       // This is the effective day permission supplied by the canonical caller, not an inference from scope.
-      ...(crossTraining && context.availableDays !== null ? { availableDays: [...new Set([...context.availableDays, day])] } : {}) });
+      ...(crossTraining && context.availableDays !== null ? { availableDays: [...new Set([...context.availableDays, day])] } : {}) }, input.daySufficiency?.[day]?.[discipline]);
     report(intent, discipline, crossTraining ? 'CROSS_TRAINING' : 'SAME_DISCIPLINE', result.feasible ? 'FEASIBLE' : 'INFEASIBLE', result.errors);
     if (!result.resolved) return result.errors;
     if (!result.feasible) {

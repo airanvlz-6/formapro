@@ -12,14 +12,27 @@ export type HistoricalRun = {
   executionId: string; athlete: string; date: string; discipline: 'carrera';
   reference: string | null; identity: 'EXPLICIT' | 'DATE_ONLY';
   hint: 'easy' | 'long_run' | 'intervals' | 'quality' | null;
+  /** Trusted legacy label classification; this is exposure only, never dose authority. */
+  exposure: 'easy' | 'recovery' | 'long_run' | 'quality' | null;
+  legacyType: string | null;
   methodId: string | null; metrics: Partial<Record<Metric, Fact>>; sensation: string | null;
   completion: 'FULL' | 'PARTIAL' | 'MODIFIED' | 'ABANDONED' | 'UNKNOWN';
   provenance: 'MODERN_STRUCTURED' | 'LEGACY_STRUCTURED'; sourceRecords: string[];
   diagnostics: string[]; countable: boolean;
 };
-const kinds: Record<string, HistoricalRun['hint']> = { carrera:null, running:null, run:null, z2:'easy', rodaje:'easy',
-  'rodaje z2':'easy', 'carrera z2':'easy', 'rodaje suave':'easy', 'rodaje largo':'long_run', 'tirada larga':'long_run', long_run:'long_run', 'long run':'long_run',
-  intervalos:'intervals', intervals:'intervals', series:'intervals', tempo:'quality', umbral:'quality' };
+export const LEGACY_RUNNING_TYPE_MAP_V1: Readonly<Record<string, { hint: HistoricalRun['hint']; exposure: NonNullable<HistoricalRun['exposure']> | null }>> = {
+  carrera:{hint:null,exposure:'easy'}, running:{hint:null,exposure:'easy'}, run:{hint:null,exposure:'easy'},
+  z2:{hint:'easy',exposure:'easy'}, 'carrera z2':{hint:'easy',exposure:'easy'}, rodaje:{hint:'easy',exposure:'easy'},
+  'rodaje z2':{hint:'easy',exposure:'easy'}, rodaje_z2:{hint:'easy',exposure:'easy'}, z2_suave:{hint:'easy',exposure:'easy'}, carrera_z2:{hint:'easy',exposure:'easy'},
+  carrera_z2_regenerativo:{hint:'easy',exposure:'recovery'}, rodaje_regenerativo:{hint:'easy',exposure:'recovery'}, carrera_recuperacion_z1:{hint:'easy',exposure:'recovery'},
+  'rodaje suave':{hint:'easy',exposure:'easy'}, 'rodaje largo':{hint:'long_run',exposure:'long_run'}, 'tirada larga':{hint:'long_run',exposure:'long_run'},
+  long_run:{hint:'long_run',exposure:'long_run'}, 'long run':{hint:'long_run',exposure:'long_run'}, carrera_larga:{hint:'long_run',exposure:'long_run'},
+  rodaje_largo_z2:{hint:'long_run',exposure:'long_run'}, rodaje_largo_progresivo:{hint:'long_run',exposure:'long_run'},
+  intervalos:{hint:'intervals',exposure:'quality'}, intervals:{hint:'intervals',exposure:'quality'}, series:{hint:'intervals',exposure:'quality'},
+  z2_intervalos:{hint:'intervals',exposure:'quality'}, intervalos_z3_cortos:{hint:'intervals',exposure:'quality'}, carrera_series:{hint:'intervals',exposure:'quality'},
+  series_pista:{hint:'intervals',exposure:'quality'}, series_progresivas_z3:{hint:'intervals',exposure:'quality'}, series_cortas_competicion:{hint:'intervals',exposure:'quality'},
+  fartlek:{hint:'quality',exposure:'quality'}, tempo:{hint:'quality',exposure:'quality'}, umbral:{hint:'quality',exposure:'quality'}
+};
 /** Only full-field unit-bearing quantities. Bare numbers require a dedicated explicit unit field. */
 function quantity(raw: unknown, dimension: 'duration' | 'distance' | 'pace', explicitUnit?: unknown): number | null {
   const q = row(raw);
@@ -39,13 +52,14 @@ function quantity(raw: unknown, dimension: 'duration' | 'distance' | 'pace', exp
 function legacyRun(raw: unknown, index: number, athlete: string, asOfDate: string): HistoricalRun | null {
   const r = row(raw), kind = normalize(r.tipo), explicitRunning = ['carrera','running','run'].includes(normalize(r.disciplina));
   if (text(r.disciplina) && !explicitRunning) return null;
-  if (!explicitRunning && !Object.hasOwn(kinds, kind)) return null;
+  const mapped = LEGACY_RUNNING_TYPE_MAP_V1[kind];
+  if (!explicitRunning && !mapped) return null;
   const date = resolveCompletionDate(r.fecha)?.date;
   if (!date || date > asOfDate) return null;
   const reference = text(r.workout_id) ?? text(r.session_id);
   const source = `usuarios.workout_history.${index}`;
   const result: HistoricalRun = { executionId: canonicalDigest([athlete,'legacy',reference ? 'id' : 'date',reference ?? date]), athlete, date, discipline:'carrera',
-    reference, identity:reference ? 'EXPLICIT' : 'DATE_ONLY', hint:Object.hasOwn(kinds,kind)?kinds[kind]:null, methodId:null, metrics:{},
+    reference, identity:reference ? 'EXPLICIT' : 'DATE_ONLY', hint:mapped?.hint ?? null, exposure:mapped?.exposure ?? 'easy', legacyType:kind || null, methodId:null, metrics:{},
     sensation:text(r.sensacion), completion:'UNKNOWN', provenance:'LEGACY_STRUCTURED', sourceRecords:[source],
     diagnostics:['LEGACY_WRITER_UNVERIFIED', ...(reference ? [] : ['IDENTITY_DATE_ONLY'])], countable:!!reference };
   const fields: [Metric,string[], 'duration' | 'distance' | 'pace' | 'hr' | 'rpe'][] = [
@@ -119,7 +133,7 @@ export function mergeRunningHistory(athlete: string, history: unknown, modern: R
       if(m.quantities[key]!==undefined)metrics[target]={value:m.quantities[key]!,sources:[source+'.quantities.'+key],confidence:'SERVER_VALIDATED_SELF_REPORT'};
     if(m.intensityObservation)metrics.rpe={value:m.intensityObservation.value,sources:[source+'.intensityObservation'],confidence:'SERVER_VALIDATED_SELF_REPORT'};
     records.push({executionId:m.executionId!,athlete,date:m.occurredAt,discipline:'carrera',reference:m.planAssociation?.sessionId??null,identity:'EXPLICIT',
-      hint:['running_threshold','running_vo2','running_specific'].includes(m.executionIdentity.methodId??'')?'quality':null,methodId:m.executionIdentity.methodId??null,
+      hint:['running_threshold','running_vo2','running_specific'].includes(m.executionIdentity.methodId??'')?'quality':null,exposure:['running_threshold','running_vo2','running_specific'].includes(m.executionIdentity.methodId??'')?'quality':'easy',legacyType:null,methodId:m.executionIdentity.methodId??null,
       metrics:dateConflict?{}:metrics,sensation:null,completion:m.completeness,provenance:'MODERN_STRUCTURED',sourceRecords:[source,...matches.flatMap(r=>r.sourceRecords)],
       diagnostics:dateConflict?['IDENTITY_DATE_CONFLICT']:matches.length?['MODERN_SUPERSEDES_LEGACY']:[],countable:!dateConflict});
   }
@@ -140,7 +154,9 @@ export function mergeRunningHistory(athlete: string, history: unknown, modern: R
     return {startDate,endDate:asOfDate,executedSessions:counted.length,countInterpretation:'MINIMUM_IDENTIFIED_OR_DISTINCT_DAY_EXPOSURES',
       duration:sum('totalDurationSeconds'),distance:sum('distanceMeters'),longestDuration:longest('totalDurationSeconds'),longestDistance:longest('distanceMeters'),
       lastLongRunDate:counted.filter(r=>r.hint==='long_run').at(-1)?.date??null,
-      qualityExposure:counted.filter(r=>['quality','intervals'].includes(r.hint??'')).map(r=>({executionId:r.executionId,date:r.date,provenance:r.provenance,hint:r.hint})),
+      longRunExposure:counted.filter(r=>r.exposure==='long_run').map(r=>({executionId:r.executionId,date:r.date,provenance:r.provenance,legacyType:r.legacyType})),
+      qualityExposure:counted.filter(r=>r.exposure==='quality').map(r=>({executionId:r.executionId,date:r.date,provenance:r.provenance,hint:r.hint,legacyType:r.legacyType})),
+      exposureCounts:Object.fromEntries(['easy','recovery','long_run','quality'].map(s=>[s,counted.filter(r=>r.exposure===s).length])),
       completionCounts:Object.fromEntries(['FULL','PARTIAL','MODIFIED','ABANDONED','UNKNOWN'].map(s=>[s,counted.filter(r=>r.completion===s).length])),
       excludedAmbiguousExecutions:rows.length-counted.length,captureCompleteness:'UNKNOWN',authority:'REPORTED_EVIDENCE_NOT_MEASURED',
       reconciliationStatus:modern.conflicts.length?'CONFLICT':rows.some(r=>!r.countable||r.identity==='DATE_ONLY')?'PARTIAL':'RESOLVED'};

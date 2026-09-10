@@ -9,6 +9,7 @@ export const runningDoseDigest = (value: unknown) => createHash('sha256').update
 type Metric = { value: number | null; unit: 's' | 'm' | 'sessions'; status: 'AVAILABLE' | 'PARTIAL' | 'UNKNOWN';
   knownActivities: number; evidenceRefs: string[] };
 export type CompatibleRunningDoseEvidence = {
+  habitualDeclarations?: NonNullable<RunningDoseEvidenceAdmission['basis']['habitualDeclarations']>;
   version: 2; family: RunningDosePolicyFamily | null; variant: string;
   status: RunningDoseEvidenceAdmission['status']; captureCompleteness: 'UNKNOWN';
   window: { startDate: string; endDate: string };
@@ -35,7 +36,8 @@ export function resolveCompatibleRunningDoseEvidence(a: RunningDoseEvidenceAdmis
   const stable = <T>(rows: T[]) => rows.sort((a, b) => runningDoseDigest(a).localeCompare(runningDoseDigest(b)));
   const variant = family === 'EVENT_SPECIFIC' ? `${context.goalId}:${context.pattern}`
     : family === 'TECHNICAL_EXPOSURE' ? context.pattern : context.methodId;
-  return { version: 2, family, variant, status: a.status, captureCompleteness: 'UNKNOWN',
+  return { version: 2, family, variant, ...(family === 'AEROBIC_CONTINUOUS' && a.basis.habitualDeclarations
+      ? { habitualDeclarations: structuredClone(a.basis.habitualDeclarations) } : {}), status: a.status, captureCompleteness: 'UNKNOWN',
     window: { startDate: a.coverage.startDate, endDate: a.coverage.endDate },
     habitualDeclaredVolume: stable(a.basis.declaredWeeklyDistance.map(d => ({ minimumMeters: d.minimumMeters,
       maximumMeters: d.maximumMeters, observedAt: d.observedAt, evidenceRef: refs.get(d.evidenceIndex)! }))),
@@ -55,5 +57,5 @@ export function resolveCompatibleRunningDoseEvidence(a: RunningDoseEvidenceAdmis
     conflicts: stable(a.conflicts.map(c => ({ activityRef: runningDoseDigest(c.identity), date: c.date, metric: c.metric }))),
     missingSignals: [...new Set([...a.missingSignals, ...(family === 'TECHNICAL_EXPOSURE'
       ? ['VARIANT_NUMERIC_POLICY_NOT_ESTABLISHED'] : ['EXECUTED_METHOD_IDENTITY', 'METHOD_WORK_QUANTITY', 'SELECTED_TARGET_POLICY'])])].sort(),
-    evidenceRefs: [...new Set(refs.values())].sort() };
+    evidenceRefs: [...new Set([...refs.values(), ...(family === 'AEROBIC_CONTINUOUS' ? (a.basis.habitualDeclarations?.facts ?? []).map(runningDoseDigest) : [])])].sort() };
 }

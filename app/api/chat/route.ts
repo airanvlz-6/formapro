@@ -1,3 +1,4 @@
+import { saveHabitualRunningAnswer, type HabitualRunningProfileStore } from '@/lib/athlete/runningHabitualDeclarations';
 import { issueEnvironmentConfirmation, readEnvironmentConfirmation, ENVIRONMENT_CONFIRMATION_COOKIE, ENVIRONMENT_CONFIRMATION_TTL_SECONDS } from '@/lib/planning/sessionEnvironmentConfirmation';
 import { ensurePlanningSpecialty, hasCanonicalSpecialty, requiresPlanningSpecialty } from '@/lib/sports/canonicalSpecialty';
 import { weeklySaveAdmission } from "@/lib/planning/weeklyCalendarAuthority";
@@ -1303,8 +1304,8 @@ if (action === "verificar_cambio_modo") {
     if (profilePatch.perfil && typeof profilePatch.perfil === 'object') {
       const current = await supabase.from('usuarios').select('perfil').eq('codigo', codigo).single();
       if (current.error || !current.data) return NextResponse.json({ ok: false, code: 'PRESCRIPTION_PROFILE_READ_FAILED' });
-      // Progressive declarations belong to the signed answer path, not generic extraction or stale UI copies.
-      for (const field of ['prescription_signals', 'prescription_access']) {
+      // Progressive declarations belong to dedicated validated answer paths, not generic extraction or stale UI copies.
+      for (const field of ['prescription_signals', 'prescription_access', 'runningHabitualDeclarations']) {
         delete profilePatch.perfil[field];
         if (current.data.perfil?.[field] !== undefined) profilePatch.perfil[field] = current.data.perfil[field];
       }
@@ -5086,6 +5087,11 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
 
   if (action === "verificar_correccion_disponibilidad_deterministico") {
     return NextResponse.json(await updateChatAvailability(supabase, codigo, datos.mensajeUsuario, datos.snapshotDigest));
+  }
+
+  if (action === "responder_habito_carrera") {
+    try { return NextResponse.json(await saveHabitualRunningAnswer(supabase as unknown as HabitualRunningProfileStore, codigo, datos?.field, datos?.answer)); }
+    catch { return NextResponse.json({ ok: false, code: 'RUNNING_HABITUAL_CAPTURE_FAILED' }); }
   }
 
   if (action === "responder_dato_prescripcion") {

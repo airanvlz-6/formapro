@@ -1,3 +1,4 @@
+import { projectHabitualRunningDeclarations } from './runningHabitualDeclarations';
 import { createHash } from 'node:crypto';
 import { record, type Evidence, type RunningReference } from './athletePrescriptionContext';
 import { resolveCompletionDate } from '../planning/recordCompletion';
@@ -60,5 +61,5 @@ export function projectRunningDoseBaseline(profile: Record<string, unknown>, pla
     facts.push({ source: 'workout_history', identity: null, date: typeof row.fecha === 'string' ? row.fecha : null,
       kind: 'EXECUTED', metric: 'occurrence', value: 1, reliability: 'completion_flag' });
   }
-  return resolveRunningDoseBaseline(asOfDate, facts, [...diagnostics]);
+  return resolveRunningDoseBaseline(asOfDate, facts, [...diagnostics], projectHabitualRunningDeclarations(profile.perfil));
 }

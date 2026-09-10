@@ -14,6 +14,7 @@ export type CanonicalTransferPermissions = { version: 1; source: 'canonical_avai
 export function resolveAuthorizedMethodCandidates(input: WeeklyContractInput, day: string) {
   const options: WeeklyOption[] = [], rejected: ReturnType<typeof projectRejectedWeeklyIntent>[] = [];
   const strategy = input.strategy!;
+  const doseUnavailable: { methodId: string; adaptationId: string; reason: string }[] = [];
   const relations = METHOD_TRANSFER_RELATIONS;
   // One hop only. Reject oversized/conflicting domain catalogs rather than silently dropping candidates.
   if (relations.length > 128 || relations.some(r => !validMethodTransferRelation(r))) return { ok: false as const, errors: ['TRANSFER_CATALOG_INVALID'] };
@@ -35,6 +36,11 @@ export function resolveAuthorizedMethodCandidates(input: WeeklyContractInput, da
   };
   const evaluate = (discipline: string, stimulus: string, intent: StrategicIntent, crossTraining = false) => {
     const context = input.contexts[discipline];
+    const capability = input.doseCapabilities?.entries.find(e => e.methodId === intent.methodId && e.pattern === intent.pattern);
+    if (capability && (!capability.prescriptionAllowed || capability.doseCapability !== 'QUANTIFIABLE')) {
+      doseUnavailable.push({ methodId: intent.methodId, adaptationId: intent.adaptationId, reason: capability.doseCapability });
+      return null;
+    }
     const result = evaluateTrainingFeasibility({ ...context, targetWeekStart: input.targetWeekStart, targetDay: day, stimulus, intent,
       // This is the effective day permission supplied by the canonical caller, not an inference from scope.
       ...(crossTraining && context.availableDays !== null ? { availableDays: [...new Set([...context.availableDays, day])] } : {}) });
@@ -103,5 +109,5 @@ export function resolveAuthorizedMethodCandidates(input: WeeklyContractInput, da
       if (errors) return { ok: false as const, errors };
     }
   }
-  return { ok: true as const, options, rejected };
+  return { ok: true as const, options, rejected, doseUnavailable };
 }

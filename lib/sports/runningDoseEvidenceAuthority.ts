@@ -1,3 +1,4 @@
+import { normalizeHabitualRunningFacts } from '../athlete/runningHabitualDeclarations';
 import { RUNNING_DOSE_WINDOWS, type RunningDoseBaseline, type RunningDoseFact } from '../athlete/runningDoseBaseline';
 
 export type RunningDoseEvidenceClass = 'OBSERVED' | 'DECLARED' | 'EXPOSURE_ONLY';
@@ -10,6 +11,7 @@ export type RunningDoseEvidenceAdmission = {
   status: RunningDoseEvidenceClass | 'UNKNOWN' | 'CONFLICT';
   coverage: RunningDoseBaseline['coverage'];
   basis: {
+    habitualDeclarations?: RunningDoseBaseline['habitualDeclarations'];
     windows: Record<string, Window & { observedDuration: BasisMetric; observedDistance: BasisMetric;
       identifiedOccurrenceCount: BasisMetric }>;
     declaredWeeklyDistance: { minimumMeters: number; maximumMeters: number; observedAt: string | null; evidenceIndex: number }[];
@@ -28,6 +30,7 @@ export type RunningDoseEvidenceAdmission = {
  * reconstruction of execution, method-dose policy, or interpretation of narrative is permitted.
  * OBSERVED is precedence for evidence classification, not a policy overriding DECLARED quantities. */
 export function admitRunningDoseEvidence(baseline: RunningDoseBaseline): RunningDoseEvidenceAdmission {
+  const habitualDeclarations = normalizeHabitualRunningFacts(baseline.habitualDeclarations?.facts ?? []);
   const admissibleEvidence: Admitted[] = [];
   const excludedEvidence: RunningDoseEvidenceAdmission['excludedEvidence'] = [];
   const conflictIds = new Set(baseline.conflicts.map(c => c.identity));
@@ -84,7 +87,7 @@ export function admitRunningDoseEvidence(baseline: RunningDoseBaseline): Running
     });
   const status = baseline.status === 'CONFLICT' || baseline.conflicts.length ? 'CONFLICT'
     : admissibleEvidence.some(e => e.authority === 'OBSERVED') ? 'OBSERVED'
-    : declaredWeeklyDistance.length ? 'DECLARED'
+    : declaredWeeklyDistance.length || habitualDeclarations.facts.length ? 'DECLARED'
     : admissibleEvidence.some(e => e.authority === 'EXPOSURE_ONLY') ? 'EXPOSURE_ONLY' : 'UNKNOWN';
   // Invariant diagnostics describe excluded categories, not claims that those inputs were supplied.
   const diagnostics = new Set(['RUNNING_DOSE_CAPTURE_INCOMPLETE', 'RUNNING_DOSE_AVAILABILITY_EXCLUDED',
@@ -98,7 +101,7 @@ export function admitRunningDoseEvidence(baseline: RunningDoseBaseline): Running
     coverage: { startDate: baseline.coverage.startDate, endDate: baseline.coverage.endDate,
       observedDays: baseline.coverage.observedDays, completedRunningSessions: baseline.coverage.completedRunningSessions,
       captureCompleteness: 'UNKNOWN' },
-    basis: { windows, declaredWeeklyDistance, longestObservedRun: { ...window,
+    basis: { ...(habitualDeclarations.facts.length ? { habitualDeclarations } : {}), windows, declaredWeeklyDistance, longestObservedRun: { ...window,
       duration: metric(baseline.metrics.longestRecentRunDurationSeconds), distance: metric(baseline.metrics.longestRecentRunDistanceMeters) },
       averageObservedRunDuration: { ...window, ...metric(baseline.metrics.recentAverageRunDurationSeconds) }, methodExposure },
     admissibleEvidence, excludedEvidence,

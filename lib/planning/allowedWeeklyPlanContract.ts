@@ -1,3 +1,4 @@
+import type { DoseCapabilityProfile } from '../sports/doseCapabilityProfile';
 import { noWeeklyPrescription, executablePrescriptionCounts, type RegenerationPolicy } from './weeklyRegeneration';
 import { emitRemainingDiagnostic } from './weeklyRemainingDiagnostic';
 import { resolveAuthorizedMethodCandidates, type CanonicalTransferPermissions } from './authorizedMethodCandidates';
@@ -24,6 +25,7 @@ export type AllowedWeeklyPlanContract = {
   regeneration?: RegenerationPolicy;
 };
 export type WeeklyContractInput = {
+  doseCapabilities?: DoseCapabilityProfile;
   transferPermissions?: CanonicalTransferPermissions;
   targetWeekStart: string; prescriptionScope: PrescriptionScope; maxExecutableDays: number;
   completeNewWeek: boolean; allowed: Record<string, string[]>;
@@ -87,6 +89,7 @@ function bindStrategicCoverage(contract: AllowedWeeklyPlanContract) {
 /** Pure option enumeration. Generic catalog stimuli are code-owned objectives, not text promises. */
 export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput, diagnosticContext?: WeeklyDiagnosticContext) {
   const rejected: ReturnType<typeof projectRejectedWeeklyIntent>[] = [];
+  const doseUnavailable: { methodId: string; adaptationId: string; reason: string }[] = [];
   try {
     if (input.strategy) assertStrategyShape(input.strategy);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(input.targetWeekStart) || new Date(input.targetWeekStart).getUTCDay() !== 1
@@ -108,6 +111,7 @@ export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput, diagn
         if (!candidates.ok) return failure('WEEKLY_CONTEXT_INVALID', candidates.errors);
         options.push(...candidates.options);
         rejected.push(...candidates.rejected);
+        doseUnavailable.push(...candidates.doseUnavailable);
         dayOptions[day] = options;
         continue;
       }
@@ -135,6 +139,12 @@ export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput, diagn
       }
       dayOptions[day] = options;
     }
+    const deferredDoseDemands = [...new Map(doseUnavailable.map(d => [JSON.stringify(d), d])).values()];
+    if (doseUnavailable.length && !Object.values(dayOptions).flat().some(o => !o.protected && isExecutableCalendarState(o.state)))
+      return { ok: false as const, canContinue: false as const, retryable: false as const, code: 'RUNNING_DOSE_CAPABILITY_INSUFFICIENT', errors: ['NO_DOSE_QUANTIFIABLE_RUNNING_METHOD'],
+        doseCapabilities: input.doseCapabilities, deferredDoseDemands, runningHabitualRequirement: input.doseCapabilities?.requirement };
+    if (input.strategy && doseUnavailable.length) input = { ...input, strategy: { ...input.strategy,
+      deferred: [...input.strategy.deferred, ...deferredDoseDemands.map(d => ({ reference: d.adaptationId + ':' + d.methodId, reason: 'dose_' + d.reason.toLowerCase() }))] } };
     const contract: AllowedWeeklyPlanContract = {
       contractVersion: 1, policyVersion: 'executable-ceiling-rest-v1', targetWeekStart: input.targetWeekStart,
       prescriptionScope: structuredClone(input.prescriptionScope), contextDigest: createHash('sha256').update(JSON.stringify(input)).digest('hex'),

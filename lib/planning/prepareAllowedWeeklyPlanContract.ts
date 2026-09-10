@@ -1,3 +1,4 @@
+import { buildDoseCapabilityProfile } from '../sports/doseCapabilityProfile';
 import { evaluateTrainingFeasibility } from '../sports/trainingFeasibility';
 import type { PlannerCompletion } from './weeklyPlannerDiagnostics';
 import { loadWeeklyCalendarContext, issueWeeklyCalendar, weeklyDigest } from './weeklyCalendarAuthority';
@@ -95,7 +96,8 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
     maxExecutableDays: c.max, completeNewWeek: !request.snapshot && !hasPast, allowed: c.allowed, contexts, fixed,
     ...(activeRegeneration ? { regeneration: { pendingManagedDays: calendarDays.filter(day => !fixed[day]
       && c.scope.managedDisciplines.some(discipline => c.allowed[discipline].includes(day))) } } : {}),
-    ...(strategy ? { strategy } : {}) },
+    ...(strategy ? { strategy, doseCapabilities: buildDoseCapabilityProfile(athlete!.runningDoseEvidenceAdmission, c.scope,
+      { goalId: strategy.goal.id, blockPhase: strategy.block.phase, blockWeek: strategy.block.week }) } : {}) },
     fixedSessions: structuredClone(fixedSessions),
     availabilityConfirmed };
 }

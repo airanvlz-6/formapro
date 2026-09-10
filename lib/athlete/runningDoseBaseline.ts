@@ -1,3 +1,4 @@
+import { normalizeHabitualRunningFacts, type HabitualRunningDeclaration } from './runningHabitualDeclarations';
 import { resolveCompletionDate } from '../planning/recordCompletion';
 import { transferMethod } from '../sports/goalTransferModel';
 
@@ -25,6 +26,7 @@ type WindowMetrics = {
   recentSessionFrequency: Metric;
 };
 export type RunningDoseBaseline = {
+  habitualDeclarations?: ReturnType<typeof normalizeHabitualRunningFacts>;
   version: 1; status: 'SUFFICIENT' | 'PARTIAL' | 'UNKNOWN' | 'CONFLICT';
   coverage: { startDate: string; endDate: string; observedDays: number;
     completedRunningSessions: number; captureCompleteness: 'UNKNOWN' };
@@ -46,7 +48,7 @@ const key = (f: RunningDoseFact) => JSON.stringify(f);
 
 /** Only accepts canonical evidence, never raw provider/profile text. No current production adapter
  * supplies verified_actual quantities: this typed boundary is ready for an audited execution source. */
-export function resolveRunningDoseBaseline(asOfDate: string, input: readonly RunningDoseFact[], inputDiagnostics: readonly string[] = []): RunningDoseBaseline {
+export function resolveRunningDoseBaseline(asOfDate: string, input: readonly RunningDoseFact[], inputDiagnostics: readonly string[] = [], declarations: readonly HabitualRunningDeclaration[] = []): RunningDoseBaseline {
   if (resolveCompletionDate(asOfDate)?.date !== asOfDate) throw new Error('RUNNING_DOSE_BASELINE_INVALID_DATE');
   const startDate = shift(asOfDate, 1 - RUNNING_DOSE_WINDOWS[1]);
   const diagnostics = new Set(inputDiagnostics);
@@ -121,12 +123,13 @@ export function resolveRunningDoseBaseline(asOfDate: string, input: readonly Run
   // of the athlete's life, sufficient fitness, or permission to prescribe.
   const sufficient = activities.length > 0 && activities.every(a => ['durationSeconds', 'distanceMeters'].every(m => a.indices.some(i => evidence[i].metric === m)))
     && !diagnostics.has('RUNNING_DOSE_IDENTITY_AMBIGUOUS_EXCLUDED');
-  const status = conflicts.length ? 'CONFLICT' : sufficient ? 'SUFFICIENT' : activities.length || declared.length
+  const habitualDeclarations = normalizeHabitualRunningFacts(declarations);
+  const status = conflicts.length ? 'CONFLICT' : sufficient ? 'SUFFICIENT' : activities.length || declared.length || habitualDeclarations.facts.length
     || diagnostics.has('RUNNING_DOSE_IDENTITY_AMBIGUOUS_EXCLUDED') ? 'PARTIAL' : 'UNKNOWN';
   diagnostics.add(`RUNNING_DOSE_BASELINE_${status === 'SUFFICIENT' ? 'RESOLVED' : status}`);
   if (quantityMissing) diagnostics.add('RUNNING_DOSE_EXECUTION_QUANTITY_MISSING');
   if (declared.length && !activities.length) diagnostics.add('RUNNING_DOSE_DECLARED_ONLY');
-  return { version: 1, status, coverage: { startDate, endDate: asOfDate, observedDays: new Set(activities.map(a => a.date)).size,
+  return { version: 1, status, ...(habitualDeclarations.facts.length ? { habitualDeclarations } : {}), coverage: { startDate, endDate: asOfDate, observedDays: new Set(activities.map(a => a.date)).size,
     completedRunningSessions: activities.length, captureCompleteness: 'UNKNOWN' }, windows,
     metrics: { longestRecentRunDurationSeconds: measure(activities, 'durationSeconds', 'max'),
       longestRecentRunDistanceMeters: measure(activities, 'distanceMeters', 'max'),

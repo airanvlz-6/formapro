@@ -643,7 +643,7 @@ export default function Forge() {
         setMensajes([{role:"assistant",content:"¡Bienvenido a tu nuevo modo! Ya tengo todos tus datos — voy a construir tu primera semana ahora mismo."}]);
         setGenerandoSemana(true);
         const planFocusInicial=await orquestarGeneracionSemana();
-        if(planFocusInicial?.goalRequirement || planFocusInicial?.preflightRequirement){setGenerandoSemana(false);return;}
+        if(planFocusInicial?.goalRequirement || planFocusInicial?.preflightRequirement || planFocusInicial?.runningHabitualRequirement){setGenerandoSemana(false);return;}
         const respuestaFocusInicial=planFocusInicial && planFocusInicial.ok!==false
           ? `✅ **Semana generada y guardada.**\n\nBloque: ${planBlockLabel(planFocusInicial)} — ${planFocusInicial.week_objective}\n\nRevisa el detalle completo en **Mi Plan**. ¿Alguna duda?`
           : weeklyGenerationOutcomeMessage(planFocusInicial);
@@ -967,7 +967,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     const preflight=await apiCall({action:"preflight_generacion_semana",codigo:codigoUsuario,datos:{generationToken:weeklyGeneration.token,targetWeekStart:weekStartOrchestrator,confirmedAvailabilityDigest:availabilityConfirmationRef.current,temporalIntent:empezarHoy ?? temporalAnswer,temporalReply}});
     if(preflight?.preflightRequirement){weeklyPlanningContinuationRef.current=continuation;return preflight;}
     weeklyPlanningContinuationRef.current=null;
-    if(preflight?.goalRequirement) return preflight;
+    if(preflight?.goalRequirement || preflight?.runningHabitualRequirement) return preflight;
     if(!preflight?.canContinue || typeof preflight.temporalDecision?.includeToday!=="boolean") return { ...preflight, ok:false, canContinue:false };
     empezarHoy=preflight.temporalDecision.includeToday;
     setMensajes(prev=>[...prev,{role:"assistant",content:"🔧 Construyendo tu semana paso a paso..."}]);
@@ -1270,6 +1270,7 @@ const [equipoSeleccionado,setEquipoSeleccionado]=useState<any>(null);
   const bloqueado=!esPremium&&!esAdmin&&fechaRegistro!==null&&diasUsados>=diasPrueba;
   const accentColor=cat?.color||C.accent;
 
+const [pendingRunningHabitualQuestion,setPendingRunningHabitualQuestion]=useState<{codigo:string;field:string}|null>(null);
 const [pendingPrescriptionQuestion,setPendingPrescriptionQuestion]=useState<{codigo:string;token:string}|null>(null);
 const [pendingGoalQuestion,setPendingGoalQuestion]=useState<{codigo:string;token:string;empezarHoy?:boolean;temporalAnswer?:string;temporalReply?:boolean}|null>(null);
 const weeklyTemporalIntentRef=useRef<{text?:string;answeringQuestion:boolean}>({answeringQuestion:false});
@@ -1290,6 +1291,10 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
             setEsperandoConfirmacionDisponibilidad(result.preflightRequirement.kind==="availability");
             setEsperandoConfirmacionEmpezarHoy(result.preflightRequirement.kind==="temporal");
             setMensajes(prev=>[...prev,{role:"assistant",content:result.preflightRequirement.text}]);
+          }
+          if(result.runningHabitualRequirement?.text){
+            setPendingRunningHabitualQuestion({codigo:codigoUsuario,field:result.runningHabitualRequirement.field});
+            setMensajes(prev=>[...prev,{role:"assistant",content:result.runningHabitualRequirement.text}]);
           }
           if(result.goalRequirement?.questionToken && result.goalRequirement.question?.text){
             const intent=(body.datos as any)?.temporalIntent;
@@ -1767,7 +1772,7 @@ const forgeValidator=(texto:string):string=>{
     setGenerandoSemana(true);
     try {
       const plan=await orquestarGeneracionSemana(undefined,temporalAnswer,answeringQuestion);
-      if(plan?.goalRequirement || plan?.preflightRequirement) return;
+      if(plan?.goalRequirement || plan?.preflightRequirement || plan?.runningHabitualRequirement) return;
       const respuestaFinalGen=plan && plan.ok!==false
         ? `✅ **Semana generada y guardada.**\n\nBloque: ${planBlockLabel(plan)} — ${plan.week_objective}\n\nRevisa el detalle completo en **Mi Plan**.`
         : weeklyGenerationOutcomeMessage(plan);
@@ -1791,7 +1796,7 @@ const forgeValidator=(texto:string):string=>{
           setPendingGoalQuestion(null);setGenerandoSemana(true);
           setMensajes(prev=>[...prev,{role:"assistant",content:"Objetivo principal guardado y comprobado. Continúo con la planificación."}]);
           const plan=await orquestarGeneracionSemana(pendingGoalQuestion.empezarHoy,pendingGoalQuestion.temporalAnswer,pendingGoalQuestion.temporalReply);
-          if(!plan?.goalRequirement && !plan?.preflightRequirement) setMensajes(prev=>[...prev,{role:"assistant",content:plan && plan.ok!==false
+          if(!plan?.goalRequirement && !plan?.preflightRequirement && !plan?.runningHabitualRequirement) setMensajes(prev=>[...prev,{role:"assistant",content:plan && plan.ok!==false
             ? `✅ **Semana generada y guardada.**\n\n${plan.week_objective}\n\nRevisa el detalle en **Mi Plan**.`
             : weeklyGenerationOutcomeMessage(plan)}]);
         }else if(!result.goalRequirement){
@@ -1802,6 +1807,18 @@ const forgeValidator=(texto:string):string=>{
             : "No se ha confirmado el objetivo. Solicita de nuevo la semana para comprobar los datos actuales."}]);
         }
       }finally{setCargando(false);setGenerandoSemana(false);}
+      return;
+    }
+    if(pendingRunningHabitualQuestion){
+      if(pendingRunningHabitualQuestion.codigo!==codigoUsuario){setPendingRunningHabitualQuestion(null);return;}
+      setCargando(true);setInput("");setMensajes(prev=>[...prev,{role:"user",content:texto}]);
+      try{
+        const result=await apiCall({action:"responder_habito_carrera",codigo:codigoUsuario,datos:{field:pendingRunningHabitualQuestion.field,answer:texto}});
+        if(result.ok){
+          setPendingRunningHabitualQuestion(result.requirement ? {codigo:codigoUsuario,field:result.requirement.field} : null);
+          setMensajes(prev=>[...prev,{role:"assistant",content:result.requirement?.text || result.message}]);
+        }else setMensajes(prev=>[...prev,{role:"assistant",content:"No he podido guardar el dato. Responde con un número entero o, para el rodaje fácil, «No tengo un rodaje fácil habitual»."}]);
+      }finally{setCargando(false);}
       return;
     }
     if(pendingPrescriptionQuestion){

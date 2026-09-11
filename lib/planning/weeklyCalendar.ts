@@ -10,7 +10,13 @@ export function calendarState(s: Record<string, any>): CalendarState {
   return 'TRAIN';
 }
 export const isProtectedCalendarSession = (s: Record<string, any>, activeRegeneration = false, past = false) =>
-  s.completada === true || ((!activeRegeneration || past) && ['REST', 'RECOVERY', 'UNAVAILABLE'].includes(calendarState(s)));
+  s.completada === true
+  // Non-completion is not absence of a prescription. Preserve known past content,
+  // including legacy text, without asserting execution or protecting empty placeholders.
+  || (past && calendarState(s) === 'TRAIN' && ((s.structuredPrescription?.schemaVersion === 2
+    && (s.structuredPrescription?.proposal?.blocks?.length > 0 || s.structuredPrescription?.objective?.intent?.kind === 'adaptation'))
+    || ['titulo', 'descripcion'].some(key => typeof s[key] === 'string' && s[key].trim().length > 0)))
+  || ((!activeRegeneration || past) && ['REST', 'RECOVERY', 'UNAVAILABLE'].includes(calendarState(s)));
 /** Existing identity admission accepts server-selected indices; never take these from the client. */
 export const protectedCalendarSessionIndices = (sessions: readonly Record<string, any>[]) =>
   sessions.flatMap((session, index) => isProtectedCalendarSession(session) ? [index] : []);

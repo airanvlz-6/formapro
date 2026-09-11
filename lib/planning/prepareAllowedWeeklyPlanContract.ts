@@ -81,7 +81,8 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
       console.warn('WEEKLY_FUTURE_COMPLETION_REJECTED', diagnostic);
       return { ok: false as const, code: 'WEEKLY_CONTEXT_INVALID', errors: ['FUTURE_COMPLETION_NOT_ALLOWED'], diagnostic };
     }
-    // Completed history survives; replaceable old states are re-enumerated in the active week.
+    // Completed history and known past prescriptions survive independently of execution.
+    // Future replaceable states are re-enumerated in the active week.
     if (before && isProtectedCalendarSession(before, activeRegeneration, past)) fixedSessions[day] = before;
     else if (past) fixedSessions[day] = { dia: day, tipo: 'sin_registrar', titulo: 'Sin registrar',
       por_que: 'Día anterior al inicio de esta planificación', descripcion: 'No aplica — esta planificación comienza a partir de hoy.' };

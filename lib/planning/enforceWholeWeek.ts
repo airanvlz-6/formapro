@@ -11,7 +11,7 @@ export async function enforceWholeWeek(codigo:string,week:string,rows:any[],sour
   const initial=validate();let result=initial,repairCount=0;
   const orchestration={version:1,maxDistinctTargets:MAX_WEEK_REPAIR_TARGETS,maxModelCalls:MAX_WEEK_REPAIR_TARGETS*2,
     localRepairCount:0,targetedRegenerationCount:0,targetedSessionCount:0,affectedSessionIds:[] as string[],
-    stages:[] as {stage:string;targetIds:string[];failedIds:string[];limitExceeded:boolean;nonRepairableCodes:string[]}[],finalStatus:initial.status};
+    stages:[] as {stage:string;targetIds:string[];failedIds:string[];failedReasons:{id:string;reason:string}[];limitExceeded:boolean;nonRepairableCodes:string[]}[],finalStatus:initial.status};
   const candidates:RepairCandidate[]=rows.map((row,index)=>{
     const day=calendarKey(row.dia),slot=authority.evidence.admittedSlots.find((s:any)=>s.day===day);
     const source=sourceSessions.find(s=>calendarKey(s.dia)===day);
@@ -23,7 +23,7 @@ export async function enforceWholeWeek(codigo:string,week:string,rows:any[],sour
   for(const stage of ['local','targeted'] as const){
     if(result.status==='pass')break;
     const plan=resolveWeekRepairPlan(result.diagnostics,candidates,orchestration.affectedSessionIds);
-    const trace={stage,targetIds:plan.affectedSessionIds,failedIds:[] as string[],limitExceeded:plan.limitExceeded,
+    const trace={stage,targetIds:plan.affectedSessionIds,failedIds:[] as string[],failedReasons:[] as {id:string;reason:string}[],limitExceeded:plan.limitExceeded,
       nonRepairableCodes:plan.nonRepairableDiagnostics.map(d=>d.code)};
     orchestration.stages.push(trace);
     if(plan.limitExceeded||plan.nonRepairableDiagnostics.length||!plan.repairGroups.length)break;
@@ -38,7 +38,7 @@ export async function enforceWholeWeek(codigo:string,week:string,rows:any[],sour
             proposal:s.structuredPrescription?.proposal||null})),complete,stage);
         const {sessionReceipt:_receipt,...content}=replacement;
         finalRows[target.index]=content;finalSources[sourceIndex]=replacement;
-      }catch{trace.failedIds.push(target.id);}
+      }catch(error:any){trace.failedIds.push(target.id);trace.failedReasons.push({id:target.id,reason:error?.message||'REPAIR_FAILED'});}
     }
     result=validate();
   }

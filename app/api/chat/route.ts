@@ -4741,7 +4741,20 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
           const output = await response.json();
           return output.content?.map((b: any) => b.text || "").join("") || "";
         });
-      if (!wholeWeek.ok) return NextResponse.json(wholeWeekFailure(wholeWeek.code));
+      if (!wholeWeek.ok) {
+        const failureDiagnostics = wholeWeek.result?.diagnostics?.map((diagnostic: any) => ({
+          code: diagnostic.code, severity: diagnostic.severity, sessionIds: diagnostic.sessionIds,
+          repairability: diagnostic.repairability
+        })) || [];
+        console.error("WEEKLY_SAVE_FAILED", {
+          code: wholeWeek.code, stage: "whole_week_repair", persistenceStatus: "not_committed", commitConfirmed: false,
+          repairCount: wholeWeek.repairCount, resultStatus: wholeWeek.result?.status,
+          diagnostics: failureDiagnostics, orchestration: wholeWeek.orchestration || null
+        });
+        return NextResponse.json({ ...wholeWeekFailure(wholeWeek.code), saveStage: "whole_week_repair",
+          persistenceStatus: "not_committed", commitConfirmed: false,
+          repairDiagnostics: failureDiagnostics, repairOrchestration: wholeWeek.orchestration || null });
+      }
       plan.sessions = wholeWeek.sessions;
       newlyPrescribedSessions = wholeWeek.sessionEvidence;
       if (wholeWeek.repairCount) await assertWeeklyCalendar(supabase, codigo, plan.week_start, plan.sessions, datos.calendarReceipt,

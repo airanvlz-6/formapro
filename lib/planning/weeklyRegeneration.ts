@@ -25,6 +25,12 @@ export function weeklyGenerationOutcomeMessage(result: { code?: string; reason?:
   if (result?.code === 'RUNNING_DOSE_CAPABILITY_INSUFFICIENT') return 'La planificación de carrera queda pendiente: todavía no hay una dosis autorizada compatible con la evidencia disponible. Guardar tu rutina habitual no autoriza por sí solo una dosis.';
   if (result?.code === 'NO_NEW_EXECUTABLE_PRESCRIPTION') return 'No se ha obtenido una nueva prescripción válida con el contrato actual. Conservo el plan anterior; no se ha consumido una generación.';
   if (result?.code === 'WEEKLY_REGENERATION_NO_OP') return 'No quedan días gestionados pendientes de planificación. Conservo el plan actual sin generar otra versión.';
+  if (result?.code === 'GENERATION_LOG_READ_FAILED') return 'No se ha podido comprobar el límite de generaciones de esta semana. No se ha guardado una versión nueva.';
+  if (result?.code === 'PLAN_REVISION_CONFLICT') return 'El plan cambió mientras se generaba la semana. Conservo la versión más reciente y no la he reemplazado.';
+  if (result?.code === 'PLAN_PERSISTENCE_UNKNOWN') return 'No se puede confirmar si la nueva semana quedó guardada. No se ha reintentado.';
+  if (result?.code === 'PLAN_PERSISTENCE_ERROR') return 'La escritura de la nueva semana devolvió un error confirmado. El plan anterior sigue disponible.';
+  if (result?.code === 'WEEK_FINAL_VALIDATION_FAILED' || result?.code === 'WEEK_COHERENCE_INVALID' || result?.code === 'WEEK_REPAIR_FAILED') return 'La semana no superó la comprobación final de coherencia. No se ha guardado una versión nueva.';
+  if (result?.code === 'WEEKLY_PROTECTED_SESSION_MISMATCH' || result?.code === 'WEEKLY_CONTEXT_STALE') return 'El contexto semanal cambió mientras se generaba el plan. No se ha reemplazado la versión guardada.';
   if (result?.code === 'MAX_GENERATIONS_REACHED' || result?.reason === 'MAX_GENERATIONS_REACHED') return 'Esta semana ya ha sido planificada dos veces. Puedes solicitar cambios en sesiones concretas.';
   return 'No se ha confirmado una semana nueva por un error técnico. El plan guardado sigue disponible.';
 }

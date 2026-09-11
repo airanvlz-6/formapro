@@ -4768,8 +4768,27 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
     if (admission.noOp) return NextResponse.json({ ok: true, noOp: true, revision: planExistente!.revision });
     const weekStartParaConteo = plan.week_start;
     if (weekStartParaConteo) {
-      const { count: generacionesExistentes } = await supabase.from("weekly_plan_generation_log").select("id", { count: "exact", head: true }).eq("user_codigo", codigo).eq("week_start", weekStartParaConteo);
-      if ((generacionesExistentes || 0) >= 2) {
+      // This read is an admission dependency. A transport/schema failure here used to escape
+      // the action and become a framework 500, which the browser reduced to the generic
+      // "technical error" message before the write had even been attempted.
+      let generacionesExistentes: number | null = 0;
+      try {
+        const quota = await supabase.from("weekly_plan_generation_log")
+          .select("id", { count: "exact", head: true }).eq("user_codigo", codigo).eq("week_start", weekStartParaConteo);
+        if (quota?.error) {
+          console.error("WEEKLY_SAVE_FAILED", { code: "GENERATION_LOG_READ_FAILED", stage: "generation_quota_admission",
+            detail: quota.error?.message || "read error" });
+          return NextResponse.json({ ok: false, code: "GENERATION_LOG_READ_FAILED",
+            saveStage: "generation_quota_admission", retryable: false });
+        }
+        generacionesExistentes = typeof quota?.count === "number" ? quota.count : 0;
+      } catch (error: any) {
+        console.error("WEEKLY_SAVE_FAILED", { code: "GENERATION_LOG_READ_FAILED", stage: "generation_quota_admission",
+          detail: error?.message || "transport" });
+        return NextResponse.json({ ok: false, code: "GENERATION_LOG_READ_FAILED",
+          saveStage: "generation_quota_admission", retryable: false });
+      }
+      if (generacionesExistentes >= 2) {
         console.error(`🚨 BLOCKED guardar_plan_semana — usuario ${codigo} ya alcanzo el limite de 2 generaciones para week_start=${weekStartParaConteo}`);
         return NextResponse.json({ error: "Esta semana ya ha sido planificada dos veces. Para evitar alterar continuamente la estructura, no se generan mas versiones automaticas — puedes pedirme modificar sesiones concretas.", blocked: true, reason: "MAX_GENERATIONS_REACHED" }, { status: 403 });
       }
@@ -4799,15 +4818,28 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
     try {
       for (const session of newlyPrescribedSessions) await assertFreshSessionRestrictions(supabase, codigo, plan.week_start, session);
     } catch (error: any) { return NextResponse.json({ ok: false, code: error.message, retryable: false }); }
-    const finalWeekValidation = validateAdmittedWholeWeek(plan.week_start, validationResult.candidate.sessions,
-      wholeWeekAuthority!.evidence, wholeWeekAuthority!.contexts);
-    if (finalWeekValidation.status !== "pass") return NextResponse.json(wholeWeekFailure("WEEK_FINAL_VALIDATION_FAILED"));
-    const wholeWeekReceipt = issueWholeWeekReceipt(codigo, plan.week_start, datos.calendarReceipt,
-      validationResult.candidate.sessions, finalWeekValidation, wholeWeek.repairCount, wholeWeek.orchestration);
+    let finalWeekValidation;
+    try {
+      finalWeekValidation = validateAdmittedWholeWeek(plan.week_start, validationResult.candidate.sessions,
+        wholeWeekAuthority!.evidence, wholeWeekAuthority!.contexts);
+    } catch (error: any) {
+      console.error("WEEKLY_SAVE_FAILED", { code: "WEEK_FINAL_VALIDATION_FAILED", stage: "final_validation",
+        detail: error?.message || "validator" });
+      return NextResponse.json({ ok: false, code: "WEEK_FINAL_VALIDATION_FAILED", saveStage: "final_validation", retryable: false });
+    }
+    if (finalWeekValidation.status !== "pass") return NextResponse.json({ ...wholeWeekFailure("WEEK_FINAL_VALIDATION_FAILED"), saveStage: "final_validation" });
+    let wholeWeekReceipt: string;
+    try {
+      wholeWeekReceipt = issueWholeWeekReceipt(codigo, plan.week_start, datos.calendarReceipt,
+        validationResult.candidate.sessions, finalWeekValidation, wholeWeek.repairCount, wholeWeek.orchestration);
+    } catch (error: any) {
+      console.error("WEEKLY_SAVE_FAILED", { code: "WEEK_RECEIPT_ISSUE_FAILED", stage: "receipt", detail: error?.message || "receipt" });
+      return NextResponse.json({ ok: false, code: "WEEK_RECEIPT_ISSUE_FAILED", saveStage: "receipt", retryable: false });
+    }
     const persisted = planExistente
       ? await mutatePlanWithCAS(supabase, validationResult.mutation)
       : await createPlan(supabase, validationResult.mutation);
-    if (persisted.status !== "committed") return NextResponse.json(planPersistenceFailure(persisted));
+    if (persisted.status !== "committed") return NextResponse.json({ ...planPersistenceFailure(persisted), saveStage: "persistence" });
     const warnings: string[] = [];
     const recordWeeklyEffect = async (label: string, write: () => PromiseLike<{ error: unknown }>) => {
       try { if ((await write()).error) warnings.push(label); }
@@ -4836,7 +4868,8 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
       user_codigo: codigo, week_start: plan.week_start, nivel: "A_regeneracion_completa",
       accion: esSemanaActual ? "regenerar_semana" : "generar_semana_nueva",
       motivo: JSON.stringify({ weekObjective: plan.week_objective || null, wholeWeekReceipt }), confirmado_por_usuario: true }));
-    return NextResponse.json({ ok: true, persistenceStatus: "committed", revision: persisted.revision, warnings,
+    return NextResponse.json({ ok: true, persistenceStatus: "committed", commitConfirmed: true, revision: persisted.revision,
+      persistenceReceipt: { planId: persisted.planId, revision: persisted.revision, weekStart: plan.week_start }, warnings,
       wholeWeekValidation: finalWeekValidation, wholeWeekReceipt, repairOrchestration: wholeWeek.orchestration, sessions: validationResult.candidate.sessions });
   }
 

@@ -1146,6 +1146,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     console.log("ORCHESTRATOR: guardando plan completo:", JSON.stringify(planCompleto));
     const resultadoGuardado=await apiCall({action:"guardar_plan_semana",codigo:codigoUsuario,datos:{plan:planCompleto,generationToken:weeklyGeneration.token,calendarReceipt:estructura.calendarReceipt,weeklyContractVersion:estructura.weeklyContractVersion}});
     if(resultadoGuardado?.ok!==true){
+      console?.error?.("WEEKLY_SAVE_FAILED", { code: resultadoGuardado?.code || resultadoGuardado?.error || "UNCONFIRMED_SAVE", stage: resultadoGuardado?.saveStage || "client_response", persistenceStatus: resultadoGuardado?.persistenceStatus || null });
       cargarPlanSemanal(codigoUsuario);
       return { ...resultadoGuardado, ok:false, canContinue:false };
     }
@@ -1326,8 +1327,12 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
           }
           return weeklyGeneration ? {...result,weeklyGeneration} : result; }
         if(body.action==="guardar_plan_semana") {
-          const result=await res.json();
-          return { ...result, ok:false, canContinue:false };
+          let result:any;
+          try { result=await res.json(); }
+          catch { result={}; }
+          return { ...result, ok:false, canContinue:false,
+            code:typeof result?.code==='string' ? result.code : `WEEKLY_SAVE_HTTP_${res.status}`,
+            ...(result?.saveStage ? {saveStage:result.saveStage} : {}) };
         }
         intentos++;
         await new Promise(r=>setTimeout(r,1000));

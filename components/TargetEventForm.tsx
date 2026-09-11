@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 
-export function TargetEventForm({ request, onDone }: { request: (data: Record<string, unknown>) => Promise<any>; onDone: () => void }) {
+export function TargetEventForm({ request, onDone }: { request: (data: Record<string, unknown>) => Promise<any>; onDone: (result?: any) => void }) {
   const [context, setContext] = useState<any>(), [date, setDate] = useState('');
   const [hasDate, setHasDate] = useState(false), [busy, setBusy] = useState(true), [error, setError] = useState('');
   useEffect(() => { let active = true;
@@ -19,7 +19,7 @@ export function TargetEventForm({ request, onDone }: { request: (data: Record<st
     try {
       const result = await request({ operation, eventDate: date, token: context.token });
       if (!result?.ok) { setError(result?.code === 'EVENT_DATE_NOT_FUTURE' ? 'Elige una fecha futura, con año incluido.' : 'No se ha guardado. Revisa la fecha o cierra y vuelve a abrir para actualizar el formulario.'); return; }
-      setContext({ ...context, message: result.message, saved: true });
+      setContext({ ...context, message: result.message, saved: true, savedOperation: operation, savedResult: result });
     } catch { setError('No se ha guardado. Inténtalo de nuevo.'); }
     finally { setBusy(false); }
   }
@@ -39,7 +39,7 @@ export function TargetEventForm({ request, onDone }: { request: (data: Record<st
       </>}
       {context && !context.supported && <p>No hay un evento compatible con el objetivo actual. Puedes seguir con tu objetivo sin añadir una fecha aquí.</p>}
       {busy && <p>Comprobando…</p>}{error && <p role="alert">{error}</p>}
-      <p><button disabled={busy} onClick={onDone}>{context?.saved ? 'Continuar' : 'Cerrar y continuar'}</button></p>
+      <p><button disabled={busy} onClick={() => onDone(context?.saved ? { ...context.savedResult, operation: context.savedOperation } : undefined)}>{context?.saved ? 'Continuar' : 'Cerrar y continuar'}</button></p>
     </div>
   </div>;
 }

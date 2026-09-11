@@ -1,5 +1,5 @@
 import { saveMethodBaseline } from '@/lib/athlete/runningMethodDeclarations';
-import { eventAction, loadEventContext, canonicalEventPrompt } from '@/lib/athlete/eventActions';
+import { eventAction, loadEventContext, canonicalEventPrompt, resolveWeeklyEventRequirement } from '@/lib/athlete/eventActions';
 import { eventAuthorityText, boundEventAnalysis } from '@/lib/athlete/eventAuthority';
 import { saveHabitualRunningAnswer, type HabitualRunningProfileStore } from '@/lib/athlete/runningHabitualDeclarations';
 import { issueEnvironmentConfirmation, readEnvironmentConfirmation, ENVIRONMENT_CONFIRMATION_COOKIE, ENVIRONMENT_CONFIRMATION_TTL_SECONDS } from '@/lib/planning/sessionEnvironmentConfirmation';
@@ -5138,6 +5138,14 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
         confirmedAvailabilityDigest: datos.confirmedAvailabilityDigest,
         snapshot: generation.snapshots[datos.targetWeekStart], temporalIntent: datos.temporalIntent, temporalReply: datos.temporalReply === true, planningRunId: generation.planningRunId,
       });
+      if (preflight.canContinue === true) {
+        const eventRequirement = typeof resolveWeeklyEventRequirement === 'function'
+          ? await resolveWeeklyEventRequirement(supabase, codigo,
+            new Date().toLocaleDateString('en-CA', { timeZone: 'Atlantic/Canary' }), datos.eventResolution)
+          : null;
+        if (eventRequirement) return NextResponse.json({ ...preflight, ok: false, canContinue: false,
+          code: 'TARGET_EVENT_RESOLUTION_REQUIRED', eventRequirement });
+      }
       const response = NextResponse.json(preflight);
       if (preflight.canContinue === true) {
         const token = issueEnvironmentConfirmation({ user: codigo, weekStart: datos.targetWeekStart, generationToken: datos.generationToken }, datos.confirmedAvailabilityDigest);

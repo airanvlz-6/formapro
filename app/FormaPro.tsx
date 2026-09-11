@@ -643,7 +643,7 @@ export default function Forge() {
         setMensajes([{role:"assistant",content:"¡Bienvenido a tu nuevo modo! Ya tengo todos tus datos — voy a construir tu primera semana ahora mismo."}]);
         setGenerandoSemana(true);
         const planFocusInicial=await orquestarGeneracionSemana();
-        if(planFocusInicial?.goalRequirement || planFocusInicial?.preflightRequirement || planFocusInicial?.runningHabitualRequirement){setGenerandoSemana(false);return;}
+        if(planFocusInicial?.goalRequirement || planFocusInicial?.preflightRequirement || planFocusInicial?.runningHabitualRequirement || planFocusInicial?.eventRequirement){setGenerandoSemana(false);return;}
         const respuestaFocusInicial=planFocusInicial && planFocusInicial.ok!==false
           ? `✅ **Semana generada y guardada.**\n\nBloque: ${planBlockLabel(planFocusInicial)} — ${planFocusInicial.week_objective}\n\nRevisa el detalle completo en **Mi Plan**. ¿Alguna duda?`
           : weeklyGenerationOutcomeMessage(planFocusInicial);
@@ -908,6 +908,7 @@ const [editandoPerfil,setEditandoPerfil]=useState(false);
 const [perfilEdit,setPerfilEdit]=useState<Record<string,string>>({});
 const [hrBootstrapUser, setHrBootstrapUser] = useState<string | null>(null);
 const [targetEventUser, setTargetEventUser] = useState<string | null>(null);
+const [pendingEventGeneration,setPendingEventGeneration]=useState<{codigo:string;empezarHoy?:boolean;temporalAnswer?:string;temporalReply:boolean}|null>(null);
 const [editandoEspecialidad,setEditandoEspecialidad]=useState(false);
 const [email,setEmail]=useState("");
 const [codigoPersonal,setCodigoPersonal]=useState("");
@@ -948,7 +949,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
   };
 
   // FORGE ORCHESTRATOR — genera la semana completa en 3 pasos pequeños en vez de una llamada gigante
-  const orquestarGeneracionSemana=async(empezarHoy?:boolean,temporalAnswer?:string,temporalReply:boolean=false):Promise<any>=>{
+  const orquestarGeneracionSemana=async(empezarHoy?:boolean,temporalAnswer?:string,temporalReply:boolean=false,eventResolution?:'without_date'):Promise<any>=>{
     if(!codigoUsuario) return null;
     console.log("=== FORGE ORCHESTRATOR: INICIO ===");
 
@@ -966,8 +967,9 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     const weekStartSemanaActual=weeklyGeneration.currentWeek;
     const weekStartOrchestrator=continuation.targetWeekStart;
 
-    const preflight=await apiCall({action:"preflight_generacion_semana",codigo:codigoUsuario,datos:{generationToken:weeklyGeneration.token,targetWeekStart:weekStartOrchestrator,confirmedAvailabilityDigest:availabilityConfirmationRef.current,temporalIntent:empezarHoy ?? temporalAnswer,temporalReply}});
+    const preflight=await apiCall({action:"preflight_generacion_semana",codigo:codigoUsuario,datos:{generationToken:weeklyGeneration.token,targetWeekStart:weekStartOrchestrator,confirmedAvailabilityDigest:availabilityConfirmationRef.current,temporalIntent:empezarHoy ?? temporalAnswer,temporalReply,eventResolution}});
     if(preflight?.preflightRequirement || preflight?.runningHabitualRequirement){weeklyPlanningContinuationRef.current=continuation;return preflight;}
+    if(preflight?.eventRequirement){weeklyPlanningContinuationRef.current=continuation;return preflight;}
     weeklyPlanningContinuationRef.current=null;
     if(preflight?.goalRequirement || preflight?.runningHabitualRequirement) return preflight;
     if(!preflight?.canContinue || typeof preflight.temporalDecision?.includeToday!=="boolean") return { ...preflight, ok:false, canContinue:false };
@@ -1294,6 +1296,15 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
             setEsperandoConfirmacionDisponibilidad(result.preflightRequirement.kind==="availability");
             setEsperandoConfirmacionEmpezarHoy(result.preflightRequirement.kind==="temporal");
             setMensajes(prev=>[...prev,{role:"assistant",content:result.preflightRequirement.text}]);
+          }
+          if(result.eventRequirement?.kind === "target_event" && codigoUsuario){
+            const intent=(body.datos as any)?.temporalIntent;
+            setPendingEventGeneration({codigo:codigoUsuario,
+              empezarHoy:typeof intent==="boolean" ? intent : (body.datos as any)?.empezarHoy,
+              temporalAnswer:typeof intent==="string" ? intent : undefined,
+              temporalReply:(body.datos as any)?.temporalReply === true});
+            setTargetEventUser(codigoUsuario);
+            setMensajes(prev=>[...prev,{role:"assistant",content:result.eventRequirement.text}]);
           }
           if(result.runningHabitualRequirement?.text){
             setPendingRunningHabitualQuestion({codigo:codigoUsuario,field:result.runningHabitualRequirement.field,
@@ -1779,7 +1790,7 @@ const forgeValidator=(texto:string):string=>{
     setGenerandoSemana(true);
     try {
       const plan=await orquestarGeneracionSemana(undefined,temporalAnswer,answeringQuestion);
-      if(plan?.goalRequirement || plan?.preflightRequirement || plan?.runningHabitualRequirement) return;
+      if(plan?.goalRequirement || plan?.preflightRequirement || plan?.runningHabitualRequirement || plan?.eventRequirement) return;
       const respuestaFinalGen=plan && plan.ok!==false
         ? `✅ **Semana generada y guardada.**\n\nBloque: ${planBlockLabel(plan)} — ${plan.week_objective}\n\nRevisa el detalle completo en **Mi Plan**.`
         : weeklyGenerationOutcomeMessage(plan);
@@ -1803,7 +1814,7 @@ const forgeValidator=(texto:string):string=>{
           setPendingGoalQuestion(null);setGenerandoSemana(true);
           setMensajes(prev=>[...prev,{role:"assistant",content:"Objetivo principal guardado y comprobado. Continúo con la planificación."}]);
           const plan=await orquestarGeneracionSemana(pendingGoalQuestion.empezarHoy,pendingGoalQuestion.temporalAnswer,pendingGoalQuestion.temporalReply);
-          if(!plan?.goalRequirement && !plan?.preflightRequirement && !plan?.runningHabitualRequirement) setMensajes(prev=>[...prev,{role:"assistant",content:plan && plan.ok!==false
+          if(!plan?.goalRequirement && !plan?.preflightRequirement && !plan?.runningHabitualRequirement && !plan?.eventRequirement) setMensajes(prev=>[...prev,{role:"assistant",content:plan && plan.ok!==false
             ? `✅ **Semana generada y guardada.**\n\n${plan.week_objective}\n\nRevisa el detalle en **Mi Plan**.`
             : weeklyGenerationOutcomeMessage(plan)}]);
         }else if(!result.goalRequirement){
@@ -1827,7 +1838,7 @@ const forgeValidator=(texto:string):string=>{
           if(!result.requirement && pendingRunningHabitualQuestion.generationToken){
             setGenerandoSemana(true);
             const plan=await orquestarGeneracionSemana(pendingRunningHabitualQuestion.includeToday);
-            if(!plan?.preflightRequirement && !plan?.goalRequirement && !plan?.runningHabitualRequirement)
+            if(!plan?.preflightRequirement && !plan?.goalRequirement && !plan?.runningHabitualRequirement && !plan?.eventRequirement)
               setMensajes(prev=>[...prev,{role:"assistant",content:plan && plan.ok!==false ? "Semana generada y guardada. Revisa Mi Plan." : weeklyGenerationOutcomeMessage(plan)}]);
           }
         }else setMensajes(prev=>[...prev,{role:"assistant",content:"No he podido guardar el dato. Responde con un número entero o, para el rodaje fácil, «No tengo un rodaje fácil habitual»."}]);
@@ -2418,6 +2429,23 @@ ${testStr}`}]});
     }catch{setResultadoTest({nivel:"Intermedio",puntuaciones:{resistencia:50,fuerza:50,tecnica:50,recuperacion:50,mental:50},fortalezas:["Constancia"],debilidades:["Datos insuficientes"],resumen:"No se pudo generar el informe completo."});}
     finally{setGenerando(false);}
   };
+  const continuarTrasResolucionEvento=async(result?:any)=>{
+    const pending=pendingEventGeneration;
+    setTargetEventUser(null);
+    setPendingEventGeneration(null);
+    if(!result?.ok || !pending || pending.codigo!==codigoUsuario) return;
+    setGenerandoSemana(true);
+    try {
+      const plan=await orquestarGeneracionSemana(pending.empezarHoy,pending.temporalAnswer,pending.temporalReply,
+        result.operation==='without_date' ? 'without_date' : undefined);
+      if(!plan?.goalRequirement && !plan?.preflightRequirement && !plan?.runningHabitualRequirement && !plan?.eventRequirement){
+        const respuesta=plan && plan.ok!==false
+          ? `✅ **Semana generada y guardada.**\n\n${plan.week_objective}\n\nRevisa el detalle completo en **Mi Plan**.`
+          : weeklyGenerationOutcomeMessage(plan);
+        setMensajes(prev=>[...prev,{role:"assistant",content:respuesta}]);
+      }
+    } finally { setGenerandoSemana(false); }
+  };
 
   const compactarHistorial=async(hist:{role:string;content:any}[])=>{
     if(hist.length<10) return;
@@ -2439,7 +2467,7 @@ ${testStr}`}]});
   return (
     <div style={{minHeight:"100dvh",background:C.bg,fontFamily:"'DM Sans', sans-serif",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 16px",paddingTop:"max(24px, env(safe-area-inset-top))",paddingBottom:"max(24px, env(safe-area-inset-bottom))"}}>
       {hrBootstrapUser && <RunningHrBootstrap request={datos => apiCall({ action: 'hr_zone_bootstrap', codigo: hrBootstrapUser, datos })} onDone={() => setHrBootstrapUser(null)} />}
-      {targetEventUser && !hrBootstrapUser && <TargetEventForm request={datos => apiCall({ action: 'target_event', codigo: targetEventUser, datos })} onDone={() => setTargetEventUser(null)} />}
+      {targetEventUser && !hrBootstrapUser && <TargetEventForm request={datos => apiCall({ action: 'target_event', codigo: targetEventUser, datos })} onDone={continuarTrasResolucionEvento} />}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@700;800&display=swap');
         *{box-sizing:border-box;margin:0;padding:0;}

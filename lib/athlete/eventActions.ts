@@ -23,6 +23,29 @@ export async function canonicalEventPrompt(db: any, athleteId: string) {
       + '\n' + eventAuthorityText(authority) + ' No inventes ni cambies fecha, horizonte o modo. No autoriza taper, semana de carrera ni pico de rendimiento.';
   } catch { return 'EVENT_AUTHORITY no disponible. No afirmes preparación hacia una fecha concreta, no calcules horizonte ni prometas taper o pico de rendimiento.'; }
 }
+
+/**
+ * Weekly generation must resolve the event state before any planning contract
+ * can reach the builder. This is a deterministic projection of the existing
+ * event authority; it never reads or interprets free text as a date.
+ */
+export async function resolveWeeklyEventRequirement(db: any, athleteId: string, today: string,
+  resolution?: unknown, now = Date.now()) {
+  // "without_date" is a request-local acknowledgement. The canonical event
+  // remains absent, but this generation attempt may continue in general
+  // development without reopening the form in a loop.
+  if (resolution === 'without_date') return null;
+  const context = await loadEventContext(db, athleteId, today);
+  const supported = !!context.goalId && !!EVENT_GOAL_CATALOG[context.goalId];
+  if (!supported || context.authority.targetEvent?.status === 'active') return null;
+  return {
+    kind: 'target_event' as const,
+    text: 'Tu objetivo admite una prueba con horizonte temporal. Indica una fecha completa o elige «Aún no — continuar sin fecha».',
+    supported: true,
+    authority: context.authority,
+    token: issueEventForm(athleteId, context.fingerprint, now),
+  };
+}
 /** Explicit form submit is declaration + confirmation. Inherits the existing chat identity boundary. */
 export async function eventAction(db: any, athleteId: string, operation: unknown, data: Record<string, unknown>, today: string, now = Date.now()) {
   const context = await loadEventContext(db, athleteId, today);

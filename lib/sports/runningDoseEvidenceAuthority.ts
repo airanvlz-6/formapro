@@ -12,6 +12,7 @@ export type RunningDoseEvidenceAdmission = {
   status: RunningDoseEvidenceClass | 'UNKNOWN' | 'CONFLICT';
   coverage: RunningDoseBaseline['coverage'];
   basis: {
+    prescriptionEvidence?: RunningDoseBaseline['prescriptionEvidence'];
     structuredExecutions?: RunningDoseBaseline['structuredExecutions'];
     selfReportedTotals?: Record<string, ReturnType<typeof selfReportedExecutionTotals>>;
     habitualConfirmation?: RunningDoseBaseline['habitualConfirmation'];
@@ -105,7 +106,7 @@ export function admitRunningDoseEvidence(baseline: RunningDoseBaseline): Running
     coverage: { startDate: baseline.coverage.startDate, endDate: baseline.coverage.endDate,
       observedDays: baseline.coverage.observedDays, completedRunningSessions: baseline.coverage.completedRunningSessions,
       captureCompleteness: 'UNKNOWN' },
-    basis: { ...(baseline.structuredExecutions ? { structuredExecutions: structuredClone(baseline.structuredExecutions),
+    basis: { ...(baseline.prescriptionEvidence ? {prescriptionEvidence: structuredClone(baseline.prescriptionEvidence)} : {}), ...(baseline.structuredExecutions ? { structuredExecutions: structuredClone(baseline.structuredExecutions),
       selfReportedTotals: Object.fromEntries(Object.entries(windows).map(([key,w]) => [key,selfReportedExecutionTotals(baseline.structuredExecutions!.records,w.startDate,w.endDate)])) } : {}),
       ...(baseline.habitualConfirmation ? {habitualConfirmation: structuredClone(baseline.habitualConfirmation)} : {}), ...(habitualDeclarations.facts.length ? { habitualDeclarations } : {}), windows, declaredWeeklyDistance, longestObservedRun: { ...window,
       duration: metric(baseline.metrics.longestRecentRunDurationSeconds), distance: metric(baseline.metrics.longestRecentRunDistanceMeters) },

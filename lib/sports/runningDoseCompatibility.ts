@@ -10,6 +10,7 @@ export const runningDoseDigest = (value: unknown) => createHash('sha256').update
 type Metric = { value: number | null; unit: 's' | 'm' | 'sessions'; status: 'AVAILABLE' | 'PARTIAL' | 'UNKNOWN';
   knownActivities: number; evidenceRefs: string[] };
 export type CompatibleRunningDoseEvidence = {
+  prescriptionEvidence?: RunningDoseEvidenceAdmission['basis']['prescriptionEvidence'];
   habitualConfirmation?: RunningDoseEvidenceAdmission['basis']['habitualConfirmation'];
   habitualDeclarations?: NonNullable<RunningDoseEvidenceAdmission['basis']['habitualDeclarations']>;
   version: 2; family: RunningDosePolicyFamily | null; variant: string;
@@ -39,7 +40,7 @@ export function resolveCompatibleRunningDoseEvidence(a: RunningDoseEvidenceAdmis
   const stable = <T>(rows: T[]) => rows.sort((a, b) => runningDoseDigest(a).localeCompare(runningDoseDigest(b)));
   const variant = family === 'EVENT_SPECIFIC' ? `${context.goalId}:${context.pattern}`
     : family === 'TECHNICAL_EXPOSURE' ? context.pattern : context.methodId;
-  return { version: 2, family, variant, ...(family === 'AEROBIC_CONTINUOUS' && a.basis.habitualConfirmation ? {habitualConfirmation: structuredClone(a.basis.habitualConfirmation)} : {}), ...(family === 'AEROBIC_CONTINUOUS' && a.basis.habitualDeclarations
+  return { version: 2, family, variant, ...(a.basis.prescriptionEvidence ? {prescriptionEvidence: structuredClone(a.basis.prescriptionEvidence)} : {}), ...(family === 'AEROBIC_CONTINUOUS' && a.basis.habitualConfirmation ? {habitualConfirmation: structuredClone(a.basis.habitualConfirmation)} : {}), ...(family === 'AEROBIC_CONTINUOUS' && a.basis.habitualDeclarations
       ? { habitualDeclarations: structuredClone(a.basis.habitualDeclarations) } : {}), status: a.status, captureCompleteness: 'UNKNOWN',
     window: { startDate: a.coverage.startDate, endDate: a.coverage.endDate },
     habitualDeclaredVolume: stable(a.basis.declaredWeeklyDistance.map(d => ({ minimumMeters: d.minimumMeters,

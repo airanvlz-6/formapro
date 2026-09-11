@@ -1,3 +1,6 @@
+import { baselineSelections } from '../athlete/runningMethodDeclarations';
+import { selectRunningEvidencePolicy } from './runningEvidencePolicy';
+import { runningSuitability, methodExposure } from './runningPrescriptionEvidence';
 import { AEROBIC_CONTINUITY_POLICY, aerobicContinuityRejection } from './aerobicContinuityPolicy';
 import { RUNNING_REUSE_POLICIES, runningReuseSelection } from './runningExecutionReusePolicies';
 import type { RunningEventPreparationDecisionV1 } from './runningEventPreparation';
@@ -29,6 +32,8 @@ export type RunningMethodDoseV2 = { version: 2; methodId: string; context: Strat
   status: 'RESOLVED' | 'UNRESOLVED' | 'CONFLICT'; reason: string;
   policy: { id: string; version: 2; family: RunningDosePolicyFamily | null; variant: string };
   evidence: CompatibleRunningDoseEvidence; sourceDigest: string; evidenceRefs: string[];
+  declaredBaseline?: { authority: 'ATHLETE_DECLARATION'; policyId: string };
+  allowedSelections?: RunningDoseSelection[];
   reuse?: { baseline: NonNullable<CompatibleRunningDoseEvidence['structuredMethodExecution']>['records'][number];
     reason: 'EXACT_COMPLETED_METHOD_REUSE'; numericProgressionAuthorized: false };
   dose: RunningDoseSelection | null; diagnostics: string[] };
@@ -69,6 +74,13 @@ export function resolveRunningMethodDose(evidence: CompatibleRunningDoseEvidence
       ...(!p?.selectDose ? ['RUNNING_METHOD_DOSE_POLICY_NOT_ESTABLISHED'] : [])])] });
   if (evidence.status === 'CONFLICT' || evidence.conflicts.length || evidence.structuredMethodExecution?.status === 'CONFLICT') return fail('CONFLICT', 'CONFLICTING_EVIDENCE');
   if (!p || p.family !== evidence.family) return fail('UNRESOLVED', 'DOMAIN_UNSUPPORTED');
+  const policy = selectRunningEvidencePolicy(context.goalId), state = evidence.prescriptionEvidence;
+  if (policy && state) {
+    const suitability=runningSuitability(state,context.methodId);
+    if (['INCOMPATIBLE_DEFER','HIGH_COST_REVIEW'].includes(suitability.status)
+      || suitability.status==='RECOVERY_PREFERRED' && !['running_base','running_recovery'].includes(context.methodId))
+      return fail('UNRESOLVED',suitability.status);
+  }
   if (p.policyId === AEROBIC_CONTINUITY_POLICY) {
     const reason = aerobicContinuityRejection(evidence, context);
     if (reason) return fail(reason === 'CONFLICTING_EVIDENCE' ? 'CONFLICT' : 'UNRESOLVED', reason);
@@ -76,7 +88,18 @@ export function resolveRunningMethodDose(evidence: CompatibleRunningDoseEvidence
   let reuse: RunningMethodDoseV2['reuse'];
   if (p.policyId === RUNNING_REUSE_POLICIES[context.methodId as keyof typeof RUNNING_REUSE_POLICIES]?.id) {
     const result = runningReuseSelection(evidence, context);
-    if (!result.dose) return fail(result.reason === 'AMBIGUOUS_LATEST_METHOD_EXECUTION' ? 'CONFLICT' : 'UNRESOLVED', result.reason);
+    if (!result.dose) {
+      const declared = state?.declarations.filter(d=>d.methodId===context.methodId) ?? [];
+      // Never fall back after partial/conflicted/latest incompatible execution or a stale modern baseline.
+      const modernHistory = state?.history.records.some(r=>r.methodId===context.methodId && r.provenance==='MODERN_STRUCTURED');
+      if (policy && state && result.reason==='RECENT_METHOD_EXECUTION_REQUIRED' && !modernHistory && declared.length===1) {
+        const allowedSelections=baselineSelections(declared[0]);
+        if (allowedSelections.every(validSelection)) return {...base,status:'RESOLVED',reason:'CONFIRMED_CURRENT_METHOD_BASELINE',
+          policy:{...base.policy,id:'hm_current_method_declaration_v1'},dose:allowedSelections[0],allowedSelections,
+          declaredBaseline:{authority:'ATHLETE_DECLARATION',policyId:policy.id},diagnostics:['ATHLETE_DECLARATION_NOT_EXECUTION','NO_NUMERIC_PROGRESSION']};
+      }
+      return fail(result.reason === 'AMBIGUOUS_LATEST_METHOD_EXECUTION' ? 'CONFLICT' : 'UNRESOLVED', result.reason);
+    }
     reuse = { baseline: structuredClone(evidence.structuredMethodExecution!.records.find(r=>r.executionId===result.executionId)!),
       reason: 'EXACT_COMPLETED_METHOD_REUSE', numericProgressionAuthorized: false };
   }
@@ -109,7 +132,7 @@ export function validateRunningMethodDose(c: AllowedTrainingContract, proposal: 
   if (a.version === 1) return legacy.validateRunningMethodDose(c, proposal);
   if (!validRunningMethodDose(c)) return ['RUNNING_METHOD_DOSE_AUTHORITY_INVALID'];
   if (a.status !== 'RESOLVED' || !a.dose) return [`RUNNING_METHOD_DOSE_${a.status}`];
-  const d = a.dose, errors: string[] = [], main = proposal.blocks.find(b => b.blockType === 'main');
+  const d = a.allowedSelections?.find(d=>d.structures.includes(proposal.structureId)) ?? a.dose, errors: string[] = [], main = proposal.blocks.find(b => b.blockType === 'main');
   if (!main) return ['RUNNING_METHOD_DOSE_MAIN_REQUIRED'];
   if (!d.structures.includes(proposal.structureId)) errors.push('RUNNING_METHOD_DOSE_STRUCTURE_MISMATCH');
   if (main.formatDose) errors.push('RUNNING_METHOD_DOSE_FORMAT_OVERRIDE');

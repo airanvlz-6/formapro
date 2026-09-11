@@ -1,3 +1,4 @@
+import { readMethodBaselines } from './runningMethodDeclarations';
 import { readRunningHabitualConfirmation, type RunningHabitualInteraction } from './runningHabitualConfirmation';
 import { projectAthletePrescriptionProfile, record } from './athletePrescriptionContext';
 import type { SessionEnvironmentInput } from '../sports/sessionTrainingEnvironment';
@@ -75,8 +76,12 @@ export async function loadAthletePrescriptionContext(db: any, userCodigo: string
     r.occurredAt >= runningDoseBaseline.coverage.startDate && r.occurredAt <= options.asOfDate) };
   const habitualConfirmation = readRunningHabitualConfirmation(record(profile.perfil).runningHabitualConfirmation, userCodigo, options.runningHabitualInteraction, runningDoseBaseline.habitualDeclarations?.facts ?? []);
   if (habitualConfirmation) runningDoseBaseline.habitualConfirmation = habitualConfirmation;
+  const runningHistory = mergeRunningHistory(userCodigo, profile.workout_history, executions.history, options.asOfDate);
+  runningDoseBaseline.prescriptionEvidence = {history:runningHistory,executions:executions.window,
+    declarations:readMethodBaselines(profile.perfil,userCodigo,options.runningHabitualInteraction),
+    restrictionsActive:restrictions.active,recovery,subjective:{score:null,date:options.asOfDate,source:'readiness_checkins'}};
   return structuredClone({ ...projected, planningStrategy: resolvePlanningStrategy(projected), userCodigo, asOfDate: options.asOfDate,
-    runningHistory: mergeRunningHistory(userCodigo, profile.workout_history, executions.history, options.asOfDate),
+    runningHistory,
     runningDoseBaseline, runningDoseEvidenceAdmission: admitRunningDoseEvidence(runningDoseBaseline),
     physiology: { source: 'prepareRecoveryContext', recovery, missingSignals: ['hrv', 'restingHr', 'sleepDuration', 'sleepScore']
       .filter(k => record(record(signals)[k]).status !== 'available') },

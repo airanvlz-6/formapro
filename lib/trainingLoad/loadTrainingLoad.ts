@@ -1,3 +1,5 @@
+import { readRunningExecutions } from '../execution/runningExecutionStore';
+import { runningActualLoad } from './runningActualLoad';
 import { resolveCompletionDate } from '../planning/recordCompletion';
 import { plannedPrescriptionLoad, externalActualLoad, summarizeLoad } from './prescriptionLoadAdapter';
 import { resolveSessionLoad, unknownQuantity, type SessionLoad } from './trainingLoad';
@@ -16,11 +18,12 @@ export async function loadTrainingLoad(db:any,userCodigo:string,fromDate:string,
     }
     throw new Error('TRAINING_LOAD_READ_LIMIT');
   };
-  const [profile,plans,external,modifications]=await Promise.all([
+  const [profile,plans,external,modifications,runningEvidence]=await Promise.all([
     rows(db.from('usuarios').select('workout_history,ciclo_actual').eq('codigo',userCodigo).single(),true),
     pages(()=>db.from('weekly_plan').select('id,week_start,sessions').eq('user_codigo',userCodigo).gte('week_start',from.weekStart).lte('week_start',to.weekStart)),
     pages(()=>db.from('external_training_records').select('id,fecha,disciplina,duracion,intensidad_percibida,source,load_quality').eq('user_codigo',userCodigo).gte('fecha',fromDate).lte('fecha',toDate)),
     pages(()=>db.from('session_modification_events').select('id,week_start,dia,original_tipo,modified_tipo').eq('user_codigo',userCodigo).gte('week_start',from.weekStart).lte('week_start',to.weekStart)),
+    readRunningExecutions(db,userCodigo,{startDate:fromDate,endDate:toDate}),
   ]);
   if(profile.workout_history!=null&&!Array.isArray(profile.workout_history))throw new Error('TRAINING_LOAD_HISTORY_INVALID');
   const within=(date:string)=>date>=fromDate&&date<=toDate;
@@ -46,13 +49,16 @@ export async function loadTrainingLoad(db:any,userCodigo:string,fromDate:string,
   for(const [i,r] of external.entries()){
     const date=resolveCompletionDate(r.fecha)?.date;if(!date){excluded.push(`external:${i}:date_unknown`);continue;}if(within(date))externalSessions.push(externalActualLoad({...r,fecha:date},`external:${r.id||i}`));
   }
+  const running=runningEvidence.records.filter(r=>within(r.occurredAt)).map(runningActualLoad);
+  const sourcesPresent=[history.length,externalSessions.length,running.length].filter(Boolean).length;
   const weekReports=(sessions:SessionLoad[])=>Object.fromEntries([...new Set(sessions.map(s=>resolveCompletionDate(s.date)!.weekStart))].sort()
     .map(week=>[week,summarizeLoad(sessions.filter(s=>resolveCompletionDate(s.date)!.weekStart===week))]));
-  return {schemaVersion:1,window:{fromDate,toDate},planned:summarizeLoad(planned),actual:{history:summarizeLoad(history),external:summarizeLoad(externalSessions),
-    combinedStatus:history.length&&externalSessions.length?'unknown_cross_source_overlap':'single_source',
-    combined:history.length&&externalSessions.length?null:summarizeLoad([...history,...externalSessions])},
-    weeks:{planned:weekReports(planned),historyActual:weekReports(history),externalActual:weekReports(externalSessions)},
+  const runningIntegrity = runningEvidence.conflicts.length ? 'CONFLICT' : runningEvidence.writerStatus;
+  return {schemaVersion:1,window:{fromDate,toDate},planned:summarizeLoad(planned),actual:{running:summarizeLoad(running),runningIntegrity,history:summarizeLoad(history),external:summarizeLoad(externalSessions),
+    combinedStatus:sourcesPresent>1?'unknown_cross_source_overlap':'single_source',
+    combined:sourcesPresent>1 || runningIntegrity==='CONFLICT'?null:summarizeLoad([...history,...externalSessions,...running])},
+    weeks:{runningActual:weekReports(running),planned:weekReports(planned),historyActual:weekReports(history),externalActual:weekReports(externalSessions)},
     completionFacts:completedFlags,modifications:modifications.map((m:any)=>({id:m.id,weekStart:m.week_start,day:m.dia,originalType:m.original_tipo,modifiedType:m.modified_tipo,loadStatus:'unknown_text_only'})),
     block:{status:'identity_unresolved_no_persistence',label:profile.ciclo_actual?.bloque||null},cycle:{status:'identity_unresolved_no_persistence'},
-    diagnostics:['TRAINING_LOAD_RESOLUTION','EXECUTION_TABLES_NOT_IMPLEMENTED_IN_CHECKOUT','NO_IMPLICIT_DEDUPLICATION_OR_LINKING','NO_BLOCK_NAME_AGGREGATION',...excluded]};
+    diagnostics:['TRAINING_LOAD_RESOLUTION','MODERN_RUNNING_INCLUDED_SEPARATE_FROM_UNLINKED_SOURCES','NO_IMPLICIT_DEDUPLICATION_OR_LINKING','NO_BLOCK_NAME_AGGREGATION',...excluded]};
 }

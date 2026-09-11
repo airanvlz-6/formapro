@@ -1,3 +1,4 @@
+import { runningPolicyGuidance } from '../sports/runningEvidencePolicy';
 import { RUNNING_METHOD_DOSE_POLICIES } from '../sports/runningMethodDosePolicies';
 import { scopeRunningHistory } from '../execution/historicalRunning';
 import { projectWeeklyPrescriptionSignals } from './weeklyPrescriptionSignals';
@@ -144,7 +145,7 @@ export async function prepareAllowedWeeklyPlanContract(db: any, codigo: string, 
     today: request.today, snapshot: request.snapshot,
     availabilityConfirmed: context.availabilityConfirmed,
     temporalDecision: request.diagnosticTemporalDecision === undefined ? request.empezarHoy : request.diagnosticTemporalDecision });
-  return built.ok ? { ...built, fixedSessions: context.fixedSessions, runningHistoryContext: context.runningHistoryContext, runningEventPreparation: context.runningEventPreparation } : built;
+  return built.ok ? { ...built, evidencePolicy:runningPolicyGuidance(context.input.strategy?.goal.id??null,context.runningEventPreparation?.preparationState??'',context.runningEventPreparation?.daysRemaining??null), factualRequirements: context.input.doseCapabilities?.entries.flatMap(e=>e.factualRequirement?[e.factualRequirement]:[])??[], fixedSessions: context.fixedSessions, runningHistoryContext: context.runningHistoryContext, runningEventPreparation: context.runningEventPreparation } : built;
 }
 
 /** Server resolves selections. Model prose never becomes an executable objective. */
@@ -170,7 +171,7 @@ export async function planBoundedWeek(db: any, codigo: string, request: Paramete
   catch { /* Observability cannot change the admitted strategy. */ }
   const calendarReceipt = generationToken === undefined ? undefined : await issueWeeklyCalendar(db, codigo, request.targetWeekStart, sessions,
     { contract: proposal.contract, selections: calendarDays.map(day => ({ day, optionId: proposal.selected[day].optionId })), request, generationToken });
-  return { ok: true as const, estructura: { weeklyContractVersion: 1, calendarProtocolVersion: 2, contractDigest, calendarReceipt,
+  return { ok: true as const, evidencePolicy:prepared.evidencePolicy, factualRequirements:prepared.factualRequirements, estructura: { weeklyContractVersion: 1, calendarProtocolVersion: 2, contractDigest, calendarReceipt,
     contextDigest: proposal.contract.contextDigest,
     strategy: { ...(proposal.contract.strategy ? { canonical: proposal.contract.strategy } : {}),
       adaptacion_principal: proposal.contract.strategy ? humanWeeklyObjective(proposal.contract.strategy) : 'Consulta las sesiones programadas para esta semana.' },

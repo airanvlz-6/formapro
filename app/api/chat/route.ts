@@ -1,3 +1,4 @@
+import { saveMethodBaseline } from '@/lib/athlete/runningMethodDeclarations';
 import { eventAction, loadEventContext, canonicalEventPrompt } from '@/lib/athlete/eventActions';
 import { eventAuthorityText, boundEventAnalysis } from '@/lib/athlete/eventAuthority';
 import { saveHabitualRunningAnswer, type HabitualRunningProfileStore } from '@/lib/athlete/runningHabitualDeclarations';
@@ -5113,6 +5114,11 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
   if (action === "target_event") {
     try { return NextResponse.json(await eventAction(supabase, codigo, datos?.operation, datos ?? {}, new Date().toLocaleDateString('en-CA', { timeZone: 'Atlantic/Canary' }))); }
     catch (error) { return NextResponse.json({ ok: false, code: error instanceof Error ? error.message : 'EVENT_INVALID' }, { status: 422 }); }
+  }
+  if (action === "confirmar_baseline_metodo") {
+    try { return NextResponse.json(await saveMethodBaseline(supabase as unknown as HabitualRunningProfileStore, codigo, datos?.baseline,
+      {planningRunId:datos?.planningRunId,targetWeekStart:datos?.targetWeekStart})); }
+    catch (error) { return NextResponse.json({ok:false,code:error instanceof Error?error.message:'METHOD_BASELINE_INVALID'},{status:422}); }
   }
   if (action === "hr_zone_bootstrap") {
     try { return NextResponse.json(await hrZoneAction(supabase, codigo, datos.operation, datos)); }

@@ -1,3 +1,4 @@
+import type { RunningPrescriptionEvidence } from '../sports/runningPrescriptionEvidence';
 import type { RunningHabitualConfirmation } from './runningHabitualConfirmation';
 import type { RunningExecutionEvidence } from '../execution/runningExecution';
 import { normalizeHabitualRunningFacts, type HabitualRunningDeclaration } from './runningHabitualDeclarations';
@@ -28,6 +29,7 @@ type WindowMetrics = {
   recentSessionFrequency: Metric;
 };
 export type RunningDoseBaseline = {
+  prescriptionEvidence?: RunningPrescriptionEvidence;
   structuredExecutions?: RunningExecutionEvidence;
   habitualConfirmation?: RunningHabitualConfirmation;
   habitualDeclarations?: ReturnType<typeof normalizeHabitualRunningFacts>;

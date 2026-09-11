@@ -1,3 +1,6 @@
+import { methodBaselineRequirement } from '../athlete/runningMethodDeclarations';
+import { methodExposure, runningSuitability } from './runningPrescriptionEvidence';
+import { selectRunningEvidencePolicy } from './runningEvidencePolicy';
 import { runningReuseRequirement } from './runningExecutionReusePolicies';
 import { runningEventMethodAllowed, type RunningEventPreparationDecisionV1 } from './runningEventPreparation';
 import { resolveLongitudinalRunningDose } from './runningMethodDoseAuthority';
@@ -68,7 +71,9 @@ export function buildDoseCapabilityProfile(admission: RunningDoseEvidenceAdmissi
       ...factual.missing, ...execution.errors,
       ...(!scope.prescriptionAllowed || !scope.managedDisciplines.includes('carrera') ? ['PRESCRIPTION_SCOPE_DENIED'] : []),
     ])].filter(b => b !== 'SERVER_VALIDATED_SELF_REPORT');
-    return { methodId: policy.methodId, family: policy.family, variant: evidence.variant, pattern,
+    return { ...(context.goalId==='half_marathon' && evidence.prescriptionEvidence ? {exposureState:methodExposure(evidence.prescriptionEvidence,policy.methodId,!!authority.reuse),
+      suitability:runningSuitability(evidence.prescriptionEvidence,policy.methodId),
+      factualRequirement:eligible && authority.status!=='RESOLVED' && authority.reason==='RECENT_METHOD_EXECUTION_REQUIRED' ? methodBaselineRequirement(policy.methodId) : null} : {}), methodId: policy.methodId, family: policy.family, variant: evidence.variant, pattern,
       ...(authority.status !== 'RESOLVED' && eligible && context.runningEventPreparation?.constraints.recovery === 'REQUIRED' && policy.methodId === 'running_recovery'
         ? { missingAuthorityRequest: runningReuseRequirement(policy.methodId,authority.reason) } : {}),
       ...(context.runningEventPreparation ? {longitudinalDose:resolveLongitudinalRunningDose(authority,context.runningEventPreparation),weeklyIntensityEligibility:eligible?'ALLOWED':'FORBIDDEN'} : {}),

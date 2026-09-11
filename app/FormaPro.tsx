@@ -1,4 +1,5 @@
 'use client';
+import { splitExecutionReports } from '@/lib/execution/reportExecutionDate';
 import { RunningHrBootstrap } from '@/components/RunningHrBootstrap';
 import { TargetEventForm } from '@/components/TargetEventForm';
 import { RunningExecutionReport } from '@/components/RunningExecutionReport';
@@ -1708,13 +1709,18 @@ const forgeValidator=(texto:string):string=>{
       if(json && !esMensajeDeSueno){
         try{
           const sesionParsed=JSON.parse(json);
-          const fechaSesionCheck=new Date(sesionParsed.fecha);
-          const diaSemCheck=fechaSesionCheck.getDay()||7;
+          const reports=splitExecutionReports(mensajeUsuarioOriginal,new Date().toLocaleDateString('en-CA',{timeZone:'Atlantic/Canary'}));
+          // Multiple reports are recorded independently by the server report flow.
+          if(reports.length!==1 || !reports[0].date) throw new Error('EXECUTION_DATE_UNRESOLVED');
+          sesionParsed.fecha=reports[0].date;
+          sesionParsed.reportText=mensajeUsuarioOriginal;
+          const fechaSesionCheck=new Date(sesionParsed.fecha+'T12:00:00Z');
+          const diaSemCheck=fechaSesionCheck.getUTCDay()||7;
           const lunesSemCheck=new Date(fechaSesionCheck);
-          lunesSemCheck.setDate(fechaSesionCheck.getDate()-diaSemCheck+1);
+          lunesSemCheck.setUTCDate(fechaSesionCheck.getUTCDate()-diaSemCheck+1);
           const weekStartCheck=lunesSemCheck.toISOString().split('T')[0];
           const DIAS_CHECK=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
-          const diaCheck=DIAS_CHECK[fechaSesionCheck.getDay()].normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+          const diaCheck=DIAS_CHECK[fechaSesionCheck.getUTCDay()].normalize("NFD").replace(/[\u0300-\u036f]/g,"");
           const workoutIdCheck=`${weekStartCheck}_${diaCheck}`;
           const yaExisteCheck=planSemanal?.sessions?.find((s:any)=>s.dia.normalize("NFD").replace(/[\u0300-\u036f]/g,"")===diaCheck)?.completada;
           setSesionPendiente({...sesionParsed,workout_id:workoutIdCheck,yaExiste:!!yaExisteCheck});
@@ -2021,6 +2027,9 @@ const forgeValidator=(texto:string):string=>{
       // directamente y guarda el reporte de entreno de forma determinista.
       if(codigoUsuario && texto.trim().length>=10){
         apiCall({action:"verificar_sesion_completada_deterministico",codigo:codigoUsuario,datos:{mensaje:texto}}).then((resSesionDet:any)=>{
+          if(resSesionDet?.clarificationRequired){
+            setMensajes(prev=>[...prev,{role:"assistant",content:resSesionDet.message}]);
+          }
           if(resSesionDet?.partial){
             setMensajes(prev=>[...prev,{role:"assistant",content:"⚠️ Entrenamiento guardado en el historial, pero no se pudo confirmar el cambio en Mi Plan. No repitas el registro automáticamente; requiere revisión."}]);
           } else if(resSesionDet?.detectado && resSesionDet.ok){

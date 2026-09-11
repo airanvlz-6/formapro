@@ -1,3 +1,4 @@
+import { splitExecutionReports, resolveReportExecutionDate } from '@/lib/execution/reportExecutionDate';
 import { saveMethodBaseline } from '@/lib/athlete/runningMethodDeclarations';
 import { eventAction, loadEventContext, canonicalEventPrompt, resolveWeeklyEventRequirement } from '@/lib/athlete/eventActions';
 import { eventAuthorityText, boundEventAnalysis } from '@/lib/athlete/eventAuthority';
@@ -1804,7 +1805,9 @@ ${ultimos}`;
       || typeof sesion.tipo !== "string" || !sesion.tipo.trim() || typeof sesion.notas !== "string" || !sesion.notas.trim()) {
       return NextResponse.json({ ok: false, historyRecorded: false, error: "INVALID_WORKOUT" }, { status: 400 });
     }
-    const fechaRegistro = sesion.fecha ?? new Date().toISOString();
+    const fechaRegistro = typeof sesion.reportText === "string"
+      ? resolveReportExecutionDate(sesion.reportText, resolveCompletionDate(new Date().toISOString())!.date)
+      : sesion.fecha;
     const fechaEfectiva = resolveCompletionDate(fechaRegistro);
     if (!fechaEfectiva || (sesion.workout_id !== undefined && (typeof sesion.workout_id !== "string" || !sesion.workout_id.trim()))) {
       return NextResponse.json({ ok: false, historyRecorded: false, error: "INVALID_WORKOUT_DATE_OR_ID" }, { status: 400 });
@@ -3454,93 +3457,115 @@ IMPORTANTE sobre "dia": si el coach esta claramente adaptando la sesion de HOY (
     const pareceSoloSueno = /métricas de sueño|dormí|puntuación de sueño|durante la noche|sueño profundo|sueño rem/i.test(mensaje.toLowerCase()) && !/entren|wod|sesion realizada|serie|repeticion|corri|entrené|hice|complet/i.test(mensaje.toLowerCase());
     if (pareceSoloSueno) return NextResponse.json({ ok: true, detectado: false });
 
-    // 🚨 FIX CRITICO: FILTRO DETERMINISTICO DE NEGACION — bug real confirmado: el mensaje "Hoy no
-    // he completado ninguna sesión de entreno" fue mal interpretado por el LLM como reporte
-    // POSITIVO de entreno completado, marcando erroneamente completada=true. Este filtro regex
-    // detecta negacion explicita ANTES de llamar a Haiku, sin depender de que el modelo entienda
-    // correctamente la negacion — mas rapido, mas barato, y elimina el riesgo de raiz.
-    const contieneNegacionExplicita = /\bno\s+(he|hice|complet|realiz|termin|acab|entren)/i.test(mensaje) ||
-      /\b(ninguna|nada de|sin hacer|no realizado|no completado)\b.*(sesion|entreno|entrenamiento)/i.test(mensaje) ||
-      /(sesion|entreno|entrenamiento).*\bno\b.*(complet|realiz|hice|hecho)/i.test(mensaje);
-    if (contieneNegacionExplicita) {
-      console.log("🛡️ SESSION SAFETY NET: negacion explicita detectada, NO se marca como completado:", mensaje.substring(0, 100));
-      return NextResponse.json({ ok: true, detectado: false, motivo: "negacion_detectada" });
+    const reportedAt = new Date().toISOString();
+    const today = resolveCompletionDate(reportedAt)!.date;
+    const reports = splitExecutionReports(mensaje, today);
+    const reportResult = (body: any, init?: { status?: number }) => ({ body, status: init?.status || 200 });
+    const processReport = async (mensaje: string, executionDate: string | null) => {
+      // 🚨 FIX CRITICO: FILTRO DETERMINISTICO DE NEGACION — bug real confirmado: el mensaje "Hoy no
+      // he completado ninguna sesión de entreno" fue mal interpretado por el LLM como reporte
+      // POSITIVO de entreno completado, marcando erroneamente completada=true. Este filtro regex
+      // detecta negacion explicita ANTES de llamar a Haiku, sin depender de que el modelo entienda
+      // correctamente la negacion — mas rapido, mas barato, y elimina el riesgo de raiz.
+      const contieneNegacionExplicita = /\bno\s+(he|hice|complet|realiz|termin|acab|entren)/i.test(mensaje) ||
+        /\b(ninguna|nada de|sin hacer|no realizado|no completado)\b.*(sesion|entreno|entrenamiento)/i.test(mensaje) ||
+        /(sesion|entreno|entrenamiento).*\bno\b.*(complet|realiz|hice|hecho)/i.test(mensaje);
+      if (contieneNegacionExplicita) {
+        console.log("🛡️ SESSION SAFETY NET: negacion explicita detectada, NO se marca como completado:", mensaje.substring(0, 100));
+        return reportResult({ ok: true, detectado: false, motivo: "negacion_detectada" });
+      }
+
+      const sesionPrompt = `Analiza este mensaje de un atleta a su coach de entrenamiento. Determina si el atleta esta reportando que COMPLETÓ un entrenamiento, hoy o en un día anterior (no una pregunta sobre entrenos futuros, no una peticion de plan, no solo metricas de sueno).
+
+  Responde SOLO con este JSON, sin texto adicional ni markdown:
+  {"es_reporte_entreno":true_o_false,"tipo":"tipo de sesion (ej: carrera, box, fuerza)","notas":"resumen factual breve de lo que reporta: distancia, tiempo, series, sensacion — SOLO lo que aparece literalmente en el mensaje","sensacion":"buena|normal|mala|null si no se menciona"}
+
+  Mensaje: "${mensaje}"
+
+  "es_reporte_entreno" debe ser true SOLO si el atleta claramente reporta haber COMPLETADO un entrenamiento (usa frases como "he terminado", "acabo de hacer", "hice", "completé", "sesion realizada"). Nunca inventes datos que el mensaje no contenga.`;
+
+      let historyRecorded = false;
+      try {
+        const sesionRes = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
+          body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 300, messages: [{ role: "user", content: sesionPrompt }] }),
+        });
+        if (!sesionRes.ok) return reportResult({ ok: false, historyRecorded: false, planCompleted: false, error: "COMPLETION_DETECTION_FAILED" }, { status: 502 });
+        const sesionData = await sesionRes.json();
+        const sesionTexto = sesionData.content?.map((b: any) => b.text || "").join("") || "{}";
+        const sesionClean = sesionTexto.replace(/```json|```/g, "").trim();
+        const extraido = JSON.parse(sesionClean);
+        if (!extraido || typeof extraido !== "object" || Array.isArray(extraido) || extraido.es_reporte_entreno !== true) {
+          return reportResult({ ok: true, detectado: false, historyRecorded: false, planCompleted: false });
+        }
+        if (typeof extraido.tipo !== "string" || !extraido.tipo.trim() || typeof extraido.notas !== "string" || !extraido.notas.trim()
+          || (extraido.sensacion !== undefined && extraido.sensacion !== null && !["buena", "normal", "mala"].includes(extraido.sensacion))) {
+          return reportResult({ ok: false, historyRecorded: false, planCompleted: false, error: "INVALID_COMPLETION_EXTRACTION" }, { status: 422 });
+        }
+        if (!executionDate) return reportResult({ ok: false, detectado: true, historyRecorded: false, planCompleted: false,
+          code: "EXECUTION_DATE_UNRESOLVED", clarificationRequired: true,
+          message: "¿En qué fecha realizaste ese entrenamiento? Repite el reporte incluyendo el día, mes y año." });
+        const fechaReporte = executionDate;
+        const fechaEjecucion = executionDate;
+        const { data: usuarioWorkoutCheck, error: errorLecturaHistory } = await supabase.from("usuarios").select("workout_history").eq("codigo", codigo).single();
+        if (errorLecturaHistory || !usuarioWorkoutCheck) return reportResult({ ok: false, historyRecorded: false, planCompleted: false, error: "HISTORY_READ_FAILED" }, { status: 500 });
+        if (usuarioWorkoutCheck.workout_history != null && !Array.isArray(usuarioWorkoutCheck.workout_history)) {
+          return reportResult({ ok: false, historyRecorded: false, planCompleted: false, error: "INVALID_WORKOUT_HISTORY" }, { status: 422 });
+        }
+        const workoutHistoryActual = usuarioWorkoutCheck.workout_history || [];
+        // Date + exact type remains a weak legacy identity, now using the resolved execution civil date.
+        const idxSesionExistente = workoutHistoryActual.findIndex((w: any) => resolveCompletionDate(w?.fecha)?.date === fechaEjecucion && w.tipo === extraido.tipo);
+        const anterior = idxSesionExistente >= 0 ? workoutHistoryActual[idxSesionExistente] : null;
+        const notasAnteriores = typeof anterior?.notas === "string" ? anterior.notas : "";
+        const nuevaSesionSafety = {
+          ...(anterior || { fecha: fechaReporte, duracion: null, analisis: "", source: "safety_net_deterministico", reported_at: reportedAt }),
+          tipo: extraido.tipo,
+          notas: notasAnteriores === extraido.notas ? notasAnteriores : `${notasAnteriores} ${extraido.notas}`.trim(),
+          sensacion: extraido.sensacion || anterior?.sensacion || "normal",
+        };
+
+        let workoutHistoryActualizado;
+        if (idxSesionExistente >= 0) {
+          workoutHistoryActualizado = [...workoutHistoryActual];
+          workoutHistoryActualizado[idxSesionExistente] = nuevaSesionSafety;
+          console.log("🛡️ SESSION SAFETY NET: enriqueciendo sesion ya existente en la fecha de ejecución con nuevos detalles");
+        } else {
+          workoutHistoryActualizado = [...workoutHistoryActual, nuevaSesionSafety];
+        }
+
+        const { data: usuarioGuardado, error: errorHistory } = await supabase.from("usuarios").update({ workout_history: workoutHistoryActualizado })
+          .eq("codigo", codigo).select("codigo").maybeSingle();
+        if (errorHistory || !usuarioGuardado || usuarioGuardado.codigo !== codigo) {
+          return reportResult({ ok: false, historyRecorded: false, planCompleted: false, error: "HISTORY_WRITE_FAILED" }, { status: 500 });
+        }
+        historyRecorded = true;
+        const completion = await recordPlanCompletion(supabase, { source: "deterministic_completion", userCodigo: codigo,
+          fecha: fechaReporte, title: extraido.tipo, description: extraido.notas });
+        // History is a separate committed record, including no-plan/rest workouts. Never roll it back.
+        // HTTP 200 for known partials prevents apiCall from repeating history enrichment.
+        return reportResult({ ...completion, historyRecorded: true, detectado: true,
+          partial: !completion.ok, sesion: nuevaSesionSafety });
+      } catch (err: any) {
+        console.error("Error en verificar_sesion_completada_deterministico:", err);
+        return reportResult({ ok: false, historyRecorded, planCompleted: false, partial: historyRecorded,
+          error: "COMPLETION_PROCESSING_FAILED" }, { status: historyRecorded ? 200 : 500 });
+      }
+    };
+    const results = [];
+    for (const report of reports) {
+      const result = await processReport(report.text, report.date);
+      results.push(result);
+      if (result.body.partial || result.status >= 500) break;
     }
-
-    const sesionPrompt = `Analiza este mensaje de un atleta a su coach de entrenamiento. Determina si el atleta esta reportando que ACABA DE COMPLETAR un entrenamiento (no una pregunta sobre entrenos futuros, no una peticion de plan, no solo metricas de sueno).
-
-Responde SOLO con este JSON, sin texto adicional ni markdown:
-{"es_reporte_entreno":true_o_false,"tipo":"tipo de sesion (ej: carrera, box, fuerza)","notas":"resumen factual breve de lo que reporta: distancia, tiempo, series, sensacion — SOLO lo que aparece literalmente en el mensaje","sensacion":"buena|normal|mala|null si no se menciona"}
-
-Mensaje: "${mensaje}"
-
-"es_reporte_entreno" debe ser true SOLO si el atleta claramente reporta haber COMPLETADO un entrenamiento (usa frases como "he terminado", "acabo de hacer", "hice", "completé", "sesion realizada"). Nunca inventes datos que el mensaje no contenga.`;
-
-    let historyRecorded = false;
-    try {
-      const sesionRes = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 300, messages: [{ role: "user", content: sesionPrompt }] }),
-      });
-      if (!sesionRes.ok) return NextResponse.json({ ok: false, historyRecorded: false, planCompleted: false, error: "COMPLETION_DETECTION_FAILED" }, { status: 502 });
-      const sesionData = await sesionRes.json();
-      const sesionTexto = sesionData.content?.map((b: any) => b.text || "").join("") || "{}";
-      const sesionClean = sesionTexto.replace(/```json|```/g, "").trim();
-      const extraido = JSON.parse(sesionClean);
-      if (!extraido || typeof extraido !== "object" || Array.isArray(extraido) || extraido.es_reporte_entreno !== true) {
-        return NextResponse.json({ ok: true, detectado: false, historyRecorded: false, planCompleted: false });
-      }
-      if (typeof extraido.tipo !== "string" || !extraido.tipo.trim() || typeof extraido.notas !== "string" || !extraido.notas.trim()
-        || (extraido.sensacion !== undefined && extraido.sensacion !== null && !["buena", "normal", "mala"].includes(extraido.sensacion))) {
-        return NextResponse.json({ ok: false, historyRecorded: false, planCompleted: false, error: "INVALID_COMPLETION_EXTRACTION" }, { status: 422 });
-      }
-      // Legacy: a detected report belongs to TODAY in Madrid; historical reports are not interpreted.
-      const fechaReporte = new Date().toISOString();
-      const hoySesionStr = resolveCompletionDate(fechaReporte)!.date;
-      const { data: usuarioWorkoutCheck, error: errorLecturaHistory } = await supabase.from("usuarios").select("workout_history").eq("codigo", codigo).single();
-      if (errorLecturaHistory || !usuarioWorkoutCheck) return NextResponse.json({ ok: false, historyRecorded: false, planCompleted: false, error: "HISTORY_READ_FAILED" }, { status: 500 });
-      if (usuarioWorkoutCheck.workout_history != null && !Array.isArray(usuarioWorkoutCheck.workout_history)) {
-        return NextResponse.json({ ok: false, historyRecorded: false, planCompleted: false, error: "INVALID_WORKOUT_HISTORY" }, { status: 422 });
-      }
-      const workoutHistoryActual = usuarioWorkoutCheck.workout_history || [];
-      // Date + exact type remains a weak legacy identity, now using the same Madrid civil date.
-      const idxSesionHoyExistente = workoutHistoryActual.findIndex((w: any) => resolveCompletionDate(w?.fecha)?.date === hoySesionStr && w.tipo === extraido.tipo);
-      const anterior = idxSesionHoyExistente >= 0 ? workoutHistoryActual[idxSesionHoyExistente] : null;
-      const notasAnteriores = typeof anterior?.notas === "string" ? anterior.notas : "";
-      const nuevaSesionSafety = {
-        ...(anterior || { fecha: fechaReporte, duracion: null, analisis: "", source: "safety_net_deterministico" }),
-        tipo: extraido.tipo,
-        notas: notasAnteriores === extraido.notas ? notasAnteriores : `${notasAnteriores} ${extraido.notas}`.trim(),
-        sensacion: extraido.sensacion || anterior?.sensacion || "normal",
-      };
-
-      let workoutHistoryActualizado;
-      if (idxSesionHoyExistente >= 0) {
-        workoutHistoryActualizado = [...workoutHistoryActual];
-        workoutHistoryActualizado[idxSesionHoyExistente] = nuevaSesionSafety;
-        console.log("🛡️ SESSION SAFETY NET: enriqueciendo sesion ya existente de hoy con nuevos detalles");
-      } else {
-        workoutHistoryActualizado = [...workoutHistoryActual, nuevaSesionSafety];
-      }
-
-      const { data: usuarioGuardado, error: errorHistory } = await supabase.from("usuarios").update({ workout_history: workoutHistoryActualizado })
-        .eq("codigo", codigo).select("codigo").maybeSingle();
-      if (errorHistory || !usuarioGuardado || usuarioGuardado.codigo !== codigo) {
-        return NextResponse.json({ ok: false, historyRecorded: false, planCompleted: false, error: "HISTORY_WRITE_FAILED" }, { status: 500 });
-      }
-      historyRecorded = true;
-      const completion = await recordPlanCompletion(supabase, { source: "deterministic_completion", userCodigo: codigo,
-        fecha: fechaReporte, title: extraido.tipo, description: extraido.notas });
-      // History is a separate committed record, including no-plan/rest workouts. Never roll it back.
-      // HTTP 200 for known partials prevents apiCall from repeating history enrichment.
-      return NextResponse.json({ ...completion, historyRecorded: true, detectado: true,
-        partial: !completion.ok, sesion: nuevaSesionSafety });
-    } catch (err: any) {
-      console.error("Error en verificar_sesion_completada_deterministico:", err);
-      return NextResponse.json({ ok: false, historyRecorded, planCompleted: false, partial: historyRecorded,
-        error: "COMPLETION_PROCESSING_FAILED" }, { status: historyRecorded ? 200 : 500 });
-    }
+    if (results.length === 1) return NextResponse.json(results[0].body, { status: results[0].status });
+    return NextResponse.json({ ok: results.every(r => r.body.ok),
+      detectado: results.some(r => r.body.detectado), historyRecorded: results.some(r => r.body.historyRecorded),
+      planCompleted: results.some(r => r.body.planCompleted), partial: results.some(r => r.body.partial)
+        || (results.some(r => r.body.historyRecorded) && results.some(r => r.status >= 400)),
+      clarificationRequired: results.some(r => r.body.clarificationRequired),
+      message: results.find(r => r.body.clarificationRequired)?.body.message,
+      executions: results.map(r => r.body) });
   }
 
   if (action === "verificar_referencia_sesion_futura") {

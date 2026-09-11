@@ -1,5 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { estimateHrrZones, validHrZones, HRR_POLICY, type HrZone } from '../sports/hrrZonePolicy';
+import { estimateHrZoneProposal, type HrZoneEstimation } from './hrZoneEstimationAuthority';
 
 const hash = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
 type Running = { byMetric: Record<string, { reason: string; resolved: { value: { value: unknown }; source: string } | null }> };
@@ -9,6 +10,8 @@ export type HrZoneSystem = {
   inputDigest: string; generatedAt: string | null; confirmation: 'PROPOSED' | 'USER_CONFIRMED'; confirmedAt: string | null;
   declarationSources?: string[];
   containsEstimatedData: boolean; proposalDigest: string;
+  estimation?: HrZoneEstimation;
+  snapshotSignature?: string;
 };
 function inputs(running: Running) {
   const a = running.byMetric.maxHr, b = running.byMetric.restingHr;
@@ -16,8 +19,10 @@ function inputs(running: Running) {
   return { maxHr: a.resolved.value.value, restingHr: b.resolved.value.value, sources: [a.resolved.source, b.resolved.source] };
 }
 const body = (s: HrZoneSystem) => ({ zoneSystemId: s.zoneSystemId, policy: s.policy, domain: s.domain, zones: s.zones,
-  origin: s.origin, inputs: s.inputs, inputDigest: s.inputDigest, generatedAt: s.generatedAt, containsEstimatedData: s.containsEstimatedData });
-export function hrZoneProposal(running: Running, generatedAt: string, declared?: HrZone[]): HrZoneSystem | null {
+  origin: s.origin, inputs: s.inputs, inputDigest: s.inputDigest,
+  ...(s.estimation ? { estimation: s.estimation } : { generatedAt: s.generatedAt }), containsEstimatedData: s.containsEstimatedData });
+// Read compatibility for previously persisted systems; never rewrites their ranges or metadata.
+function legacyHrZoneProposal(running: Running, generatedAt: string, declared?: HrZone[]): HrZoneSystem | null {
   const i = declared ? null : inputs(running), zones = declared ?? (i && estimateHrrZones(i.maxHr, i.restingHr));
   if (!validHrZones(zones) || !Number.isFinite(Date.parse(generatedAt))) return null;
   const s: HrZoneSystem = { zoneSystemId: declared ? 'user_declared_5_zone_v1' : HRR_POLICY.id,
@@ -27,16 +32,45 @@ export function hrZoneProposal(running: Running, generatedAt: string, declared?:
     containsEstimatedData: !declared, proposalDigest: '' };
   s.proposalDigest = hash(body(s)); return s;
 }
+const snapshotPayload = (s: HrZoneSystem) => JSON.stringify({ purpose: 'hr-zone-snapshot-v2', ...body(s),
+  proposalDigest: s.proposalDigest, generatedAt: s.generatedAt, confirmation: s.confirmation, confirmedAt: s.confirmedAt });
+function seal(s: HrZoneSystem): HrZoneSystem { return { ...s, snapshotSignature: mac(snapshotPayload(s)) }; }
+export function hrZoneProposal(running: Running, generatedAt: string, declared?: HrZone[]): HrZoneSystem | null {
+  if (declared) return legacyHrZoneProposal(running, generatedAt, declared);
+  const i = inputs(running);
+  if (!i || !Number.isFinite(Date.parse(generatedAt))) return null;
+  const estimation = estimateHrZoneProposal(i);
+  if (!estimation) return null;
+  const s: HrZoneSystem = { zoneSystemId: estimation.policyId, policy: { id: estimation.policyId, version: estimation.policyVersion },
+    domain: 'heart_rate', zones: structuredClone(estimation.zones), origin: estimation.origin, inputs: i,
+    inputDigest: hash(i), generatedAt, confirmation: 'PROPOSED', confirmedAt: null,
+    containsEstimatedData: true, estimation, proposalDigest: '' };
+  s.proposalDigest = hash(body(s));
+  return seal(s);
+}
 export function validHrZoneSystem(s: HrZoneSystem): boolean {
   try {
   if (!s || !validHrZones(s.zones) || !['PROPOSED', 'USER_CONFIRMED'].includes(s.confirmation)
     || (s.confirmation === 'USER_CONFIRMED' ? !s.confirmedAt || !Number.isFinite(Date.parse(s.confirmedAt)) : s.confirmedAt !== null)) return false;
+  if (s.estimation) {
+    // Authenticate the exact immutable result. Do not invoke HRR on admission/reload.
+    if (s.policy.id !== HRR_POLICY.id || s.policy.version !== HRR_POLICY.version
+      || typeof s.generatedAt !== 'string' || !Number.isFinite(Date.parse(s.generatedAt))
+      || s.proposalDigest !== hash(body(s)) || typeof s.snapshotSignature !== 'string') return false;
+    const expected = Buffer.from(mac(snapshotPayload(s))), actual = Buffer.from(s.snapshotSignature);
+    return expected.length === actual.length && timingSafeEqual(expected, actual);
+  }
   const running: Running = { byMetric: Object.fromEntries(['maxHr', 'restingHr'].map((k, n) => [k, { reason: 'resolved', resolved: {
     value: { value: s.inputs?.[k as 'maxHr' | 'restingHr'] }, source: s.inputs?.sources[n] } }])) as Running['byMetric'] };
   if (typeof s.generatedAt !== 'string') return false;
-  const expected = hrZoneProposal(running, s.generatedAt, s.origin === 'USER_DECLARED' ? s.zones : undefined);
+  const expected = legacyHrZoneProposal(running, s.generatedAt, s.origin === 'USER_DECLARED' ? s.zones : undefined);
   return !!expected && JSON.stringify(body(expected)) === JSON.stringify(body(s)) && hash(body(s)) === s.proposalDigest;
   } catch { return false; }
+}
+export function hrZoneInputsStale(running: Running, stored: unknown): boolean {
+  const s = stored as HrZoneSystem;
+  return validHrZoneSystem(s) && s.confirmation === 'USER_CONFIRMED'
+    && s.origin === 'FORGE_ESTIMATED_HRR' && s.inputDigest !== hash(inputs(running));
 }
 /** Legacy complete declarations are separate zone facts, never aliases for easyHr. */
 export function admittedHrZones(running: Running, stored: unknown): HrZoneSystem | null {
@@ -75,5 +109,6 @@ export function confirmHrZoneProposal(user: string, token: unknown, digest: unkn
   if (p.user !== user || !Number.isFinite(p.expires) || p.expires <= now || p.previousDigest !== hash(current ?? null)
     || !validHrZoneSystem(s) || s.confirmation !== 'PROPOSED' || s.proposalDigest !== digest
     || (s.origin === 'FORGE_ESTIMATED_HRR' && s.inputDigest !== hash(inputs(running)))) throw new Error('HR_ZONE_PROPOSAL_STALE');
-  return { ...s, confirmation: 'USER_CONFIRMED' as const, confirmedAt: new Date(now).toISOString() };
+  const confirmed = { ...s, confirmation: 'USER_CONFIRMED' as const, confirmedAt: new Date(now).toISOString() };
+  return s.estimation ? seal(confirmed) : confirmed;
 }

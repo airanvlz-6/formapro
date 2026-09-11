@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 type Proposal = { zones: { id: string; lower: number; upper: number }[]; proposalDigest: string; origin: string };
 export function RunningHrBootstrap({ request, onDone }: { request: (data: Record<string, unknown>) => Promise<any>; onDone: () => void }) {
-  const [result, setResult] = useState<{ state: string; proposal?: Proposal; token?: string }>();
+  const [result, setResult] = useState<{ state: string; proposal?: Proposal; system?: Proposal; token?: string }>();
   const [manual, setManual] = useState(false), [values, setValues] = useState(Array(10).fill(''));
   const [busy, setBusy] = useState(true), [error, setError] = useState('');
   async function send(data: Record<string, unknown>, finish = false) {
@@ -15,10 +15,15 @@ export function RunningHrBootstrap({ request, onDone }: { request: (data: Record
   return <div role="dialog" aria-modal="true" aria-label="Intensidad de carrera" style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#0D0D0D', color: '#F0EDE8', overflow: 'auto', padding: '32px 20px' }}>
     <div style={{ maxWidth: 480, margin: 'auto' }}>
       <h2>Intensidad de tus entrenamientos</h2>
+      {result?.state === 'ADMITTED' && result.system && <><p>{result.system.origin === 'FORGE_ESTIMATED_HRR' ? 'Estas zonas estimadas ya están confirmadas. Conservamos sus valores originales.' : 'Tus zonas declaradas ya están disponibles.'}</p>
+        <table style={{ width: '100%' }}><tbody>{result.system.zones.map(z => <tr key={z.id}><td>{z.id}</td><td>{z.lower}–{z.upper} ppm</td></tr>)}</tbody></table>
+        <button disabled={busy} onClick={onDone}>Continuar con mis zonas</button></>}
       {result?.proposal ? <><p>{result.proposal.origin === 'FORGE_ESTIMATED_HRR' ? 'Estas son zonas de entrenamiento estimadas con tu FC máxima y tu FC en reposo. No son umbrales medidos. Revísalas antes de usarlas.' : 'Revisa tus zonas declaradas antes de confirmarlas.'}</p>
         <table style={{ width: '100%' }}><tbody>{result.proposal.zones.map(z => <tr key={z.id}><td>{z.id}</td><td>{z.lower}–{z.upper} ppm</td></tr>)}</tbody></table>
         <button disabled={busy} onClick={() => void send({ operation: 'confirm', token: result.token, digest: result.proposal!.proposalDigest }, true)}>Confirmar zonas</button></>
-        : result && <p>{result.state === 'NO_MONITOR' ? 'Sin pulsómetro, Forge utilizará percepción del esfuerzo (RPE) cuando no haya otra referencia objetiva de carrera.' : 'No tenemos suficientes datos para estimar tus zonas de frecuencia cardíaca. Por ahora Forge utilizará percepción del esfuerzo (RPE) cuando no haya otra referencia objetiva. Podrás añadir tus datos o zonas más adelante.'}</p>}
+        : result && result.state !== 'ADMITTED' && <p>{result.state === 'STALE_INPUTS' ? 'Tu FC máxima o tu FC en reposo ha cambiado. Las zonas confirmadas anteriores ya no coinciden con tus datos y no se usarán. No las hemos recalculado. Puedes introducir tus zonas o continuar con RPE.'
+          : result.state === 'STALE_SYSTEM' ? 'No podemos admitir el sistema de zonas anterior con la política actual. Conservamos el registro sin recalcularlo. Puedes introducir tus zonas o continuar con RPE.'
+          : result.state === 'NO_MONITOR' ? 'Sin pulsómetro, Forge utilizará percepción del esfuerzo (RPE) cuando no haya otra referencia objetiva de carrera.' : 'No tenemos suficientes datos para estimar tus zonas de frecuencia cardíaca. Por ahora Forge utilizará percepción del esfuerzo (RPE) cuando no haya otra referencia objetiva. Podrás añadir tus datos o zonas más adelante.'}</p>}
       <p>RPE expresa cómo de intenso sientes el esfuerzo:</p>
       <p>1–2 muy suave · 3–4 suave / cómodo · 5–6 moderado · 7–8 duro · 9 muy duro · 10 máximo.</p>
       <button disabled={busy} onClick={() => setManual(!manual)}>Modificar / introducir mis zonas</button>

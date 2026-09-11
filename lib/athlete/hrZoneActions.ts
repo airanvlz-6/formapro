@@ -1,5 +1,5 @@
 import { projectAthletePrescriptionProfile } from './athletePrescriptionContext';
-import { admittedHrZones, hrZoneProposal, issueHrZoneProposal, confirmHrZoneProposal } from './hrZoneBootstrap';
+import { admittedHrZones, hrZoneProposal, issueHrZoneProposal, confirmHrZoneProposal, hrZoneInputsStale } from './hrZoneBootstrap';
 import type { HrZone } from '../sports/hrrZonePolicy';
 
 /** Same authenticated chat identity as onboarding; only explicit actions write confirmation. */
@@ -10,8 +10,10 @@ export async function hrZoneAction(db: any, user: string, action: unknown, data:
   if (action === 'propose') {
     if (canonical.prescriptionSignals.signals['capability.canMeasureHeartRate'].state !== 'available') return { ok: true, state: 'NO_MONITOR' };
     const existing = admittedHrZones(canonical.running, profile.hrZoneBootstrap);
-    const declared = data.zones ?? (existing?.origin === 'USER_DECLARED' ? existing.zones : undefined);
-    const proposal = hrZoneProposal(canonical.running, new Date().toISOString(), declared);
+    if (data.zones === undefined && existing) return { ok: true, state: 'ADMITTED', system: existing };
+    if (data.zones === undefined && hrZoneInputsStale(canonical.running, profile.hrZoneBootstrap)) return { ok: true, state: 'STALE_INPUTS' };
+    if (data.zones === undefined && profile.hrZoneBootstrap?.confirmation === 'USER_CONFIRMED') return { ok: true, state: 'STALE_SYSTEM' };
+    const proposal = hrZoneProposal(canonical.running, new Date().toISOString(), data.zones);
     if (!proposal) {
       if (data.zones !== undefined) throw new Error('HR_ZONES_INVALID');
       return { ok: true, state: 'MISSING_INPUTS' };

@@ -1,0 +1,177 @@
+{
+  "initialStatus": "repair_required",
+  "diagnostics": [
+    {
+      "code": "WEEK_STRUCTURE_UNKNOWN",
+      "severity": "WARNING",
+      "sessionIds": [
+        "lunes:0"
+      ],
+      "dates": [
+        "2026-09-07"
+      ],
+      "dimension": null,
+      "evidence": null,
+      "reason": "No structured dose; no inference from prose.",
+      "repairability": "none"
+    },
+    {
+      "code": "WEEK_IMPACT_UNKNOWN",
+      "severity": "INFO",
+      "sessionIds": [
+        "lunes:0"
+      ],
+      "dates": [
+        "2026-09-07"
+      ],
+      "dimension": "impact",
+      "evidence": null,
+      "reason": "Missing impact is not low impact.",
+      "repairability": "none"
+    },
+    {
+      "code": "WEEK_STRUCTURE_UNKNOWN",
+      "severity": "WARNING",
+      "sessionIds": [
+        "martes:1"
+      ],
+      "dates": [
+        "2026-09-08"
+      ],
+      "dimension": null,
+      "evidence": null,
+      "reason": "No structured dose; no inference from prose.",
+      "repairability": "none"
+    },
+    {
+      "code": "WEEK_IMPACT_UNKNOWN",
+      "severity": "INFO",
+      "sessionIds": [
+        "martes:1"
+      ],
+      "dates": [
+        "2026-09-08"
+      ],
+      "dimension": "impact",
+      "evidence": null,
+      "reason": "Missing impact is not low impact.",
+      "repairability": "none"
+    },
+    {
+      "code": "WEEK_PRIMARY_DEFERRED",
+      "severity": "WARNING",
+      "sessionIds": [],
+      "dates": [],
+      "dimension": "resistencia_especifica",
+      "evidence": {
+        "reference": "adaptation:resistencia_especifica",
+        "reason": "no_feasible_managed_method"
+      },
+      "reason": "Explicit canonical deferral; not silently counted as covered.",
+      "repairability": "none"
+    },
+    {
+      "code": "WEEK_PRIMARY_DEFERRED",
+      "severity": "WARNING",
+      "sessionIds": [],
+      "dates": [],
+      "dimension": "umbral",
+      "evidence": {
+        "reference": "adaptation:umbral",
+        "reason": "no_feasible_managed_method"
+      },
+      "reason": "Explicit canonical deferral; not silently counted as covered.",
+      "repairability": "none"
+    },
+    {
+      "code": "WEEK_EXACT_DUPLICATE",
+      "severity": "ERROR",
+      "sessionIds": [
+        "viernes:4",
+        "sabado:5"
+      ],
+      "dates": [
+        "2026-09-11",
+        "2026-09-12"
+      ],
+      "dimension": "dose",
+      "evidence": {
+        "movement": 1,
+        "pattern": 1,
+        "stimulus": true,
+        "structure": true,
+        "dose": true,
+        "intensity": true,
+        "adaptation": true,
+        "role": true,
+        "loadProfile": true
+      },
+      "reason": "Identical structured prescription; no signed repetition justification exists.",
+      "repairability": "same_contract"
+    }
+  ],
+  "affectedObjectives": [
+    {
+      "day": "viernes",
+      "intent": {
+        "kind": "adaptation",
+        "goalId": "half_marathon",
+        "adaptationId": "base_aerobica",
+        "methodId": "running_base",
+        "role": "PRIMARY",
+        "pattern": "run",
+        "blockPhase": "unknown",
+        "blockWeek": null,
+        "weaknessId": null
+      }
+    },
+    {
+      "day": "sabado",
+      "intent": {
+        "kind": "adaptation",
+        "goalId": "half_marathon",
+        "adaptationId": "base_aerobica",
+        "methodId": "running_base",
+        "role": "PRIMARY",
+        "pattern": "run",
+        "blockPhase": "unknown",
+        "blockWeek": null,
+        "weaknessId": null
+      }
+    }
+  ],
+  "orchestration": {
+    "version": 1,
+    "maxDistinctTargets": 3,
+    "maxModelCalls": 6,
+    "localRepairCount": 1,
+    "targetedRegenerationCount": 1,
+    "targetedSessionCount": 1,
+    "affectedSessionIds": [
+      "sabado:5"
+    ],
+    "stages": [
+      {
+        "stage": "local",
+        "targetIds": [
+          "sabado:5"
+        ],
+        "failedIds": [],
+        "failedReasons": [],
+        "limitExceeded": false,
+        "nonRepairableCodes": []
+      },
+      {
+        "stage": "targeted",
+        "targetIds": [
+          "sabado:5"
+        ],
+        "failedIds": [],
+        "failedReasons": [],
+        "limitExceeded": false,
+        "nonRepairableCodes": []
+      }
+    ],
+    "finalStatus": "repair_required"
+  }
+}

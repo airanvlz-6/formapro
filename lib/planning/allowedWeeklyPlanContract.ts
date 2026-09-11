@@ -17,6 +17,8 @@ import { assertStrategyShape, strategicIntents, type CanonicalWeekStrategy } fro
 import { projectRejectedWeeklyIntent, emitWeeklyFeasibilityDiagnostic, type WeeklyDiagnosticContext } from './weeklyFeasibilityDiagnostic';
 
 export type WeeklyOption = { optionId: string; state: 'TRAIN' | 'RECOVERY' | 'REST' | 'UNAVAILABLE';
+  /** Server/domain projection: identical fixed prescriptions have no signed repetition authority. */
+  fixedPrescriptionKey?: string;
   discipline?: string; stimulusId?: string; intent?: PrescriptionIntent; protected?: true };
 export type AllowedWeeklyPlanContract = {
   runningEventPreparation?: RunningEventPreparationDecisionV1;
@@ -51,16 +53,18 @@ function covers(option: WeeklyOption, group: Coverage): boolean {
     : intent.adaptationId === group.adaptationId))
     && (!group.discipline || option.discipline === group.discipline) && (!group.weaknessId || intent.weaknessId === group.weaknessId);
 }
-/** Finite existence proof over seven days, count, rest and demand bits. No session dosing or interday physiology. */
+/** Finite existence proof over count, rest, coverage and domain-projected fixed keys. No dose selection or interday physiology. */
 function coverageFeasible(contract: AllowedWeeklyPlanContract, groups: Coverage[]): boolean {
   const full = (1 << groups.length) - 1;
-  let states = new Set(['0:0:0:0']);
+  const keys = [...new Set(Object.values(contract.dayOptions).flat().flatMap(o => !o.protected && o.fixedPrescriptionKey ? [o.fixedPrescriptionKey] : []))];
+  let states = new Set(['0:0:0:0:0']);
   for (const day of calendarDays) {
-    const signatures = [...new Set(contract.dayOptions[day].map(o => `${Number(isExecutableCalendarState(o.state))}:${Number(o.state === 'REST')}:${groups.reduce((mask, g, i) => mask | (covers(o, g) ? 1 << i : 0), 0)}:${Number(!o.protected && isExecutableCalendarState(o.state))}`))];
+    const signatures = [...new Set(contract.dayOptions[day].map(o => `${Number(isExecutableCalendarState(o.state))}:${Number(o.state === 'REST')}:${groups.reduce((mask, g, i) => mask | (covers(o, g) ? 1 << i : 0), 0)}:${Number(!o.protected && isExecutableCalendarState(o.state))}:${!o.protected && o.fixedPrescriptionKey ? BigInt(1) << BigInt(keys.indexOf(o.fixedPrescriptionKey)) : BigInt(0)}`))];
     const next = new Set<string>();
     for (const state of states) for (const signature of signatures) {
       const [n, rest, mask, fresh] = state.split(':').map(Number), [add, r, bits, addedFresh] = signature.split(':').map(Number);
-      if (n + add <= contract.frequencyPolicy.maxExecutableDays) next.add(`${n + add}:${rest | r}:${mask | bits}:${fresh | addedFresh}`);
+      const used = BigInt(state.split(':')[4]), added = BigInt(signature.split(':')[4]);
+      if (!(used & added) && n + add <= contract.frequencyPolicy.maxExecutableDays) next.add(`${n + add}:${rest | r}:${mask | bits}:${fresh | addedFresh}:${used | added}`);
     }
     states = next;
   }
@@ -239,6 +243,9 @@ export function validateWeeklySelection(contract: AllowedWeeklyPlanContract, pro
     selected[s.day] = option;
   }
   const options = Object.values(selected);
+  const fixedKeys = options.flatMap(o => !o.protected && o.fixedPrescriptionKey ? [o.fixedPrescriptionKey] : []);
+  if (new Set(fixedKeys).size !== fixedKeys.length)
+    return failure('WEEKLY_SELECTION_INVALID', ['WEEKLY_FIXED_PRESCRIPTION_DUPLICATE']);
   if(contract.runningEventPreparation?.constraints.longRun==='REQUIRED' && !options.some(o=>!o.protected && o.intent?.kind==='adaptation' && o.intent.methodId==='running_long_run')) return failure('WEEKLY_SELECTION_INVALID',['D3_REQUIRED_LONG_RUN_MISSING']);
   if(contract.runningEventPreparation?.constraints.quality==='REQUIRED' && !options.some(o=>o.intent?.kind==='adaptation' && ['running_threshold','running_vo2'].includes(o.intent.methodId)))
     return failure('WEEKLY_SELECTION_INVALID',['D3_REQUIRED_QUALITY_MISSING']);
@@ -263,6 +270,7 @@ export function weeklyPlannerPrompt(contract: AllowedWeeklyPlanContract) {
   return `Selecciona una semana exclusivamente entre las opciones del contrato JSON. Disponibilidad es permiso, no obligación.
 Si regeneration está presente, selecciona al menos una opción ejecutable NO protegida; la historia preservada no satisface el trabajo pendiente.
 TRAIN y RECOVERY cuentan hacia maxExecutableDays. RECOVERY no sustituye REST. No inventes movimientos ni objetivos específicos.
+No selecciones dos opciones nuevas con el mismo fixedPrescriptionKey: sus autoridades fijan una prescripción idéntica sin permiso de repetición. Elige otra opción autorizada o REST respetando coverage.
 Si existe strategy, debes cubrir TODOS sus grupos coverage con las opciones seleccionadas. Respeta roles y métodos; deferred explica lo que no puede exigirse esta semana.
 Devuelve exclusivamente JSON RAW: el objeto directamente. El primer carácter de la respuesta DEBE ser { y el último carácter DEBE ser }.
 NO uses Markdown. NO uses \`\`\`json ni fences \`\`\` de ningún tipo. NO añadas prosa antes ni después del JSON, explicaciones ni comentarios.

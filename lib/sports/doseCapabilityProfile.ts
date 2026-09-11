@@ -16,6 +16,7 @@ import { transferMethod, type StrategicIntent, type GoalId } from './goalTransfe
 import type { PrescriptionScope } from './prescriptionScope';
 import { habitualRunningRequirement } from '../athlete/runningHabitualDeclarations';
 import { compatibleRunningExecutions } from './runningExecutionCompatibility';
+import { fixedRunningPrescription } from './fixedRunningPrescription';
 
 export function buildDoseCapabilityProfile(admission: RunningDoseEvidenceAdmission, scope: PrescriptionScope,
   context: { runningEventPreparation?: RunningEventPreparationDecisionV1; goalId: GoalId | null; blockPhase: StrategicIntent['blockPhase']; blockWeek: number | null; athlete?: AthletePrescriptionContext; contexts?: Record<string, ContractInput> }) {
@@ -40,6 +41,7 @@ export function buildDoseCapabilityProfile(admission: RunningDoseEvidenceAdmissi
       : authority.reason === 'HABITUAL_RECONFIRMATION_REQUIRED' ? 'RECONFIRMATION_REQUIRED' as const
       : ready ? (policy.selectDose ? 'EVIDENCE_READY_POLICY_UNRESOLVED' as const : 'EVIDENCE_READY_POLICY_MISSING' as const) : 'MISSING_EVIDENCE' as const;
     const continuity = authority.dose?.composition === 'SINGLE_CONTINUOUS_TOTAL' || authority.dose?.composition === 'SINGLE_INTERVAL_MAIN';
+    let fixedPrescription: ReturnType<typeof fixedRunningPrescription> = null;
     let execution = {compositionStatus: 'NOT_ESTABLISHED', intensityStatus: 'NOT_EVALUATED', timeStatus: 'NOT_EVALUATED', errors: [] as string[]};
     if (continuity && authority.status === 'RESOLVED') {
       execution = {compositionStatus:'RESOLVED',intensityStatus:'UNRESOLVED',timeStatus:'UNRESOLVED',errors:['SESSION_EXECUTION_CONTEXT_REQUIRED']};
@@ -50,6 +52,7 @@ export function buildDoseCapabilityProfile(admission: RunningDoseEvidenceAdmissi
           built.contract.runningMethodDose=authority;
           built.contract.intensityAuthority=resolveMethodIntensity(built.contract);
           execution=aerobicExecutionGate(built.contract);
+          if (!execution.errors.length) fixedPrescription=fixedRunningPrescription(built.contract);
         }
       }
     }
@@ -80,6 +83,7 @@ export function buildDoseCapabilityProfile(admission: RunningDoseEvidenceAdmissi
       evidenceStatus: conflict ? 'CONFLICT' as const : duration?.status === 'AVAILABLE' ? 'DECLARATIONS_AVAILABLE' as const
         : factual.status === 'AVAILABLE' ? 'STRUCTURED_EXECUTION_AVAILABLE' as const : factual.status === 'PARTIAL' ? 'PARTIAL' as const : 'MISSING' as const,
       policyStatus: policy.selectDose ? 'ESTABLISHED' as const : 'NOT_ESTABLISHED' as const,
+      ...(fixedPrescription ? {fixedPrescription} : {}),
       blockers, executionIntegrityStatus: factual.integrityStatus, weeklyContextStatus: 'NOT_EVALUATED' as const,
       compositionStatus: execution.compositionStatus, intensityStatus: execution.intensityStatus, timeStatus: execution.timeStatus,
       prescriptionBlockReason: execution.errors[0] ?? (authority.status === 'RESOLVED' ? null : authority.reason),

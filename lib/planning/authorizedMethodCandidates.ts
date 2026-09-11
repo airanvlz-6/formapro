@@ -6,6 +6,8 @@ import { calendarState } from './weeklyCalendar';
 import { strategicIntents } from './canonicalWeekStrategy';
 import { projectRejectedWeeklyIntent } from './weeklyFeasibilityDiagnostic';
 import type { WeeklyContractInput, WeeklyOption } from './allowedWeeklyPlanContract';
+import { createHash } from 'node:crypto';
+import { canonicalWeekValue } from './wholeWeekValidation';
 
 /** Server-owned future input. No current adapter produces this and no request/UI field is forwarded.
  * Permission authorizes a directed day/discipline transition, never a safety exemption. */
@@ -54,7 +56,10 @@ export function resolveAuthorizedMethodCandidates(input: WeeklyContractInput, da
     }
     options.push({ optionId: `${day}:${discipline}:${stimulus}:${intent.methodId}:${intent.pattern}`
       + (intent.transfer ? `:transfer:${intent.transfer.fromAdaptationId}:${intent.transfer.relationId}` : ''),
-      state: calendarState({ tipo: discipline, stimulusId: stimulus }), discipline, stimulusId: stimulus, intent });
+      state: calendarState({ tipo: discipline, stimulusId: stimulus }), discipline, stimulusId: stimulus, intent,
+      ...(capability?.fixedPrescription ? {fixedPrescriptionKey: createHash('sha256').update(canonicalWeekValue({
+        prescription: capability.fixedPrescription, adaptationId: intent.adaptationId, role: intent.role,
+      })).digest('hex')} : {}) });
     return null;
   };
   for (const discipline of input.prescriptionScope.managedDisciplines) {

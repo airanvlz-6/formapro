@@ -4,6 +4,11 @@ import { buildPrescriptionScope, resolveProfileDisciplines } from '../sports/pre
 import { EVENT_GOAL_CATALOG } from '../sports/eventGoalCatalog';
 import { cancelTargetEvent, declareTargetEvent, eventAuthorityText, eventDigest, issueEventForm, legacyEventCandidates, resolveEventAuthority, verifyEventForm } from './eventAuthority';
 
+const eventGoalLabel = (goalId: string | null) => ({
+  half_marathon: 'tu media maratón', '10k': 'tu 10K', crossfit: 'tu competición de CrossFit',
+  max_strength: 'tu prueba de fuerza', hyrox: 'tu competición de Hyrox',
+} as Record<string, string>)[goalId ?? ''] ?? null;
+
 export async function loadEventContext(db: any, athleteId: string, today: string) {
   const read = await db.from('usuarios').select('perfil,objetivo_principal,modo_entrada,categoria,especialidad,distribucion_semanal').eq('codigo', athleteId).single();
   const sources = await db.from('athlete_training_sources').select('disciplina,owner,activo,dias').eq('user_codigo', athleteId).eq('activo', true);
@@ -38,10 +43,12 @@ export async function resolveWeeklyEventRequirement(db: any, athleteId: string, 
   const context = await loadEventContext(db, athleteId, today);
   const supported = !!context.goalId && !!EVENT_GOAL_CATALOG[context.goalId];
   if (!supported || context.authority.targetEvent?.status === 'active') return null;
+  const label = eventGoalLabel(context.goalId);
   return {
     kind: 'target_event' as const,
-    text: 'Tu objetivo admite una prueba con horizonte temporal. Indica una fecha completa o elige «Aún no — continuar sin fecha».',
+    text: label ? `¿Tienes ya fecha para ${label}?` : '¿Tienes ya fecha para esta prueba?',
     supported: true,
+    goalLabel: label,
     authority: context.authority,
     token: issueEventForm(athleteId, context.fingerprint, now),
   };
@@ -49,7 +56,7 @@ export async function resolveWeeklyEventRequirement(db: any, athleteId: string, 
 /** Explicit form submit is declaration + confirmation. Inherits the existing chat identity boundary. */
 export async function eventAction(db: any, athleteId: string, operation: unknown, data: Record<string, unknown>, today: string, now = Date.now()) {
   const context = await loadEventContext(db, athleteId, today);
-  if (operation === 'read') return { ok: true, authority: context.authority, message: eventAuthorityText(context.authority),
+  if (operation === 'read') return { ok: true, authority: context.authority, message: eventAuthorityText(context.authority), goalLabel: eventGoalLabel(context.goalId),
     supported: !!context.goalId && !!EVENT_GOAL_CATALOG[context.goalId], legacy: context.legacy,
     token: issueEventForm(athleteId, context.fingerprint, now) };
   if (!['declare', 'without_date'].includes(String(operation))) throw new Error('EVENT_ACTION_INVALID');

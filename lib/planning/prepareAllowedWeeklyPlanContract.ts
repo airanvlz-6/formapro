@@ -113,7 +113,7 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
     if (!declarations?.conflicts.length && duration?.status!=='NO_HABITUAL_EASY_RUN') return {
       ok:false as const,canContinue:false as const,code:'RUNNING_HABITUAL_RECONFIRMATION_REQUIRED',
       runningHabitualRequirement: duration ? {field:duration.field,unit:duration.unit,currentDurationMinutes:duration.value,
-        text:`¿Sigue siendo tu rodaje fácil habitual de ${duration.value} minutos? Responde CONFIRMAR o escribe el número de minutos actual.`}
+        text:`¿Sigue siendo tu rodaje fácil habitual de ${duration.value} minutos? Responde CONFIRMAR, «sí», «correcto» o «sigue igual», o escribe el número de minutos actual.`}
         : habitualRunningRequirement([]),
     };
   }

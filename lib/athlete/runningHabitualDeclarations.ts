@@ -6,6 +6,11 @@ export type HabitualRunningDeclaration = { field: HabitualRunningField; authorit
   semantics: 'HABITUAL_EASY_RUN_DURATION' | 'HABITUAL_RUNNING_FREQUENCY';
   source: string; confirmedAt: string | null; freshness: 'UNKNOWN' };
 const row = (v: unknown): Record<string, unknown> => v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
+const normalizeConfirmation = (answer: unknown) => typeof answer === 'string'
+  ? answer.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() : '';
+export function isHabitualRunningConfirmation(answer: unknown) {
+  return ['confirmar', 'si', 'correcto', 'sigue igual'].includes(normalizeConfirmation(answer));
+}
 export function parseHabitualRunningAnswer(field: HabitualRunningField, answer: unknown): number | 'NO_HABITUAL_EASY_RUN' {
   if (!habitualRunningFields.includes(field)) throw new Error('RUNNING_HABITUAL_FIELD_INVALID');
   if (field === 'habitualEasyRunningDurationMinutes' && ['NO_HABITUAL_EASY_RUN', 'No tengo un rodaje fácil habitual'].includes(String(answer))) return 'NO_HABITUAL_EASY_RUN';
@@ -58,7 +63,7 @@ export type HabitualRunningProfileStore = { from(table: 'usuarios'): {
 } };
 export async function saveHabitualRunningAnswer(db: HabitualRunningProfileStore, user: string, field: HabitualRunningField, answer: unknown, confirmedAt = new Date().toISOString(), interaction?: RunningHabitualInteraction, expectedDurationMinutes?: unknown) {
   if (typeof user !== 'string' || !user.trim()) throw new Error('RUNNING_HABITUAL_USER_REQUIRED');
-  const reconfirm = field === 'habitualEasyRunningDurationMinutes' && answer === 'CONFIRMAR';
+  const reconfirm = field === 'habitualEasyRunningDurationMinutes' && isHabitualRunningConfirmation(answer);
   const value = reconfirm ? null : parseHabitualRunningAnswer(field, answer);
   if (!Number.isFinite(Date.parse(confirmedAt))) throw new Error('RUNNING_HABITUAL_DATE_INVALID');
   const current = await db.from('usuarios').select('perfil').eq('codigo', user).single();

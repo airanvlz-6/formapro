@@ -23,8 +23,8 @@ function intensity(c: AllowedTrainingContract, d: MovementDose): string {
   if (i.kind === 'percent_1rm') { const load = calculatedLoad(c, d)!;
     return `${range(load.minimumKg, load.maximumKg)} kg (${range(i.value, i.max ?? i.value)}% 1RM)`; }
   const v = typeof ref.value === 'number' ? { min: ref.value, max: ref.value } : ref.value;
-  const metric = /^z[1-5]$/.test(ref.metric || '') ? ref.metric!.toUpperCase()
-    : ({ easyPace: 'Ritmo suave', thresholdPace: 'Ritmo umbral', thresholdHr: 'Umbral', easyHr: 'Suave', '10k': 'Ritmo 10 km', '5k': 'Ritmo 5 km' } as Record<string, string>)[ref.metric!] || ref.metric;
+  const metric = ref.intensityEvidence?.zoneCompatibility?.sourceZone ?? (/^z[1-5]$/.test(ref.metric || '') ? ref.metric!.toUpperCase()
+    : ({ easyPace: 'Ritmo suave', thresholdPace: 'Ritmo umbral', thresholdHr: 'Umbral', easyHr: 'Suave', '10k': 'Ritmo 10 km', '5k': 'Ritmo 5 km' } as Record<string, string>)[ref.metric!] || ref.metric);
   return `${metric} · ${ref.unit === 'bpm' ? `${range(v.min, v.max)} ppm` : v.min === v.max ? pace(v.min) : `${pace(v.min)}–${pace(v.max)}`}`;
 }
 function movement(c: AllowedTrainingContract, id: string, d: MovementDose): string {

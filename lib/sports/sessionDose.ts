@@ -4,6 +4,7 @@ import { MOVEMENT_LIBRARY } from './movementLibrary';
 import { WORKOUT_STRUCTURE_LIBRARY } from './workoutStructureLibrary';
 import type { DoseReference } from './sessionDoseContext';
 import { validateSessionTimeDose } from './sessionTimeDoseAuthority';
+import { validateMethodIntensity } from './methodIntensityAuthority';
 
 export type DoseIntensity = { kind: 'rpe' | 'rir'; value: number; max?: number }
   | { kind: 'percent_1rm'; referenceId: string; value: number; max?: number }
@@ -148,6 +149,9 @@ export function validateSessionDose(c: AllowedTrainingContract, p: StructuredSes
   else if (maximum !== null && estimate.maximumSeconds! > maximum) errors.push('SESSION_BUDGET_EXCEEDED');
   if (c.doseContext?.timeAuthority) errors.push(...validateSessionTimeDose(c.doseContext.timeAuthority,
     { ...estimate, expectedSeconds: estimate.expectedSeconds ?? null }));
+  // Generic run/cyclic reference compatibility is necessary, not sufficient.
+  // Direct dose consumers must honor the same signed main-intensity authority as StructuredSession.
+  if (!errors.length) errors.push(...validateMethodIntensity(c, p));
   try { observe?.(estimate, errors); } catch { /* Observation never changes validation. */ }
   return [...new Set(errors)];
 }

@@ -59,8 +59,8 @@ export function humanCoachingProjection(c: AllowedTrainingContract, p: Structure
     if (i.kind === 'percent_1rm') { const kg = calculatedLoad(c, d)!; return `${range(kg.minimumKg, kg.maximumKg)} kg (${range(i.value, i.max ?? i.value)}% 1RM)`; }
     const ref = doseReference(c, i)!;
     const raceLabels: Readonly<Record<string, string>> = { halfMarathon: 'Ritmo medio de media maratón', marathon: 'Ritmo medio de maratón' };
-    const name = showPerceptionGuide && ref.metric && Object.hasOwn(raceLabels, ref.metric) ? raceLabels[ref.metric]
-      : label(metricLabels, ref.metric, 'metric', 'Referencia prescrita');
+    const name = ref.intensityEvidence?.zoneCompatibility?.sourceZone ?? (showPerceptionGuide && ref.metric && Object.hasOwn(raceLabels, ref.metric) ? raceLabels[ref.metric]
+      : label(metricLabels, ref.metric, 'metric', 'Referencia prescrita'));
     const v = typeof ref.value === 'number' ? { min: ref.value, max: ref.value } : ref.value;
     return `${name} · ${ref.unit === 'bpm' ? `${range(v.min, v.max)} ppm` : v.min === v.max ? pace(v.min) : `${pace(v.min)}–${pace(v.max)}`}`;
   };

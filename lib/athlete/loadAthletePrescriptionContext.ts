@@ -1,4 +1,5 @@
 import { readMethodBaselines } from './runningMethodDeclarations';
+import { prescriptionHistorySummary } from './prescriptionHistorySummary';
 import { readRunningHabitualConfirmation, type RunningHabitualInteraction } from './runningHabitualConfirmation';
 import { projectAthletePrescriptionProfile, record } from './athletePrescriptionContext';
 import type { SessionEnvironmentInput } from '../sports/sessionTrainingEnvironment';
@@ -88,7 +89,7 @@ export async function loadAthletePrescriptionContext(db: any, userCodigo: string
     readiness: options.readiness ? { status: 'available' as const, ...options.readiness }
       : { status: 'unknown' as const, source: 'canonical_readiness_engine', result: null, reason: 'not_prepared_no_recalculation' },
     restrictions: { source: 'getCanonicalRestrictions', value: restrictions },
-    history: { completedSessions,
+    history: { completedSessions, prescriptions: prescriptionHistorySummary(plans as unknown[], options.asOfDate),
       exposure: { source: 'buildExposureReport', byDiscipline: Object.fromEntries(['box', 'carrera', 'fuerza'].map(d => [d, buildExposureReport(exposureInput, d)])),
         limitations: ['last_four_weekly_rows_not_exact_window', 'textual_report_matching', 'no_intra_week_reservations', 'unknown_dates_excluded'] },
       recentFrequency: { source: 'usuarios.workout_history', fromDate, toDate: options.asOfDate,

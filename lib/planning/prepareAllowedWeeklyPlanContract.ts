@@ -1,4 +1,5 @@
 import { runningPolicyGuidance } from '../sports/runningEvidencePolicy';
+import { buildWeeklyCoachingContext, loadWeeklyCoachingSupplement } from './weeklyCoachingContext';
 import { RUNNING_METHOD_DOSE_POLICIES } from '../sports/runningMethodDosePolicies';
 import { scopeRunningHistory } from '../execution/historicalRunning';
 import { projectWeeklyPrescriptionSignals } from './weeklyPrescriptionSignals';
@@ -133,7 +134,7 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
     ...(runningEventPreparation?.managed && runningEventPreparation.preparationState !== 'GENERAL_DEVELOPMENT' && strategy?.goal.id === 'half_marathon' ? { runningEventPreparation } : {}),
     ...(strategy ? { strategy, doseCapabilities: buildDoseCapabilityProfile(athlete!.runningDoseEvidenceAdmission, c.scope,
       { ...(runningEventPreparation?.managed && runningEventPreparation.preparationState !== 'GENERAL_DEVELOPMENT' && strategy.goal.id === 'half_marathon' ? {runningEventPreparation} : {}), goalId: strategy.goal.id, blockPhase: strategy.block.phase, blockWeek: strategy.block.week, athlete, contexts }) } : {}) },
-    fixedSessions: structuredClone(fixedSessions),
+    athlete, fixedSessions: structuredClone(fixedSessions),
     runningHistoryContext: athlete ? scopeRunningHistory(athlete.runningHistory, c.scope) : null,
     runningEventPreparation,
     availabilityConfirmed };
@@ -146,7 +147,11 @@ export async function prepareAllowedWeeklyPlanContract(db: any, codigo: string, 
     today: request.today, snapshot: request.snapshot,
     availabilityConfirmed: context.availabilityConfirmed,
     temporalDecision: request.diagnosticTemporalDecision === undefined ? request.empezarHoy : request.diagnosticTemporalDecision });
-  return built.ok ? { ...built, evidencePolicy:runningPolicyGuidance(context.input.strategy?.goal.id??null,context.runningEventPreparation?.preparationState??'',context.runningEventPreparation?.daysRemaining??null), factualRequirements: context.input.doseCapabilities?.entries.flatMap(e=>e.factualRequirement?[e.factualRequirement]:[])??[], fixedSessions: context.fixedSessions, runningHistoryContext: context.runningHistoryContext, runningEventPreparation: context.runningEventPreparation } : built;
+  if (!built.ok) return built;
+  const evidencePolicy = runningPolicyGuidance(context.input.strategy?.goal.id??null,context.runningEventPreparation?.preparationState??'',context.runningEventPreparation?.daysRemaining??null);
+  const coachingContext = buildWeeklyCoachingContext(context.input, built.contract, context.athlete, request.snapshot, request.today,
+    await loadWeeklyCoachingSupplement(db, codigo, request.today), evidencePolicy);
+  return { ...built, coachingContext, evidencePolicy, factualRequirements: context.input.doseCapabilities?.entries.flatMap(e=>e.factualRequirement?[e.factualRequirement]:[])??[], fixedSessions: context.fixedSessions, runningHistoryContext: context.runningHistoryContext, runningEventPreparation: context.runningEventPreparation };
 }
 
 /** Server resolves selections. Model prose never becomes an executable objective. */
@@ -154,7 +159,7 @@ export async function planBoundedWeek(db: any, codigo: string, request: Paramete
   complete: (prompt: string) => Promise<PlannerCompletion>, generationToken?: string) {
   const prepared = await prepareAllowedWeeklyPlanContract(db, codigo, request);
   if (!prepared.ok) return prepared;
-  const proposal = await composeBoundedWeek(prepared.contract, complete);
+  const proposal = await composeBoundedWeek(prepared.contract, complete, prepared.coachingContext);
   if (!proposal.ok) return proposal;
   const sessions = calendarDays.map(day => {
     const option = proposal.selected[day];

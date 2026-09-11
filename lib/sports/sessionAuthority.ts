@@ -220,8 +220,8 @@ export function admitSessionContent(session: Record<string, any>, userCodigo: st
   if (session.tipo === 'external_blocked') throw new Error('EXTERNAL_SLOT_NOT_AUTHORIZED');
   if (options.pastDay && session.titulo === 'Sin registrar') return { dia, tipo: 'sin_registrar', titulo: 'Sin registrar',
     por_que: 'Día anterior al inicio de esta planificación', descripcion: 'No aplica — esta planificación comienza a partir de hoy.', completada: false };
-  if (session.tipo === 'descanso') return { dia, tipo: 'descanso', titulo: 'Descanso', por_que: 'Recuperación programada',
-    descripcion: 'Día de descanso — prioriza sueño, hidratación y nutrición.' };
+  if (session.tipo === 'descanso') return { dia, tipo: 'descanso', titulo: 'Descanso', por_que: 'Descanso',
+    descripcion: 'Día sin entrenamiento programado.' };
   // Drop all other client metadata, including scientific notes and the ephemeral receipt.
   return verifySessionReceipt(session.sessionReceipt, session, userCodigo, weekStart);
 }

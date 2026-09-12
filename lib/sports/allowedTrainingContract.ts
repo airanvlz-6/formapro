@@ -12,6 +12,7 @@ import { timeAuthorityForIntent } from './sessionTimeDosePolicy';
 import { sameSessionTimeDoseAuthority } from './sessionTimeDoseAuthority';
 import { validMethodIntensity, type MethodIntensityAuthority } from './methodIntensityAuthority';
 import { validRunningMethodDose, type AuthorizedRunningMethodDose } from './runningMethodDoseAuthority';
+import { GENERATED_MOVEMENT_AUTHORITY, type GeneratedMovementAuthority } from './movementVariants';
 
 export { STRUCTURES_BY_STIMULUS } from './workoutStructureLibrary';
 export { resolveTrainingStimulus, type StimulusResolution } from './trainingFeasibility';
@@ -38,6 +39,7 @@ export type ContractInput = {
   source: 'weekly_session_builder';
 };
 export type AllowedTrainingContract = Omit<ContractInput, 'stimulus'> & {
+  generatedMovementAuthority?: GeneratedMovementAuthority;
   intensityAuthority?: MethodIntensityAuthority;
   runningMethodDose?: AuthorizedRunningMethodDose;
   contractVersion: 1 | 2 | 3;
@@ -71,6 +73,10 @@ export function validateAllowedTrainingContract(contract: AllowedTrainingContrac
   try {
     const input: ContractInput = { ...contract, stimulus: contract.stimulusId };
     const errors = feasibilityInputErrors(input);
+    if (contract.generatedMovementAuthority !== undefined && (contract.contractVersion !== 3
+      || contract.doseContext?.sessionDecisionAuthority !== 'coach' || !contract.doseContext.sufficiency
+      || JSON.stringify(contract.generatedMovementAuthority) !== JSON.stringify(GENERATED_MOVEMENT_AUTHORITY)))
+      errors.push('GENERATED_MOVEMENT_AUTHORITY_INVALID');
     if (contract.runningEventPreparation && contract.discipline === 'carrera') {
       if (contract.intent?.kind !== 'adaptation' || !runningEventMethodAllowed(contract.runningEventPreparation,contract.intent.methodId)) errors.push('D3_METHOD_FORBIDDEN');
       const index=['lunes','martes','miercoles','jueves','viernes','sabado','domingo'].indexOf(contract.targetDay);

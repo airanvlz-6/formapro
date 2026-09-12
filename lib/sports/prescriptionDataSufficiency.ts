@@ -6,6 +6,7 @@ export { referenceQuestionFields } from './prescriptionReferenceFields';
 export { prescriptionQuestion } from './prescriptionQuestionRenderer';
 import type { PrescriptionSignals, PrescriptionSignal } from '../athlete/prescriptionSignals';
 import type { DoseReference } from './sessionDoseContext';
+import { resolvedMovement, type MovementVariantProposal } from './movementVariants';
 
 export type PrescriptionDataRequirement = { signal: string; reason: string; requiredFor: string;
   criticality: 'required' | 'preferred'; acceptableFallbacks: string[] };
@@ -16,6 +17,7 @@ export type PrescriptionDataSufficiency = { status: 'sufficient' | 'fallback_ava
   fallbacks: { signal: string; fallback: string; movementId?: string; referenceId?: string }[];
   questions: PrescriptionQuestion[]; diagnostics: { code: string; signal: string; reason: string }[] };
 export type SufficiencyRequest = { movementId: string; discipline: string; intensity?: '1rm' | 'hr' | 'pace' | 'rpe' | 'rir';
+  variant?: MovementVariantProposal;
   referenceId?: string; distance?: boolean; allowRpe?: boolean; allowPace?: boolean;
   /** IDs already restricted by scope, restrictions AND the same immutable intent/pattern. */
   authorizedAlternatives?: string[] };
@@ -27,7 +29,8 @@ export function movementPrescriptionRequirements(context: PrescriptionSignals, r
   const evidence = (signal: string): SignalEvidence => ({ signal, ...(context.signals[signal] || unknown), answerType: 'availability' });
   const requireSignal = (signal: string, reason: string) => checks.push({
     requirement: { signal, reason, requiredFor: request.movementId, criticality: 'required', acceptableFallbacks: [] }, evidence: [evidence(signal)] });
-  const movement = MOVEMENT_LIBRARY[request.movementId];
+  const resolved = request.variant ? resolvedMovement(request) : undefined;
+  const movement = request.variant ? resolved?.descriptor : MOVEMENT_LIBRARY[request.movementId];
   if (!movement || !movement.discipline.some(discipline => discipline === request.discipline)) {
     checks.push({ requirement: { signal: 'movement.authorized', reason: 'movement_not_authorized', requiredFor: request.movementId,
       criticality: 'required', acceptableFallbacks: [] }, evidence: [{ signal: 'movement.authorized', ...unknown }] });
@@ -43,7 +46,7 @@ export function movementPrescriptionRequirements(context: PrescriptionSignals, r
   if (request.intensity && !['rpe', 'rir'].includes(request.intensity)) {
     const kind = request.intensity as '1rm' | 'hr' | 'pace';
     const id = `reference.${request.referenceId || (kind === '1rm' ? `1rm:${request.movementId}` : kind === 'hr' ? 'running:easyHr' : 'running:easyPace')}`;
-    const ref = references.find(r => (!request.referenceId || r.id === request.referenceId) && (kind === '1rm'
+    const ref = references.find(r => !request.variant && (!request.referenceId || r.id === request.referenceId) && (kind === '1rm'
       ? r.kind === '1rm' && r.movementId === request.movementId : r.kind === 'running' && r.unit === (kind === 'hr' ? 'bpm' : 'seconds_per_km')));
     const cap = kind === 'hr' ? 'capability.canMeasureHeartRate' : kind === 'pace' ? 'capability.canMeasurePace' : null;
     const referenceEvidence: SignalEvidence = { signal: id, state: ref ? 'available' : 'unknown', source: ref?.source || null,
@@ -89,15 +92,17 @@ export function resolvePrescriptionDataSufficiency(context: PrescriptionSignals,
 }
 
 /** Explicit executable choices supplied to Builder; percentages/HR are preferred only when supported. */
-export function prescriptionGenerationOptions(context: PrescriptionSignals, references: DoseReference[], movementIds: string[], discipline: string) {
+export function prescriptionGenerationOptions(context: PrescriptionSignals, references: DoseReference[], movementIds: string[], discipline: string,
+  variants: Record<string, MovementVariantProposal> = {}) {
   return movementIds.map(movementId => {
-    const movement = MOVEMENT_LIBRARY[movementId];
-    const enduranceDose = ['run', 'cyclic'].includes(movement.movement_pattern);
+    const variant = variants[movementId];
+    const movement = variant ? resolvedMovement({ movementId, variant })?.descriptor : MOVEMENT_LIBRARY[movementId];
+    const enduranceDose = !!movement && ['run', 'cyclic'].includes(movement.movement_pattern);
     // Intensity remains a Builder choice within 3C. No new zone or adaptation-specific intensity is invented here.
-    const decision = resolvePrescriptionDataSufficiency(context, references, { movementId, discipline,
+    const decision = resolvePrescriptionDataSufficiency(context, references, { movementId, discipline, ...(variant ? { variant } : {}),
       intensity: enduranceDose ? 'rpe' : '1rm', allowRpe: true });
-    const executableReferenceIds = references.filter(r => r.kind === '1rm' ? r.movementId === movementId
-      : enduranceDose && context.signals[r.unit === 'bpm' ? 'capability.canMeasureHeartRate' : 'capability.canMeasurePace']?.state === 'available').map(r => r.id);
+    const executableReferenceIds = references.filter(r => !variant && (r.kind === '1rm' ? r.movementId === movementId
+      : enduranceDose && context.signals[r.unit === 'bpm' ? 'capability.canMeasureHeartRate' : 'capability.canMeasurePace']?.state === 'available')).map(r => r.id);
     return { movementId, decision, executableReferenceIds, distanceAvailable: context.signals['capability.canMeasureDistance']?.state === 'available' };
   });
 }

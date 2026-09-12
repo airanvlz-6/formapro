@@ -12,6 +12,7 @@ import { renderContractSession, parseStructuredSession, validateSessionAgainstTr
 import { canonicalDiscipline, normalizeTrainingKey, buildPrescriptionScope, resolveProfileDisciplines } from './prescriptionScope';
 import { loadAthletePrescriptionContext } from '../athlete/loadAthletePrescriptionContext';
 import { buildSessionDoseContext } from './sessionDoseContext';
+import { GENERATED_MOVEMENT_AUTHORITY } from './movementVariants';
 import { resolvePrescriptionDataSufficiency } from './prescriptionDataSufficiency';
 import { intentMatchingMovementIds } from './prescriptionIntent';
 import { issuePrescriptionQuestion } from '../athlete/prescriptionAnswers';
@@ -109,6 +110,7 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
       return { ok: false as const, code: 'PRESCRIPTION_DATA_MISSING', errors: prepared.errors, sufficiency, question,
         questionToken: question ? issuePrescriptionQuestion(userCodigo, base.contract.discipline, question) : undefined };
     }
+    prepared.contract.generatedMovementAuthority = { ...GENERATED_MOVEMENT_AUTHORITY };
     prepared.contract.intensityAuthority = resolveMethodIntensity(prepared.contract);
     if (prepared.contract.discipline === 'carrera' && prepared.contract.intent?.kind === 'adaptation' && isRunningDoseMethod(prepared.contract.intent))
       prepared.contract.runningMethodDose = resolveRunningMethodDose(resolveCompatibleRunningDoseEvidence(canonical.runningDoseEvidenceAdmission, prepared.contract.intent), prepared.contract.intent, 'coach');
@@ -184,6 +186,9 @@ export async function assertFreshSessionRestrictions(db: any, userCodigo: string
   const contract = JSON.parse(Buffer.from(session.sessionReceipt.split('.')[0], 'base64url').toString()).contract;
   if (contract.contractVersion === 3) {
     const date = prescriptionDate(contract.targetWeekStart, contract.targetDay);
+    const access = await db.from('usuarios').select('perfil').eq('codigo', userCodigo).single();
+    if (access.error || !access.data) throw new Error('SESSION_AVAILABILITY_READ_FAILED');
+    if (access.data.perfil?.prescription_access?.[date]?.availability === 'unavailable') throw new Error('SESSION_TEMPORARY_AVAILABILITY_CHANGED');
     let sessionEnvironment: SessionEnvironmentInput | undefined;
     if (contract.doseContext.sufficiency?.environment?.sessionEnvironmentSource) {
       sessionEnvironment = { date, assignedDiscipline: contract.discipline };

@@ -9,11 +9,17 @@ import { prescriptionGenerationOptions } from './prescriptionDataSufficiency';
 import { emitSessionDoseAuthority, emitSessionCoachingDiagnostic, sessionCoachingHistoryDiagnostic } from './sessionDoseDiagnostics';
 import { calculatedLoad } from './sessionDose';
 import type { PresentationVersion } from './sessionPresentation';
+import { resolvedMovement } from './movementVariants';
+import { MOVEMENT_LIBRARY } from './movementLibrary';
 
 function freeze<T>(value: T): T {
   if (value && typeof value === 'object') { Object.freeze(value); Object.values(value).forEach(freeze); }
   return value;
 }
+// Failed proposals can contain arbitrary IDs/keys. Movement diagnostics retain only code families.
+const movementDiagnosticCodes = (errors: readonly string[]) => errors.map(error => {
+  const code = error.split(':')[0]; return /^[A-Z_]{1,80}$/.test(code) ? code : 'UNKNOWN';
+});
 /** One private immutable snapshot for prompt, both attempts, validation and rendering. */
 export async function generateContractSession(contract: AllowedTrainingContract, history: SesionParaComparar[],
   complete: (prompt: string) => Promise<string | BuilderCompletion>, context = '', planningRunId?: string, presentationVersion: PresentationVersion = 'legacy') {
@@ -43,7 +49,9 @@ export async function generateContractSession(contract: AllowedTrainingContract,
       ...(authority.intensityAuthority.version === 2 ? { codesCsv: authority.intensityAuthority.diagnostics?.join(',') } : {}) }); } catch { /* Non-authoritative diagnostic. */ }
   }
   const recent = structuredClone(history);
-  const intentInstruction = authority.intent && authority.intent.kind !== 'stimulus_only'
+  const intentInstruction = authority.generatedMovementAuthority && authority.intent && authority.intent.kind !== 'stimulus_only'
+    ? `\nIntent canónico: main debe satisfacer el patrón ${authority.intent.pattern} con un movimiento canónico permitido o una variante cuya semántica resuelva ese patrón. explanation y displayName no conceden compatibilidad.`
+    : authority.intent && authority.intent.kind !== 'stimulus_only'
     ? `\nIntent canónico: el bloque main debe incluir al menos un ID de ${JSON.stringify(intentMatchingMovementIds(authority.intent, authority.allowedMovementIds))}. Otros IDs permitidos pueden acompañarlo. Un movimiento solo en warmup/cooldown no satisface el intent.` : '';
   const options = authority.doseContext?.sufficiency ? prescriptionGenerationOptions(authority.doseContext.sufficiency,
     authority.doseContext.references, authority.allowedMovementIds, authority.discipline) : null;
@@ -72,8 +80,28 @@ No interpretes una prescripción como ejecución. UNKNOWN sigue siendo UNKNOWN. 
 Solo usa IDs y referencias suministrados. El servidor calcula cargas y expresa referencias; no escribas kg, bpm ni ritmos libres. No rellenes el presupuesto de tiempo por obligación.
 Puedes usar solo main o warmup/main con cooldown opcional, respetando la semántica de la estructura. No añadas preparación para eludir validación.
 Incluye explanation como razón breve (1–400 caracteres), sin razonamiento interno. Esa razón no modifica factibilidad. Devuelve el schema existente.`;
-  const instructions = authority.contractVersion === 3 ? STRUCTURED_DOSE_INSTRUCTIONS : STRUCTURED_SESSION_INSTRUCTIONS;
-  const prompt = `${coach ? instructions.replace('La explicación y el objetivo se derivan por código, no los escribas.', 'El objetivo se deriva del intent.') + coachInstruction : instructions}${timeInstruction}${representationInstruction}${intensityInstruction}${methodInstruction}${coach ? '' : doseInstruction + compositionInstruction}\nCONTRACT:\n${JSON.stringify(authority)}${intentInstruction}\nContexto no autoritativo:\n${context}\nOpciones ejecutables por alcance (preparationOnly nunca amplía main):\n${JSON.stringify(builderOptions)}\nHistorial para evitar duplicación:\n${JSON.stringify(recent)}`;
+  const baseInstructions = authority.contractVersion === 3 ? STRUCTURED_DOSE_INSTRUCTIONS : STRUCTURED_SESSION_INSTRUCTIONS;
+  const instructions = authority.generatedMovementAuthority ? baseInstructions
+    .replace('Reutiliza IDs exactos del contrato.', 'Los canónicos reutilizan IDs exactos del contrato; las variantes siguen el schema MOVIMIENTOS.')
+    .replace('Solo allowedMovementIds tienen material y nivel resueltos.', 'Los canónicos de allowedMovementIds tienen material y nivel resueltos; cada variante requiere validación propia.')
+    .replace('Cada movimiento: movementId y prescription.', 'Cada movimiento: movementId y prescription; las variantes incluyen además variant.') : baseInstructions;
+  const variantInstruction = authority.generatedMovementAuthority ? `\nMOVIMIENTOS: allowedMovementIds son candidatos canónicos confiables, preferibles cuando encajan, no todos los ejercicios posibles.
+Puedes elegir un canónico con su schema actual, o una variante deportiva reconocible si mejora esta sesión. Incluye brevemente el motivo en explanation.
+Variante: {movementId:"generated:local_1",variant:{version:1,canonicalFamily:"ID canónico conocido",displayName:"nombre de la receta",modifiers:{...}},prescription:{...}}.
+El servidor v1 resuelve variaciones controladas de squat, hinge, lunge, push/pull, core y carry. Otros patrones/familias quedan UNRESOLVED, no inventes metadata para autorizarlos.
+Modificadores tipados: tempo:[4 componentes en segundos] para movimientos dinámicos controlados (copiar exactamente también en prescription.tempo); stance:"narrow"|"wide" para squat/hinge o plank; direction:"reverse" para lunge o sled_drag/sled_pull; loadPosition:"contralateral" solo para lunge con mancuerna como único material canónico.
+Nombre verificable: concatenar en este orden los campos presentes: "Tempo " + tempo unido por guiones; stance; loadPosition; direction; canonicalFamily con underscores convertidos en espacios. Ejemplo: "Tempo 3-1-1-0 contralateral reverse db lunge". Este nombre expresa una receta, no una afirmación de seguridad.
+No declares pattern, equipment availability, impact, axialLoad, safeForKnee ni referenceAnchor: los resuelve/verifica el servidor. La familia es procedencia, NO referencia de fuerza.
+Variantes v1 usan RPE/RIR y dosis compatibles; NO %1RM ni referencias HR/pace heredadas. No inventes kg. Equipment, skill, restricciones, scope, intent, estructura y tiempo siguen siendo hard.
+La variante conserva las exclusiones del movimiento base. Cambios de geometría no heredan garantías negativas: UNKNOWN relevante rechaza. No uses una variante para eludir una exclusión.
+Mantén el mismo ID local para la misma receta entre bloques; no uses IDs distintos para duplicar el mismo ejercicio dentro de un bloque. Si la variante no se resuelve, el segundo intento debe proponer otra decisión explícita, sin sustitución silenciosa.
+BASES CANÓNICAS SUGERIDAS:\n${JSON.stringify(authority.allowedMovementIds.map(id => ({ id, pattern: MOVEMENT_LIBRARY[id].movement_pattern,
+    equipment: MOVEMENT_LIBRARY[id].equipment, technicalDemand: MOVEMENT_LIBRARY[id].technical_demand, doseBasis: MOVEMENT_LIBRARY[id].dose_basis ?? 'repetitions_or_cyclic' })))}` : '';
+  const decisionInstruction = authority.generatedMovementAuthority ? coachInstruction.replace('Solo usa IDs y referencias suministrados.', 'Usa IDs canónicos suministrados o variantes del schema MOVIMIENTOS; las referencias deben ser suministradas.') : coachInstruction;
+  const prompt = `${coach ? instructions.replace('La explicación y el objetivo se derivan por código, no los escribas.', 'El objetivo se deriva del intent.') + decisionInstruction : instructions}${timeInstruction}${representationInstruction}${intensityInstruction}${methodInstruction}${coach ? '' : doseInstruction + compositionInstruction}${variantInstruction}\nCONTRACT:\n${JSON.stringify(authority)}${intentInstruction}\nContexto no autoritativo:\n${context}\nOpciones ejecutables por alcance (preparationOnly nunca amplía main):\n${JSON.stringify(builderOptions)}\nHistorial para evitar duplicación:\n${JSON.stringify(recent)}`;
+  if (authority.generatedMovementAuthority) emitSessionCoachingDiagnostic('SESSION_MOVEMENT_COACH_INPUT', {
+    canonicalCandidates: authority.allowedMovementIds, generativeAuthority: authority.generatedMovementAuthority,
+    intent: authority.intent, structures: authority.allowedStructureIds });
   if (coach) emitSessionCoachingDiagnostic('SESSION_COACH_INPUT', { intent: authority.intent,
     history: sessionCoachingHistoryDiagnostic(context, authority.discipline),
     feasibleMovements: authority.allowedMovementIds, feasibleStructures: authority.allowedStructureIds,
@@ -96,6 +124,7 @@ Incluye explanation como razón breve (1–400 caracteres), sin razonamiento int
     catch { trace.emit(attempt + 1, 'provider', 'SESSION_GENERATION_FAILED', ['LLM_REQUEST_FAILED'], false, 'provider_failure_terminal'); return { ok: false as const, code: 'SESSION_GENERATION_FAILED', violations: ['LLM_REQUEST_FAILED'], diagnostics: trace.summary() }; }
     const parsed = parseStructuredSession(raw);
     if (!parsed.ok) {
+      if (authority.generatedMovementAuthority) emitSessionCoachingDiagnostic('MOVEMENT_RESOLUTION', { status: 'REJECTED', errors: movementDiagnosticCodes(parsed.violations) });
       previousErrors = parsed.violations;
       const duplicate = parsed.violations.some(v => v.startsWith('DUPLICATE_MOVEMENT:'));
       const retry = !attempt && (coach || duplicate || parsed.violations.some(v => v.startsWith('DOSE_')));
@@ -104,6 +133,11 @@ Incluye explanation como razón breve (1–400 caracteres), sin razonamiento int
       return { ok: false as const, code: 'SESSION_PROPOSAL_INVALID', violations: parsed.violations, diagnostics: trace.summary() };
     }
     missingDetails = [];
+    if (authority.generatedMovementAuthority) {
+      emitSessionCoachingDiagnostic('SESSION_MOVEMENT_PROPOSAL', parsed.proposal.blocks.flatMap(b => b.movements.map(m => ({
+        movementId: resolvedMovement(m) ? m.movementId : 'UNKNOWN', source: m.variant ? 'generated_variant' : 'canonical', ...(m.variant ? { variant: m.variant } : {}) }))));
+      emitSessionCoachingDiagnostic('MOVEMENT_RESOLUTION', parsed.proposal.blocks.flatMap(b => b.movements.map(m => resolvedMovement(m) ?? { status: 'UNKNOWN' })));
+    }
     if (coach && !parsed.proposal.explanation?.trim()) {
       previousErrors = ['SESSION_COACH_REASON_REQUIRED'];
       trace.emit(attempt + 1, 'checkSessionShape', 'SESSION_PROPOSAL_INVALID', previousErrors, !attempt, attempt ? 'attempt_limit' : 'dose_parse_retry');
@@ -117,6 +151,7 @@ Incluye explanation como razón breve (1–400 caracteres), sin razonamiento int
       emitSessionDoseAuthority(authority, { ...estimate, expectedSeconds: estimate.expectedSeconds ?? null }, errors, trace.summary().planningRunId ?? undefined),
       (signal, state, block, movement) => { missingDetails.push(sufficiencyFailure(signal, state, block, movement)); });
     if (!validation.ok) {
+      if (authority.generatedMovementAuthority) emitSessionCoachingDiagnostic('MOVEMENT_FEASIBILITY', { result: 'REJECT', errors: movementDiagnosticCodes(validation.violations) });
       if (coach) emitSessionCoachingDiagnostic('SESSION_AUTHORITY_RESOLUTION', { rejections: validation.violations });
       previousErrors = validation.violations;
       const retry = !attempt && (coach || validation.violations.some(v => v.startsWith('RUNNING_METHOD_DOSE_') || v.startsWith('PRESCRIPTION_DATA_') || v.startsWith('DOSE_') || v.startsWith('STRUCTURE_') || v.startsWith('SESSION_DOSE_') || v.startsWith('SESSION_BUDGET_') || v.startsWith('SESSION_DURATION_')));
@@ -136,6 +171,8 @@ Incluye explanation como razón breve (1–400 caracteres), sin razonamiento int
               .map(({ id, metric, value, unit }) => ({ id, metric, value, unit }))[0] : null }))) });
       if (!duplicate) emitSessionCoachingDiagnostic('BUILDER_OUTPUT', validation.proposal);
     }
+    if (!duplicate && authority.generatedMovementAuthority) emitSessionCoachingDiagnostic('SESSION_MOVEMENT_ADMISSION', {
+      result: 'PASS', descriptors: validation.proposal.blocks.flatMap(b => b.movements.map(m => resolvedMovement(m))) });
     if (!duplicate) { trace.emit(attempt + 1, 'complete', 'PASS', [], false, 'accepted'); return { ok: true as const, contract: authority,
       proposal: validation.proposal, session, coachingDecision, attempts: attempt + 1, diagnostics: trace.summary() }; }
     trace.emit(attempt + 1, 'duplication', 'SESSION_DUPLICATE', ['SESSION_DUPLICATE'], !attempt, attempt ? 'attempt_limit' : 'duplicate_retry');

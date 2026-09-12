@@ -28,8 +28,10 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
   targetWeekStart: string; today: string; empezarHoy: boolean; snapshot: { sessions: readonly any[] } | null;
   strategyVersion?: 1; strategyProposal?: unknown; planningRunId?: string; diagnosticTemporalDecision?: boolean | null;
   confirmedAvailabilityDigest?: string | null;
+  /** Server-selected immutable survivors for a bounded chat reassessment; bound into the receipt. */
+  preserveDays?: string[];
 }) {
-  const c = await loadWeeklyCalendarContext(db, codigo);
+  const c = await loadWeeklyCalendarContext(db, codigo, request.targetWeekStart);
   if (request.strategyVersion !== undefined && request.strategyVersion !== 1) throw new Error('STRATEGY_VERSION_UNSUPPORTED');
   const athlete = request.strategyVersion === 1 ? await loadAthletePrescriptionContext(db, codigo, { asOfDate: request.today, runningHabitualInteraction: request.planningRunId ? {planningRunId:request.planningRunId,targetWeekStart:request.targetWeekStart} : undefined }) : undefined;
   if (athlete) {
@@ -83,6 +85,7 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
     // Completed history and known past prescriptions survive independently of execution.
     // Future replaceable states are re-enumerated in the active week.
     if (before && isProtectedCalendarSession(before, activeRegeneration, past)) fixedSessions[day] = before;
+    else if (before && request.preserveDays?.includes(day)) fixedSessions[day] = before;
     else if (past) fixedSessions[day] = { dia: day, tipo: 'sin_registrar', titulo: 'Sin registrar',
       por_que: 'Día anterior al inicio de esta planificación', descripcion: 'No aplica — esta planificación comienza a partir de hoy.' };
     const external = Object.values(contexts).flatMap(context => context.externalLoadContext.activities).filter(a => a.days.includes(day));
@@ -92,6 +95,8 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
       if (before && before.tipo !== 'external_blocked' && (!activeRegeneration || fixedSessions[day] === before)) return { ok: false as const, code: 'WEEKLY_CONTRACT_UNSATISFIABLE', errors: ['EXTERNAL_PROTECTED_CONFLICT'] };
       fixedSessions[day] ??= admitSessionContent({ dia: day }, codigo, request.targetWeekStart, { externalDiscipline: externalDisciplines[0] });
     }
+    if (!fixedSessions[day] && c.profile.perfil?.prescription_access?.[civil]?.availability === 'unavailable')
+      fixedSessions[day] = { dia: day, tipo: 'unavailable', titulo: 'No disponible', descripcion: 'Disponibilidad temporal declarada para esta fecha.', por_que: 'Cambio de disponibilidad.' };
     if (before && fixedSessions[day] === before && calendarState(before) === 'RECOVERY' && !before.completada) {
       const context = contexts[before.tipo];
       if (!context || typeof before.stimulusId !== 'string') return { ok: false as const, code: 'WEEKLY_CONTRACT_UNSATISFIABLE', errors: ['PROTECTED_RECOVERY_UNRESOLVED'] };
@@ -116,7 +121,7 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
   return { ok: true as const, input: { targetWeekStart: request.targetWeekStart, prescriptionScope: c.scope,
     maxExecutableDays: c.max, completeNewWeek: !request.snapshot && !hasPast, allowed: c.allowed, contexts, fixed,
     daySufficiency: projectWeeklyPrescriptionSignals(c.profile, request.targetWeekStart, c.scope.managedDisciplines, c.allowed, availabilityConfirmed),
-    ...(activeRegeneration ? { regeneration: { pendingManagedDays: calendarDays.filter(day => !fixed[day]
+    ...(activeRegeneration && !request.preserveDays ? { regeneration: { pendingManagedDays: calendarDays.filter(day => !fixed[day]
       && c.scope.managedDisciplines.some(discipline => c.allowed[discipline].includes(day))) } } : {}),
     ...(runningEventPreparation?.managed && runningEventPreparation.preparationState !== 'GENERAL_DEVELOPMENT' && strategy?.goal.id === 'half_marathon' ? { runningEventPreparation } : {}),
     ...(strategy ? { strategy, doseCapabilities: buildDoseCapabilityProfile(athlete!.runningDoseEvidenceAdmission, c.scope,

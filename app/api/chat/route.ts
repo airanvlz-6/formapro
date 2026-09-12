@@ -1,4 +1,6 @@
 import { splitExecutionReports, resolveReportExecutionDate } from '@/lib/execution/reportExecutionDate';
+import { runChatCoach } from '@/lib/chat/runChatCoach';
+import { userEvidenceText, conversationalMemoryOnly } from '@/lib/chat/conversationEvidence';
 import { saveMethodBaseline } from '@/lib/athlete/runningMethodDeclarations';
 import { eventAction, loadEventContext, canonicalEventPrompt, resolveWeeklyEventRequirement } from '@/lib/athlete/eventActions';
 import { eventAuthorityText, boundEventAnalysis } from '@/lib/athlete/eventAuthority';
@@ -806,7 +808,7 @@ export async function POST(req: NextRequest) {
 }
 
 async function handlePost(req: NextRequest) {
-  const { messages, system, model, max_tokens, action, codigo, datos, email, codigoConjunto, pendingId } = await req.json();
+  const { messages, system, model, max_tokens, action, codigo, datos, email, codigoConjunto, pendingId, coachGrounding, coachMessage } = await req.json();
   // Never accept a client boolean/raw digest as session-environment attestation.
   if (action === 'planificar_semana' && datos && typeof datos === 'object') {
     datos.confirmedAvailabilityDigest = readEnvironmentConfirmation(req.headers?.get('cookie'), {
@@ -820,6 +822,15 @@ async function handlePost(req: NextRequest) {
   if (!apiKey) {
     return NextResponse.json({ error: "API key not found" }, { status: 500 });
   }
+  const groundedReply = async (message: string) => runChatCoach(supabase, codigo, message, async (prompt, conversation) => {
+    const response = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey!, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 6000, system: prompt, messages: conversation }) });
+    if (!response.ok) throw new Error('CHAT_PROVIDER_FAILED');
+    const output = await response.json();
+    return output.content?.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('') || '';
+  });
+
 
 
 
@@ -1195,9 +1206,7 @@ if (action === "verificar_cambio_modo") {
   }
 
   if (action === "enviar_mensaje_coach") {
-    // FORGE MOBILE COACH — endpoint exclusivo para Forge Mobile. NUNCA toca /api/chat original
-    // ni el buildPrompt de la web. Usa la copia aislada (getAthleteContext + buildPrompt) en
-    // lib/mobile/, verificada con contrato de equivalencia el 19/08/2026.
+    // Web y móvil comparten grounding, mutaciones acotadas y adaptación en servidor.
     //
     // SEGURIDAD: nunca confiamos solo en "codigo" como identidad — el cliente movil debe probar,
     // via authUserId (obtenido de la sesion real de Supabase Auth en el dispositivo), que ese
@@ -1218,35 +1227,8 @@ if (action === "verificar_cambio_modo") {
         return NextResponse.json({ error: "No autorizado" }, { status: 403 });
       }
 
-      const { getAthleteContext } = await import("@/lib/mobile/getAthleteContext");
-      const { buildPrompt } = await import("@/lib/mobile/buildPrompt");
-      const ctx = await getAthleteContext(codigo);
-
-      const fechaHoyMobile = new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Madrid" });
-      const mensajeConFecha = `${mensaje}\n\n[Fecha actual del sistema: ${fechaHoyMobile}]\n[Contexto temporal del mensaje: CONSULTA_GENERAL]`;
-
-      const systemPrompt = buildPrompt(ctx.catObj, ctx.perfil, ctx.marcas, ctx.resumen, ctx.memoriaCoach, ctx.cicloActual, ctx.perfilPsicologico, ctx.esPremiumOAdmin, ctx.athleteState, ctx.datosEntrenamiento, ctx.estadoFisiologico, ctx.historialFisiologico, ctx.distribucionSemanal, ctx.objetivoPrincipal, ctx.planSemanal, ctx.debilidades, ctx.blockOutcomes, ctx.estadoCanonico);
-
-      const eventPrompt = await canonicalEventPrompt(supabase, codigo);
-      const mensajesParaAPI = [...(ctx.historial || []).slice(-3), { role: "user", content: mensajeConFecha }];
-
-      const coachRes = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 4000, system: systemPrompt + '\n' + eventPrompt, messages: mensajesParaAPI }),
-      });
-      const coachData = await coachRes.json();
-      const respuestaTexto = coachData.content?.map((b: any) => b.text || "").join("") || "Error al conectar.";
-
-      // FIX: persistir el intercambio en el historial real, igual que hace la web — sin esto, la
-      // conversacion movil nunca sobrevivia a un recargo de la app (vivia solo en memoria de React).
-      const historialActualizado = [...(ctx.historial || []), { role: "user", content: mensaje }, { role: "assistant", content: respuestaTexto }];
-      await supabase.from("usuarios").update({ historial: historialActualizado.slice(-15), updated_at: new Date().toISOString() }).eq("codigo", codigo);
-
-      // Nota: los tags [SESION:], [PLAN:], etc. siguen sin procesarse aqui de forma centralizada —
-      // cada Safety Net deterministico (verificar_sesion_completada_..., verificar_modificacion_...)
-      // se encarga de su propio dominio de forma independiente, disparado desde el cliente movil.
-      return NextResponse.json({ ok: true, respuesta: respuestaTexto });
+      const result = await groundedReply(mensaje);
+      return NextResponse.json({ ok: true, ...result, respuesta: result.answer });
     } catch (err: any) {
       console.error("Error en enviar_mensaje_coach:", err);
       return NextResponse.json({ error: "Error: " + err.message }, { status: 500 });
@@ -1369,7 +1351,7 @@ if (action === "verificar_cambio_modo") {
       try {
         const {data: usuarioData} = await supabase.from("usuarios").select("ciclo_actual,notas_coach,datos_entrenamiento,workout_history,distribucion_semanal,objetivo_principal,historial_marcas,analisis_bloques").eq("codigo", codigo).single();
         const cicloActual = usuarioData?.ciclo_actual || {};
-        const ultimos = profilePatch.historial.slice(-6).map((m: any) => `${m.role === "user" ? "ATLETA" : "COACH"}: ${typeof m.content === "string" ? m.content.substring(0, 1500) : "[archivo]"}`).join("\n\n");
+        const ultimos = userEvidenceText(profilePatch.historial.slice(-6));
         const extraerTextoContenido = (content: any): string => {
           if (typeof content === "string") return content.substring(0, 1500);
           if (Array.isArray(content)) {
@@ -1419,7 +1401,7 @@ ${soloUsuario}
 MENSAJES SOLO DEL ATLETA (para extraer datos_entrenamiento y estado_fisiologico):
 ${soloUsuario}
 
-Para "fin_bloque": si el coach menciona que se ha completado un bloque, inicia deload, o empieza un nuevo bloque, extrae: {"bloque_completado":"nombre del bloque completado","objetivo_bloque":"objetivo que tenía","resultado":"cumplido|parcial|no_cumplido","adherencia_estimada":"porcentaje estimado","carga":"adecuada|alta|baja","siguiente_bloque":"nombre del siguiente bloque"}. null si no hay cambio de bloque.
+Para "fin_bloque": nunca infieras cierre o cambio de bloque desde la conversación; este campo debe ser null. El esquema legacy era: {"bloque_completado":"nombre del bloque completado","objetivo_bloque":"objetivo que tenía","resultado":"cumplido|parcial|no_cumplido","adherencia_estimada":"porcentaje estimado","carga":"adecuada|alta|baja","siguiente_bloque":"nombre del siguiente bloque"}. null si no hay cambio de bloque.
 
 Para "objetivo_principal": si el atleta menciona un objetivo concreto con fecha (competición, carrera, evento, marca objetivo), extrae: {"descripcion":"descripción del objetivo","fecha":"YYYY-MM-DD","tipo":"competicion|marca|evento|otro"}. null si no hay objetivo mencionado.
 Para "datos_entrenamiento": extrae SOLO de mensajes del ATLETA, nunca del COACH. Si el atleta menciona explícitamente sus zonas, marcas o métricas personales extráelas. Si solo es el coach hablando de zonas en su planificación, devuelve null.
@@ -1441,6 +1423,7 @@ ${ultimos}`;
         if (!jsonMatch) throw new Error("No JSON found");
         let extracted = JSON.parse(jsonMatch[0]);
 
+        extracted = conversationalMemoryOnly(validateExtraction(extracted, soloUsuario));
         const updates: any = {};
         if (extracted.lesiones) updates.lesiones_actuales = extracted.lesiones;
         if (extracted.plan) updates.plan_proxima_semana = extracted.plan;
@@ -5513,6 +5496,14 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
   }
 
 
+
+  if (coachGrounding === true && !action) {
+    try {
+      const result = await groundedReply(coachMessage);
+      return NextResponse.json({ ...result, content: [{ type: 'text', text: result.answer }] });
+    } catch { return NextResponse.json({ ok: false, grounded: true, code: 'CHAT_GROUNDING_FAILED', retryable: false,
+      content: [{ type: 'text', text: 'No he podido verificar toda la información necesaria para responder y confirmar los cambios. Revisa el plan antes de dar por guardada una adaptación.' }] }); }
+  }
 
   // Llamada normal a la IA con timeout de 120 segundos (aumentado por prompts largos con Estado Canonico + plan semanal completo)
   const controller = new AbortController();

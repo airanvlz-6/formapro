@@ -5,6 +5,7 @@ import { WORKOUT_STRUCTURE_LIBRARY } from './workoutStructureLibrary';
 import type { DoseReference } from './sessionDoseContext';
 import { validateSessionTimeDose } from './sessionTimeDoseAuthority';
 import { validateMethodIntensity } from './methodIntensityAuthority';
+import { resolvedMovement, type MovementEntry } from './movementVariants';
 
 export type DoseIntensity = { kind: 'rpe' | 'rir'; value: number; max?: number }
   | { kind: 'percent_1rm'; referenceId: string; value: number; max?: number }
@@ -44,9 +45,11 @@ export function doseReference(c: AllowedTrainingContract, intensity: DoseIntensi
   return intensity && 'referenceId' in intensity ? c.doseContext?.references.find(r => r.id === intensity.referenceId) : undefined;
 }
 /** Exact reference movement only in v1. Variants use technical RPE instead of borrowing another lift's RM. */
-function intensityErrors(c: AllowedTrainingContract, movementId: string, i?: DoseIntensity): string[] {
+function intensityErrors(c: AllowedTrainingContract, entry: MovementEntry, i?: DoseIntensity): string[] {
+  const movementId = entry.movementId;
   if (!i) return ['SESSION_DOSE_INCOMPLETE:INTENSITY'];
   if (i.kind === 'rpe' || i.kind === 'rir') return [];
+  if (entry.variant) return ['GENERATED_REFERENCE_NOT_AUTHORIZED'];
   const r = doseReference(c, i);
   if (!r) return ['BENCHMARK_RESOLUTION:REFERENCE_NOT_ALLOWED'];
   if (i.kind === 'percent_1rm') return r.kind === '1rm' && r.movementId === movementId ? [] : ['BENCHMARK_RESOLUTION:ONE_RM_MOVEMENT_REQUIRED'];
@@ -125,14 +128,14 @@ export function validateSessionDose(c: AllowedTrainingContract, p: StructuredSes
   if (format === 'complex' && (!f?.rounds || f.restSeconds === undefined)) errors.push('SESSION_DOSE_INCOMPLETE:COMPLEX_ROUNDS_REST');
   if (f?.durationSeconds && f.timeCapSeconds) errors.push('DOSE_FORMAT_TIME_CONFLICT');
   for (const b of p.blocks) for (const m of b.movements) {
-    const d = m.prescription, pattern = MOVEMENT_LIBRARY[m.movementId]?.movement_pattern;
+    const d = m.prescription, descriptor = resolvedMovement(m)?.descriptor, pattern = descriptor?.movement_pattern ?? '';
     if (['reps', 'durationSeconds', 'distanceMeters'].filter(k => Object.hasOwn(d, k)).length !== 1) errors.push('DOSE_VOLUME_CONFLICT');
     if (d.perSide && !d.reps) errors.push('DOSE_SIDE_REPS_REQUIRED');
-    errors.push(...intensityErrors(c, m.movementId, d.intensity));
+    errors.push(...intensityErrors(c, m, d.intensity));
     const mainStrength = b.blockType === 'main' && ['strength_sets', 'complex', 'skill_practice'].includes(format) && !['run', 'cyclic'].includes(pattern);
     const running = ['run', 'cyclic'].includes(pattern);
     if (running && d.intensity?.kind === 'rir') errors.push('DOSE_RUNNING_RIR_UNSUPPORTED');
-    if (mainStrength && (!d.sets || (MOVEMENT_LIBRARY[m.movementId]?.dose_basis === 'duration' ? !d.durationSeconds : !d.reps) || d.restSeconds === undefined)) errors.push('SESSION_DOSE_INCOMPLETE:STRENGTH_SETS_REPS_REST');
+    if (mainStrength && (!d.sets || (descriptor?.dose_basis === 'duration' ? !d.durationSeconds : !d.reps) || d.restSeconds === undefined)) errors.push('SESSION_DOSE_INCOMPLETE:STRENGTH_SETS_REPS_REST');
     if (running && !d.durationSeconds && !d.distanceMeters) errors.push('SESSION_DOSE_INCOMPLETE:RUNNING_VOLUME');
     if (b.blockType === 'main' && format === 'intervals' && (!d.sets || d.restSeconds === undefined)) errors.push('SESSION_DOSE_INCOMPLETE:INTERVAL_COUNT_RECOVERY');
     if (metcon && b.blockType === 'main' && !d.reps && !d.durationSeconds && !d.distanceMeters) errors.push('SESSION_DOSE_INCOMPLETE:METCON_VOLUME');

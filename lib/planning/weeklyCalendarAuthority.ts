@@ -1,4 +1,5 @@
 import { weeklyRegenerationOutcome } from './weeklyRegeneration';
+import { availableDaysAtWeek } from '../sports/temporaryTrainingAccess';
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { buildAllowedWeeklyPlanContract, validateWeeklySelection, type AllowedWeeklyPlanContract } from './allowedWeeklyPlanContract';
 import { loadWeeklyPlanningContext } from './prepareAllowedWeeklyPlanContract';
@@ -27,7 +28,7 @@ function mac(payload: string) {
   if (!key) throw new Error('CALENDAR_AUTHORITY_UNAVAILABLE');
   return createHmac('sha256', key).update('forge-week-calendar-v1:' + payload).digest('base64url');
 }
-export async function loadWeeklyCalendarContext(db: any, codigo: string) {
+export async function loadWeeklyCalendarContext(db: any, codigo: string, targetWeek?: string) {
   const p = await db.from('usuarios').select('modo_entrada,perfil,workout_history,distribucion_semanal,especialidad,categoria').eq('codigo', codigo).single();
   const t = await db.from('athlete_training_sources').select('disciplina,owner,activo,dias').eq('user_codigo', codigo).eq('activo', true);
   if (p.error || !p.data || t.error || !Array.isArray(t.data)) throw new Error('CALENDAR_CONTEXT_READ_FAILED');
@@ -47,12 +48,13 @@ export async function loadWeeklyCalendarContext(db: any, codigo: string) {
       : normalized?.ok ? normalized.availability[discipline] : null;
     if (!Array.isArray(value) || value.some(v => typeof v !== 'string')) throw weeklyAvailabilityFailure(dist, discipline, scope.scope, sources, value);
     allowed[discipline] = value.map(calendarKey);
+    if (targetWeek) allowed[discipline] = availableDaysAtWeek(profile.perfil, targetWeek, allowed[discipline])!;
   }
   const frequency = calcularFrecuenciaRealRelativa(profile.workout_history || [], Number.parseInt(profile.perfil?.dias || '0'));
   return { profile, sources: t.data, scope: scope.scope, allowed, max: aplicarTrainingFrequencySafetyNet(7, frequency).diasEntrenoSugeridos };
 }
 export async function issueWeeklyCalendar(db: any, codigo: string, week: string, sessions: any[], admission?: Admission) {
-  const c = await loadWeeklyCalendarContext(db, codigo);
+  const c = await loadWeeklyCalendarContext(db, codigo, week);
   const result = validateWeeklyCalendar(sessions, c.max, c.allowed);
   if (!result.ok || !result.slots) throw Object.assign(new Error(result.errors.join(',')), { availabilityViolations: result.availabilityViolations });
   const calendarSlots = result.slots;
@@ -79,6 +81,7 @@ export async function issueWeeklyCalendar(db: any, codigo: string, week: string,
       ...(contract.regeneration ? { regeneration: contract.regeneration } : {}),
       ...(contract.strategy ? { strategy: contract.strategy } : {}),
       planning: { today: request.today, empezarHoy: request.empezarHoy,
+        ...(request.preserveDays ? { preserveDays: request.preserveDays } : {}),
         ...(request.planningRunId ? {planningRunId:request.planningRunId} : {}),
         ...(request.confirmedAvailabilityDigest === weeklyDigest({ distribution: c.profile.distribucion_semanal, sources: c.sources, scope: c.scope })
           ? { confirmedAvailabilityDigest: request.confirmedAvailabilityDigest } : {}),
@@ -170,7 +173,7 @@ export async function assertWeeklyCalendar(db: any, codigo: string, week: string
       verifySessionReceipt(session.sessionReceipt, session, codigo, week, receipt as string);
     }
   }
-  const c = await loadWeeklyCalendarContext(db, codigo);
+  const c = await loadWeeklyCalendarContext(db, codigo, week);
   const result = validateWeeklyCalendar(sessions, c.max, c.allowed, evidence.slots);
   if (!result.ok) throw new Error(result.errors.join(','));
   return { evidence, contexts };

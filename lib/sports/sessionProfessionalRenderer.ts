@@ -4,6 +4,7 @@ import { calculatedLoad, doseReference, estimateSessionDuration } from './sessio
 import { WORKOUT_STRUCTURE_LIBRARY } from './workoutStructureLibrary';
 import { renderWeekObjective } from '../planning/canonicalWeekStrategy';
 import { prescriptionGenerationOptions } from './prescriptionDataSufficiency';
+import { resolvedMovement } from './movementVariants';
 
 export function formatDuration(seconds: number): string {
   const n = Math.max(0, Math.round(seconds)), h = Math.floor(n / 3600), m = Math.floor(n % 3600 / 60), s = n % 60;
@@ -27,10 +28,10 @@ function intensity(c: AllowedTrainingContract, d: MovementDose): string {
     : ({ easyPace: 'Ritmo suave', thresholdPace: 'Ritmo umbral', thresholdHr: 'Umbral', easyHr: 'Suave', '10k': 'Ritmo 10 km', '5k': 'Ritmo 5 km' } as Record<string, string>)[ref.metric!] || ref.metric);
   return `${metric} · ${ref.unit === 'bpm' ? `${range(v.min, v.max)} ppm` : v.min === v.max ? pace(v.min) : `${pace(v.min)}–${pace(v.max)}`}`;
 }
-function movement(c: AllowedTrainingContract, id: string, d: MovementDose): string {
+function movement(c: AllowedTrainingContract, id: string, d: MovementDose, displayName?: string): string {
   const amount = d.reps ? `${d.reps}${d.perSide ? ' por lado' : ''}`
     : [d.durationSeconds ? formatDuration(d.durationSeconds) : '', d.distanceMeters ? d.distanceMeters >= 1000 ? `${number(d.distanceMeters / 1000)} km` : `${number(d.distanceMeters)} m` : ''].filter(Boolean).join(' · ');
-  return `- **${label(id)}**\n  ${d.sets ? `${d.sets} × ` : ''}${amount} @ ${intensity(c, d)}`
+  return `- **${displayName ?? label(id)}**\n  ${d.sets ? `${d.sets} × ` : ''}${amount} @ ${intensity(c, d)}`
     + (d.restSeconds !== undefined ? `\n  Descanso: ${formatDuration(d.restSeconds)}` : '')
     + (d.tempo ? `\n  Tempo: ${d.tempo.join('-')}` : '');
 }
@@ -60,10 +61,13 @@ export function renderProfessionalSession(c: AllowedTrainingContract, p: Structu
       : `${formatDuration(duration.minimumSeconds)}–${formatDuration(duration.maximumSeconds)} (estimación con descansos y transiciones)`;
   const entries = p.blocks.flatMap(b => b.movements), used = new Set(entries.flatMap(m => m.prescription.intensity && 'referenceId' in m.prescription.intensity ? [m.prescription.intensity.referenceId] : []));
   const structuredPrescription = { schemaVersion: 2, proposal: structuredClone(p),
+    ...(entries.some(m => m.variant) ? { movementResolution: { version: 1,
+      descriptors: entries.map(m => ({ localMovementId: m.movementId, ...structuredClone(resolvedMovement(m)!) })) } } : {}),
     objective: { intent: structuredClone(intent), weekObjective, neighbours: dc.neighbours }, sessionRole: c.stimulusId === 'recuperacion_activa' ? 'RECOVERY' : strategic?.role || null,
     weakness: dc.weakness, references: dc.references.filter(r => used.has(r.id)),
     ...(dc.sufficiency ? { dataSufficiency: prescriptionGenerationOptions(dc.sufficiency, dc.references,
-      [...new Set(p.blocks.flatMap(b => b.movements.map(m => m.movementId)))], c.discipline) } : {}),
+      [...new Set(p.blocks.flatMap(b => b.movements.map(m => m.movementId)))], c.discipline,
+      Object.fromEntries(entries.flatMap(m => m.variant ? [[m.movementId, m.variant]] : []))) } : {}),
     calculatedLoads: p.blocks.flatMap(b => b.movements.flatMap(m => { const load = calculatedLoad(c, m.prescription); return load ? [{ blockType: b.blockType, movementId: m.movementId, ...load }] : []; })),
     duration, timeBudget: dc.timeBudget, ...(dc.timeAuthority ? { timeAuthority: dc.timeAuthority } : {}), contextEvidenceDigest: dc.evidenceDigest,
     ...(c.intensityAuthority ? { intensityAuthority: structuredClone(c.intensityAuthority) } : {}),
@@ -75,7 +79,7 @@ export function renderProfessionalSession(c: AllowedTrainingContract, p: Structu
     por_que: why, debilidad_relacionada: dc.weakness?.name || dc.weakness?.id || null,
     descripcion: `**OBJETIVO**\n${objective}\n\n**DURACIÓN**\n${durationText}\n\n`
       + p.blocks.map(b => `**${headings[b.blockType]}**\n${b.blockType === 'main' ? formatTitle(p) + '\n' : ''}`
-        + b.movements.map(m => movement(c, m.movementId, m.prescription)).join('\n')).join('\n\n') };
+        + b.movements.map(m => movement(c, m.movementId, m.prescription, m.variant ? resolvedMovement(m)!.displayName : undefined)).join('\n')).join('\n\n') };
 }
 
 export const STRUCTURED_DOSE_INSTRUCTIONS = `Devuelve SOLO JSON con schemaVersion:2, stimulusId, structureId y blocks. Reutiliza IDs exactos del contrato.

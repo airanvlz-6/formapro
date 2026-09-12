@@ -8,18 +8,24 @@
 
 import { MOVEMENT_LIBRARY, Movimiento } from "./movementLibrary";
 import { legacySessionView } from './sessionPresentation';
+import { resolvedMovement, type MovementVariantProposal } from './movementVariants';
 
 /** Structured sibling of the existing textual report. No text parsing or inferred executed reps.
  * Counts distinct sessions and keeps unknown repetitions separate from known subtotals. */
-export function buildStructuredExposureReport(rows: { sessionId: string; movementId: string; repetitions: number | null }[]) {
-  const known = rows.filter(r => Object.hasOwn(MOVEMENT_LIBRARY, r.movementId));
+export function buildStructuredExposureReport(rows: { sessionId: string; movementId: string; variant?: MovementVariantProposal; repetitions: number | null }[]) {
+  const known = rows.flatMap(r => { const m = resolvedMovement(r); return m ? [{ ...r, movementId: m.identity, resolved: m }] : []; });
   const summarize = (entries: typeof rows) => ({ sessions: new Set(entries.map(r => r.sessionId)).size,
     knownRepetitions: entries.reduce((n,r) => n + (r.repetitions ?? 0), 0),
     status: entries.every(r => r.repetitions !== null) ? 'complete' : entries.some(r => r.repetitions !== null) ? 'partial' : 'unknown' });
   return { source: 'ExposureEngine.structured',
     byMovement: Object.fromEntries([...new Set(known.map(r=>r.movementId))].sort().map(id=>[id,summarize(known.filter(r=>r.movementId===id))])),
-    byPattern: Object.fromEntries([...new Set(known.map(r=>MOVEMENT_LIBRARY[r.movementId].movement_pattern))].sort()
-      .map(pattern=>[pattern,summarize(known.filter(r=>MOVEMENT_LIBRARY[r.movementId].movement_pattern===pattern))])),
+    byPattern: Object.fromEntries([...new Set(known.map(r=>r.resolved.descriptor.movement_pattern))].sort()
+      .map(pattern=>[pattern,summarize(known.filter(r=>r.resolved.descriptor.movement_pattern===pattern))])),
+    ...(known.some(r => r.variant) ? { byCanonicalFamily: Object.fromEntries([...new Set(known.map(r => r.resolved.canonicalFamily).filter(Boolean))]
+      .map(family => [family!, summarize(known.filter(r => r.resolved.canonicalFamily === family))])),
+      movementIdentities: known.map(r => ({ identity: r.resolved.identity, source: r.resolved.source,
+        canonicalFamily: r.resolved.canonicalFamily, pattern: r.resolved.descriptor.movement_pattern,
+        discipline: r.resolved.descriptor.discipline, displayName: r.resolved.displayName, modifiers: r.resolved.modifiers ?? null })) } : {}),
     unknownMovementRows: rows.length-known.length };
 }
 

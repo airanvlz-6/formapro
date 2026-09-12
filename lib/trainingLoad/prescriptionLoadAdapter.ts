@@ -1,7 +1,8 @@
-import { MOVEMENT_LIBRARY, STIMULUS_LIBRARY } from '../sports/movementLibrary';
+import { STIMULUS_LIBRARY } from '../sports/movementLibrary';
 import { WORKOUT_STRUCTURE_LIBRARY } from '../sports/workoutStructureLibrary';
 import { checkSessionShape } from '../sports/structuredSession';
 import { buildStructuredExposureReport } from '../sports/exposureEngine';
+import { resolvedMovement } from '../sports/movementVariants';
 import { resolveSessionLoad, aggregateLoadSessions, quantity, unknownQuantity, type SegmentInput, type SessionLoad, type Quantity } from './trainingLoad';
 
 const record=(v:unknown):Record<string,any>=>v!==null&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,any>:{};
@@ -21,16 +22,17 @@ export function plannedPrescriptionLoad(row: Record<string,any>, date:string, id
     const open=!!format&&['amrap','density','death_by','emom','e2mom','ladder'].includes(format);
     const multiplier=open?null:f?.rounds??1;
     for(const [mi,m] of b.movements.entries()){
-      const meta=MOVEMENT_LIBRARY[m.movementId],d=m.prescription;
+      const meta=resolvedMovement(m)?.descriptor,d=m.prescription;
       if(!meta)throw new Error('TRAINING_LOAD_MOVEMENT_UNKNOWN');
       const i=d.intensity,ref=i&&'referenceId'in i?refs.find((r:any)=>r.id===i.referenceId):null;
       let kg:SegmentInput['kg'];
-      if(i?.kind==='percent_1rm'&&ref?.kind==='1rm'&&ref.movementId===m.movementId&&ref.unit==='kg'&&positive(ref.value))
+      if(!m.variant&&i?.kind==='percent_1rm'&&ref?.kind==='1rm'&&ref.movementId===m.movementId&&ref.unit==='kg'&&positive(ref.value))
         kg={minimum:Math.round(ref.value*i.value)/100,maximum:Math.round(ref.value*(i.max??i.value))/100};
       segments.push({id:`${bi}:${mi}`,movementId:m.movementId,pattern:meta.movement_pattern,source:`${source}.proposal.blocks.${bi}.movements.${mi}`,
         sets:d.sets??1,reps:d.reps,durationSeconds:d.durationSeconds,distanceMeters:d.distanceMeters,restSeconds:d.restSeconds??0,
         perSide:d.perSide,multiplier,externalLoadApplicable:!!kg||meta.equipment.some(e=>['barra','mancuerna','kettlebell','sandbag','balon_medicinal','disco','sled','yoke'].includes(e)),
-        ...(kg?{kg}:{}),intensity:i?{prescribed:i,reference:ref||null}:null,formatContext:{blockType:b.blockType,format,dose:f||null},
+        ...(kg?{kg}:{}),intensity:i?{prescribed:i,reference:ref||null}:null,formatContext:{blockType:b.blockType,format,dose:f||null,
+          ...(m.variant ? { variant: structuredClone(m.variant) } : {})},
         categories:{impact:meta.impact,technical:meta.technical_demand,energySystem:STIMULUS_LIBRARY[proposal.stimulusId]?.sistema_energetico||'unknown',structureStimulus:structure.stimulus_type}});
     }
     if(format==='complex'&&f?.rounds&&f.restSeconds!==undefined)segments.push({
@@ -62,7 +64,8 @@ export function externalActualLoad(row:Record<string,any>,id:string):SessionLoad
 }
 export function summarizeLoad(sessions:SessionLoad[]){
   const exposure=(kind:'planned'|'actual')=>buildStructuredExposureReport(sessions.filter(s=>s.kind===kind).flatMap(s=>s.segments.filter(e=>!!e.input.movementId).map(e=>({
-    sessionId:s.id,movementId:e.input.movementId!,repetitions:e.vector.repetitions.status==='complete'?e.vector.repetitions.minimum:null}))));
+    sessionId:s.id,movementId:e.input.movementId!,...((e.input.formatContext as any)?.variant ? { variant: (e.input.formatContext as any).variant } : {}),
+    repetitions:e.vector.repetitions.status==='complete'?e.vector.repetitions.minimum:null}))));
   return {schemaVersion:1,load:aggregateLoadSessions(sessions),exposure:{planned:exposure('planned'),actual:exposure('actual')},sessions,
     diagnostics:['TRAINING_LOAD_RESOLUTION','READINESS_SEPARATE','NO_IMPLICIT_PLANNED_ACTUAL_LINK']};
 }

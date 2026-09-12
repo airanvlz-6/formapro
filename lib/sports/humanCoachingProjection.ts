@@ -5,6 +5,7 @@ import { calculatedLoad, doseReference, estimateSessionDuration } from './sessio
 import { formatDuration } from './sessionProfessionalRenderer';
 import { WORKOUT_STRUCTURE_LIBRARY } from './workoutStructureLibrary';
 import { adaptationLabels, goalLabels, methodLabels, metricLabels, movementLabels, structureLabels } from './humanPresentationLabels';
+import { resolvedMovement } from './movementVariants';
 
 const join = (values: string[]) => values.length < 2 ? values.join('') : `${values.slice(0, -1).join(', ')} y ${values.at(-1)}`;
 const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -78,7 +79,7 @@ export function humanCoachingProjection(c: AllowedTrainingContract, p: Structure
         const guide = target?.primary.kind === 'reference' ? target.secondary : undefined;
         const amount = d.reps ? `${d.reps}${d.perSide ? ' por lado' : ''}` : d.durationSeconds ? formatDuration(d.durationSeconds)
           : d.distanceMeters! >= 1000 ? `${num(d.distanceMeters! / 1000)} km` : `${num(d.distanceMeters!)} m`;
-        return { name: label(movementLabels, m.movementId, 'movement', 'Ejercicio programado'),
+        return { name: m.variant ? resolvedMovement(m)!.displayName : label(movementLabels, m.movementId, 'movement', 'Ejercicio programado'),
           dose: `${d.sets ? `${d.sets} × ` : ''}${amount} · ${intensity(d)}${guide ? ` · ${guide.metric.toUpperCase()} esperado ${range(guide.value, guide.max ?? guide.value)}` : ''}`,
           rest: d.restSeconds === undefined ? null : `${b.blockType === 'main' && format === 'intervals' ? 'Descanso entre intervalos' : 'Descanso'}: ${formatDuration(d.restSeconds)}`,
           tempo: d.tempo ? `Tempo: ${d.tempo.join('-')}` : null };

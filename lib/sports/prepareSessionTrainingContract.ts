@@ -1,4 +1,5 @@
 import type { PrescriptionIntent } from './prescriptionIntent';
+import { availableDaysAtWeek } from './temporaryTrainingAccess';
 import type { CanonicalRestrictions } from '../athlete/getCanonicalRestrictions';
 import { buildPrescriptionScope, canonicalDiscipline, normalizeTrainingKey, resolveProfileDisciplines, type TrainingSource } from './prescriptionScope';
 import { buildAllowedTrainingContract, EXPOSURE_LIMITATIONS, type ContractInput, type ContractResult, type ExternalLoadContext } from './allowedTrainingContract';
@@ -6,7 +7,7 @@ import { buildExposureReport } from './exposureEngine';
 import { legacySessionView } from './sessionPresentation';
 import { normalizeTrainingAvailability } from './trainingAvailability';
 
-type StoredProfile = { modo_entrada?: string; especialidad?: string; categoria?: string; distribucion_semanal?: unknown };
+type StoredProfile = { modo_entrada?: string; especialidad?: string; categoria?: string; distribucion_semanal?: unknown; perfil?: unknown };
 function distribution(value: unknown): Record<string, unknown> {
   try { const parsed = typeof value === 'string' ? JSON.parse(value) : value;
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
@@ -61,7 +62,7 @@ export async function prepareSessionTrainingContext(db: any, userCodigo: string,
       targetDay: normalizeTrainingKey(request.day), discipline, stimulus: request.stimulus,
       restrictionsSnapshot: restrictions, externalLoadContext, exposureContext: { source: 'legacy_completed_weekly_rows', report, limitations: EXPOSURE_LIMITATIONS },
       ...(Object.hasOwn(request, 'intent') ? { intent: request.intent } : {}),
-      availableDays, source: 'weekly_session_builder' } };
+      availableDays: availableDaysAtWeek(profile.perfil, request.targetWeekStart, availableDays), source: 'weekly_session_builder' } };
   } catch { return { ok: false, errors: ['CONTRACT_CONTEXT_READ_FAILED'] }; }
 }
 

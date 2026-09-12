@@ -1,8 +1,6 @@
-import { intentMatchingMovementIds } from './prescriptionIntent';
 import { calendarState } from '../planning/weeklyCalendar';
 import { validateStructureSemantics } from './structureSemantics';
 import { validateAllowedTrainingContract, type AllowedTrainingContract } from './allowedTrainingContract';
-import { MOVEMENT_LIBRARY } from './movementLibrary';
 import { WORKOUT_STRUCTURE_LIBRARY } from './workoutStructureLibrary';
 import { activeRestrictionFlags, evaluateMovementRestrictions } from './movementRestrictionPolicy';
 import { normalizeTrainingKey } from './prescriptionScope';
@@ -13,6 +11,7 @@ import { renderHumanSession } from './sessionHumanRenderer';
 import { authenticatedPresentationVersion, type PresentationVersion } from './sessionPresentation';
 import { validateMethodIntensity } from './methodIntensityAuthority';
 import { validateRunningMethodDose } from './runningMethodDoseAuthority';
+import { resolveSessionMovement, resolvedMovement, type MovementVariantProposal } from './movementVariants';
 
 export type MovementDose = { sets?: number; reps?: number; durationSeconds?: number; distanceMeters?: number; restSeconds?: number;
   intensity?: DoseIntensity; tempo?: [number, number, number, number]; perSide?: boolean };
@@ -20,7 +19,7 @@ export type StructuredSessionProposal = {
   schemaVersion?: 2;
   stimulusId: string;
   structureId: string;
-  blocks: { blockType: 'warmup' | 'main' | 'cooldown'; formatDose?: FormatDose; movements: { movementId: string; prescription: MovementDose }[] }[];
+  blocks: { blockType: 'warmup' | 'main' | 'cooldown'; formatDose?: FormatDose; movements: { movementId: string; variant?: MovementVariantProposal; prescription: MovementDose }[] }[];
   explanation?: string;
 };
 export type SessionValidation = { ok: true; proposal: StructuredSessionProposal } | { ok: false; violations: string[] };
@@ -52,11 +51,15 @@ export function checkSessionShape(value: unknown): SessionValidation {
     if (Object.hasOwn(block, 'formatDose') && !checkFormatDose(block.formatDose)) violations.push('DOSE_FORMAT_INVALID');
     const seen = new Set<string>();
     block.movements.forEach((entry: unknown) => {
-      if (!object(entry) || !keys(entry, ['movementId', 'prescription']) || typeof entry.movementId !== 'string' || !entry.movementId
+      if (!object(entry) || !keys(entry, ['movementId', 'prescription', ...(modern ? ['variant'] : [])]) || typeof entry.movementId !== 'string' || !entry.movementId
         || !['movementId', 'prescription'].every(k => Object.hasOwn(entry, k))
         || !object(entry.prescription) || (!modern && !keys(entry.prescription, doseKeys))) { violations.push(`MOVEMENT_SHAPE_INVALID:${index}`); return; }
       if (seen.has(entry.movementId)) violations.push(`DUPLICATE_MOVEMENT:${index}:${entry.movementId}`);
       seen.add(entry.movementId);
+      if (Object.hasOwn(entry, 'variant')) {
+        const result = resolveSessionMovement(entry as unknown as { movementId: string; variant: MovementVariantProposal });
+        if (result.status !== 'GENERATED_RESOLVED') violations.push(...('errors' in result ? result.errors : ['GENERATED_VARIANT_SHAPE_INVALID']));
+      }
       const dose = entry.prescription;
       if (modern) violations.push(...checkDoseExtension(dose));
       if (!['reps', 'durationSeconds', 'distanceMeters'].some(k => Object.hasOwn(dose, k))) violations.push('DOSE_REQUIRED');
@@ -113,18 +116,33 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
     violations.push('SINGLE_BLOCK_COMPOSITION_NOT_AUTHORIZED');
   const main = p.blocks.find(b => b.blockType === 'main')!.movements;
   violations.push(...validateStructureSemantics(structure, main));
-  if (contract.intent && contract.intent.kind !== 'stimulus_only' && !intentMatchingMovementIds(contract.intent,
-    main.map(m => m.movementId).filter(id => contract.allowedMovementIds.includes(id))).length) violations.push('INTENT_NOT_SATISFIED');
+  if (contract.intent && contract.intent.kind !== 'stimulus_only' && !main.some(entry =>
+    resolvedMovement(entry)?.descriptor.movement_pattern === (contract.intent as { pattern: string }).pattern
+    && (!!entry.variant || contract.allowedMovementIds.includes(entry.movementId)))) violations.push('INTENT_NOT_SATISFIED');
   const restrictions = contract.restrictionsSnapshot;
   const notes = [...restrictions.restrictions, ...restrictions.reassessments];
   const flags = activeRestrictionFlags(notes);
+  const generatedIdentities = new Map<string, string>();
+  for (const block of p.blocks) {
+    const exact = block.movements.map(m => resolvedMovement(m)?.identity).filter(Boolean);
+    if (new Set(exact).size !== exact.length) violations.push('GENERATED_EXACT_IDENTITY_DUPLICATED');
+  }
   for (const block of p.blocks) for (const entry of block.movements) {
-    const m = Object.hasOwn(MOVEMENT_LIBRARY, entry.movementId) ? MOVEMENT_LIBRARY[entry.movementId] : undefined;
+    const resolved = resolvedMovement(entry), m = resolved?.descriptor;
     if (!m) { violations.push(`MOVEMENT_UNKNOWN:${entry.movementId}`); continue; }
-    if (!contract.allowedMovementIds.includes(m.id)) violations.push(`MOVEMENT_OUTSIDE_POOL:${m.id}`);
+    if (entry.variant) {
+      if (!contract.generatedMovementAuthority) violations.push('GENERATED_MOVEMENT_NOT_AUTHORIZED');
+      if (!m.stimulus.includes(contract.stimulusId) && !m.suitable_for.includes(contract.stimulusId)) violations.push('GENERATED_STIMULUS_INCOMPATIBLE');
+      if (generatedIdentities.has(entry.movementId) && generatedIdentities.get(entry.movementId) !== resolved!.identity) violations.push('GENERATED_LOCAL_ID_CONFLICT');
+      generatedIdentities.set(entry.movementId, resolved!.identity);
+      if (resolved!.geometryChanged && restrictions.areas.length) violations.push('GENERATED_RESTRICTION_UNKNOWN:body_area');
+      if (entry.variant.modifiers.tempo && JSON.stringify(entry.variant.modifiers.tempo) !== JSON.stringify(entry.prescription.tempo)) violations.push('GENERATED_TEMPO_DOSE_MISMATCH');
+    } else if (!contract.allowedMovementIds.includes(m.id)) violations.push(`MOVEMENT_OUTSIDE_POOL:${m.id}`);
     if (!m.discipline.includes(contract.discipline as 'box' | 'carrera' | 'fuerza')) violations.push(`MOVEMENT_DISCIPLINE:${m.id}`);
-    if (!evaluateMovementRestrictions(m, flags).allowed || restrictions.areas.some(a => m.avoid_with?.includes(a))
-      || notes.some(n => normalizeTrainingKey(n.movement) === m.id)) violations.push(`MOVEMENT_RESTRICTED:${m.id}`);
+    const restriction = evaluateMovementRestrictions(m, flags, entry.variant ? resolved!.restrictionProperties : undefined);
+    if (entry.variant && restriction.unknown.length) violations.push(...restriction.unknown.map(flag => `GENERATED_RESTRICTION_UNKNOWN:${flag}`));
+    if (!restriction.allowed || restrictions.areas.some(a => m.avoid_with?.includes(a))
+      || notes.some(n => normalizeTrainingKey(n.movement) === (resolved!.canonicalFamily ?? m.id))) violations.push(`MOVEMENT_RESTRICTED:${m.id}`);
   }
   if (!violations.length) violations.push(...validateRunningMethodDose(contract, p));
   if (!violations.length) violations.push(...validateSessionDose(contract, p, observeDose));
@@ -132,7 +150,7 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
     const intensity = m.prescription.intensity;
     const ref = intensity && 'referenceId' in intensity ? contract.doseContext.references.find(r => r.id === intensity.referenceId) : undefined;
     const decision = resolvePrescriptionDataSufficiency(contract.doseContext.sufficiency, contract.doseContext.references, {
-      movementId: m.movementId, discipline: contract.discipline, distance: !!m.prescription.distanceMeters,
+      movementId: m.movementId, ...(m.variant ? { variant: m.variant } : {}), discipline: contract.discipline, distance: !!m.prescription.distanceMeters,
       intensity: intensity?.kind === 'percent_1rm' ? '1rm' : intensity?.kind === 'reference' ? ref?.unit === 'bpm' ? 'hr' : 'pace' : intensity?.kind,
       referenceId: ref?.id });
     if (decision.status !== 'sufficient') for (const s of decision.missingSignals) {

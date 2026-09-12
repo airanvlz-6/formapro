@@ -1,11 +1,8 @@
 import { runningPolicyGuidance } from '../sports/runningEvidencePolicy';
 import { transferMethod } from '../sports/goalTransferModel';
 import { buildWeeklyCoachingContext, loadWeeklyCoachingSupplement } from './weeklyCoachingContext';
-import { RUNNING_METHOD_DOSE_POLICIES } from '../sports/runningMethodDosePolicies';
 import { scopeRunningHistory } from '../execution/historicalRunning';
 import { projectWeeklyPrescriptionSignals } from './weeklyPrescriptionSignals';
-import { AEROBIC_CONTINUITY_POLICY } from '../sports/aerobicContinuityPolicy';
-import { habitualRunningRequirement } from '../athlete/runningHabitualDeclarations';
 import { buildDoseCapabilityProfile } from '../sports/doseCapabilityProfile';
 import { evaluateTrainingFeasibility } from '../sports/trainingFeasibility';
 import type { PlannerCompletion } from './weeklyPlannerDiagnostics';
@@ -107,19 +104,8 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
       fixed[day] = { state: calendarState(s), ...(['box', 'carrera'].includes(s.tipo) ? { discipline: s.tipo } : {}) };
     }
   }
-  // Only a current validated generation supplies planningRunId. Never infer freshness from a date.
-  if (RUNNING_METHOD_DOSE_POLICIES.some(p=>p.policyId===AEROBIC_CONTINUITY_POLICY) && request.planningRunId && strategy?.methods.includes('running_base') && c.scope.managedDisciplines.includes('carrera')
-    && calendarDays.some(day=>!fixed[day] && c.allowed.carrera?.includes(day))
-    && !athlete!.runningDoseEvidenceAdmission.basis.habitualConfirmation) {
-    const declarations=athlete!.runningDoseEvidenceAdmission.basis.habitualDeclarations;
-    const duration=declarations?.facts.find(f=>f.field==='habitualEasyRunningDurationMinutes');
-    if (!declarations?.conflicts.length && duration?.status!=='NO_HABITUAL_EASY_RUN') return {
-      ok:false as const,canContinue:false as const,code:'RUNNING_HABITUAL_RECONFIRMATION_REQUIRED',
-      runningHabitualRequirement: duration ? {field:duration.field,unit:duration.unit,currentDurationMinutes:duration.value,
-        text:`¿Sigue siendo tu rodaje fácil habitual de ${duration.value} minutos? Responde CONFIRMAR, «sí», «correcto» o «sigue igual», o escribe el número de minutos actual.`}
-        : habitualRunningRequirement([]),
-    };
-  }
+  // Habitual declarations remain dated facts. New session coaches do not need a
+  // current-interaction exact-repeat target; signed fact changes are still checked at save.
   if (runningEventPreparation?.managed && runningEventPreparation.preparationState !== 'GENERAL_DEVELOPMENT' && strategy?.goal.id === 'half_marathon' && contexts.carrera)
     contexts.carrera.runningEventPreparation = runningEventPreparation;
   let availabilityConfirmed = false;
@@ -134,7 +120,7 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
       && c.scope.managedDisciplines.some(discipline => c.allowed[discipline].includes(day))) } } : {}),
     ...(runningEventPreparation?.managed && runningEventPreparation.preparationState !== 'GENERAL_DEVELOPMENT' && strategy?.goal.id === 'half_marathon' ? { runningEventPreparation } : {}),
     ...(strategy ? { strategy, doseCapabilities: buildDoseCapabilityProfile(athlete!.runningDoseEvidenceAdmission, c.scope,
-      { ...(runningEventPreparation?.managed && runningEventPreparation.preparationState !== 'GENERAL_DEVELOPMENT' && strategy.goal.id === 'half_marathon' ? {runningEventPreparation} : {}), goalId: strategy.goal.id, blockPhase: strategy.block.phase, blockWeek: strategy.block.week, athlete, contexts }) } : {}) },
+      { sessionDecisionAuthority: 'coach', ...(runningEventPreparation?.managed && runningEventPreparation.preparationState !== 'GENERAL_DEVELOPMENT' && strategy.goal.id === 'half_marathon' ? {runningEventPreparation} : {}), goalId: strategy.goal.id, blockPhase: strategy.block.phase, blockWeek: strategy.block.week, athlete, contexts }) } : {}) },
     athlete, fixedSessions: structuredClone(fixedSessions),
     runningHistoryContext: athlete ? scopeRunningHistory(athlete.runningHistory, c.scope) : null,
     runningEventPreparation,

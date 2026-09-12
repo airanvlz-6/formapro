@@ -6,7 +6,7 @@ import type { StructuredSessionProposal } from './structuredSession';
 import { checkDoseExtension } from './sessionDose';
 import { prescriptionGenerationOptions } from './prescriptionDataSufficiency';
 import { MOVEMENT_LIBRARY } from './movementLibrary';
-import { runningIntensityPolicy, INTENSITY_DIAGNOSTICS, type IntensityDiagnostic } from './runningIntensityPolicies';
+import { runningIntensityPolicy, runningIntensityChoices, INTENSITY_DIAGNOSTICS, type IntensityDiagnostic } from './runningIntensityPolicies';
 
 export type IntensityEvidence = {
   zoneCompatibility?: { zoneSystemId: string; sourceZone: string; policyId: string; version: number;
@@ -22,9 +22,11 @@ export type IntensityEvidence = {
 };
 export type IntensityTarget = { movementId: string; primary: DoseIntensity; evidence: IntensityEvidence;
   secondary?: { metric: 'rpe' | 'rir'; value: number; max?: number; purpose: 'perception_guide'; evidence: IntensityEvidence } };
-/** A server policy supplies complete targets; the model never resolves their metric/range. Main scope is explicit. */
+/** Domain expression candidates retain exact references. Historical contracts impose complete targets;
+ * coach contracts publish metric choices and treat subjective bands as guidance. Main scope is explicit. */
 export type MethodIntensityPolicy = { id: string; version: number; methodId: string; scope: 'main'; targets: IntensityTarget[] };
 export type MethodIntensityAuthority = { version: 1 | 2; methodId: string | null; scope: 'main'; sourceDigest: string;
+  decisionAuthority?: 'coach'; choices?: IntensityTarget[];
   diagnostics?: IntensityDiagnostic[] } & (
   { status: 'UNRESOLVED'; reason: 'NO_METHOD_POLICY' | 'POLICY_NOT_EXECUTABLE'; policy: null; targets: [] }
   | { status: 'RESOLVED'; reason: 'AUTHORIZED_POLICY'; policy: { id: string; version: number }; targets: IntensityTarget[] });
@@ -74,6 +76,8 @@ export function resolveMethodIntensity(c: AllowedTrainingContract, policy?: Meth
     ? {...candidate,targets:candidate.targets.filter(t=>t.movementId!=='rodaje_largo')} : candidate;
   const version = domain ? 2 as const : 1 as const;
   const base = { version, methodId, scope: 'main' as const, sourceDigest: sourceDigest(c, version),
+    ...(c.doseContext?.sessionDecisionAuthority === 'coach' && domain ? { decisionAuthority: 'coach' as const, choices: runningIntensityChoices(c)
+      .filter(t => c.runningEventPreparation?.constraints.longRun !== 'FORBIDDEN' || t.movementId !== 'rodaje_largo') } : {}),
     ...(domain ? { diagnostics: domain.diagnostics } : {}) };
   if(c.runningEventPreparation && c.discipline==='carrera' && (!methodId || !runningEventMethodAllowed(c.runningEventPreparation,methodId)))
     return {...base,status:'UNRESOLVED',reason:'POLICY_NOT_EXECUTABLE',policy:null,targets:[]};
@@ -82,11 +86,15 @@ export function resolveMethodIntensity(c: AllowedTrainingContract, policy?: Meth
     || !selected.targets.length || new Set(selected.targets.map(t => t.movementId)).size !== selected.targets.length || !selected.targets.every(t => executable(c, t)))
     return { ...base, ...(domain ? { diagnostics: ['METHOD_INTENSITY_POLICY_UNRESOLVED'] as IntensityDiagnostic[] } : {}),
       status: 'UNRESOLVED', reason: 'POLICY_NOT_EXECUTABLE', policy: null, targets: [] };
-  return { ...base, status: 'RESOLVED', reason: 'AUTHORIZED_POLICY', policy: { id: selected.id, version: selected.version }, targets: structuredClone(selected.targets) };
+  return { ...base, status: 'RESOLVED', reason: 'AUTHORIZED_POLICY', policy: { id: selected.id, version: selected.version },
+    targets: structuredClone(base.decisionAuthority ? selected.targets.map(({ secondary: _guide, ...target }) => target) : selected.targets) };
 }
 export function validMethodIntensity(c: AllowedTrainingContract): boolean {
   const a = c.intensityAuthority;
   if (a === undefined) return true; // Historical receipts have no C1 extension.
+  if (a?.decisionAuthority === 'coach' && (c.doseContext?.sessionDecisionAuthority !== 'coach'
+    || digest(a) !== digest(resolveMethodIntensity(c)))) return false;
+  if (a?.choices && a.decisionAuthority !== 'coach') return false;
   if (!a || ![1, 2].includes(a.version) || a.scope !== 'main' || a.sourceDigest !== sourceDigest(c, a.version)
     || a.methodId !== (c.intent?.kind === 'adaptation' ? c.intent.methodId : null)) return false;
   if (a.version === 2 && (!Array.isArray(a.diagnostics) || !a.diagnostics.length || a.diagnostics.length > INTENSITY_DIAGNOSTICS.length
@@ -102,6 +110,13 @@ export function validateMethodIntensity(c: AllowedTrainingContract, p: Structure
   return p.blocks.filter(b => b.blockType === a.scope).flatMap(b => b.movements.flatMap(m => {
     const expected = a.targets.find(t => t.movementId === m.movementId)?.primary;
     const actual = m.prescription.intensity;
+    if (a.decisionAuthority === 'coach') {
+      const compatible = a.choices?.filter(t => t.movementId === m.movementId) ?? [];
+      return actual && compatible.some(t => actual.kind === 'rpe' ? t.primary.kind === 'rpe'
+        && !checkDoseExtension({ intensity: actual }).length : Object.keys(t.primary).length === Object.keys(actual).length
+          && Object.entries(t.primary).every(([key, value]) => (actual as unknown as Record<string, unknown>)[key] === value))
+        ? [] : ['METHOD_INTENSITY_OUTSIDE_DOMAIN'];
+    }
     const same = expected && actual && Object.keys(expected).length === Object.keys(actual).length
       && Object.entries(expected).every(([k, v]) => (actual as unknown as Record<string, unknown>)[k] === v);
     return same ? [] : ['METHOD_INTENSITY_OUTSIDE_DOMAIN'];

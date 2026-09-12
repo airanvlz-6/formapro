@@ -13,6 +13,7 @@ export type DoseReference = { id: string; kind: '1rm' | 'running'; movementId?: 
   value: number | { min: number; max: number }; unit: 'kg' | 'bpm' | 'seconds_per_km'; source: string; observedAt: string | null;
   intensityEvidence?: IntensityEvidence };
 export type SessionDoseContext = { version: 1; policy: 'structured-dose-v1'; references: DoseReference[];
+  sessionDecisionAuthority?: 'coach';
   sufficiency?: PrescriptionSignals;
   runningReferenceAuthority?: RunningReferenceAuthority;
   referenceResolution?: { version: 1; running: Record<string, 'resolved' | 'unknown' | 'conflict'> };
@@ -26,7 +27,8 @@ export type SessionDoseContext = { version: 1; policy: 'structured-dose-v1'; ref
 /** Projection of 3A only. Resolved declared references are usable, not promoted to laboratory measurements.
  * No e1RM, age zones, fuzzy reference substitutions or fresh-score calculations. */
 export function buildSessionDoseContext(context: AthletePrescriptionContext, intent?: PrescriptionIntent,
-  weekStrategy: CanonicalWeekStrategy | null = null, neighbours: SessionDoseContext['neighbours'] = [], enforceSufficiency = false): SessionDoseContext {
+  weekStrategy: CanonicalWeekStrategy | null = null, neighbours: SessionDoseContext['neighbours'] = [], enforceSufficiency = false,
+  sessionDecisionAuthority?: 'coach'): SessionDoseContext {
   if (intent?.kind === 'adaptation' && resolveStrategyGoal(context) !== intent.goalId) throw new Error('SESSION_GOAL_CONTEXT_CHANGED');
   if (context.sessionTimeBudget.reason === 'conflict') throw new Error('SESSION_TIME_BUDGET_CONFLICT');
   const references: DoseReference[] = [];
@@ -44,6 +46,7 @@ export function buildSessionDoseContext(context: AthletePrescriptionContext, int
   const timeBudget = { maximumSeconds: time?.value.maxMinutes != null ? time.value.maxMinutes * 60 : null,
     minimumSeconds: time?.value.minMinutes != null ? time.value.minMinutes * 60 : null, status: budget.reason, source: time?.source || null };
   return { version: 1, policy: 'structured-dose-v1', references, runningReferenceAuthority,
+    ...(sessionDecisionAuthority ? { sessionDecisionAuthority } : {}),
     referenceResolution: { version: 1, running: Object.fromEntries(Object.entries(context.running.byMetric)
       .filter(([metric]) => (RUNNING_REFERENCE_METRICS as readonly string[]).includes(metric))
       .map(([metric, resolution]) => [metric, resolution.reason])) },
@@ -59,6 +62,7 @@ export function buildSessionDoseContext(context: AthletePrescriptionContext, int
 
 export function validateDoseContext(c: SessionDoseContext): boolean {
   return !!c && c.version === 1 && c.policy === 'structured-dose-v1' && Array.isArray(c.references)
+    && (c.sessionDecisionAuthority === undefined || c.sessionDecisionAuthority === 'coach')
     && (c.runningReferenceAuthority === undefined || validRunningReferenceAuthority(c.runningReferenceAuthority, c.references))
     && (c.referenceResolution === undefined || c.referenceResolution.version === 1 && !!c.referenceResolution.running
       && Object.entries(c.referenceResolution.running).every(([metric, state]) =>

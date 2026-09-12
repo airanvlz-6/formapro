@@ -37,10 +37,10 @@ export const GENERATION_SAFETY_BOUNDS: Record<string, number> = {
 export function checkSessionShape(value: unknown): SessionValidation {
   const violations: string[] = [];
   const modern = object(value) && value.schemaVersion === 2;
-  if (!object(value) || !keys(value, ['stimulusId', 'structureId', 'blocks', ...(modern ? ['schemaVersion'] : ['explanation'])])
+  if (!object(value) || !keys(value, ['stimulusId', 'structureId', 'blocks', 'explanation', ...(modern ? ['schemaVersion'] : [])])
     || !['stimulusId', 'structureId', 'blocks'].every(k => Object.hasOwn(value, k))
     || typeof value.stimulusId !== 'string' || !value.stimulusId || typeof value.structureId !== 'string' || !value.structureId
-    || (value.explanation !== undefined && (typeof value.explanation !== 'string' || value.explanation.length > 2000))
+    || (value.explanation !== undefined && (typeof value.explanation !== 'string' || value.explanation.length > (modern ? 400 : 2000)))
     || !Array.isArray(value.blocks) || (modern ? ![1, 2, 3].includes(value.blocks.length) : value.blocks.length !== 3)) return { ok: false, violations: ['PROPOSAL_SHAPE_INVALID'] };
   const blockTypes = modern && value.blocks.length === 1 ? ['main'] : ['warmup', 'main', 'cooldown'];
   value.blocks.forEach((block: unknown, index: number) => {
@@ -109,7 +109,7 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
   if (p.stimulusId !== contract.stimulusId) violations.push('STIMULUS_MISMATCH');
   const structure = Object.hasOwn(WORKOUT_STRUCTURE_LIBRARY, p.structureId) ? WORKOUT_STRUCTURE_LIBRARY[p.structureId] : undefined;
   if (!structure || !contract.allowedStructureIds.includes(p.structureId) || structure.discipline !== contract.discipline) violations.push('STRUCTURE_NOT_ALLOWED');
-  if (p.blocks.length === 1 && !(contract.runningMethodDose?.version === 2 && ['SINGLE_CONTINUOUS_TOTAL','SINGLE_INTERVAL_MAIN'].includes(contract.runningMethodDose.dose?.composition ?? '')))
+  if (p.blocks.length === 1 && contract.doseContext?.sessionDecisionAuthority !== 'coach' && !(contract.runningMethodDose?.version === 2 && ['SINGLE_CONTINUOUS_TOTAL','SINGLE_INTERVAL_MAIN'].includes(contract.runningMethodDose.dose?.composition ?? '')))
     violations.push('SINGLE_BLOCK_COMPOSITION_NOT_AUTHORIZED');
   const main = p.blocks.find(b => b.blockType === 'main')!.movements;
   violations.push(...validateStructureSemantics(structure, main));

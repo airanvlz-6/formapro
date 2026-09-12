@@ -19,12 +19,13 @@ import { compatibleRunningExecutions } from './runningExecutionCompatibility';
 import { fixedRunningPrescription } from './fixedRunningPrescription';
 
 export function buildDoseCapabilityProfile(admission: RunningDoseEvidenceAdmission, scope: PrescriptionScope,
-  context: { runningEventPreparation?: RunningEventPreparationDecisionV1; goalId: GoalId | null; blockPhase: StrategicIntent['blockPhase']; blockWeek: number | null; athlete?: AthletePrescriptionContext; contexts?: Record<string, ContractInput> }) {
+  context: { sessionDecisionAuthority?: 'coach'; runningEventPreparation?: RunningEventPreparationDecisionV1; goalId: GoalId | null; blockPhase: StrategicIntent['blockPhase']; blockWeek: number | null; athlete?: AthletePrescriptionContext; contexts?: Record<string, ContractInput> }) {
   const entries = RUNNING_METHOD_DOSE_POLICIES.flatMap(policy => transferMethod(policy.methodId)!.patterns.map(pattern => {
     const intent: StrategicIntent = { kind: 'adaptation', methodId: policy.methodId,
       adaptationId: transferMethod(policy.methodId)!.adaptationId, role: policy.methodId === 'running_recovery' ? 'MAINTENANCE' : 'PRIMARY', pattern,
       goalId: context.goalId ?? 'running_general', blockPhase: context.blockPhase, blockWeek: context.blockWeek, weaknessId: null };
-    const evidence = resolveCompatibleRunningDoseEvidence(admission, intent), authority = resolveRunningMethodDose(evidence, intent);
+    const coach = context.sessionDecisionAuthority === 'coach';
+    const evidence = resolveCompatibleRunningDoseEvidence(admission, intent), authority = resolveRunningMethodDose(evidence, intent, context.sessionDecisionAuthority);
     const eligible = !context.runningEventPreparation || runningEventMethodAllowed(context.runningEventPreparation,policy.methodId);
     const facts = evidence.habitualDeclarations?.facts ?? [];
     const duration = facts.find(f => f.field === 'habitualEasyRunningDurationMinutes');
@@ -42,7 +43,7 @@ export function buildDoseCapabilityProfile(admission: RunningDoseEvidenceAdmissi
       : ready ? (policy.selectDose ? 'EVIDENCE_READY_POLICY_UNRESOLVED' as const : 'EVIDENCE_READY_POLICY_MISSING' as const) : 'MISSING_EVIDENCE' as const;
     const continuity = authority.dose?.composition === 'SINGLE_CONTINUOUS_TOTAL' || authority.dose?.composition === 'SINGLE_INTERVAL_MAIN';
     let fixedPrescription: ReturnType<typeof fixedRunningPrescription> = null;
-    let execution = {compositionStatus: 'NOT_ESTABLISHED', intensityStatus: 'NOT_EVALUATED', timeStatus: 'NOT_EVALUATED', errors: [] as string[]};
+    let execution = {compositionStatus: 'NOT_ESTABLISHED', intensityStatus: 'NOT_EVALUATED', timeStatus: 'NOT_EVALUATED', errors: coach ? ['SESSION_EXECUTION_CONTEXT_REQUIRED'] : [] as string[]};
     if (continuity && authority.status === 'RESOLVED') {
       execution = {compositionStatus:'RESOLVED',intensityStatus:'UNRESOLVED',timeStatus:'UNRESOLVED',errors:['SESSION_EXECUTION_CONTEXT_REQUIRED']};
       if (context.athlete && context.contexts?.carrera) {
@@ -56,13 +57,18 @@ export function buildDoseCapabilityProfile(admission: RunningDoseEvidenceAdmissi
         }
       }
     }
-    // Diagnostic evaluation independent of dose selection. It cannot make a null selector executable.
+    // Evaluate expression capability independently of the old numeric selector.
+    // Coach mode defers actual quantity/time checks until there is a proposal.
     if (!continuity && context.athlete && context.contexts?.carrera) {
-      const doseContext = buildSessionDoseContext(context.athlete,intent,null,[],true);
+      const doseContext = buildSessionDoseContext(context.athlete,intent,null,[],true,context.sessionDecisionAuthority);
       const built = buildAllowedTrainingContract({...context.contexts.carrera,
         targetDay:context.contexts.carrera.availableDays?.[0] ?? context.contexts.carrera.targetDay,
         stimulus:transferMethod(policy.methodId)!.stimulusId,intent,doseContext});
       execution.intensityStatus = built.ok ? resolveMethodIntensity(built.contract).status : 'UNRESOLVED';
+      if (coach) execution = { compositionStatus: built.ok ? 'COACH_SELECTS' : 'UNRESOLVED',
+        intensityStatus: execution.intensityStatus, timeStatus: 'VALIDATE_PROPOSAL',
+        // Empty/forbidden pools are evaluated by weekly feasibility, not mislabeled missing dose evidence.
+        errors: built.ok && execution.intensityStatus !== 'RESOLVED' ? ['DOSE_INTENSITY_UNRESOLVED'] : [] };
     }
     const blockers = [...new Set([
       ...(conflict ? ['DOSE_EVIDENCE_CONFLICT'] : ready ? [] : ['DOSE_EVIDENCE_MISSING']),
@@ -84,11 +90,13 @@ export function buildDoseCapabilityProfile(admission: RunningDoseEvidenceAdmissi
         : factual.status === 'AVAILABLE' ? 'STRUCTURED_EXECUTION_AVAILABLE' as const : factual.status === 'PARTIAL' ? 'PARTIAL' as const : 'MISSING' as const,
       policyStatus: policy.selectDose ? 'ESTABLISHED' as const : 'NOT_ESTABLISHED' as const,
       ...(fixedPrescription ? {fixedPrescription} : {}),
-      blockers, executionIntegrityStatus: factual.integrityStatus, weeklyContextStatus: 'NOT_EVALUATED' as const,
+      blockers: coach ? [...execution.errors, ...(conflict ? ['DOSE_EVIDENCE_CONFLICT'] : []),
+        ...(!scope.prescriptionAllowed || !scope.managedDisciplines.includes('carrera') ? ['PRESCRIPTION_SCOPE_DENIED'] : [])] : blockers,
+      executionIntegrityStatus: factual.integrityStatus, weeklyContextStatus: 'NOT_EVALUATED' as const,
       compositionStatus: execution.compositionStatus, intensityStatus: execution.intensityStatus, timeStatus: execution.timeStatus,
       prescriptionBlockReason: execution.errors[0] ?? (authority.status === 'RESOLVED' ? null : authority.reason),
       doseCapability, prescriptionAllowed: eligible && (!context.runningEventPreparation || execution.intensityStatus === 'RESOLVED') && !conflict && scope.prescriptionAllowed && scope.managedDisciplines.includes('carrera') && authority.status === 'RESOLVED' && !execution.errors.length,
-      missingRequirements: [...missingRequirements, ...(!policy.selectDose ? ['NUMERIC_DOSE_POLICY'] : authority.status !== 'RESOLVED' ? [authority.reason] : []), ...execution.errors], evidenceRefs: [...evidence.evidenceRefs],
+      missingRequirements: coach ? [...execution.errors, ...(conflict ? ['DOSE_EVIDENCE_CONFLICT'] : [])] : [...missingRequirements, ...(!policy.selectDose ? ['NUMERIC_DOSE_POLICY'] : authority.status !== 'RESOLVED' ? [authority.reason] : []), ...execution.errors], evidenceRefs: [...evidence.evidenceRefs],
       diagnostics: [conflict ? 'RUNNING_DOSE_CAPABILITY_CONFLICT' : ready ? 'RUNNING_DOSE_CAPABILITY_EVIDENCE_READY' : 'RUNNING_DOSE_CAPABILITY_MISSING_EVIDENCE',
         ...(!policy.selectDose ? ['RUNNING_DOSE_CAPABILITY_POLICY_MISSING'] : []),
         ...(policy.family === 'AEROBIC_CONTINUOUS' ? [duration?.status === 'AVAILABLE' ? 'RUNNING_HABITUAL_EASY_DURATION_AVAILABLE'
@@ -96,7 +104,7 @@ export function buildDoseCapabilityProfile(admission: RunningDoseEvidenceAdmissi
           frequency ? 'RUNNING_HABITUAL_FREQUENCY_AVAILABLE' : 'RUNNING_HABITUAL_FREQUENCY_MISSING'] : [])] };
   }));
   return { version: 1 as const, entries,
-    requirement: scope.prescriptionAllowed && scope.managedDisciplines.includes('carrera')
+    requirement: context.sessionDecisionAuthority !== 'coach' && scope.prescriptionAllowed && scope.managedDisciplines.includes('carrera')
       ? (admission.basis.habitualDeclarations?.facts.some(f=>f.field==='habitualEasyRunningDurationMinutes') ? null : habitualRunningRequirement([])) : null };
 }
 export type DoseCapabilityProfile = ReturnType<typeof buildDoseCapabilityProfile>;

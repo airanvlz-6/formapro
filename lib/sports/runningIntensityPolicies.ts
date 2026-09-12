@@ -60,7 +60,7 @@ export const RUNNING_INTENSITY_POLICIES: readonly DomainPolicy[] = [
 const subjective = (id: string): IntensityEvidence => ({ kind: 'SUBJECTIVE', resolution: 'RESOLVED', confidence: 'declared',
   measurementBasis: 'UNKNOWN', source: id, inputs: [], algorithm: null, containsEstimatedData: false });
 const evidenceRank = (e?: IntensityEvidence) => !e ? 3 : e.containsEstimatedData ? 2 : e.kind === 'DIRECT' ? 0 : e.kind === 'DERIVED' ? 1 : 3;
-export function runningIntensityPolicy(c: AllowedTrainingContract): { policy?: MethodIntensityPolicy; diagnostics: IntensityDiagnostic[] } | null {
+export function runningIntensityPolicy(c: AllowedTrainingContract, metricChoice?: Metric): { policy?: MethodIntensityPolicy; diagnostics: IntensityDiagnostic[] } | null {
   if (c.intent?.kind !== 'adaptation' || c.discipline !== 'carrera') return null;
   const methodId = c.intent.methodId;
   const domain = RUNNING_INTENSITY_POLICIES.find(p => p.methodId === methodId);
@@ -77,7 +77,7 @@ export function runningIntensityPolicy(c: AllowedTrainingContract): { policy?: M
   const diagnostics = new Set<IntensityDiagnostic>();
   const targets: IntensityTarget[] = movements.map(movementId => {
     const executableIds = signals ? prescriptionGenerationOptions(signals, refs, [movementId], c.discipline)[0].executableReferenceIds : [];
-    for (const metric of domain.orderedMetricPreference) {
+    for (const metric of metricChoice ? domain.orderedMetricPreference.filter(m => m === metricChoice) : domain.orderedMetricPreference) {
       if (metric === 'rpe') break;
       const types = metric === 'pace' && variant ? variant.pace : domain.compatibleReferenceTypes[metric];
       const capability = metric === 'hr' ? 'capability.canMeasureHeartRate' : 'capability.canMeasurePace';
@@ -103,4 +103,11 @@ export function runningIntensityPolicy(c: AllowedTrainingContract): { policy?: M
   diagnostics.add('METHOD_INTENSITY_RESOLVED');
   return { policy: { id: domain.id, version: domain.version, methodId: domain.methodId, scope: 'main', targets },
     diagnostics: [...diagnostics].sort() };
+}
+
+/** Metric choice belongs to the coach; reference precedence within each metric remains canonical. */
+export function runningIntensityChoices(c: AllowedTrainingContract): IntensityTarget[] {
+  const choices = ['hr', 'pace', 'rpe'].flatMap(metric => runningIntensityPolicy(c, metric as Metric)?.policy?.targets ?? []);
+  return choices.filter((target, index) => choices.findIndex(t => t.movementId === target.movementId
+    && JSON.stringify(t.primary) === JSON.stringify(target.primary)) === index).map(({ secondary: _guide, ...target }) => target);
 }

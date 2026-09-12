@@ -19,6 +19,7 @@ export function prescriptionHistorySummary(plans: readonly unknown[], asOfDate: 
         temporal: date < asOfDate ? 'PAST' : date === asOfDate ? 'TODAY' : 'FUTURE', state,
         factualState: s.completada === true ? 'EXECUTED' : prescribed ? 'PLANNED_ONLY' : 'NO_EXECUTION_RECORDED',
         prescription: { discipline: s.tipo ?? null, title: text(s.titulo), methodId: intent.methodId ?? null,
+          structuredDose: stored.proposal?.schemaVersion === 2 ? structuredClone(stored.proposal.blocks) : null,
           adaptationId: intent.adaptationId ?? null, role: intent.role ?? null,
           stimulusId: stored.proposal?.stimulusId ?? s.stimulusId ?? null,
           durationMinutes: typeof s.duracion_min === 'number' ? s.duracion_min : null },

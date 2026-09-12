@@ -95,7 +95,7 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
       prescriptionDate: prescriptionDate(request.targetWeekStart, request.day),
       runningHabitualInteraction: planningRunId ? {planningRunId,targetWeekStart:request.targetWeekStart} : undefined,
       sessionEnvironment: { date: prescriptionDate(request.targetWeekStart, request.day), assignedDiscipline: request.discipline, confirmedAssignment } });
-    const doseContext = buildSessionDoseContext(canonical, base.contract.intent, strategicWeek, neighbours, true);
+    const doseContext = buildSessionDoseContext(canonical, base.contract.intent, strategicWeek, neighbours, true, 'coach');
     emitEquipmentAuthorityDiagnostic(doseContext.sufficiency!, base.contract.allowedMovementIds, planningRunId, request.day);
     const prepared = buildAllowedTrainingContract({ ...base.contract, stimulus: base.contract.stimulusId, doseContext });
     if (!prepared.ok) {
@@ -111,7 +111,7 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
     }
     prepared.contract.intensityAuthority = resolveMethodIntensity(prepared.contract);
     if (prepared.contract.discipline === 'carrera' && prepared.contract.intent?.kind === 'adaptation' && isRunningDoseMethod(prepared.contract.intent))
-      prepared.contract.runningMethodDose = resolveRunningMethodDose(resolveCompatibleRunningDoseEvidence(canonical.runningDoseEvidenceAdmission, prepared.contract.intent), prepared.contract.intent);
+      prepared.contract.runningMethodDose = resolveRunningMethodDose(resolveCompatibleRunningDoseEvidence(canonical.runningDoseEvidenceAdmission, prepared.contract.intent), prepared.contract.intent, 'coach');
     if (weekly && (weeklyDigest(prepared.contract.restrictionsSnapshot) !== weeklyDigest(weeklyContext.restrictionsSnapshot)
       || weeklyDigest(prepared.contract.prescriptionScope) !== weeklyDigest(weeklyContext.prescriptionScope)
       || weeklyDigest(prepared.contract.availableDays) !== weeklyDigest(weeklyContext.availableDays)))
@@ -124,12 +124,17 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
     delete builderProfile.perfil.runningHabitualDeclarations;
     delete builderProfile.perfil.runningHabitualConfirmation;
     const result = await generateContractSession(prepared.contract, recent, complete,
-      JSON.stringify({ serverProfile: builderProfile, requestContext: context }), planningRunId, 'human_v3');
+      JSON.stringify({ serverProfile: builderProfile, sessionHistory: canonical.history,
+        structuredRunningExecutions: canonical.runningDoseBaseline.structuredExecutions,
+        habitualDeclarations: canonical.runningDoseBaseline.habitualDeclarations,
+        physiology: canonical.physiology, readiness: canonical.readiness,
+        asOfDate: canonical.asOfDate, requestContext: context }), planningRunId, 'human_v3');
     if (!result.ok) return result;
     const payload = Buffer.from(JSON.stringify({ userCodigo, expiresAt: Date.now() + 30 * 60_000,
       contract: result.contract, proposal: result.proposal, presentationVersion: 'human_v3', ...(weekly ? { weekly } : {}) })).toString('base64url');
     const sessionReceipt = `${payload}.${signature(payload)}`;
-    return { ok: true as const, trainingContract: result.contract, sesion: { ...result.session, sessionReceipt }, attempts: result.attempts, diagnostics: result.diagnostics };
+    return { ok: true as const, trainingContract: result.contract, sesion: { ...result.session, sessionReceipt },
+      coachingDecision: result.coachingDecision, attempts: result.attempts, diagnostics: result.diagnostics };
   } catch (error: any) { return { ok: false as const, code: error.message?.startsWith('WEEKLY_') || error.message?.startsWith('CALENDAR_')
     ? error.message : 'SESSION_AUTHORITY_FAILED', errors: [error.message], retryable: false }; }
 }

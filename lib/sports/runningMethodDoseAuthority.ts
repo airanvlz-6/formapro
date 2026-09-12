@@ -29,6 +29,8 @@ export type RunningDoseSelection = {
     bout: { unit: 'seconds' | 'meters'; range: Range } | null; recoverySeconds: Range | null };
 };
 export type RunningMethodDoseV2 = { version: 2; methodId: string; context: StrategicIntent;
+  decisionAuthority?: 'coach';
+  advisory?: { reason: string; dose: RunningDoseSelection | null; diagnostics: string[] };
   status: 'RESOLVED' | 'UNRESOLVED' | 'CONFLICT'; reason: string;
   policy: { id: string; version: 2; family: RunningDosePolicyFamily | null; variant: string };
   evidence: CompatibleRunningDoseEvidence; sourceDigest: string; evidenceRefs: string[];
@@ -38,11 +40,11 @@ export type RunningMethodDoseV2 = { version: 2; methodId: string; context: Strat
     reason: 'EXACT_COMPLETED_METHOD_REUSE'; numericProgressionAuthorized: false };
   dose: RunningDoseSelection | null; diagnostics: string[] };
 export type AuthorizedRunningMethodDose = RunningMethodDoseV2 | legacy.AuthorizedRunningMethodDose;
-/** Acknowledges intent without adding an unsupported progression selector. */
+/** No deterministic progression formula: new contracts delegate the quantity; old contracts preserve exact reuse. */
 export function resolveLongitudinalRunningDose(authority: RunningMethodDoseV2, decision: RunningEventPreparationDecisionV1) {
   return {version:1 as const, decisionDigest:decision.decisionDigest, longitudinalIntent:decision.longitudinalDecision,
-    numericProgressionAuthorized:false as const,
-    reason:authority.status !== 'RESOLVED' ? 'NO_CANONICAL_NUMERIC_BASELINE'
+    numericProgressionAuthorized:authority.decisionAuthority === 'coach' && authority.status === 'RESOLVED',
+    reason:authority.decisionAuthority === 'coach' ? 'COACH_DECIDES_WITH_FACTUAL_CONTEXT' : authority.status !== 'RESOLVED' ? 'NO_CANONICAL_NUMERIC_BASELINE'
       : decision.longitudinalDecision === 'PROGRESS' ? 'PROGRESSION_SELECTOR_NOT_ESTABLISHED' : 'EXISTING_SAFE_DOSE_ONLY',
     selectedDose:authority.dose};
 }
@@ -63,10 +65,12 @@ function validSelection(d: RunningDoseSelection): boolean {
       .every(r => r == null || rangeValid(r));
 }
 
-/** Registry-only selection. A maximum, occurrence or weekly total cannot select a target. */
-export function resolveRunningMethodDose(evidence: CompatibleRunningDoseEvidence, context: StrategicIntent): RunningMethodDoseV2 {
+/** Server-issued coach mode preserves evidence and advisory knowledge without selecting a target.
+ * Omission is the historical registry-only behavior, required for existing receipts. */
+export function resolveRunningMethodDose(evidence: CompatibleRunningDoseEvidence, context: StrategicIntent, decisionAuthority?: 'coach'): RunningMethodDoseV2 {
   const p = RUNNING_METHOD_DOSE_POLICIES.find(p => p.methodId === context.methodId);
   const base = { version: 2 as const, methodId: context.methodId, context: structuredClone(context),
+    ...(decisionAuthority ? { decisionAuthority } : {}),
     evidence: structuredClone(evidence), sourceDigest: runningDoseDigest({ evidence, context }), evidenceRefs: [...evidence.evidenceRefs],
     policy: { id: p?.policyId ?? `${context.methodId}_dose_v2`, version: 2 as const, family: p?.family ?? null, variant: evidence.variant } };
   const fail = (status: 'UNRESOLVED' | 'CONFLICT', reason: string): RunningMethodDoseV2 => ({ ...base, status, reason, dose: null,
@@ -74,6 +78,12 @@ export function resolveRunningMethodDose(evidence: CompatibleRunningDoseEvidence
       ...(!p?.selectDose ? ['RUNNING_METHOD_DOSE_POLICY_NOT_ESTABLISHED'] : [])])] });
   if (evidence.status === 'CONFLICT' || evidence.conflicts.length || evidence.structuredMethodExecution?.status === 'CONFLICT') return fail('CONFLICT', 'CONFLICTING_EVIDENCE');
   if (!p || p.family !== evidence.family) return fail('UNRESOLVED', 'DOMAIN_UNSUPPORTED');
+  if (decisionAuthority === 'coach') {
+    const previous = resolveRunningMethodDose(evidence, context);
+    return { ...base, decisionAuthority, status: 'RESOLVED', reason: 'COACH_SELECTS_DOSE', dose: null,
+      advisory: { reason: previous.reason, dose: previous.dose, diagnostics: previous.diagnostics },
+      diagnostics: ['RUNNING_METHOD_DOSE_RESOLVED', 'HABITUAL_AND_EXECUTION_ARE_CONTEXT_NOT_TARGETS'] };
+  }
   const policy = selectRunningEvidencePolicy(context.goalId), state = evidence.prescriptionEvidence;
   if (policy && state) {
     const suitability=runningSuitability(state,context.methodId);
@@ -115,22 +125,25 @@ export function resolveRunningMethodDose(evidence: CompatibleRunningDoseEvidence
 /** Compatibility is explicit: v1 is frozen and can only refresh a previously signed v1. */
 export function refreshRunningMethodDose(a: RunningDoseEvidenceAdmission, context: StrategicIntent, previous: AuthorizedRunningMethodDose) {
   return previous.version === 1 ? legacy.resolveRunningMethodDose(legacy.selectRunningDoseBasis(a), context)
-    : resolveRunningMethodDose(resolveCompatibleRunningDoseEvidence(a, context), context);
+    : resolveRunningMethodDose(resolveCompatibleRunningDoseEvidence(a, context), context, previous.decisionAuthority);
 }
 export function validRunningMethodDose(c: AllowedTrainingContract): boolean {
   const a = c.runningMethodDose;
   if (a === undefined) return true;
   if (a?.version === 1) return legacy.validRunningMethodDose(c);
   if (!a || a.version !== 2 || c.discipline !== 'carrera' || c.intent?.kind !== 'adaptation' || !isRunningDoseMethod(c.intent)) return false;
-  try { return runningDoseDigest(a) === runningDoseDigest(resolveRunningMethodDose(a.evidence, c.intent)); } catch { return false; }
+  if (a.decisionAuthority !== c.doseContext?.sessionDecisionAuthority) return false;
+  try { return runningDoseDigest(a) === runningDoseDigest(resolveRunningMethodDose(a.evidence, c.intent, a.decisionAuthority)); } catch { return false; }
 }
 
-/** Validate selected quantities only. No selection, widening, clipping or unit conversion. */
+/** Historical targets remain exact. Coach proposals use shared dose/time/structure guards downstream.
+ * No selection, widening, clipping or unit conversion occurs here. */
 export function validateRunningMethodDose(c: AllowedTrainingContract, proposal: StructuredSessionProposal): string[] {
   const a = c.runningMethodDose;
   if (!a) return [];
   if (a.version === 1) return legacy.validateRunningMethodDose(c, proposal);
   if (!validRunningMethodDose(c)) return ['RUNNING_METHOD_DOSE_AUTHORITY_INVALID'];
+  if (a.decisionAuthority === 'coach' && a.status === 'RESOLVED') return [];
   if (a.status !== 'RESOLVED' || !a.dose) return [`RUNNING_METHOD_DOSE_${a.status}`];
   const d = a.allowedSelections?.find(d=>d.structures.includes(proposal.structureId)) ?? a.dose, errors: string[] = [], main = proposal.blocks.find(b => b.blockType === 'main');
   if (!main) return ['RUNNING_METHOD_DOSE_MAIN_REQUIRED'];

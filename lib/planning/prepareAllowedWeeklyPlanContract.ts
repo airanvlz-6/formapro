@@ -1,4 +1,5 @@
 import { runningPolicyGuidance } from '../sports/runningEvidencePolicy';
+import { transferMethod } from '../sports/goalTransferModel';
 import { buildWeeklyCoachingContext, loadWeeklyCoachingSupplement } from './weeklyCoachingContext';
 import { RUNNING_METHOD_DOSE_POLICIES } from '../sports/runningMethodDosePolicies';
 import { scopeRunningHistory } from '../execution/historicalRunning';
@@ -144,6 +145,7 @@ export async function prepareAllowedWeeklyPlanContract(db: any, codigo: string, 
   const context = await loadWeeklyPlanningContext(db, codigo, request);
   if (!context.ok) return context;
   const built = buildAllowedWeeklyPlanContract(context.input, { planningRunId: request.planningRunId,
+    includeFeasible: process.env.FORGE_WEEKLY_COACHING_DIAGNOSTICS === '1',
     today: request.today, snapshot: request.snapshot,
     availabilityConfirmed: context.availabilityConfirmed,
     temporalDecision: request.diagnosticTemporalDecision === undefined ? request.empezarHoy : request.diagnosticTemporalDecision });
@@ -151,6 +153,33 @@ export async function prepareAllowedWeeklyPlanContract(db: any, codigo: string, 
   const evidencePolicy = runningPolicyGuidance(context.input.strategy?.goal.id??null,context.runningEventPreparation?.preparationState??'',context.runningEventPreparation?.daysRemaining??null);
   const coachingContext = buildWeeklyCoachingContext(context.input, built.contract, context.athlete, request.snapshot, request.today,
     await loadWeeklyCoachingSupplement(db, codigo, request.today), evidencePolicy);
+  if (process.env.FORGE_WEEKLY_COACHING_DIAGNOSTICS === '1') try {
+    // No raw DB rows, notes, identifiers of executions, provider envelope or secrets.
+    console.info('WEEKLY_COACHING_INPUT', JSON.stringify({ planningRunId: request.planningRunId ?? null,
+      weekStart: request.targetWeekStart, contextDigest: built.contract.contextDigest,
+      goal: built.contract.strategy?.goal.id ?? null, phase: built.contract.strategy?.block.phase ?? 'unknown',
+      blockWeek: built.contract.strategy?.block.week ?? null,
+      eventPreparation: context.runningEventPreparation?.preparationState ?? null,
+      daysToEvent: context.runningEventPreparation?.daysRemaining ?? null,
+      context: { asOfDate: coachingContext.asOfDate, semantics: coachingContext.semantics,
+        historyRows: coachingContext.past.prescriptionHistory.total,
+        history: coachingContext.past.prescriptionHistory.items.map(row => ({ date: row.date, state: row.state,
+          factualState: row.factualState, methodId: transferMethod(row.prescription.methodId)?.id ?? null,
+          quantityStatus: row.execution?.quantityStatus ?? 'UNKNOWN' })),
+        modificationRows: coachingContext.past.modifications.total,
+        executionRows: coachingContext.past.domainExecutionEvidence.recent.total,
+        executionStatus: coachingContext.past.domainExecutionEvidence.status,
+        readinessStatus: coachingContext.current.readiness.status,
+        timeBudgetReason: coachingContext.current.timeBudget.reason,
+        externalActivities: coachingContext.current.external.activities.length,
+        activeWeaknesses: coachingContext.future.weaknesses.total,
+        availability: coachingContext.future.availability,
+        limitations: coachingContext.past.historyLimitations },
+      options: Object.fromEntries(Object.entries(built.contract.dayOptions).map(([day, options]) => [day,
+        options.map(o => ({ optionId: o.optionId, state: o.state, discipline: o.discipline ?? null,
+          protected: o.protected === true, adaptationId: o.intent?.kind === 'adaptation' ? o.intent.adaptationId : null,
+          methodId: o.intent?.kind === 'adaptation' ? o.intent.methodId : null }))])) }));
+  } catch { /* Diagnostics never change admission. */ }
   return { ...built, coachingContext, evidencePolicy, factualRequirements: context.input.doseCapabilities?.entries.flatMap(e=>e.factualRequirement?[e.factualRequirement]:[])??[], fixedSessions: context.fixedSessions, runningHistoryContext: context.runningHistoryContext, runningEventPreparation: context.runningEventPreparation };
 }
 
@@ -161,6 +190,17 @@ export async function planBoundedWeek(db: any, codigo: string, request: Paramete
   if (!prepared.ok) return prepared;
   const proposal = await composeBoundedWeek(prepared.contract, complete, prepared.coachingContext);
   if (!proposal.ok) return proposal;
+  if (process.env.FORGE_WEEKLY_COACHING_DIAGNOSTICS === '1') try {
+    console.info('WEEKLY_COACHING_SELECTION', JSON.stringify({ planningRunId: request.planningRunId ?? null,
+      weekStart: request.targetWeekStart, contextDigest: proposal.contract.contextDigest,
+      selections: calendarDays.map(day => {
+        const o = proposal.selected[day];
+        return { day, optionId: o.optionId, state: o.state, discipline: o.discipline ?? null,
+          protected: o.protected === true, adaptationId: o.intent?.kind === 'adaptation' ? o.intent.adaptationId : null,
+          methodId: o.intent?.kind === 'adaptation' ? o.intent.methodId : null, decision: proposal.decisions[day] ?? null };
+      }),
+      warnings: proposal.warnings }));
+  } catch { /* Explanations are diagnostic data, never receipt or Builder inputs. */ }
   const sessions = calendarDays.map(day => {
     const option = proposal.selected[day];
     if (option.protected) return { ...structuredClone(prepared.fixedSessions[day]),
@@ -182,5 +222,6 @@ export async function planBoundedWeek(db: any, codigo: string, request: Paramete
     strategy: { ...(proposal.contract.strategy ? { canonical: proposal.contract.strategy } : {}),
       adaptacion_principal: proposal.contract.strategy ? humanWeeklyObjective(proposal.contract.strategy) : 'Consulta las sesiones programadas para esta semana.' },
     sessions: sessions.map((s, i) => ('weeklyProtected' in s && s.weeklyProtected) ? s : ({ ...s, optionId: proposal.selected[calendarDays[i]].optionId,
-      targetDate: new Date(new Date(request.targetWeekStart + 'T12:00:00Z').getTime() + i * 86400000).toISOString().slice(0, 10) })) }, attempts: proposal.attempts };
+      targetDate: new Date(new Date(request.targetWeekStart + 'T12:00:00Z').getTime() + i * 86400000).toISOString().slice(0, 10) })) },
+    coachingDecisions: proposal.decisions, coachingWarnings: proposal.warnings, attempts: proposal.attempts };
 }

@@ -7,6 +7,7 @@ import type { WeeklyContractInput, WeeklyOption } from './allowedWeeklyPlanContr
 import { calendarDays } from './weeklyCalendar';
 
 export type WeeklyDiagnosticContext = { planningRunId?: string; temporalDecision?: boolean | null;
+  includeFeasible?: boolean;
   today?: string; snapshot?: { sessions: readonly { dia: string; tipo?: string; completada?: boolean; stimulusId?: string }[] } | null;
   availabilityConfirmed?: boolean };
 const errorCodes = ['MOVEMENT_POOL_EMPTY', 'INTENT_POOL_EMPTY', 'STRUCTURE_POOL_EMPTY', 'STRUCTURE_SPACE_UNSATISFIABLE'] as const;
@@ -81,6 +82,9 @@ export function buildWeeklyFeasibilityDiagnostic(input: WeeklyContractInput, cal
 
 export function emitWeeklyFeasibilityDiagnostic(input: WeeklyContractInput, calendar: Record<string, WeeklyOption[]>,
   rejected: readonly Rejection[], context?: WeeklyDiagnosticContext) {
-  try { console.info('WEEKLY_FEASIBILITY_REJECTION_DIAGNOSTIC', buildWeeklyFeasibilityDiagnostic(input, calendar, rejected, context)); }
+  try {
+    const diagnostic = buildWeeklyFeasibilityDiagnostic(input, calendar, rejected, context);
+    console.info('WEEKLY_FEASIBILITY_REJECTION_DIAGNOSTIC', context?.includeFeasible ? JSON.stringify(diagnostic) : diagnostic);
+  }
   catch { /* Observability cannot change the contract result, including on projection or sink failure. */ }
 }

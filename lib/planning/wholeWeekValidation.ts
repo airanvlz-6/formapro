@@ -10,6 +10,7 @@ export type WeekSessionFacts = {
   adaptationDoseSatisfied?: boolean;
 };
 export type WeekStrategyFacts = {
+  weeklyDecisionAuthority?: 'coach';
   goal: string | null; adaptations: { id: string; role: string; weaknessIds: string[] }[];
   required: { id: string; adaptationId?: string; discipline?: string; weaknessId?: string }[];
   deferred: { reference: string; reason: string }[];
@@ -62,11 +63,11 @@ export function validateWholeWeek(input: WholeWeekInput) {
       else if (!required.some(g => g.adaptationId === a.id)) required.push({ id: `adaptation:${a.id}`, adaptationId: a.id });
     }
     for (const g of required) {
-      const rows = covered(g); coverage.push({ id: g.id, sessionIds: rows.map(s => s.id), required: true });
+      const rows = covered(g); coverage.push({ id: g.id, sessionIds: rows.map(s => s.id), required: strategy.weeklyDecisionAuthority !== 'coach' });
       if (!rows.length) add(g.adaptationId && strategy.adaptations.some(a => a.id === g.adaptationId && a.role === 'PRIMARY')
-        ? 'WEEK_PRIMARY_ADAPTATION_MISSING' : 'WEEK_OBJECTIVE_UNCOVERED', 'ERROR', [], g.adaptationId || g.id, g, 'Required canonical coverage has no compatible structured session.');
+        ? 'WEEK_PRIMARY_ADAPTATION_MISSING' : 'WEEK_OBJECTIVE_UNCOVERED', strategy.weeklyDecisionAuthority === 'coach' ? 'WARNING' : 'ERROR', [], g.adaptationId || g.id, g, 'Canonical coverage has no compatible structured session; review the weekly coaching choice.');
     }
-    if (!required.some(g => g.adaptationId && covered(g).length)) add('WEEK_OBJECTIVE_UNCOVERED', 'ERROR', [], 'goal', strategy.goal, 'The weekly objective has no materialized adaptation.');
+    if (!required.some(g => g.adaptationId && covered(g).length)) add('WEEK_OBJECTIVE_UNCOVERED', strategy.weeklyDecisionAuthority === 'coach' ? 'WARNING' : 'ERROR', [], 'goal', strategy.goal, 'The recommended weekly objective has no materialized adaptation.');
     for (const a of strategy.adaptations) {
       for (const w of a.weaknessIds) if (!covered({ weaknessId: w }).length) add('WEEK_WEAKNESS_UNCOVERED', 'WARNING', [], w, a.id, 'Weakness target has no attribution; primary objective retains priority.');
     }

@@ -10,6 +10,8 @@ export type StrategyDiagnostic = { code: 'GOAL_DEMAND_RESOLUTION' | 'ADAPTATION_
   reason: string; reference?: string };
 export type StrategyProposal = { version: 1; preferredAdaptations: string[] };
 export type CanonicalWeekStrategy = {
+  /** Weekly priorities/coverage are advice; session IDs and dose authorities remain binding. */
+  weeklyDecisionAuthority?: 'coach';
   eventAuthority?: EventAuthority;
   version: 1; policy: 'goal-transfer-v1'; goal: { id: GoalId | null; sources: string[]; evidenceDigest: string };
   block: { phase: StrategicIntent['blockPhase']; week: number | null; totalWeeks: number | null; evidenceDigest: string };
@@ -50,7 +52,7 @@ export function buildCanonicalWeekStrategy(context: AthletePrescriptionContext, 
   const adaptations: CanonicalWeekStrategy['adaptations'] = original.map(d => ({ id: d.adaptationId, role: d.role, weaknessIds: [], requiredPattern: null }));
   if (phase === 'deload' && goalId) {
     // A declared deload changes qualitative intent only. No automatic block schedule or dose arithmetic.
-    for (const a of adaptations.splice(0)) deferred.push({ reference: a.id, reason: 'declared_deload' });
+    // Keep goal alternatives available. The declared phase informs the Coach, not an exclusive menu.
     adaptations.push({ id: 'recuperacion_activa', role: 'PRIMARY', weaknessIds: [], requiredPattern: null },
       { id: 'tecnica', role: 'MAINTENANCE', weaknessIds: [], requiredPattern: null });
   }
@@ -85,7 +87,7 @@ export function buildCanonicalWeekStrategy(context: AthletePrescriptionContext, 
     { code: 'TRANSFER_RESOLUTION', reason: 'equipment_inventory_and_all_vs_any_requirements_not_canonical' },
     { code: 'TRANSFER_RESOLUTION', reason: 'level_and_readiness_not_new_authority' },
     { code: 'TRANSFER_RESOLUTION', reason: 'interday_interference_not_established_by_structure_metadata' });
-  return { version: 1, policy: 'goal-transfer-v1', goal: { id: goalId, sources: resolvePlanningStrategy(context).sources, evidenceDigest: digest(resolvePlanningStrategy(context)) },
+  return { version: 1, policy: 'goal-transfer-v1', weeklyDecisionAuthority: 'coach', goal: { id: goalId, sources: resolvePlanningStrategy(context).sources, evidenceDigest: digest(resolvePlanningStrategy(context)) },
     ...(context.asOfDate ? { eventAuthority: resolveEventAuthority(context.eventInput ?? {}, goalId, scope, context.asOfDate, context.userCodigo) } : {}),
     block: { phase, week: typeof context.cycle.week.value === 'number' ? context.cycle.week.value : null,
       totalWeeks: typeof context.cycle.totalWeeks.value === 'number' ? context.cycle.totalWeeks.value : null, evidenceDigest: digest(context.cycle) },
@@ -97,9 +99,10 @@ export function strategicIntents(strategy: CanonicalWeekStrategy, discipline: st
   if (!strategy.goal.id) return [];
   return TRANSFER_METHODS.filter(m => strategy.methods.includes(m.id) && m.discipline === discipline && m.stimulusId === stimulus).flatMap(m => {
     const adaptation = strategy.adaptations.find(a => a.id === m.adaptationId)!;
-    return m.patterns.filter(pattern => !adaptation.requiredPattern || pattern === adaptation.requiredPattern).map(pattern => ({ kind: 'adaptation' as const,
+    return m.patterns.filter(pattern => strategy.weeklyDecisionAuthority === 'coach' || !adaptation.requiredPattern || pattern === adaptation.requiredPattern).map(pattern => ({ kind: 'adaptation' as const,
       goalId: strategy.goal.id!, adaptationId: adaptation.id, methodId: m.id, role: adaptation.role, pattern,
-      blockPhase: strategy.block.phase, blockWeek: strategy.block.week, weaknessId: adaptation.weaknessIds[0] || null }));
+      blockPhase: strategy.block.phase, blockWeek: strategy.block.week,
+      weaknessId: (!adaptation.requiredPattern || pattern === adaptation.requiredPattern) ? adaptation.weaknessIds[0] || null : null }));
   });
 }
 export function renderWeekObjective(strategy: CanonicalWeekStrategy): string {

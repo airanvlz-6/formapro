@@ -1,5 +1,7 @@
 'use client';
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+
+import { athleteStatePresentation } from '@/lib/athlete/athleteStatePresentation';
 
 export default function MiAtleta() {
   const [codigo, setCodigo] = useState("");
@@ -12,8 +14,10 @@ export default function MiAtleta() {
   const [iniciado, setIniciado] = useState(false);
   const [error, setError] = useState("");
   const [estadoAtleta, setEstadoAtleta] = useState<{estado:string;motivo:string;bodyArea:string|null;reasonDescription:string|null;desde:string;restricciones:{movement:string;issue:string;priority:string}[]}|null>(null);
-  const [confirmandoReevaluacion, setConfirmandoReevaluacion] = useState(false);
-  const [reevaluacionEnviada, setReevaluacionEnviada] = useState(false);
+  const [confirmandoReevaluacion, setConfirmandoReevaluacion] = useState<string|null>(null);
+  const [estadoEnviando, setEstadoEnviando] = useState(false);
+  const estadoRequestPending = useRef(false);
+  const [errorEstado, setErrorEstado] = useState("");
 
   const C = {
     bg:"#0D0D0D", card:"#1A1A1A", ink:"#F0EDE8", muted:"#9A9590",
@@ -51,10 +55,34 @@ export default function MiAtleta() {
       // FORGE ATHLETE STATE ENGINE — estado de restriccion completo, con detalle de movimientos evitados
       const resEstado = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"obtener_detalle_estado_atleta",codigo:cod})});
       const dataEstado = await resEstado.json();
-      if(dataEstado?.estado && dataEstado.estado!=="normal") setEstadoAtleta(dataEstado);
+      if (!resEstado.ok || !["normal", "restricted", "reassessment"].includes(dataEstado.estado)) throw new Error("state_read_failed");
+      setEstadoAtleta(athleteStatePresentation(dataEstado?.estado) ? dataEstado : null);
     }catch{ setError("Error de conexión"); }
     finally{ setCargando(false); setIniciado(true); }
   };
+
+  const confirmarTransicion = async () => {
+    if (estadoRequestPending.current || !confirmandoReevaluacion || confirmandoReevaluacion !== estadoAtleta?.estado) return;
+    const action = estadoAtleta.estado === "restricted" ? "resolver_restriccion_atleta"
+      : estadoAtleta.estado === "reassessment" ? "completar_reevaluacion_atleta" : null;
+    if (!action) return;
+    estadoRequestPending.current = true;
+    setEstadoEnviando(true); setErrorEstado("");
+    try {
+      const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, codigo, ...(action === "completar_reevaluacion_atleta" ? { datos: { confirmado: true } } : {}) }) });
+      const result = await res.json();
+      if (!res.ok || !result.ok) throw new Error('transition_failed');
+      const refreshed = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "obtener_detalle_estado_atleta", codigo }) });
+      const detail = await refreshed.json();
+      if (!refreshed.ok || !['normal', 'restricted', 'reassessment'].includes(detail.estado)) throw new Error('refresh_failed');
+      setEstadoAtleta(athleteStatePresentation(detail.estado) ? detail : null);
+      setConfirmandoReevaluacion(null);
+    } catch { setErrorEstado("No se pudo confirmar el cambio de estado. Recarga para comprobar el estado actual antes de volver a intentarlo."); }
+    finally { estadoRequestPending.current = false; setEstadoEnviando(false); }
+  };
+  const estadoVisual = athleteStatePresentation(estadoAtleta?.estado);
 
   if(cargando && !iniciado) return (
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
@@ -103,49 +131,43 @@ export default function MiAtleta() {
           </a>
         </div>
 
-        {estadoAtleta&&(
-          <div style={{background:"linear-gradient(135deg,#8B0000,#5C0000)",borderRadius:16,padding:"20px 22px",marginBottom:20}}>
-            <p style={{color:"#fff",fontSize:16,fontWeight:800,marginBottom:6}}>🔴 Estado: Restringido</p>
-            <p style={{color:"#fff",fontSize:11,opacity:0.7,marginBottom:6,textTransform:"uppercase",letterSpacing:0.5}}>Desde {new Date(estadoAtleta.desde).toLocaleDateString('es-ES')}</p>
-            <p style={{color:"#fff",fontSize:13.5,opacity:0.95,marginBottom:14,lineHeight:1.5}}>{estadoAtleta.reasonDescription || `Restricción activa relacionada con ${estadoAtleta.bodyArea || estadoAtleta.motivo}.`}</p>
-            {estadoAtleta.restricciones&&estadoAtleta.restricciones.length>0&&(
+        {estadoAtleta&&estadoVisual&&(
+          <div style={{background:estadoVisual.background,borderRadius:16,padding:"20px 22px",marginBottom:20}}>
+            <p style={{color:"#fff",fontSize:16,fontWeight:800,marginBottom:6}}>{estadoVisual.athleteTitle}</p>
+            <p style={{color:"#fff",fontSize:11,opacity:0.7,marginBottom:6}}>Desde {new Date(estadoAtleta.desde).toLocaleDateString('es-ES')}</p>
+            <p style={{color:"#fff",fontSize:13.5,marginBottom:14,lineHeight:1.5}}>{estadoAtleta.estado === "restricted" ? estadoAtleta.reasonDescription || estadoVisual.description : estadoVisual.description}</p>
+            {estadoAtleta.restricciones?.length>0&&(
               <div style={{background:"rgba(255,255,255,0.1)",borderRadius:10,padding:"12px 14px",marginBottom:14}}>
-                <p style={{color:"#fff",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>Forge está evitando:</p>
+                <p style={{color:"#fff",fontSize:11,fontWeight:700,marginBottom:8}}>{estadoAtleta.estado === "restricted" ? "Forge está evitando:" : "En reevaluación:"}</p>
                 {estadoAtleta.restricciones.map((r,i)=>(
-                  <p key={i} style={{color:"#fff",fontSize:12.5,opacity:0.9,marginBottom:4}}>• {r.movement}: {r.issue}</p>
+                  <p key={i} style={{color:"#fff",fontSize:12.5,marginBottom:4}}>• {r.movement}: {r.issue}</p>
                 ))}
               </div>
             )}
-            {!confirmandoReevaluacion&&!reevaluacionEnviada&&(
+            {!confirmandoReevaluacion&&(
               <>
-                <p style={{color:"#fff",fontSize:12,opacity:0.85,marginBottom:12}}>Si ya no tienes molestias, puedes iniciar una reevaluación. Forge no retomará automáticamente tu planificación anterior hasta comprobar tu estado actual.</p>
-                <button onClick={()=>setConfirmandoReevaluacion(true)} style={{width:"100%",background:"#fff",color:"#8B0000",border:"none",borderRadius:100,padding:"12px 18px",fontSize:14,fontWeight:700,cursor:"pointer"}}>
-                  Iniciar reevaluación
+                <p style={{color:"#fff",fontSize:12,marginBottom:12}}>{estadoAtleta.estado === "restricted"
+                  ? "Si ya no tienes molestias, puedes iniciar una reevaluación. Forge no retomará automáticamente tu planificación anterior hasta comprobar tu estado actual."
+                  : "Si has completado la reevaluación y quieres retirar las restricciones temporales restantes, confirma la finalización."}</p>
+                <button onClick={()=>{setErrorEstado("");setConfirmandoReevaluacion(estadoAtleta.estado);}} style={{width:"100%",background:"#fff",color:estadoVisual.color,border:"none",borderRadius:100,padding:"12px 18px",fontSize:14,fontWeight:700,cursor:"pointer"}}>
+                  {estadoAtleta.estado === "restricted" ? "Iniciar reevaluación" : "Finalizar reevaluación"}
                 </button>
               </>
             )}
-            {confirmandoReevaluacion&&!reevaluacionEnviada&&(
+            {confirmandoReevaluacion&&(
               <div>
-                <p style={{color:"#fff",fontSize:13,fontWeight:600,marginBottom:10,textAlign:"center"}}>Confirmo que ya no tengo molestias y quiero iniciar la reevaluación.</p>
+                <p style={{color:"#fff",fontSize:13,fontWeight:600,marginBottom:10}}>{confirmandoReevaluacion === "restricted"
+                  ? "Confirmo que ya no tengo molestias y quiero iniciar la reevaluación."
+                  : "Confirmo que he completado la reevaluación y quiero retirar las restricciones temporales restantes. Esta acción no es una valoración médica."}</p>
                 <div style={{display:"flex",gap:8}}>
-                  <button onClick={async()=>{
-                    const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"resolver_restriccion_atleta",codigo})});
-                    const data=await res.json();
-                    if(data?.resuelto){
-                      setReevaluacionEnviada(true);
-                    }
-                  }} style={{flex:1,background:"#fff",color:"#8B0000",border:"none",borderRadius:100,padding:"12px 18px",fontSize:14,fontWeight:700,cursor:"pointer"}}>
-                    Sí, confirmar
+                  <button disabled={estadoEnviando} onClick={confirmarTransicion} style={{flex:1,background:"#fff",color:estadoVisual.color,border:"none",borderRadius:100,padding:"12px 18px",fontSize:14,fontWeight:700,cursor:"pointer"}}>
+                    {estadoEnviando ? "Guardando…" : "Sí, confirmar"}
                   </button>
-                  <button onClick={()=>setConfirmandoReevaluacion(false)} style={{flex:1,background:"transparent",color:"#fff",border:"1px solid rgba(255,255,255,0.5)",borderRadius:100,padding:"12px 18px",fontSize:14,fontWeight:600,cursor:"pointer"}}>
-                    Cancelar
-                  </button>
+                  <button disabled={estadoEnviando} onClick={()=>setConfirmandoReevaluacion(null)} style={{flex:1,background:"transparent",color:"#fff",border:"1px solid rgba(255,255,255,0.5)",borderRadius:100,padding:"12px 18px",fontSize:14,fontWeight:600,cursor:"pointer"}}>Cancelar</button>
                 </div>
               </div>
             )}
-            {reevaluacionEnviada&&(
-              <p style={{color:"#fff",fontSize:13,fontWeight:600,textAlign:"center"}}>✅ Reevaluación iniciada. Habla con tu Coach para valorar juntos tu tolerancia actual antes de retomar la carga habitual.</p>
-            )}
+            {errorEstado&&<p role="alert" style={{color:"#fff",fontSize:13,marginTop:12}}>{errorEstado}</p>}
           </div>
         )}
 

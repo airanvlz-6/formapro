@@ -1,4 +1,5 @@
 'use client';
+import { athleteStatePresentation } from '@/lib/athlete/athleteStatePresentation';
 import { splitExecutionReports } from '@/lib/execution/reportExecutionDate';
 import { RunningHrBootstrap } from '@/components/RunningHrBootstrap';
 import { TargetEventForm } from '@/components/TargetEventForm';
@@ -810,8 +811,9 @@ export default function Forge() {
         // FORGE PENDING ACTION BANNER — restaurar el banner de confirmacion si quedo un pending_action
         // sin resolver de una sesion anterior (ej: el usuario cerro la app antes de confirmar/rechazar).
         apiCall({action:"obtener_estado_atleta_activo",codigo:u.codigo}).then((resEstado:any)=>{
-          if(resEstado?.estado&&resEstado.estado!=="normal"){
+          if(athleteStatePresentation(resEstado?.estado)){
             setEstadoAtletaActivo({estado:resEstado.estado,motivo:resEstado.motivo,desde:resEstado.desde});
+          } else if(resEstado?.estado === "normal") { setEstadoAtletaActivo(null);
           }
         });
         apiCall({action:"obtener_pending_action_activo",codigo:u.codigo}).then((resPending:any)=>{
@@ -3521,11 +3523,11 @@ ${testStr}`}]});
                 </div>
               </div>
             )}
-            {estadoAtletaActivo&&(
-              <div style={{background:"linear-gradient(135deg,#8B0000,#5C0000)",borderRadius:16,padding:"16px 18px",marginBottom:10}}>
-                <p style={{color:"#fff",fontSize:14,fontWeight:700,marginBottom:4}}>🔴 Entrenamiento restringido</p>
-                <p style={{color:"#fff",fontSize:12.5,opacity:0.9,marginBottom:12}}>Forge está adaptando tu planificación debido a una restricción activa.</p>
-                <a href={`/atleta?codigo=${codigoUsuario}`} style={{display:"block",width:"100%",background:"#fff",color:"#8B0000",border:"none",borderRadius:100,padding:"10px 16px",fontSize:13,fontWeight:700,textAlign:"center",textDecoration:"none"}}>
+            {athleteStatePresentation(estadoAtletaActivo?.estado)&&(
+              <div style={{background:athleteStatePresentation(estadoAtletaActivo?.estado)!.background,borderRadius:16,padding:"16px 18px",marginBottom:10}}>
+                <p style={{color:"#fff",fontSize:14,fontWeight:700,marginBottom:4}}>{athleteStatePresentation(estadoAtletaActivo?.estado)!.title}</p>
+                <p style={{color:"#fff",fontSize:12.5,opacity:0.9,marginBottom:12}}>{athleteStatePresentation(estadoAtletaActivo?.estado)!.description}</p>
+                <a href={`/atleta?codigo=${codigoUsuario}`} style={{display:"block",width:"100%",background:"#fff",color:athleteStatePresentation(estadoAtletaActivo?.estado)!.color,border:"none",borderRadius:100,padding:"10px 16px",fontSize:13,fontWeight:700,textAlign:"center",textDecoration:"none"}}>
                   Ver estado y restricciones →
                 </a>
               </div>

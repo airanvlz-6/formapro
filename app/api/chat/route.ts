@@ -1,3 +1,4 @@
+import { transitionAthleteState } from '@/lib/athlete/athleteStateTransition';
 import { prepareCompletedBlockOutcome } from '@/lib/planning/completedBlockOutcome';
 import { splitExecutionReports, resolveReportExecutionDate } from '@/lib/execution/reportExecutionDate';
 import { runChatCoach } from '@/lib/chat/runChatCoach';
@@ -3626,7 +3627,8 @@ IMPORTANTE sobre "dia": si el coach esta claramente adaptando la sesion de HOY (
   if (action === "obtener_estado_atleta_activo") {
     // Solo lectura — permite al frontend saber si hay una restriccion activa, para mostrar UI
     // adecuada (ej: banner de "en gestion de lesion" con opcion de marcar como resuelto).
-    const { data: estadoActivo } = await supabase.from("athlete_state_events").select("*").eq("user_codigo", codigo).eq("activo", true).maybeSingle();
+    const { data: estadoActivo, error: estadoError } = await supabase.from("athlete_state_events").select("*").eq("user_codigo", codigo).eq("activo", true).maybeSingle();
+    if (estadoError) return NextResponse.json({ ok: false, code: 'ATHLETE_STATE_READ_FAILED' }, { status: 503 });
     return NextResponse.json({ estado: estadoActivo?.estado || "normal", motivo: estadoActivo?.motivo || null, desde: estadoActivo?.fecha_inicio || null });
   }
 
@@ -3634,17 +3636,19 @@ IMPORTANTE sobre "dia": si el coach esta claramente adaptando la sesion de HOY (
     // Detalle completo del estado activo — la UI lee el estado ESTRUCTURADO real (reason_description,
     // body_area), nunca infiere la explicacion desde una Coaching Note asociada (consecuencia
     // secundaria). Las Coaching Notes/restricciones se muestran como EVIDENCIA complementaria.
-    const { data: estadoDetalle } = await supabase.from("athlete_state_events").select("*").eq("user_codigo", codigo).eq("activo", true).maybeSingle();
+    const { data: estadoDetalle, error: estadoError } = await supabase.from("athlete_state_events").select("*").eq("user_codigo", codigo).eq("activo", true).maybeSingle();
+    if (estadoError) return NextResponse.json({ ok: false, code: 'ATHLETE_STATE_READ_FAILED' }, { status: 503 });
     if (!estadoDetalle || estadoDetalle.estado === "normal") {
       return NextResponse.json({ estado: "normal" });
     }
     const hoyDetalle = new Date().toISOString().split('T')[0];
-    const { data: restriccionesDetalle } = await supabase.from("athlete_coaching_notes")
+    const { data: restriccionesDetalle, error: notasError } = await supabase.from("athlete_coaching_notes")
       .select("movement,issue,priority")
       .eq("user_codigo", codigo)
-      .eq("constraint_level", "hard")
+      .eq("constraint_level", estadoDetalle.estado === "reassessment" ? "reassessment" : "hard")
       .in("status", ["pending", "considerada"])
       .or(`valid_until.is.null,valid_until.gte.${hoyDetalle}`);
+    if (notasError) return NextResponse.json({ ok: false, code: 'ATHLETE_STATE_NOTES_READ_FAILED' }, { status: 503 });
     return NextResponse.json({
       estado: estadoDetalle.estado,
       motivo: estadoDetalle.motivo,
@@ -3656,35 +3660,13 @@ IMPORTANTE sobre "dia": si el coach esta claramente adaptando la sesion de HOY (
   }
 
   if (action === "resolver_restriccion_atleta") {
-    // FORGE ATHLETE STATE ENGINE — transicion de salida, SIEMPRE disparada por confirmacion
-    // EXPLICITA del usuario (nunca inferida del lenguaje libre del Coach). El atleta pasa a
-    // REASSESSMENT: reconocemos que la restriccion se resolvio pero NO asumimos retorno automatico
-    // a la carga previa — la siguiente semana debe evaluar tolerancia real antes de progresar.
-    const { data: estadoParaResolver } = await supabase.from("athlete_state_events").select("id,estado,motivo,fecha_inicio").eq("user_codigo", codigo).eq("activo", true).maybeSingle();
-    if (!estadoParaResolver || estadoParaResolver.estado === "normal") {
-      return NextResponse.json({ ok: true, resuelto: false, motivo: "sin_restriccion_activa" });
-    }
+    const result = await transitionAthleteState(supabase, codigo, action);
+    return NextResponse.json(result, { status: result.ok ? 200 : 503 });
+  }
 
-    await supabase.from("athlete_state_events").update({ activo: false, fecha_fin: new Date().toISOString().split('T')[0] }).eq("id", estadoParaResolver.id);
-    await supabase.from("athlete_state_events").insert({
-      user_codigo: codigo,
-      estado: "reassessment",
-      motivo: `Resolución confirmada de: ${estadoParaResolver.motivo}`,
-      activo: true
-    });
-
-    // FIX CRITICO DE SEGURIDAD CONFIRMADO CON EVIDENCIA REAL (30/08): marcar la constraint como
-    // "resuelta" eliminaba TODA proteccion inmediatamente al confirmar resolucion — el Session
-    // Builder dejaba de consultarla (status filtra por pending/considerada) y genero contenido de
-    // alto impacto (400m Z3) el mismo dia que empezo la reevaluacion de una restriccion de rodilla.
-    // REASSESSMENT significa "la restriccion esta siendo reevaluada", NUNCA "ha desaparecido".
-    // Ahora: la constraint se mantiene activa (status sigue en pending/considerada) pero cambia a
-    // constraint_level="reassessment" — el Session Builder la sigue recibiendo, con instruccion de
-    // progresion controlada en vez de bloqueo total.
-    await supabase.from("athlete_coaching_notes").update({ constraint_level: "reassessment" }).eq("user_codigo", codigo).eq("constraint_level", "hard").in("status", ["pending", "considerada"]);
-
-    console.log("🟡 ATHLETE STATE ENGINE:", codigo, "transiciona de", estadoParaResolver.estado, "a REASSESSMENT");
-    return NextResponse.json({ ok: true, resuelto: true, nuevoEstado: "reassessment" });
+  if (action === "completar_reevaluacion_atleta") {
+    const result = await transitionAthleteState(supabase, codigo, action, datos?.confirmado === true);
+    return NextResponse.json(result, { status: result.ok ? 200 : result.code === 'ATHLETE_STATE_CONFIRMATION_REQUIRED' ? 400 : 503 });
   }
 
   if (action === "verificar_carga_externa_deterministico") {

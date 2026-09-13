@@ -18,6 +18,14 @@ export function resolveTrainingStimulus(discipline: string, value: unknown): Sti
   return stimulus?.discipline === discipline ? { status: 'resolved', stimulusId: id }
     : { status: 'unresolved', reason: 'STIMULUS_UNKNOWN_OR_WRONG_DISCIPLINE' };
 }
+/** Open intents carry resolved sporting semantics. Catalog tags are examples, not permissions. */
+export function resolveIntentStimulus(input: ContractInput): StimulusResolution {
+  if (input.intent?.kind !== 'open_coach') return resolveTrainingStimulus(input.discipline, input.stimulus);
+  const resolved = resolvePrescriptionIntent(input.intent);
+  return resolved.ok && input.intent.discipline === input.discipline && input.intent.stimulusId === input.stimulus
+    ? { status: 'resolved', stimulusId: input.intent.stimulusId }
+    : { status: 'unresolved', reason: 'OPEN_INTENT_SEMANTICS_MISMATCH' };
+}
 const DAYS = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 const dateValid = (s: string) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && Number.isFinite(Date.parse(s)) && new Date(s).toISOString().slice(0, 10) === s;
 
@@ -86,12 +94,22 @@ export type TrainingFeasibility =
 export function evaluateTrainingFeasibility(input: ContractInput, sufficiency?: PrescriptionSignals): TrainingFeasibility {
   try {
     const errors = feasibilityInputErrors(input);
-    const stimulus = resolveTrainingStimulus(input.discipline, input.stimulus);
+    const stimulus = resolveIntentStimulus(input);
     if (stimulus.status === 'unresolved') errors.push(stimulus.reason);
     if (errors.length || stimulus.status !== 'resolved') return { resolved: false, feasible: false, errors: [...new Set(errors)] };
     const admittedIntent = resolvePrescriptionIntent(Object.hasOwn(input, 'intent') ? input.intent : { kind: 'stimulus_only' });
     if (!admittedIntent.ok) return { resolved: false, feasible: false, errors: admittedIntent.errors };
     const intent = admittedIntent.intent;
+    if (intent.kind === 'open_coach') {
+      // Do not prove sporting impossibility from an empty example pool. Actual design is
+      // checked against restrictions, equipment, skill, references and time after proposal.
+      const ids = Object.keys(MOVEMENT_LIBRARY).sort();
+      return { resolved: true, feasible: true, errors: [], discipline: input.discipline, stimulusId: stimulus.stimulusId,
+        candidates: [], movements: [], structures: Object.keys(WORKOUT_STRUCTURE_LIBRARY).sort(), restrictionFiltering: [], intent,
+        intentMovementIds: intentMatchingMovementIds(intent, ids), allowedMovementIds: ids,
+        allowedStructureIds: Object.keys(WORKOUT_STRUCTURE_LIBRARY).sort(), satisfiableStructureIds: [],
+        rankedCandidates: ids.map(movementId => ({ movementId, recentExposures: input.exposureContext.report.exposiciones.find(e => e.movementId === movementId)?.vecesUltimas4Semanas ?? 0 })) };
+    }
     const pool = evaluatePools(input, stimulus.stimulusId, sufficiency);
     const allowedMovementIds = pool.movements.map(m => m.id).sort();
     const allowedStructureIds = [...pool.structures].sort();

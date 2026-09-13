@@ -52,7 +52,7 @@ export async function resolveWeeklyGenerationPreflight(db: any, codigo: string, 
     const temporalDecision = { includeToday: explicit !== null ? explicit : false,
       reason: explicit !== null ? 'explicit_intent' : !todayInTarget ? 'today_outside_target_week' : 'no_remaining_managed_days' };
     const prepared = await prepareAllowedWeeklyPlanContract(db, codigo, { ...request,
-      empezarHoy: temporalDecision.includeToday, strategyVersion: 1, diagnosticTemporalDecision: explicit });
+      empezarHoy: temporalDecision.includeToday, strategyVersion: 1, openCoachVersion: 1, diagnosticTemporalDecision: explicit });
     if (!prepared.ok) return { ...prepared, availabilityStatus, canContinue: false,
       temporalStatus: 'TEMPORAL_DECISION_RESOLVED', temporalDecision };
     return { ok: true, availabilityStatus, availability: c.allowed, canContinue: true,

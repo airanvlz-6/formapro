@@ -6,7 +6,7 @@ import { WORKOUT_STRUCTURE_LIBRARY } from './workoutStructureLibrary';
 import type { ExposureReport } from './exposureEngine';
 import type { PrescriptionScope } from './prescriptionScope';
 import type { RestrictionFlag } from './movementRestrictionPolicy';
-import { evaluateTrainingFeasibility, feasibilityInputErrors, resolveTrainingStimulus } from './trainingFeasibility';
+import { evaluateTrainingFeasibility, feasibilityInputErrors, resolveTrainingStimulus, resolveIntentStimulus } from './trainingFeasibility';
 import { validateDoseContext, type SessionDoseContext } from './sessionDoseContext';
 import { timeAuthorityForIntent } from './sessionTimeDosePolicy';
 import { sameSessionTimeDoseAuthority } from './sessionTimeDoseAuthority';
@@ -42,7 +42,7 @@ export type AllowedTrainingContract = Omit<ContractInput, 'stimulus'> & {
   generatedMovementAuthority?: GeneratedMovementAuthority;
   intensityAuthority?: MethodIntensityAuthority;
   runningMethodDose?: AuthorizedRunningMethodDose;
-  contractVersion: 1 | 2 | 3;
+  contractVersion: 1 | 2 | 3 | 4;
   stimulusId: string;
   allowedMovementIds: string[];
   allowedStructureIds: string[];
@@ -60,7 +60,7 @@ function buildContract(input: ContractInput): ContractResult {
   const pool = evaluateTrainingFeasibility(input);
   if (!pool.resolved || !pool.feasible) return { ok: false, errors: pool.errors };
   const { stimulus: _intent, ...context } = input;
-  const contract: AllowedTrainingContract = structuredClone({ ...context, contractVersion: input.doseContext ? 3 : Object.hasOwn(input, 'intent') ? 2 : 1, stimulusId: pool.stimulusId,
+  const contract: AllowedTrainingContract = structuredClone({ ...context, contractVersion: input.intent?.kind === 'open_coach' ? 4 : input.doseContext ? 3 : Object.hasOwn(input, 'intent') ? 2 : 1, stimulusId: pool.stimulusId,
     allowedMovementIds: pool.allowedMovementIds, allowedStructureIds: pool.allowedStructureIds,
     rankedCandidates: pool.rankedCandidates,
     restrictionFiltering: pool.restrictionFiltering,
@@ -73,7 +73,7 @@ export function validateAllowedTrainingContract(contract: AllowedTrainingContrac
   try {
     const input: ContractInput = { ...contract, stimulus: contract.stimulusId };
     const errors = feasibilityInputErrors(input);
-    if (contract.generatedMovementAuthority !== undefined && (contract.contractVersion !== 3
+    if (contract.generatedMovementAuthority !== undefined && (contract.contractVersion < 3
       || contract.doseContext?.sessionDecisionAuthority !== 'coach' || !contract.doseContext.sufficiency
       || JSON.stringify(contract.generatedMovementAuthority) !== JSON.stringify(GENERATED_MOVEMENT_AUTHORITY)))
       errors.push('GENERATED_MOVEMENT_AUTHORITY_INVALID');
@@ -85,16 +85,19 @@ export function validateAllowedTrainingContract(contract: AllowedTrainingContrac
     }
     if (!validMethodIntensity(contract)) errors.push('METHOD_INTENSITY_AUTHORITY_INVALID');
     if (!validRunningMethodDose(contract)) errors.push('RUNNING_METHOD_DOSE_AUTHORITY_INVALID');
-    if (![1, 2, 3].includes(contract.contractVersion)) errors.push('CONTRACT_VERSION_INVALID');
-    if (contract.contractVersion === 3 ? !validateDoseContext(contract.doseContext!) : Object.hasOwn(contract, 'doseContext')) errors.push('DOSE_CONTEXT_VERSION_INVALID');
+    if (![1, 2, 3, 4].includes(contract.contractVersion)) errors.push('CONTRACT_VERSION_INVALID');
+    if (contract.contractVersion === 4 && contract.intent?.kind !== 'open_coach'
+      || contract.contractVersion !== 4 && contract.intent?.kind === 'open_coach') errors.push('OPEN_DESIGN_VERSION_MISMATCH');
+    if (contract.contractVersion === 4 && (!contract.doseContext?.sufficiency || contract.doseContext.sessionDecisionAuthority !== 'coach')) errors.push('OPEN_DESIGN_FACTS_REQUIRED');
+    if ([3, 4].includes(contract.contractVersion) ? !validateDoseContext(contract.doseContext!) : Object.hasOwn(contract, 'doseContext')) errors.push('DOSE_CONTEXT_VERSION_INVALID');
     if (contract.doseContext?.timeAuthority && !sameSessionTimeDoseAuthority(contract.doseContext.timeAuthority,
       timeAuthorityForIntent(contract.doseContext.timeBudget, contract.intent))) errors.push('SESSION_DOSE_AUTHORITY_MISMATCH');
     if (contract.contractVersion === 1 && Object.hasOwn(contract, 'intent')) errors.push('INTENT_VERSION_MISMATCH');
     if (contract.contractVersion === 2 && !Object.hasOwn(contract, 'intent')) errors.push('INTENT_REQUIRED');
-    const stimulus = resolveTrainingStimulus(contract.discipline, contract.stimulusId);
+    const stimulus = resolveIntentStimulus(input);
     if (stimulus.status !== 'resolved') errors.push(stimulus.reason);
     for (const [ids, library, kind] of [[contract.allowedMovementIds, MOVEMENT_LIBRARY, 'MOVEMENT'], [contract.allowedStructureIds, WORKOUT_STRUCTURE_LIBRARY, 'STRUCTURE']] as const) {
-      if (!Array.isArray(ids) || !ids.length) errors.push(`${kind}_POOL_EMPTY`);
+      if (!Array.isArray(ids) || (!ids.length && contract.intent?.kind !== 'open_coach')) errors.push(`${kind}_POOL_EMPTY`);
       else {
         if (new Set(ids).size !== ids.length) errors.push(`${kind}_IDS_DUPLICATED`);
         if (ids.some(id => typeof id !== 'string' || !Object.hasOwn(library, id))) errors.push(`${kind}_ID_UNKNOWN`);

@@ -18,7 +18,7 @@ import { authenticatedPresentationVersion } from '../sports/sessionPresentation'
 
 export const weeklyDigest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const snapshotDigest = (snapshot: any) => weeklyDigest(snapshot ? { id: snapshot.id, revision: snapshot.revision, sessions: snapshot.sessions } : null);
-type Admission = { contract: AllowedWeeklyPlanContract; selections: { day: string; optionId: string }[];
+type Admission = { contract: AllowedWeeklyPlanContract; selections: { day: string; optionId?: string }[];
   request: Parameters<typeof loadWeeklyPlanningContext>[2]; generationToken: string; decisions?: Record<string, unknown> };
 function rejectWeekly(code: string): never {
   console.warn('WEEKLY_AUTHORITY_REJECTED', { code, protocolVersion: 2 });
@@ -57,7 +57,8 @@ export async function loadWeeklyCalendarContext(db: any, codigo: string, targetW
 }
 export async function issueWeeklyCalendar(db: any, codigo: string, week: string, sessions: any[], admission?: Admission) {
   const c = await loadWeeklyCalendarContext(db, codigo, week);
-  const result = validateWeeklyCalendar(sessions, c.max, c.allowed);
+  const openCoach = admission?.contract.contractVersion === 2;
+  const result = validateWeeklyCalendar(sessions, openCoach ? 7 : c.max, c.allowed, undefined, openCoach);
   if (!result.ok || !result.slots) throw Object.assign(new Error(result.errors.join(',')), { availabilityViolations: result.availabilityViolations });
   const calendarSlots = result.slots;
   let authority = {};
@@ -85,6 +86,8 @@ export async function issueWeeklyCalendar(db: any, codigo: string, week: string,
       ...(contract.regeneration ? { regeneration: contract.regeneration } : {}),
       ...(contract.strategy ? { strategy: contract.strategy } : {}),
       planning: { today: request.today, empezarHoy: request.empezarHoy,
+        preservationVersion: request.preservationVersion ?? 2,
+        ...(request.openCoachVersion ? { openCoachVersion: request.openCoachVersion } : {}),
         ...(request.coherenceVersion === 1 ? { coherenceVersion: 1 } : {}),
         ...(request.preserveDays ? { preserveDays: request.preserveDays } : {}),
         ...(request.planningRunId ? {planningRunId:request.planningRunId} : {}),
@@ -130,7 +133,7 @@ export async function assertFreshWeeklyAuthority(db: any, codigo: string, week: 
   if (row.error) rejectWeekly('WEEKLY_FRESHNESS_READ_FAILED');
   if (row.data && (row.data.user_codigo !== codigo || row.data.week_start !== week)) rejectWeekly('WEEKLY_CONTEXT_STALE');
   if (snapshotDigest(row.data) !== evidence.snapshotDigest) rejectWeekly('WEEKLY_REVISION_STALE');
-  const current = await loadWeeklyPlanningContext(db, codigo, { targetWeekStart: week, ...evidence.planning, snapshot: row.data })
+  const current = await loadWeeklyPlanningContext(db, codigo, { targetWeekStart: week, preservationVersion: 1, ...evidence.planning, snapshot: row.data })
     .catch(error => { if (error?.message === 'STRATEGY_PROPOSAL_INVALID') rejectWeekly('WEEKLY_CONTEXT_STALE'); throw error; });
   if (!current.ok) rejectWeekly('WEEKLY_CONTEXT_STALE');
   if (evidence.coherenceVersion === 1 && weeklyDigest(current.longitudinal) !== weeklyDigest(evidence.longitudinal)) rejectWeekly('WEEKLY_CONTEXT_STALE');
@@ -191,7 +194,8 @@ export async function assertWeeklyCalendar(db: any, codigo: string, week: string
     }
   }
   const c = await loadWeeklyCalendarContext(db, codigo, week);
-  const result = validateWeeklyCalendar(sessions, c.max, c.allowed, evidence.slots);
+  const openCoach = evidence.contractVersion === 2;
+  const result = validateWeeklyCalendar(sessions, openCoach ? 7 : c.max, c.allowed, evidence.slots, openCoach);
   if (!result.ok) throw new Error(result.errors.join(','));
   return { evidence, contexts };
 }
@@ -213,6 +217,7 @@ export function issueWholeWeekReceipt(codigo:string,week:string,calendarReceipt:
 export async function assertCalendarMutation(db: any, codigo: string, before: readonly any[], after: readonly any[]) {
   const c = await loadWeeklyCalendarContext(db, codigo);
   const protectedSlots = before.map(s => ({ day: calendarKey(s.dia), state: calendarState(s), type: s.tipo }));
-  const result = validateWeeklyCalendar(after, c.max, c.allowed, protectedSlots);
+  const existingCount = before.filter(s => isExecutableCalendarState(calendarState(s))).length;
+  const result = validateWeeklyCalendar(after, Math.max(c.max, existingCount), c.allowed, protectedSlots, existingCount === 7);
   if (!result.ok) throw new Error(result.errors.join(','));
 }

@@ -1,6 +1,6 @@
 import { isExecutableCalendarState } from './weeklyCalendar';
 
-export type RegenerationPolicy = { pendingManagedDays: string[] };
+export type RegenerationPolicy = { pendingManagedDays: string[]; openCoachDecision?: true };
 type Slot = { state: string; protected?: boolean };
 export function executablePrescriptionCounts(slots: readonly Slot[]) {
   return {
@@ -17,6 +17,7 @@ export function noWeeklyPrescription(reason: 'NO_FEASIBLE_REMAINING_SELECTION' |
 export function weeklyRegenerationOutcome(policy: RegenerationPolicy | undefined, slots: readonly Slot[]) {
   if (!policy) return null;
   if (!policy.pendingManagedDays.length) return noWeeklyPrescription('NO_REMAINING_MANAGED_DAYS');
+  if (policy.openCoachDecision) return null; // Explicit signed REST choices are a new decision, not empty enumeration.
   return executablePrescriptionCounts(slots).newExecutableDays ? null : noWeeklyPrescription('NO_FEASIBLE_REMAINING_SELECTION');
 }
 /** Presentation only. All decisions originate in the shared server contract. */

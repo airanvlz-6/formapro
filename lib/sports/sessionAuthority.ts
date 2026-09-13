@@ -66,6 +66,8 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
   try {
     if (request.intent?.kind === 'adaptation' && request.intent.transfer && !request.weekly)
       return { ok: false as const, code: 'TRANSFER_REQUIRES_WEEKLY_AUTHORITY' };
+    if (request.intent?.kind === 'open_coach' && !request.weekly)
+      return { ok: false as const, code: 'OPEN_INTENT_REQUIRES_WEEKLY_AUTHORITY' };
     let weekly: { calendarReceipt: string; optionId: string; priorSessions?: Record<string, string> } | undefined;
     let weeklyContext: any;
     let confirmedAssignment: SessionEnvironmentInput['confirmedAssignment'];
@@ -100,7 +102,7 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
       }
       const ordered = fresh.evidence.admittedSlots, index = ordered.findIndex((s: any) => s.day === slot.day);
       neighbours = [ordered[index - 1], ordered[index + 1]].filter(Boolean).map((s: any) => ({ day: s.day,
-        adaptationId: s.intent?.kind === 'adaptation' ? s.intent.adaptationId : null, state: s.state }));
+        adaptationId: ['adaptation', 'open_coach'].includes(s.intent?.kind) ? s.intent.adaptationId : null, state: s.state }));
       request = { targetWeekStart: fresh.evidence.week, day: slot.day, discipline: slot.discipline,
         stimulus: slot.stimulusId, intent: slot.intent, state: slot.state };
     }
@@ -111,16 +113,22 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
       .select(`${PROFILE},perfil,marcas_especificas,ciclo_actual,athlete_development,datos_entrenamiento`).eq('codigo', userCodigo).single();
     if (error || !profile) return { ok: false as const, code: 'CONTRACT_PROFILE_READ_FAILED' };
     const restrictions = await getCanonicalRestrictions(db, userCodigo);
+    const openCanonical = request.intent?.kind === 'open_coach' ? await loadAthletePrescriptionContext(db, userCodigo, {
+      asOfDate: restrictions.asOfDate, prescriptionDate: prescriptionDate(request.targetWeekStart, request.day),
+      runningHabitualInteraction: planningRunId ? {planningRunId,targetWeekStart:request.targetWeekStart} : undefined,
+      sessionEnvironment: { date: prescriptionDate(request.targetWeekStart, request.day), assignedDiscipline: request.discipline, confirmedAssignment },
+    }) : undefined;
+    const openDose = openCanonical ? buildSessionDoseContext(openCanonical, request.intent, strategicWeek, neighbours, true, 'coach') : undefined;
     // Reuse the freshly loaded weekly context; only restrictions are reread at the existing session boundary.
     const base = weeklyContext ? buildAllowedTrainingContract({ ...weeklyContext, targetDay: request.day,
-      stimulus: request.stimulus, intent: request.intent, restrictionsSnapshot: restrictions })
+      stimulus: request.stimulus, intent: request.intent, restrictionsSnapshot: restrictions, ...(openDose ? { doseContext: openDose } : {}) })
       : await prepareSessionTrainingContract(db, userCodigo, profile, request, restrictions);
     if (!base.ok) return { ok: false as const, code: 'TRAINING_CONTRACT_INVALID', errors: base.errors };
-    const canonical = await loadAthletePrescriptionContext(db, userCodigo, { asOfDate: restrictions.asOfDate,
+    const canonical = openCanonical ?? await loadAthletePrescriptionContext(db, userCodigo, { asOfDate: restrictions.asOfDate,
       prescriptionDate: prescriptionDate(request.targetWeekStart, request.day),
       runningHabitualInteraction: planningRunId ? {planningRunId,targetWeekStart:request.targetWeekStart} : undefined,
       sessionEnvironment: { date: prescriptionDate(request.targetWeekStart, request.day), assignedDiscipline: request.discipline, confirmedAssignment } });
-    const doseContext = buildSessionDoseContext(canonical, base.contract.intent, strategicWeek, neighbours, true, 'coach');
+    const doseContext = openDose ?? buildSessionDoseContext(canonical, base.contract.intent, strategicWeek, neighbours, true, 'coach');
     emitEquipmentAuthorityDiagnostic(doseContext.sufficiency!, base.contract.allowedMovementIds, planningRunId, request.day);
     const prepared = buildAllowedTrainingContract({ ...base.contract, stimulus: base.contract.stimulusId, doseContext });
     if (!prepared.ok) {
@@ -191,7 +199,7 @@ export function verifySessionReceipt(receipt: unknown, session: Record<string, a
     resolveWeeklySlot(weekly, { day: c.targetDay, optionId: evidence.weekly.optionId, targetWeekStart: c.targetWeekStart,
       discipline: c.discipline, stimulus: c.stimulusId, intent: c.intent,
       state: calendarState({ tipo: c.discipline, stimulusId: c.stimulusId }) });
-    if (![2, 3].includes(c.contractVersion) || weeklyDigest(c.prescriptionScope) !== weeklyDigest(weekly.prescriptionScope))
+    if (![2, 3, 4].includes(c.contractVersion) || (c.contractVersion === 4 && weekly.contractVersion !== 2) || weeklyDigest(c.prescriptionScope) !== weeklyDigest(weekly.prescriptionScope))
       throw new Error('WEEKLY_SESSION_CHAIN_MISMATCH');
   }
   const rendered = renderContractSession(evidence.contract, evidence.proposal, authenticatedPresentationVersion(evidence.presentationVersion));
@@ -214,7 +222,7 @@ export async function assertFreshSessionRestrictions(db: any, userCodigo: string
   const material = (r: any) => JSON.stringify({ state: r.state, areas: r.areas, restrictions: r.restrictions, reassessments: r.reassessments, active: r.active });
   if (material(original) !== material(current)) throw new Error('SESSION_RESTRICTIONS_CHANGED_REGENERATE');
   const contract = JSON.parse(Buffer.from(session.sessionReceipt.split('.')[0], 'base64url').toString()).contract;
-  if (contract.contractVersion === 3) {
+  if (contract.contractVersion >= 3) {
     const date = prescriptionDate(contract.targetWeekStart, contract.targetDay);
     const access = await db.from('usuarios').select('perfil').eq('codigo', userCodigo).single();
     if (access.error || !access.data) throw new Error('SESSION_AVAILABILITY_READ_FAILED');

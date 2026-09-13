@@ -54,7 +54,7 @@ export async function generateContractSession(contract: AllowedTrainingContract,
     : authority.intent && authority.intent.kind !== 'stimulus_only'
     ? `\nIntent canónico: el bloque main debe incluir al menos un ID de ${JSON.stringify(intentMatchingMovementIds(authority.intent, authority.allowedMovementIds))}. Otros IDs permitidos pueden acompañarlo. Un movimiento solo en warmup/cooldown no satisface el intent.` : '';
   const options = authority.doseContext?.sufficiency ? prescriptionGenerationOptions(authority.doseContext.sufficiency,
-    authority.doseContext.references, authority.allowedMovementIds, authority.discipline) : null;
+    authority.doseContext.references, authority.allowedMovementIds, authority.discipline, {}, authority.contractVersion === 4) : null;
   const timeInstruction = authority.doseContext?.timeAuthority?.targetDuration
     ? '\nLa banda temporal y minimumUsefulDurationSeconds de doseContext.timeAuthority pertenecen al servidor. Compón dentro de esa banda sin cambiar intent, pools ni intensidad autorizada. El máximo conservador estimado debe caber bajo hardMaximumSeconds; expectedSeconds es el punto medio operativo del rango, no una medición. No añadas descansos o transiciones artificiales para satisfacer la dosis.' : '';
   const representationInstruction = '\nCada movementId aparece como máximo una vez DENTRO de cada bloque, también en carrera/cíclicos. Puede repetirse ENTRE warmup, main y cooldown con su dosis propia. Para intervalos homogéneos usa la dosis estructurada sets/durationSeconds/restSeconds; no una entrada duplicada por intervalo. No combines dosis heterogéneas ni inventes cantidades para evitar esta regla.';
@@ -80,7 +80,7 @@ No interpretes una prescripción como ejecución. UNKNOWN sigue siendo UNKNOWN. 
 Solo usa IDs y referencias suministrados. El servidor calcula cargas y expresa referencias; no escribas kg, bpm ni ritmos libres. No rellenes el presupuesto de tiempo por obligación.
 Puedes usar solo main o warmup/main con cooldown opcional, respetando la semántica de la estructura. No añadas preparación para eludir validación.
 Incluye explanation como razón breve (1–400 caracteres), sin razonamiento interno. Esa razón no modifica factibilidad. Devuelve el schema existente.`;
-  const baseInstructions = authority.contractVersion === 3 ? STRUCTURED_DOSE_INSTRUCTIONS : STRUCTURED_SESSION_INSTRUCTIONS;
+  const baseInstructions = authority.contractVersion >= 3 ? STRUCTURED_DOSE_INSTRUCTIONS : STRUCTURED_SESSION_INSTRUCTIONS;
   const instructions = authority.generatedMovementAuthority ? baseInstructions
     .replace('Reutiliza IDs exactos del contrato.', 'Los canónicos reutilizan IDs exactos del contrato; las variantes siguen el schema MOVIMIENTOS.')
     .replace('Solo allowedMovementIds tienen material y nivel resueltos.', 'Los canónicos de allowedMovementIds tienen material y nivel resueltos; cada variante requiere validación propia.')
@@ -98,7 +98,13 @@ Mantén el mismo ID local para la misma receta entre bloques; no uses IDs distin
 BASES CANÓNICAS SUGERIDAS:\n${JSON.stringify(authority.allowedMovementIds.map(id => ({ id, pattern: MOVEMENT_LIBRARY[id].movement_pattern,
     equipment: MOVEMENT_LIBRARY[id].equipment, technicalDemand: MOVEMENT_LIBRARY[id].technical_demand, doseBasis: MOVEMENT_LIBRARY[id].dose_basis ?? 'repetitions_or_cyclic' })))}` : '';
   const decisionInstruction = authority.generatedMovementAuthority ? coachInstruction.replace('Solo usa IDs y referencias suministrados.', 'Usa IDs canónicos suministrados o variantes del schema MOVIMIENTOS; las referencias deben ser suministradas.') : coachInstruction;
-  const prompt = `${coach ? instructions.replace('La explicación y el objetivo se derivan por código, no los escribas.', 'El objetivo se deriva del intent.') + decisionInstruction : instructions}${timeInstruction}${representationInstruction}${intensityInstruction}${methodInstruction}${coach ? '' : doseInstruction + compositionInstruction}${variantInstruction}\nCONTRACT:\n${JSON.stringify(authority)}${intentInstruction}\nContexto no autoritativo:\n${context}\nOpciones ejecutables por alcance (preparationOnly nunca amplía main):\n${JSON.stringify(builderOptions)}\nHistorial para evitar duplicación:\n${JSON.stringify(recent)}`;
+  const openInstructions = authority.contractVersion === 4 ? `Diseña a partir del intent abierto. Los IDs de movimientos y estructuras son conocimiento, NO acreditan equipo, habilidad o seguridad del atleta. No es necesario suitable_for ni mapping de estímulo/estructura.
+Usa movimientos canónicos o variantes estructuradas resolubles según MOVIMIENTOS, nunca nombres opacos ni garantías biomecánicas inventadas. Una familia no conocida requiere resolución, no permiso automático. El patrón principal del intent debe aparecer en main. Los demás movimientos son decisiones del Coach.
+Equipo y skill required deben constar available en doseContext.sufficiency. Unknown requiere otra propuesta o aclaración, no afirma contraindicación. Restricciones activas se comprueban sobre la semántica de cada movimiento. Referencias deben ser exactas compatibles. Propón cantidad, estructura, RPE/RIR o referencia válida y descanso; respeta tiempo, cardinalidad y work/rest.
+Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gramática representable, blocks y explanation breve. Mantén el schema de dosis descrito abajo.\n` : '';
+  let prompt = `${openInstructions}${coach ? instructions.replace('La explicación y el objetivo se derivan por código, no los escribas.', 'El objetivo se deriva del intent.') + decisionInstruction : instructions}${timeInstruction}${representationInstruction}${intensityInstruction}${methodInstruction}${coach ? '' : doseInstruction + compositionInstruction}${variantInstruction}\nCONTRACT:\n${JSON.stringify(authority)}${intentInstruction}\nContexto no autoritativo:\n${context}\nOpciones ejecutables por alcance (preparationOnly nunca amplía main):\n${JSON.stringify(builderOptions)}\nHistorial para evitar duplicación:\n${JSON.stringify(recent)}`;
+  if (authority.contractVersion === 4) prompt = prompt.replace('Los canónicos de allowedMovementIds tienen material y nivel resueltos; cada variante requiere validación propia.', 'Cada propuesta requiere validación propia de material y nivel.')
+    .replace('allowedMovementIds son candidatos canónicos confiables, preferibles cuando encajan, no todos los ejercicios posibles.', 'allowedMovementIds son ejemplos canónicos, no todos los ejercicios posibles ni permisos sobre el atleta.');
   if (authority.generatedMovementAuthority) emitSessionCoachingDiagnostic('SESSION_MOVEMENT_COACH_INPUT', {
     canonicalCandidates: authority.allowedMovementIds, generativeAuthority: authority.generatedMovementAuthority,
     intent: authority.intent, structures: authority.allowedStructureIds });
@@ -162,7 +168,9 @@ BASES CANÓNICAS SUGERIDAS:\n${JSON.stringify(authority.allowedMovementIds.map(i
     // Commentary is not part of the executable proposal or its receipt.
     if (coach) delete validation.proposal.explanation;
     const session = renderContractSession(authority, validation.proposal, presentationVersion);
-    const duplicate = detectarSesionDuplicada(session, recent).esDuplicado;
+    const repeated = detectarSesionDuplicada(session, recent).esDuplicado;
+    const duplicate = authority.contractVersion !== 4 && repeated;
+    if (authority.contractVersion === 4 && repeated) emitSessionCoachingDiagnostic('SESSION_AUTHORITY_RESOLUTION', { day: authority.targetDay, advisory: 'SESSION_REPETITION', repeated: true });
     if (coach) {
       emitSessionCoachingDiagnostic('SESSION_AUTHORITY_RESOLUTION', { rejections: duplicate ? ['SESSION_DUPLICATE'] : [],
         expressions: validation.proposal.blocks.flatMap(b => b.movements.map(m => ({ movementId: m.movementId,

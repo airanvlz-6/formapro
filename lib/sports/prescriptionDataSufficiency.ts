@@ -17,6 +17,8 @@ export type PrescriptionDataSufficiency = { status: 'sufficient' | 'fallback_ava
   fallbacks: { signal: string; fallback: string; movementId?: string; referenceId?: string }[];
   questions: PrescriptionQuestion[]; diagnostics: { code: string; signal: string; reason: string }[] };
 export type SufficiencyRequest = { movementId: string; discipline: string; intensity?: '1rm' | 'hr' | 'pace' | 'rpe' | 'rir';
+  /** Server contract v4 validates requirements of resolved movements across sporting labels. */
+  openDesign?: boolean;
   variant?: MovementVariantProposal;
   referenceId?: string; distance?: boolean; allowRpe?: boolean; allowPace?: boolean;
   /** IDs already restricted by scope, restrictions AND the same immutable intent/pattern. */
@@ -31,7 +33,7 @@ export function movementPrescriptionRequirements(context: PrescriptionSignals, r
     requirement: { signal, reason, requiredFor: request.movementId, criticality: 'required', acceptableFallbacks: [] }, evidence: [evidence(signal)] });
   const resolved = request.variant ? resolvedMovement(request) : undefined;
   const movement = request.variant ? resolved?.descriptor : MOVEMENT_LIBRARY[request.movementId];
-  if (!movement || !movement.discipline.some(discipline => discipline === request.discipline)) {
+  if (!movement || (!request.openDesign && !movement.discipline.some(discipline => discipline === request.discipline))) {
     checks.push({ requirement: { signal: 'movement.authorized', reason: 'movement_not_authorized', requiredFor: request.movementId,
       criticality: 'required', acceptableFallbacks: [] }, evidence: [{ signal: 'movement.authorized', ...unknown }] });
   } else {
@@ -41,7 +43,7 @@ export function movementPrescriptionRequirements(context: PrescriptionSignals, r
       requireSignal(`equipment.${selected}`, 'movement_equipment');
     }
     if (movement.technical_demand === 'alta' && (!movement.scalable || ['olympic_lift', 'inverted_locomotion'].includes(movement.movement_pattern)))
-      requireSignal(`skill.${request.discipline}.advanced`, 'high_technical_demand_without_safe_unknown_level');
+      requireSignal(`skill.${request.openDesign ? movement.discipline[0] : request.discipline}.advanced`, 'high_technical_demand_without_safe_unknown_level');
   }
   if (request.intensity && !['rpe', 'rir'].includes(request.intensity)) {
     const kind = request.intensity as '1rm' | 'hr' | 'pace';
@@ -93,16 +95,16 @@ export function resolvePrescriptionDataSufficiency(context: PrescriptionSignals,
 
 /** Explicit executable choices supplied to Builder; percentages/HR are preferred only when supported. */
 export function prescriptionGenerationOptions(context: PrescriptionSignals, references: DoseReference[], movementIds: string[], discipline: string,
-  variants: Record<string, MovementVariantProposal> = {}) {
+  variants: Record<string, MovementVariantProposal> = {}, openDesign = false) {
   return movementIds.map(movementId => {
     const variant = variants[movementId];
     const movement = variant ? resolvedMovement({ movementId, variant })?.descriptor : MOVEMENT_LIBRARY[movementId];
     const enduranceDose = !!movement && ['run', 'cyclic'].includes(movement.movement_pattern);
     // Intensity remains a Builder choice within 3C. No new zone or adaptation-specific intensity is invented here.
-    const decision = resolvePrescriptionDataSufficiency(context, references, { movementId, discipline, ...(variant ? { variant } : {}),
+    const decision = resolvePrescriptionDataSufficiency(context, references, { movementId, discipline, openDesign, ...(variant ? { variant } : {}),
       intensity: enduranceDose ? 'rpe' : '1rm', allowRpe: true });
     const executableReferenceIds = references.filter(r => !variant && (r.kind === '1rm' ? r.movementId === movementId
-      : enduranceDose && context.signals[r.unit === 'bpm' ? 'capability.canMeasureHeartRate' : 'capability.canMeasurePace']?.state === 'available')).map(r => r.id);
+      : enduranceDose && (!openDesign || movement?.movement_pattern === 'run') && context.signals[r.unit === 'bpm' ? 'capability.canMeasureHeartRate' : 'capability.canMeasurePace']?.state === 'available')).map(r => r.id);
     return { movementId, decision, executableReferenceIds, distanceAvailable: context.signals['capability.canMeasureDistance']?.state === 'available' };
   });
 }

@@ -2242,7 +2242,7 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
 
   if (action === "planificar_semana") {
     try {
-      if (datos.weeklyContractVersion !== 1) throw new Error("WEEKLY_CLIENT_UPGRADE_REQUIRED");
+      if (datos.weeklyContractVersion !== 2) throw new Error("WEEKLY_CLIENT_UPGRADE_REQUIRED");
       const generation = resolveWeeklyGeneration(datos.generationToken, codigo);
       if (![generation.currentWeek, generation.nextWeek].includes(datos.targetWeekStart)) throw new Error("CALENDAR_TARGET_INVALID");
       const today = resolveCompletionDate(new Date().toISOString())!.date;
@@ -2259,7 +2259,7 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
       const result = await planBoundedWeek(supabase, codigo, {
         targetWeekStart: datos.targetWeekStart, today,
         empezarHoy: includeToday, snapshot: generation.snapshots[datos.targetWeekStart],
-        strategyVersion: 1, strategyProposal: datos.analisis?.strategyProposal, coherenceVersion: 1, planningRunId: generation.planningRunId,
+        strategyVersion: 1, strategyProposal: datos.analisis?.strategyProposal, coherenceVersion: 1, openCoachVersion: 1, planningRunId: generation.planningRunId,
         confirmedAvailabilityDigest: datos.confirmedAvailabilityDigest,
       }, async (prompt: string) => {
         const response = await fetch("https://api.anthropic.com/v1/messages", {

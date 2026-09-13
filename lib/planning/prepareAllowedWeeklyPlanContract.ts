@@ -7,7 +7,8 @@ import { buildDoseCapabilityProfile } from '../sports/doseCapabilityProfile';
 import { evaluateTrainingFeasibility } from '../sports/trainingFeasibility';
 import type { PlannerCompletion } from './weeklyPlannerDiagnostics';
 import { loadWeeklyCalendarContext, issueWeeklyCalendar, weeklyDigest } from './weeklyCalendarAuthority';
-import { calendarDays, calendarKey, calendarState, isProtectedCalendarSession } from './weeklyCalendar';
+import { calendarDays, calendarKey, calendarState, isProtectedCalendarSession, legacyProtectedCalendarSession, calendarProtectionReason, type ProtectionReason } from './weeklyCalendar';
+import { openSelection } from './openWeeklyCoachContract';
 import { getCanonicalRestrictions } from '../athlete/getCanonicalRestrictions';
 import { prepareSessionTrainingContext } from '../sports/prepareSessionTrainingContract';
 import type { ContractInput } from '../sports/allowedTrainingContract';
@@ -31,6 +32,8 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
   strategyVersion?: 1; strategyProposal?: unknown; planningRunId?: string; diagnosticTemporalDecision?: boolean | null;
   confirmedAvailabilityDigest?: string | null;
   coherenceVersion?: 1;
+  openCoachVersion?: 1;
+  preservationVersion?: 1 | 2;
   /** Server-selected immutable survivors for a bounded chat reassessment; bound into the receipt. */
   preserveDays?: string[];
 }) {
@@ -70,6 +73,7 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
     contexts[discipline] = prepared.input;
   }
   const fixed: WeeklyContractInput['fixed'] = {}, fixedSessions: Record<string, any> = {};
+  const protectionReasons: Record<string, ProtectionReason> = {};
   const existing = request.snapshot?.sessions || [];
   if (!Array.isArray(existing) || existing.some(s => !s || typeof s.dia !== 'string' || !calendarDays.includes(calendarKey(s.dia)))
     || new Set(existing.map(s => calendarKey(s.dia))).size !== existing.length)
@@ -91,16 +95,19 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
     }
     // Completed history and known past prescriptions survive independently of execution.
     // Future replaceable states are re-enumerated in the active week.
-    if (before && isProtectedCalendarSession(before, activeRegeneration, past)) fixedSessions[day] = before;
-    else if (before && request.preserveDays?.includes(day)) fixedSessions[day] = before;
+    if (before && (request.preservationVersion === 1 ? legacyProtectedCalendarSession : isProtectedCalendarSession)(before, activeRegeneration, past)) {
+      fixedSessions[day] = before; protectionReasons[day] = calendarProtectionReason(before, past) ?? 'PAST';
+    }
+    else if (before && request.preserveDays?.includes(day)) { fixedSessions[day] = before; protectionReasons[day] = 'EXPLICIT_SCOPE_PRESERVE'; }
     else if (past) fixedSessions[day] = { dia: day, tipo: 'sin_registrar', titulo: 'Sin registrar',
       por_que: 'Día anterior al inicio de esta planificación', descripcion: 'No aplica — esta planificación comienza a partir de hoy.' };
     const external = Object.values(contexts).flatMap(context => context.externalLoadContext.activities).filter(a => a.days.includes(day));
     const externalDisciplines = [...new Set(external.map(a => a.discipline))];
     if (externalDisciplines.length > 1) return { ok: false as const, code: 'WEEKLY_CONTRACT_UNSATISFIABLE', errors: ['EXTERNAL_DAY_AMBIGUOUS'] };
     if (externalDisciplines.length && !past) {
-      if (before && before.tipo !== 'external_blocked' && (!activeRegeneration || fixedSessions[day] === before)) return { ok: false as const, code: 'WEEKLY_CONTRACT_UNSATISFIABLE', errors: ['EXTERNAL_PROTECTED_CONFLICT'] };
+      if (before && before.tipo !== 'external_blocked' && (request.preservationVersion === 1 ? !activeRegeneration || fixedSessions[day] === before : fixedSessions[day] === before)) return { ok: false as const, code: 'WEEKLY_CONTRACT_UNSATISFIABLE', errors: ['EXTERNAL_PROTECTED_CONFLICT'] };
       fixedSessions[day] ??= admitSessionContent({ dia: day }, codigo, request.targetWeekStart, { externalDiscipline: externalDisciplines[0] });
+      protectionReasons[day] = 'EXTERNAL';
     }
     if (!fixedSessions[day] && c.profile.perfil?.prescription_access?.[civil]?.availability === 'unavailable')
       fixedSessions[day] = { dia: day, tipo: 'unavailable', titulo: 'No disponible', descripcion: 'Disponibilidad temporal declarada para esta fecha.', por_que: 'Cambio de disponibilidad.' };
@@ -113,12 +120,13 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
     }
     if (fixedSessions[day]) {
       const s = fixedSessions[day];
-      fixed[day] = { state: calendarState(s), ...(['box', 'carrera'].includes(s.tipo) ? { discipline: s.tipo } : {}) };
+      fixed[day] = { state: calendarState(s), ...(['box', 'carrera'].includes(s.tipo) ? { discipline: s.tipo } : {}),
+        ...(request.preservationVersion === 1 ? {} : { protectionReason: protectionReasons[day] ?? (past ? 'PAST' : 'UNAVAILABLE') }) };
     }
   }
   // Habitual declarations remain dated facts. New session coaches do not need a
   // current-interaction exact-repeat target; signed fact changes are still checked at save.
-  if (runningEventPreparation?.managed && runningEventPreparation.preparationState !== 'GENERAL_DEVELOPMENT' && strategy?.goal.id === 'half_marathon' && contexts.carrera)
+  if (!request.openCoachVersion && runningEventPreparation?.managed && runningEventPreparation.preparationState !== 'GENERAL_DEVELOPMENT' && strategy?.goal.id === 'half_marathon' && contexts.carrera)
     contexts.carrera.runningEventPreparation = runningEventPreparation;
   let availabilityConfirmed = false;
   try {
@@ -126,9 +134,10 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
       && request.confirmedAvailabilityDigest === weeklyDigest({ distribution: c.profile.distribucion_semanal, sources: c.sources, scope: c.scope });
   } catch { /* Diagnostic metadata is never an admission requirement. */ }
   return { ok: true as const, input: { targetWeekStart: request.targetWeekStart, prescriptionScope: c.scope,
+    ...(request.openCoachVersion ? { openCoachVersion: request.openCoachVersion } : {}),
     maxExecutableDays: c.max, completeNewWeek: !request.snapshot && !hasPast, allowed: c.allowed, contexts, fixed,
     daySufficiency: projectWeeklyPrescriptionSignals(c.profile, request.targetWeekStart, c.scope.managedDisciplines, c.allowed, availabilityConfirmed),
-    ...(activeRegeneration && !request.preserveDays ? { regeneration: { pendingManagedDays: calendarDays.filter(day => !fixed[day]
+    ...((activeRegeneration || request.preservationVersion !== 1 && !!request.snapshot) && !request.preserveDays ? { regeneration: { pendingManagedDays: calendarDays.filter(day => !fixed[day]
       && c.scope.managedDisciplines.some(discipline => c.allowed[discipline].includes(day))) } } : {}),
     ...(runningEventPreparation?.managed && runningEventPreparation.preparationState !== 'GENERAL_DEVELOPMENT' && strategy?.goal.id === 'half_marathon' ? { runningEventPreparation } : {}),
     ...(strategy ? { strategy, doseCapabilities: buildDoseCapabilityProfile(athlete!.runningDoseEvidenceAdmission, c.scope,
@@ -195,7 +204,7 @@ export async function planBoundedWeek(db: any, codigo: string, request: Paramete
   const longitudinal = request.coherenceVersion === 1 ? await ensureLongitudinalTarget(db, codigo, request.targetWeekStart, request.today, complete, request.planningRunId) : undefined;
   const prepared = await prepareAllowedWeeklyPlanContract(db, codigo, request);
   if (!prepared.ok) return prepared;
-  const proposal = await composeBoundedWeek(prepared.contract, complete, prepared.coachingContext);
+  const proposal = await composeBoundedWeek(prepared.contract, complete, prepared.coachingContext, request.planningRunId);
   if (!proposal.ok) return proposal;
   if (process.env.FORGE_WEEKLY_COACHING_DIAGNOSTICS === '1') try {
     for (const day of calendarDays) {
@@ -230,8 +239,9 @@ export async function planBoundedWeek(db: any, codigo: string, request: Paramete
   try { console.info?.('WEEKLY_STRATEGY_DIAGNOSTIC', { planningRunId: request.planningRunId ?? null, weekStart: request.targetWeekStart, contractDigest, ...diagnostic }); }
   catch { /* Observability cannot change the admitted strategy. */ }
   const calendarReceipt = generationToken === undefined ? undefined : await issueWeeklyCalendar(db, codigo, request.targetWeekStart, sessions,
-    { contract: proposal.contract, selections: calendarDays.map(day => ({ day, optionId: proposal.selected[day].optionId })), request, generationToken, decisions: proposal.decisions });
-  return { ok: true as const, evidencePolicy:prepared.evidencePolicy, factualRequirements:prepared.factualRequirements, estructura: { weeklyContractVersion: 1, calendarProtocolVersion: 2, contractDigest, calendarReceipt, longitudinal,
+    { contract: proposal.contract, selections: calendarDays.map(day => proposal.contract.contractVersion === 2
+      ? openSelection(day, proposal.selected[day], proposal.decisions[day]) : { day, optionId: proposal.selected[day].optionId }), request, generationToken, decisions: proposal.decisions });
+  return { ok: true as const, evidencePolicy:prepared.evidencePolicy, factualRequirements:prepared.factualRequirements, estructura: { weeklyContractVersion: proposal.contract.contractVersion, calendarProtocolVersion: 2, contractDigest, calendarReceipt, longitudinal,
     contextDigest: proposal.contract.contextDigest,
     strategy: { ...(proposal.contract.strategy ? { canonical: proposal.contract.strategy } : {}),
       adaptacion_principal: proposal.contract.strategy ? request.coherenceVersion === 1

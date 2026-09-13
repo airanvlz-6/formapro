@@ -111,7 +111,7 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
   }
   if (p.stimulusId !== contract.stimulusId) violations.push('STIMULUS_MISMATCH');
   const structure = Object.hasOwn(WORKOUT_STRUCTURE_LIBRARY, p.structureId) ? WORKOUT_STRUCTURE_LIBRARY[p.structureId] : undefined;
-  if (!structure || !contract.allowedStructureIds.includes(p.structureId) || structure.discipline !== contract.discipline) violations.push('STRUCTURE_NOT_ALLOWED');
+  if (!structure || (contract.contractVersion !== 4 && (!contract.allowedStructureIds.includes(p.structureId) || structure.discipline !== contract.discipline))) violations.push(contract.contractVersion === 4 ? 'STRUCTURE_REPRESENTATION_UNRESOLVED' : 'STRUCTURE_NOT_ALLOWED');
   if (p.blocks.length === 1 && contract.doseContext?.sessionDecisionAuthority !== 'coach' && !(contract.runningMethodDose?.version === 2 && ['SINGLE_CONTINUOUS_TOTAL','SINGLE_INTERVAL_MAIN'].includes(contract.runningMethodDose.dose?.composition ?? '')))
     violations.push('SINGLE_BLOCK_COMPOSITION_NOT_AUTHORIZED');
   const main = p.blocks.find(b => b.blockType === 'main')!.movements;
@@ -129,19 +129,20 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
   }
   for (const block of p.blocks) for (const entry of block.movements) {
     const resolved = resolvedMovement(entry), m = resolved?.descriptor;
-    if (!m) { violations.push(`MOVEMENT_UNKNOWN:${entry.movementId}`); continue; }
+    if (!m) { violations.push(`${contract.contractVersion === 4 ? 'MOVEMENT_SEMANTICS_UNRESOLVED' : 'MOVEMENT_UNKNOWN'}:${entry.movementId}`); continue; }
     if (entry.variant) {
       if (!contract.generatedMovementAuthority) violations.push('GENERATED_MOVEMENT_NOT_AUTHORIZED');
-      if (!m.stimulus.includes(contract.stimulusId) && !m.suitable_for.includes(contract.stimulusId)) violations.push('GENERATED_STIMULUS_INCOMPATIBLE');
+      if (contract.contractVersion !== 4 && !m.stimulus.includes(contract.stimulusId) && !m.suitable_for.includes(contract.stimulusId)) violations.push('GENERATED_STIMULUS_INCOMPATIBLE');
       if (generatedIdentities.has(entry.movementId) && generatedIdentities.get(entry.movementId) !== resolved!.identity) violations.push('GENERATED_LOCAL_ID_CONFLICT');
       generatedIdentities.set(entry.movementId, resolved!.identity);
       if (resolved!.geometryChanged && restrictions.areas.length) violations.push('GENERATED_RESTRICTION_UNKNOWN:body_area');
       if (entry.variant.modifiers.tempo && JSON.stringify(entry.variant.modifiers.tempo) !== JSON.stringify(entry.prescription.tempo)) violations.push('GENERATED_TEMPO_DOSE_MISMATCH');
-    } else if (!contract.allowedMovementIds.includes(m.id)) violations.push(`MOVEMENT_OUTSIDE_POOL:${m.id}`);
-    if (!m.discipline.includes(contract.discipline as 'box' | 'carrera' | 'fuerza')) violations.push(`MOVEMENT_DISCIPLINE:${m.id}`);
+    } else if (contract.contractVersion !== 4 && !contract.allowedMovementIds.includes(m.id)) violations.push(`MOVEMENT_OUTSIDE_POOL:${m.id}`);
+    if (contract.contractVersion !== 4 && !m.discipline.includes(contract.discipline as 'box' | 'carrera' | 'fuerza')) violations.push(`MOVEMENT_DISCIPLINE:${m.id}`);
     const restriction = evaluateMovementRestrictions(m, flags, entry.variant ? resolved!.restrictionProperties : undefined);
     if (entry.variant && restriction.unknown.length) violations.push(...restriction.unknown.map(flag => `GENERATED_RESTRICTION_UNKNOWN:${flag}`));
-    if (!restriction.allowed || restrictions.areas.some(a => m.avoid_with?.includes(a))
+    if (contract.contractVersion === 4 && restriction.unknown.length) violations.push(`UNKNOWN_SAFETY:${m.id}`);
+    if ((contract.contractVersion === 4 ? restriction.incompatible.length > 0 : !restriction.allowed) || restrictions.areas.some(a => m.avoid_with?.includes(a))
       || notes.some(n => normalizeTrainingKey(n.movement) === (resolved!.canonicalFamily ?? m.id))) violations.push(`MOVEMENT_RESTRICTED:${m.id}`);
   }
   if (!violations.length) violations.push(...validateRunningMethodDose(contract, p));
@@ -150,11 +151,11 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
     const intensity = m.prescription.intensity;
     const ref = intensity && 'referenceId' in intensity ? contract.doseContext.references.find(r => r.id === intensity.referenceId) : undefined;
     const decision = resolvePrescriptionDataSufficiency(contract.doseContext.sufficiency, contract.doseContext.references, {
-      movementId: m.movementId, ...(m.variant ? { variant: m.variant } : {}), discipline: contract.discipline, distance: !!m.prescription.distanceMeters,
+      movementId: m.movementId, ...(m.variant ? { variant: m.variant } : {}), discipline: contract.discipline, openDesign: contract.contractVersion === 4, distance: !!m.prescription.distanceMeters,
       intensity: intensity?.kind === 'percent_1rm' ? '1rm' : intensity?.kind === 'reference' ? ref?.unit === 'bpm' ? 'hr' : 'pace' : intensity?.kind,
       referenceId: ref?.id });
     if (decision.status !== 'sufficient') for (const s of decision.missingSignals) {
-      violations.push(`PRESCRIPTION_DATA_MISSING:${s.signal}`);
+      violations.push(contract.contractVersion === 4 ? `${s.state === 'unavailable' ? 'FACTUAL_REQUIREMENT_UNAVAILABLE' : 'REQUIREMENT_UNKNOWN'}:${s.signal}` : `PRESCRIPTION_DATA_MISSING:${s.signal}`);
       try { observeMissingSignal?.(s.signal, s.state, blockIndex, movementIndex); } catch { /* Observation is non-authoritative. */ }
     }
   }
@@ -169,10 +170,10 @@ export function renderContractSession(contract: AllowedTrainingContract, proposa
   const validation = validateSessionAgainstTrainingContract(contract, proposal);
   if (!validation.ok) throw new Error(`SESSION_CONTRACT_INVALID:${validation.violations.join(',')}`);
   if (version === 'human_v2' || version === 'human_v3') {
-    if (contract.contractVersion !== 3) throw new Error('SESSION_PRESENTATION_CONTRACT_UNSUPPORTED');
+    if (contract.contractVersion < 3) throw new Error('SESSION_PRESENTATION_CONTRACT_UNSUPPORTED');
     return renderHumanSession(contract, proposal, version);
   }
-  if (contract.contractVersion === 3) return renderProfessionalSession(contract, proposal);
+  if (contract.contractVersion >= 3) return renderProfessionalSession(contract, proposal);
   const headings = { warmup: 'Calentamiento', main: 'Bloque principal', cooldown: 'Vuelta a la calma' };
   const units: Record<string, string> = { sets: 'series', reps: 'repeticiones', durationSeconds: 'segundos', distanceMeters: 'metros', restSeconds: 'segundos de descanso' };
   return { dia: contract.targetDay, tipo: contract.discipline, titulo: `${label(proposal.stimulusId)} · ${label(proposal.structureId)}`,

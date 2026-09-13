@@ -53,7 +53,7 @@ function intensityErrors(c: AllowedTrainingContract, entry: MovementEntry, i?: D
   const r = doseReference(c, i);
   if (!r) return ['BENCHMARK_RESOLUTION:REFERENCE_NOT_ALLOWED'];
   if (i.kind === 'percent_1rm') return r.kind === '1rm' && r.movementId === movementId ? [] : ['BENCHMARK_RESOLUTION:ONE_RM_MOVEMENT_REQUIRED'];
-  return r.kind === 'running' && ['run', 'cyclic'].includes(MOVEMENT_LIBRARY[movementId]?.movement_pattern)
+  return r.kind === 'running' && (c.contractVersion === 4 ? ['run'] : ['run', 'cyclic']).includes(MOVEMENT_LIBRARY[movementId]?.movement_pattern)
     ? [] : ['BENCHMARK_RESOLUTION:RUNNING_REFERENCE_MISMATCH'];
 }
 export function calculatedLoad(c: AllowedTrainingContract, d: MovementDose) {
@@ -105,7 +105,7 @@ export function estimateSessionDuration(c: AllowedTrainingContract, p: Structure
 /** Single semantic dose authority, downstream of schema, catalog, scope and restrictions. */
 export function validateSessionDose(c: AllowedTrainingContract, p: StructuredSessionProposal,
   observe?: (estimate: ReturnType<typeof estimateSessionDuration>, errors: readonly string[]) => void): string[] {
-  if (c.contractVersion !== 3) return p.schemaVersion === 2 ? ['DOSE_CONTRACT_VERSION_REQUIRED'] : [];
+  if (c.contractVersion < 3) return p.schemaVersion === 2 ? ['DOSE_CONTRACT_VERSION_REQUIRED'] : [];
   if (p.schemaVersion !== 2) return ['SESSION_DOSE_INCOMPLETE:SCHEMA_VERSION_REQUIRED'];
   const errors: string[] = [], main = p.blocks.find(b => b.blockType === 'main')!;
   const structure = WORKOUT_STRUCTURE_LIBRARY[p.structureId]; if (!structure) return ['STRUCTURE_NOT_ALLOWED'];

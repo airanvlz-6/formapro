@@ -986,9 +986,9 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     const analisis=analyzerRes.analisis;
 
     // The server owns the two-proposal budget; client never multiplies Planner retries.
-    const plannerRes=await apiCall({action:"planificar_semana",codigo:codigoUsuario,datos:{weeklyContractVersion:1,analisis,generationToken:weeklyGeneration.token,targetWeekStart:weekStartOrchestrator,empezarHoy}});
+    const plannerRes=await apiCall({action:"planificar_semana",codigo:codigoUsuario,datos:{weeklyContractVersion:2,analisis,generationToken:weeklyGeneration.token,targetWeekStart:weekStartOrchestrator,empezarHoy}});
     if(plannerRes?.goalRequirement) return {goalRequirement:plannerRes.goalRequirement};
-    if(!plannerRes?.ok || plannerRes.estructura?.weeklyContractVersion!==1) return { ...plannerRes, ok:false, canContinue:false };
+    if(!plannerRes?.ok || plannerRes.estructura?.weeklyContractVersion!==2) return { ...plannerRes, ok:false, canContinue:false };
     const estructura=plannerRes.estructura;
 
     // FIX CRITICO DE RAIZ: calcular el weekStart REAL (con la logica de "si la semana actual ya
@@ -1043,7 +1043,7 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     });
 
     console.log("ORCHESTRATOR_BUILDER_TARGETS", {planningRunId:weeklyGeneration.planningRunId ?? null, count:diasAConstruir.length, days:diasAConstruir.map((d:any)=>d.dia)});
-    if(!diasAConstruir.length) return noWeeklyPrescription('EMPTY_BUILDER_TARGETS');
+    if(!diasAConstruir.length && estructura.weeklyContractVersion!==2) return noWeeklyPrescription('EMPTY_BUILDER_TARGETS');
     const todasLasSesionesOrden=estructura.sessions||[];
     const resultadosParalelos:any[]=[];
     for (const diaEstructura of [...diasAConstruir].sort((a:any,b:any)=>ORDEN_DIAS.indexOf(normalizarDiaOrch(a.dia))-ORDEN_DIAS.indexOf(normalizarDiaOrch(b.dia)))) {
@@ -1126,8 +1126,8 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     const resultadoIntegridad=validarIntegridadSemana(sesionesCompletas, distribucionSemanal);
     console.log("WEEK INTEGRITY: resultado:", JSON.stringify(resultadoIntegridad));
 
-    // A discrepancy is terminal: never replace a contract selection from client availability.
-    if(!resultadoIntegridad.valido && resultadoIntegridad.diasCorregir.length>0) return null;
+    // Open contracts use server integrity authority; legacy keeps the client terminal check.
+    if(estructura.weeklyContractVersion!==2 && !resultadoIntegridad.valido && resultadoIntegridad.diasCorregir.length>0) return null;
 
     // weekStart ya se calculo al principio de la funcion (weekStartOrchestrator) — se reutiliza aqui.
     const weekStart=weekStartOrchestrator;

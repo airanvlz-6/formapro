@@ -3,10 +3,11 @@ import { humanWeeklyObjective } from '../sports/humanCoachingProjection';
 
 /** Presentation facts derive exclusively from admitted slots, never recommended coverage. */
 export function selectedWeekStrategy(strategy: CanonicalWeekStrategy, slots: readonly any[], decisions: Record<string, any> = {}): CanonicalWeekStrategy {
-  const selected = slots.filter(s => ['TRAIN', 'RECOVERY'].includes(s.state) && s.intent?.kind === 'adaptation');
+  const selected = slots.filter(s => ['TRAIN', 'RECOVERY'].includes(s.state) && ['adaptation', 'open_coach'].includes(s.intent?.kind));
   return { ...strategy,
     adaptations: selected.flatMap(s => {
-      const a = strategy.adaptations.find(a => a.id === s.intent.adaptationId);
+      const a = strategy.adaptations.find(a => a.id === s.intent.adaptationId)
+        ?? (s.intent.kind === 'open_coach' ? { id: s.intent.adaptationId, role: s.intent.role, weaknessIds: [], requiredPattern: null } : undefined);
       return a ? [{ ...a, role: decisions[s.day]?.role ?? s.intent.role }] : [];
     }).sort((a, b) => {
       const rank: Record<string, number> = { PRIMARY: 0, SUPPORTING: 1, MAINTENANCE: 2, OPTIONAL: 3, RECOVERY: 4 };

@@ -29,7 +29,7 @@ export async function adaptChatPlan(db: any, user: string, today: string, impact
         || typeof scope.reason !== 'string' || !scope.reason.trim() || scope.reason.length > 500) throw new Error('CHAT_ADAPTATION_SCOPE_INVALID');
       const preserveDays = calendarDays.filter(day => !scope.reassessDays.includes(day));
       const planned = await planBoundedWeek(db, user, { targetWeekStart: week, today, empezarHoy: true, snapshot,
-        strategyVersion: 1, coherenceVersion: 1, planningRunId: generation.planningRunId, preserveDays }, complete, generation.token);
+        strategyVersion: 1, coherenceVersion: 1, openCoachVersion: 1, planningRunId: generation.planningRunId, preserveDays }, complete, generation.token);
       if (!planned.ok) throw new Error(planned.code ?? 'CHAT_WEEK_REASSESSMENT_FAILED');
       const structure = planned.estructura, receipt = structure.calendarReceipt!;
       const sourceSessions: any[] = [];

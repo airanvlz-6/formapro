@@ -9,7 +9,15 @@ export function calendarState(s: Record<string, any>): CalendarState {
   if (s.stimulusId === 'recuperacion_activa' || (s.tipo === 'carrera' && s.titulo?.startsWith('recuperacion activa · '))) return 'RECOVERY';
   return 'TRAIN';
 }
-export const isProtectedCalendarSession = (s: Record<string, any>, activeRegeneration = false, past = false) =>
+export type ProtectionReason = 'PAST' | 'COMPLETED' | 'EXTERNAL' | 'EXPLICIT_SCOPE_PRESERVE' | 'UNAVAILABLE';
+export function calendarProtectionReason(s: Record<string, any>, past = false): ProtectionReason | null {
+  if (s.completada === true) return 'COMPLETED';
+  if (past && legacyProtectedCalendarSession(s, true, true)) return 'PAST';
+  if (s.tipo === 'external_blocked' || s.owner === 'external') return 'EXTERNAL';
+  return null;
+}
+/** Legacy snapshots are replayed only by their signed historical receipt semantics. */
+export const legacyProtectedCalendarSession = (s: Record<string, any>, activeRegeneration = false, past = false) =>
   s.completada === true
   // Non-completion is not absence of a prescription. Preserve known past content,
   // including legacy text, without asserting execution or protecting empty placeholders.
@@ -17,17 +25,19 @@ export const isProtectedCalendarSession = (s: Record<string, any>, activeRegener
     && (s.structuredPrescription?.proposal?.blocks?.length > 0 || s.structuredPrescription?.objective?.intent?.kind === 'adaptation'))
     || ['titulo', 'descripcion'].some(key => typeof s[key] === 'string' && s[key].trim().length > 0)))
   || ((!activeRegeneration || past) && ['REST', 'RECOVERY', 'UNAVAILABLE'].includes(calendarState(s)));
+export const isProtectedCalendarSession = (s: Record<string, any>, _activeRegeneration = false, past = false) =>
+  !!calendarProtectionReason(s, past);
 /** Existing identity admission accepts server-selected indices; never take these from the client. */
-export const protectedCalendarSessionIndices = (sessions: readonly Record<string, any>[]) =>
-  sessions.flatMap((session, index) => isProtectedCalendarSession(session) ? [index] : []);
+export const protectedCalendarSessionIndices = (sessions: readonly Record<string, any>[], pastDays: readonly string[] = []) =>
+  sessions.flatMap((session, index) => isProtectedCalendarSession(session, false, pastDays.includes(calendarKey(session.dia))) ? [index] : []);
 export function validateWeeklyCalendar(sessions: readonly Record<string, any>[], maxTrainingDays: number,
-  allowed: Record<string, string[] | null>, protectedSlots?: { day: string; state: CalendarState; type: string }[]) {
+  allowed: Record<string, string[] | null>, protectedSlots?: { day: string; state: CalendarState; type: string }[], openCoach = false) {
   const errors: string[] = [];
   const availabilityViolations: { day: string; requestedDiscipline: string; allowedCapabilities: string[] }[] = [];
   if (!Array.isArray(sessions) || sessions.length !== 7) return { ok: false, errors: ['CALENDAR_REQUIRES_SEVEN_DAYS'] };
   const slots = sessions.map(s => ({ day: typeof s.dia === 'string' ? calendarKey(s.dia) : '', state: calendarState(s), type: s.tipo }));
   if (new Set(slots.map(s => s.day)).size !== 7 || slots.some(s => !calendarDays.includes(s.day))) errors.push('CALENDAR_DAYS_INVALID');
-  if (!Number.isInteger(maxTrainingDays) || maxTrainingDays < 0 || maxTrainingDays > 6) errors.push('CALENDAR_LIMIT_INVALID');
+  if (!Number.isInteger(maxTrainingDays) || maxTrainingDays < 0 || maxTrainingDays > (openCoach ? 7 : 6)) errors.push('CALENDAR_LIMIT_INVALID');
   if (slots.filter(s => isExecutableCalendarState(s.state)).length > maxTrainingDays) errors.push('CALENDAR_TRAINING_LIMIT');
   sessions.forEach((s, i) => {
     const slot = slots[i];

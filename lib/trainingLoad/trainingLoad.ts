@@ -4,7 +4,7 @@ export type Quantity = { status: 'complete' | 'partial' | 'unknown' | 'not_appli
 export type LoadVector = Record<'durationSeconds' | 'workSeconds' | 'recoverySeconds' | 'distanceMeters' | 'repetitions' | 'externalVolumeKg' | 'sessionRpeMinutes', Quantity>;
 export type SegmentInput = { id: string; movementId: string | null; pattern: string | null; source: string;
   sets?: number; reps?: number; kg?: { minimum: number; maximum: number }; durationSeconds?: number; distanceMeters?: number;
-  restSeconds?: number; perSide?: boolean; multiplier: number | null; externalLoadApplicable: boolean;
+  restSeconds?: number; perSide?: boolean; repetitionSideUnknown?: boolean; multiplier: number | null; externalLoadApplicable: boolean;
   intensity?: unknown; categories?: Record<string, string>; formatContext?: unknown; };
 export type SegmentLoad = { input: SegmentInput; vector: LoadVector };
 export type LoadSessionInput = { id: string; date: string; kind: 'planned' | 'actual'; discipline: string | null;
@@ -49,7 +49,7 @@ export function resolveSegmentLoad(input: SegmentInput): SegmentLoad {
   const v = emptyVector(), q = (n: number, unit: string, max=n) => quantity(n,unit,input.source,max);
   const n = input.sets === undefined || input.multiplier === null ? null : input.sets * input.multiplier;
   if (n !== null) {
-    if (input.reps !== undefined) v.repetitions=q(n*input.reps*(input.perSide?2:1),'reps');
+    if (input.reps !== undefined && !input.repetitionSideUnknown) v.repetitions=q(n*input.reps*(input.perSide?2:1),'reps');
     if (input.durationSeconds !== undefined) v.workSeconds=q(n*input.durationSeconds,'s');
     if (input.distanceMeters !== undefined) v.distanceMeters=q(n*input.distanceMeters,'m');
     if (input.restSeconds !== undefined) v.recoverySeconds=q(Math.max(0,input.sets!-1)*input.restSeconds*input.multiplier!,'s');

@@ -13,6 +13,7 @@ import { sameSessionTimeDoseAuthority } from './sessionTimeDoseAuthority';
 import { validMethodIntensity, type MethodIntensityAuthority } from './methodIntensityAuthority';
 import { validRunningMethodDose, type AuthorizedRunningMethodDose } from './runningMethodDoseAuthority';
 import { GENERATED_MOVEMENT_AUTHORITY, type GeneratedMovementAuthority } from './movementVariants';
+import { EXECUTION_POLICY } from './sessionExecution';
 
 export { STRUCTURES_BY_STIMULUS } from './workoutStructureLibrary';
 export { resolveTrainingStimulus, type StimulusResolution } from './trainingFeasibility';
@@ -39,6 +40,7 @@ export type ContractInput = {
   source: 'weekly_session_builder';
 };
 export type AllowedTrainingContract = Omit<ContractInput, 'stimulus'> & {
+  executionPolicy?: typeof EXECUTION_POLICY;
   generatedMovementAuthority?: GeneratedMovementAuthority;
   intensityAuthority?: MethodIntensityAuthority;
   runningMethodDose?: AuthorizedRunningMethodDose;
@@ -61,6 +63,7 @@ function buildContract(input: ContractInput): ContractResult {
   if (!pool.resolved || !pool.feasible) return { ok: false, errors: pool.errors };
   const { stimulus: _intent, ...context } = input;
   const contract: AllowedTrainingContract = structuredClone({ ...context, contractVersion: input.intent?.kind === 'open_coach' ? 4 : input.doseContext ? 3 : Object.hasOwn(input, 'intent') ? 2 : 1, stimulusId: pool.stimulusId,
+    ...(input.intent?.kind === 'open_coach' ? { executionPolicy: EXECUTION_POLICY } : {}),
     allowedMovementIds: pool.allowedMovementIds, allowedStructureIds: pool.allowedStructureIds,
     rankedCandidates: pool.rankedCandidates,
     restrictionFiltering: pool.restrictionFiltering,
@@ -73,6 +76,7 @@ export function validateAllowedTrainingContract(contract: AllowedTrainingContrac
   try {
     const input: ContractInput = { ...contract, stimulus: contract.stimulusId };
     const errors = feasibilityInputErrors(input);
+    if (contract.executionPolicy !== undefined && (contract.executionPolicy !== EXECUTION_POLICY || contract.contractVersion !== 4)) errors.push('EXECUTION_POLICY_INVALID');
     if (contract.generatedMovementAuthority !== undefined && (contract.contractVersion < 3
       || contract.doseContext?.sessionDecisionAuthority !== 'coach' || !contract.doseContext.sufficiency
       || JSON.stringify(contract.generatedMovementAuthority) !== JSON.stringify(GENERATED_MOVEMENT_AUTHORITY)))

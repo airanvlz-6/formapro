@@ -1,3 +1,4 @@
+import { openExecution, resolveExecutableDose, executionInstructionComplete } from './sessionExecution';
 import { calendarState } from '../planning/weeklyCalendar';
 import { validateStructureSemantics } from './structureSemantics';
 import { validateAllowedTrainingContract, type AllowedTrainingContract } from './allowedTrainingContract';
@@ -14,7 +15,7 @@ import { validateRunningMethodDose } from './runningMethodDoseAuthority';
 import { resolveSessionMovement, resolvedMovement, type MovementVariantProposal } from './movementVariants';
 
 export type MovementDose = { sets?: number; reps?: number; durationSeconds?: number; distanceMeters?: number; restSeconds?: number;
-  intensity?: DoseIntensity; tempo?: [number, number, number, number]; perSide?: boolean };
+  doseInstruction?: string; intensity?: DoseIntensity; tempo?: [number, number, number, number]; perSide?: boolean };
 export type StructuredSessionProposal = {
   schemaVersion?: 2;
   stimulusId: string;
@@ -33,7 +34,8 @@ export const GENERATION_SAFETY_BOUNDS: Record<string, number> = {
 };
 
 /** No extraction from prose, ID repair, aliases, fuzzy matching or extra executable fields. */
-export function checkSessionShape(value: unknown): SessionValidation {
+export function checkSessionShape(value: unknown, execution = false): SessionValidation {
+  if (execution && object(value)) value = structuredClone(value);
   const violations: string[] = [];
   const modern = object(value) && value.schemaVersion === 2;
   if (!object(value) || !keys(value, ['stimulusId', 'structureId', 'blocks', 'explanation', ...(modern ? ['schemaVersion'] : [])])
@@ -60,11 +62,16 @@ export function checkSessionShape(value: unknown): SessionValidation {
         const result = resolveSessionMovement(entry as unknown as { movementId: string; variant: MovementVariantProposal });
         if (result.status !== 'GENERATED_RESOLVED') violations.push(...('errors' in result ? result.errors : ['GENERATED_VARIANT_SHAPE_INVALID']));
       }
-      const dose = entry.prescription;
-      if (modern) violations.push(...checkDoseExtension(dose));
-      if (!['reps', 'durationSeconds', 'distanceMeters'].some(k => Object.hasOwn(dose, k))) violations.push('DOSE_REQUIRED');
+      if (execution) {
+        const resolved = resolveExecutableDose(entry.prescription as MovementDose);
+        if (!resolved.ok) { violations.push(...resolved.errors); return; }
+        entry.prescription = resolved.dose;
+      }
+      const dose = entry.prescription as Record<string, unknown>;
+      if (modern) violations.push(...checkDoseExtension(dose, execution));
+      if (execution ? !executionInstructionComplete(dose as MovementDose) : !['reps', 'durationSeconds', 'distanceMeters'].some(k => Object.hasOwn(dose, k))) violations.push(execution ? 'EXECUTION_INSTRUCTION_INCOMPLETE' : 'DOSE_REQUIRED');
       for (const [k, n] of Object.entries(dose)) {
-        if (modern && ['intensity', 'tempo', 'perSide'].includes(k)) continue;
+        if (modern && ['intensity', 'tempo', 'perSide', ...(execution ? ['doseInstruction'] : [])].includes(k)) continue;
         if (typeof n !== 'number' || !Number.isFinite(n) || (k === 'restSeconds' ? n < 0 : n <= 0)
           || (['sets', 'reps'].includes(k) && !Number.isSafeInteger(n))) violations.push(`DOSE_INVALID:${k}`);
         else if (n > GENERATION_SAFETY_BOUNDS[k]) violations.push(`DOSE_SAFETY_BOUND:${k}`);
@@ -85,19 +92,19 @@ export function checkSessionShape(value: unknown): SessionValidation {
   return violations.length ? { ok: false, violations } : { ok: true, proposal: value as StructuredSessionProposal };
 }
 
-export function parseStructuredSession(raw: unknown): SessionValidation {
+export function parseStructuredSession(raw: unknown, execution = false): SessionValidation {
   if (typeof raw !== 'string' || raw.length > 64000) return { ok: false, violations: ['JSON_REQUIRED'] };
   let text = raw.trim();
   // Only a complete enclosing JSON fence is trivial syntax; surrounding prose is never searched.
   if (text.startsWith('```json\n') && text.endsWith('\n```')) text = text.slice(8, -4).trim();
-  try { return checkSessionShape(JSON.parse(text)); }
+  try { return checkSessionShape(JSON.parse(text), execution); }
   catch { return { ok: false, violations: ['JSON_INVALID'] }; }
 }
 
 export function validateSessionAgainstTrainingContract(contract: AllowedTrainingContract, value: unknown,
   observeDose?: Parameters<typeof validateSessionDose>[2],
   observeMissingSignal?: (signal: string, state: string, blockIndex: number, movementIndex: number) => void): SessionValidation {
-  const checked = checkSessionShape(value);
+  const checked = checkSessionShape(value, openExecution(contract));
   if (!checked.ok) return checked;
   const authority = validateAllowedTrainingContract(contract);
   if (!authority.ok) return { ok: false, violations: authority.errors.map(e => `CONTRACT:${e}`) };
@@ -169,6 +176,7 @@ export function renderContractSession(contract: AllowedTrainingContract, proposa
   const version = authenticatedPresentationVersion(presentationVersion);
   const validation = validateSessionAgainstTrainingContract(contract, proposal);
   if (!validation.ok) throw new Error(`SESSION_CONTRACT_INVALID:${validation.violations.join(',')}`);
+  proposal = validation.proposal;
   if (version === 'human_v2' || version === 'human_v3') {
     if (contract.contractVersion < 3) throw new Error('SESSION_PRESENTATION_CONTRACT_UNSUPPORTED');
     return renderHumanSession(contract, proposal, version);

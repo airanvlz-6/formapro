@@ -1,3 +1,4 @@
+import { openExecution } from './sessionExecution';
 import type { AllowedTrainingContract } from './allowedTrainingContract';
 import type { MovementDose, StructuredSessionProposal } from './structuredSession';
 import { calculatedLoad, doseReference, estimateSessionDuration } from './sessionDose';
@@ -18,7 +19,8 @@ const roles: Record<string, string> = { PRIMARY: 'principal', SUPPORTING: 'de ap
 const phases: Record<string, string> = { accumulation: 'acumulación', intensification: 'intensificación', realization: 'realización', deload: 'descarga', unknown: 'fase sin resolver' };
 function pace(n: number) { const seconds = Math.round(n); return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')} min/km`; }
 function intensity(c: AllowedTrainingContract, d: MovementDose): string {
-  const i = d.intensity!;
+  const i = d.intensity;
+  if (!i) return "";
   if (i.kind === 'rpe' || i.kind === 'rir') return `${i.kind.toUpperCase()} ${range(i.value, i.max ?? i.value)}`;
   const ref = doseReference(c, i)!;
   if (i.kind === 'percent_1rm') { const load = calculatedLoad(c, d)!;
@@ -29,9 +31,10 @@ function intensity(c: AllowedTrainingContract, d: MovementDose): string {
   return `${metric} · ${ref.unit === 'bpm' ? `${range(v.min, v.max)} ppm` : v.min === v.max ? pace(v.min) : `${pace(v.min)}–${pace(v.max)}`}`;
 }
 function movement(c: AllowedTrainingContract, id: string, d: MovementDose, displayName?: string): string {
-  const amount = d.reps ? `${d.reps}${d.perSide ? ' por lado' : ''}`
+  const amount = d.reps ? `${d.reps}${d.perSide ? ' por lado' : ''}${openExecution(c) && d.durationSeconds ? ` · ${formatDuration(d.durationSeconds)}` : ''}${openExecution(c) && d.distanceMeters ? ` · ${number(d.distanceMeters)} m` : ''}`
     : [d.durationSeconds ? formatDuration(d.durationSeconds) : '', d.distanceMeters ? d.distanceMeters >= 1000 ? `${number(d.distanceMeters / 1000)} km` : `${number(d.distanceMeters)} m` : ''].filter(Boolean).join(' · ');
-  return `- **${displayName ?? label(id)}**\n  ${d.sets ? `${d.sets} × ` : ''}${amount} @ ${intensity(c, d)}`
+  return `- **${displayName ?? label(id)}**\n  ${d.sets ? `${d.sets}${amount ? ' × ' : ' series'}` : ''}${amount}${!d.reps && d.perSide ? ' por lado' : ''}${d.intensity ? ` @ ${intensity(c, d)}` : ''}`
+    + (d.doseInstruction ? `\n  Instrucción: ${d.doseInstruction}` : '')
     + (d.restSeconds !== undefined ? `\n  Descanso: ${formatDuration(d.restSeconds)}` : '')
     + (d.tempo ? `\n  Tempo: ${d.tempo.join('-')}` : '');
 }
@@ -56,11 +59,12 @@ export function renderProfessionalSession(c: AllowedTrainingContract, p: Structu
     + (dc.neighbours.length ? ` Contexto del calendario: ${dc.neighbours.map(n => `${n.day}: ${n.adaptationId ? label(n.adaptationId) : label(n.state.toLowerCase())}`).join('; ')}.` : '')
     : `El contrato autorizado prescribe ${label(c.stimulusId)}. La estrategia disponible no permite afirmar un objetivo o una relación con otras sesiones más específicos.`;
   const duration = estimateSessionDuration(c, p);
-  const durationText = duration.maximumSeconds === null ? `${formatDuration(duration.minimumSeconds)} como mínimo; duración total no acotada`
+  const durationText = openExecution(c) && duration.maximumSeconds === null ? (dc.timeBudget.maximumSeconds === null ? 'Duración según ejecución.' : `Respeta el tiempo disponible: máximo ${formatDuration(dc.timeBudget.maximumSeconds)}.`) : duration.maximumSeconds === null ? `${formatDuration(duration.minimumSeconds)} como mínimo; duración total no acotada`
     : duration.minimumSeconds === duration.maximumSeconds ? formatDuration(duration.maximumSeconds)
       : `${formatDuration(duration.minimumSeconds)}–${formatDuration(duration.maximumSeconds)} (estimación con descansos y transiciones)`;
   const entries = p.blocks.flatMap(b => b.movements), used = new Set(entries.flatMap(m => m.prescription.intensity && 'referenceId' in m.prescription.intensity ? [m.prescription.intensity.referenceId] : []));
   const structuredPrescription = { schemaVersion: 2, proposal: structuredClone(p),
+    ...(openExecution(c) ? { executionPolicy: c.executionPolicy, analytics: entries.map(m => ({ movementId: m.movementId, sideSemantics: m.prescription.perSide === undefined ? 'UNKNOWN' : m.prescription.perSide ? 'PER_SIDE' : 'TOTAL' })) } : {}),
     ...(entries.some(m => m.variant) ? { movementResolution: { version: 1,
       descriptors: entries.map(m => ({ localMovementId: m.movementId, ...structuredClone(resolvedMovement(m)!) })) } } : {}),
     objective: { intent: structuredClone(intent), weekObjective, neighbours: dc.neighbours }, sessionRole: c.stimulusId === 'recuperacion_activa' ? 'RECOVERY' : intent.kind === 'open_coach' ? intent.role : strategic?.role || null,

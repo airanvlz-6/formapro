@@ -1,3 +1,4 @@
+import { openExecution } from './sessionExecution';
 import { calendarState } from '../planning/weeklyCalendar';
 import { calendarDays, calendarKey } from '../planning/weeklyCalendar';
 import { emitSessionCoachingDiagnostic } from './sessionDoseDiagnostics';
@@ -52,7 +53,7 @@ export async function repairSessionWithinReceipt(session: Record<string, any>, c
   const evidence = JSON.parse(Buffer.from(session.sessionReceipt.split('.')[0], 'base64url').toString());
   const weekly=verifyWeeklyCalendarReceipt(calendarReceipt,codigo,week,true);
   const raw = await complete(`${stage==='local'?'Repair the implicated composition locally.':'Targeted regeneration: compose a fresh alternative; the local pass was insufficient.'} Return only proposal JSON inside the UNCHANGED signed contract. No titles or authority changes.\nSTAGE:${stage}\nCONTRACT:\n${JSON.stringify(evidence.contract)}\nWEEK_STRATEGY:\n${JSON.stringify(weekly.strategy||null)}\nREJECTED_PROPOSAL:\n${JSON.stringify(evidence.proposal)}\nWHOLE_WEEK_DIAGNOSTICS:\n${JSON.stringify(diagnostics)}\nSIBLING_PROPOSALS:\n${JSON.stringify(siblings)}`);
-  const parsed = parseStructuredSession(raw);
+  const parsed = parseStructuredSession(raw, openExecution(evidence.contract));
   if (!parsed.ok) throw new Error('WEEK_REPAIR_PROPOSAL_INVALID');
   const checked = validateSessionAgainstTrainingContract(evidence.contract, parsed.proposal);
   if (!checked.ok) throw new Error('WEEK_REPAIR_CONTRACT_INVALID');

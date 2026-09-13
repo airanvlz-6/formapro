@@ -1,3 +1,4 @@
+import { openExecution, EXECUTABLE_DOSE_INSTRUCTIONS } from './sessionExecution';
 import { aerobicExecutionGate } from './aerobicExecutionGate';
 import { builderTrace, contractFailureStage, sufficiencyFailure, type SufficiencyFailure, type BuilderCompletion } from './builderDiagnostics';
 import { intentMatchingMovementIds } from './prescriptionIntent';
@@ -80,7 +81,7 @@ No interpretes una prescripción como ejecución. UNKNOWN sigue siendo UNKNOWN. 
 Solo usa IDs y referencias suministrados. El servidor calcula cargas y expresa referencias; no escribas kg, bpm ni ritmos libres. No rellenes el presupuesto de tiempo por obligación.
 Puedes usar solo main o warmup/main con cooldown opcional, respetando la semántica de la estructura. No añadas preparación para eludir validación.
 Incluye explanation como razón breve (1–400 caracteres), sin razonamiento interno. Esa razón no modifica factibilidad. Devuelve el schema existente.`;
-  const baseInstructions = authority.contractVersion >= 3 ? STRUCTURED_DOSE_INSTRUCTIONS : STRUCTURED_SESSION_INSTRUCTIONS;
+  const baseInstructions = openExecution(authority) ? EXECUTABLE_DOSE_INSTRUCTIONS : authority.contractVersion >= 3 ? STRUCTURED_DOSE_INSTRUCTIONS : STRUCTURED_SESSION_INSTRUCTIONS;
   const instructions = authority.generatedMovementAuthority ? baseInstructions
     .replace('Reutiliza IDs exactos del contrato.', 'Los canónicos reutilizan IDs exactos del contrato; las variantes siguen el schema MOVIMIENTOS.')
     .replace('Solo allowedMovementIds tienen material y nivel resueltos.', 'Los canónicos de allowedMovementIds tienen material y nivel resueltos; cada variante requiere validación propia.')
@@ -128,7 +129,7 @@ Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gram�
         instruction: 'Cada movementId debe aparecer como máximo una vez dentro de cada bloque. Recompón la propuesta dentro del mismo contrato; no traslades ni elimines dosis automáticamente. Esta restricción no prohíbe repetir un movementId entre warmup y main con dosis apropiadas.' })}` : '';
     try { raw = trace.completion(await complete(prompt + (attempt ? `\nLa primera propuesta fue rechazada: ${JSON.stringify(previousErrors)}. Devuelve una composición válida dentro del MISMO contrato; no repitas la propuesta rechazada.` : '') + duplicateCorrection)); }
     catch { trace.emit(attempt + 1, 'provider', 'SESSION_GENERATION_FAILED', ['LLM_REQUEST_FAILED'], false, 'provider_failure_terminal'); return { ok: false as const, code: 'SESSION_GENERATION_FAILED', violations: ['LLM_REQUEST_FAILED'], diagnostics: trace.summary() }; }
-    const parsed = parseStructuredSession(raw);
+    const parsed = parseStructuredSession(raw, openExecution(authority));
     if (!parsed.ok) {
       if (authority.generatedMovementAuthority) emitSessionCoachingDiagnostic('MOVEMENT_RESOLUTION', { status: 'REJECTED', errors: movementDiagnosticCodes(parsed.violations) });
       previousErrors = parsed.violations;

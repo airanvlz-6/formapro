@@ -1,3 +1,5 @@
+import { openExecution, instructionReferenceErrors } from './sessionExecution';
+import { estimateExecutableDuration, validateExecutableFormat } from './sessionExecutableDose';
 import type { AllowedTrainingContract } from './allowedTrainingContract';
 import type { MovementDose, StructuredSessionProposal } from './structuredSession';
 import { MOVEMENT_LIBRARY } from './movementLibrary';
@@ -15,9 +17,9 @@ export type FormatDose = { durationSeconds?: number; timeCapSeconds?: number; ro
 const obj = (v: any) => !!v && typeof v === 'object' && !Array.isArray(v);
 const exact = (v: any, keys: string[]) => obj(v) && Object.keys(v).every(k => keys.includes(k));
 export const DOSE_FIELDS = ['sets', 'reps', 'durationSeconds', 'distanceMeters', 'restSeconds', 'intensity', 'tempo', 'perSide'] as const;
-export function checkDoseExtension(d: any): string[] {
+export function checkDoseExtension(d: any, execution = false): string[] {
   const errors: string[] = [];
-  if (!exact(d, [...DOSE_FIELDS])) return ['DOSE_FIELDS_INVALID'];
+  if (!exact(d, [...DOSE_FIELDS, ...(execution ? ['doseInstruction'] : [])])) return ['DOSE_FIELDS_INVALID'];
   if (d.perSide !== undefined && typeof d.perSide !== 'boolean') errors.push('DOSE_SIDE_INVALID');
   if (d.tempo !== undefined && (!Array.isArray(d.tempo) || d.tempo.length !== 4 || d.tempo.some((n: any) => !Number.isFinite(n) || n < 0 || n > 60)
     || d.tempo.reduce((a: number, b: number) => a + b, 0) <= 0)) errors.push('DOSE_TEMPO_INVALID');
@@ -47,7 +49,7 @@ export function doseReference(c: AllowedTrainingContract, intensity: DoseIntensi
 /** Exact reference movement only in v1. Variants use technical RPE instead of borrowing another lift's RM. */
 function intensityErrors(c: AllowedTrainingContract, entry: MovementEntry, i?: DoseIntensity): string[] {
   const movementId = entry.movementId;
-  if (!i) return ['SESSION_DOSE_INCOMPLETE:INTENSITY'];
+  if (!i) return openExecution(c) ? [] : ['SESSION_DOSE_INCOMPLETE:INTENSITY'];
   if (i.kind === 'rpe' || i.kind === 'rir') return [];
   if (entry.variant) return ['GENERATED_REFERENCE_NOT_AUTHORIZED'];
   const r = doseReference(c, i);
@@ -77,6 +79,7 @@ const volumeRange = (c: AllowedTrainingContract, d: MovementDose): Range => {
   return { minimumSeconds: reps * (tempo || 2), maximumSeconds: reps * (tempo || 6) };
 };
 export function estimateSessionDuration(c: AllowedTrainingContract, p: StructuredSessionProposal) {
+  if (openExecution(c)) return estimateExecutableDuration(c, p);
   const parts = p.blocks.map(b => {
     const f = b.formatDose, format = b.blockType === 'main' ? WORKOUT_STRUCTURE_LIBRARY[p.structureId].formato : null;
     if (f?.durationSeconds) return { blockType: b.blockType, minimumSeconds: f.durationSeconds, maximumSeconds: f.durationSeconds };
@@ -107,12 +110,17 @@ export function validateSessionDose(c: AllowedTrainingContract, p: StructuredSes
   observe?: (estimate: ReturnType<typeof estimateSessionDuration>, errors: readonly string[]) => void): string[] {
   if (c.contractVersion < 3) return p.schemaVersion === 2 ? ['DOSE_CONTRACT_VERSION_REQUIRED'] : [];
   if (p.schemaVersion !== 2) return ['SESSION_DOSE_INCOMPLETE:SCHEMA_VERSION_REQUIRED'];
+  const execution = openExecution(c);
   const errors: string[] = [], main = p.blocks.find(b => b.blockType === 'main')!;
   const structure = WORKOUT_STRUCTURE_LIBRARY[p.structureId]; if (!structure) return ['STRUCTURE_NOT_ALLOWED'];
   const format = structure.formato, f = main.formatDose;
   const timed = ['amrap', 'emom', 'e2mom', 'density', 'death_by'].includes(format);
   const metcon = ['amrap', 'emom', 'e2mom', 'for_time', 'rounds', 'couplet', 'triplet', 'chipper', 'ladder', 'density', 'death_by'].includes(format)
     && c.discipline === 'box';
+  if (execution) {
+    errors.push(...validateExecutableFormat(c, p));
+    for (const b of p.blocks) for (const m of b.movements) errors.push(...intensityErrors(c, m, m.prescription.intensity), ...instructionReferenceErrors(c, m.prescription));
+  } else {
   if (f && !metcon && format !== 'complex') errors.push('DOSE_FORMAT_NOT_ALLOWED');
   if (f) {
     const allowed = format === 'complex' ? ['rounds', 'restSeconds'] : ['emom', 'e2mom'].includes(format)
@@ -145,12 +153,13 @@ export function validateSessionDose(c: AllowedTrainingContract, p: StructuredSes
   for (const b of p.blocks.filter(b => b.blockType !== 'main')) {
     if (JSON.stringify(b.movements) === JSON.stringify(main.movements)) errors.push('DOSE_PREPARATION_IDENTICAL_TO_MAIN');
   }
+  }
   const estimate = estimateSessionDuration(c, p), maximum = c.doseContext!.timeBudget.maximumSeconds;
   const totalReps = p.blocks.reduce((n, b) => n + b.movements.reduce((sum, m) => sum + (m.prescription.sets || 1) * (m.prescription.reps || 0) * (m.prescription.perSide ? 2 : 1), 0) * (b.formatDose?.rounds || 1), 0);
   if (totalReps > 10000 || estimate.minimumSeconds > 28800) errors.push('DOSE_SESSION_TOTAL_BOUND');
-  if (maximum !== null && estimate.maximumSeconds === null) errors.push('SESSION_DURATION_ESTIMATE:UNBOUNDED_WITH_FINITE_BUDGET');
-  else if (maximum !== null && estimate.maximumSeconds! > maximum) errors.push('SESSION_BUDGET_EXCEEDED');
-  if (c.doseContext?.timeAuthority) errors.push(...validateSessionTimeDose(c.doseContext.timeAuthority,
+  if (!execution && maximum !== null && estimate.maximumSeconds === null) errors.push('SESSION_DURATION_ESTIMATE:UNBOUNDED_WITH_FINITE_BUDGET');
+  else if (maximum !== null && (estimate.minimumSeconds > maximum || estimate.maximumSeconds !== null && estimate.maximumSeconds > maximum)) errors.push('SESSION_BUDGET_EXCEEDED');
+  if (!execution && c.doseContext?.timeAuthority) errors.push(...validateSessionTimeDose(c.doseContext.timeAuthority,
     { ...estimate, expectedSeconds: estimate.expectedSeconds ?? null }));
   // Generic run/cyclic reference compatibility is necessary, not sufficient.
   // Direct dose consumers must honor the same signed main-intensity authority as StructuredSession.

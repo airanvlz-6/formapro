@@ -3,6 +3,7 @@ import { WORKOUT_STRUCTURE_LIBRARY } from '../sports/workoutStructureLibrary';
 import { checkSessionShape } from '../sports/structuredSession';
 import { buildStructuredExposureReport } from '../sports/exposureEngine';
 import { resolvedMovement } from '../sports/movementVariants';
+import { EXECUTION_POLICY } from '../sports/sessionExecution';
 import { resolveSessionLoad, aggregateLoadSessions, quantity, unknownQuantity, type SegmentInput, type SessionLoad, type Quantity } from './trainingLoad';
 
 const record=(v:unknown):Record<string,any>=>v!==null&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,any>:{};
@@ -10,7 +11,8 @@ const positive=(v:unknown):v is number=>typeof v==='number'&&Number.isFinite(v)&
 /** Reads persisted, server-admitted 3C facts. Does not regenerate a contract from today's benchmarks. */
 export function plannedPrescriptionLoad(row: Record<string,any>, date:string, id:string): SessionLoad {
   const stored=record(row.structuredPrescription), source=`weekly_plan.sessions.${id}.structuredPrescription`;
-  const checked=checkSessionShape(stored.proposal);
+  const execution = stored.executionPolicy === EXECUTION_POLICY;
+  const checked=checkSessionShape(stored.proposal, execution);
   if(stored.schemaVersion!==2||!checked.ok||checked.proposal.schemaVersion!==2) return resolveSessionLoad({id,date,kind:'planned',discipline:row.tipo||null,
     source,segments:[],executionStatus:row.completada===true?'completed_flag':'unknown',diagnostics:['LEGACY_OR_INVALID_DOSE_UNKNOWN']});
   const proposal=checked.proposal, structure=WORKOUT_STRUCTURE_LIBRARY[proposal.structureId];
@@ -29,8 +31,8 @@ export function plannedPrescriptionLoad(row: Record<string,any>, date:string, id
       if(!m.variant&&i?.kind==='percent_1rm'&&ref?.kind==='1rm'&&ref.movementId===m.movementId&&ref.unit==='kg'&&positive(ref.value))
         kg={minimum:Math.round(ref.value*i.value)/100,maximum:Math.round(ref.value*(i.max??i.value))/100};
       segments.push({id:`${bi}:${mi}`,movementId:m.movementId,pattern:meta.movement_pattern,source:`${source}.proposal.blocks.${bi}.movements.${mi}`,
-        sets:d.sets??1,reps:d.reps,durationSeconds:d.durationSeconds,distanceMeters:d.distanceMeters,restSeconds:d.restSeconds??0,
-        perSide:d.perSide,multiplier,externalLoadApplicable:!!kg||meta.equipment.some(e=>['barra','mancuerna','kettlebell','sandbag','balon_medicinal','disco','sled','yoke'].includes(e)),
+        sets:d.sets??1,reps:d.reps,durationSeconds:d.durationSeconds===undefined?undefined:d.durationSeconds*(execution&&d.perSide?2:1),distanceMeters:d.distanceMeters===undefined?undefined:d.distanceMeters*(execution&&d.perSide?2:1),restSeconds:execution?d.restSeconds:d.restSeconds??0,
+        perSide:d.perSide,...(execution && d.reps && d.perSide === undefined ? { repetitionSideUnknown: true } : {}),multiplier,externalLoadApplicable:!!kg||meta.equipment.some(e=>['barra','mancuerna','kettlebell','sandbag','balon_medicinal','disco','sled','yoke'].includes(e)),
         ...(kg?{kg}:{}),intensity:i?{prescribed:i,reference:ref||null}:null,formatContext:{blockType:b.blockType,format,dose:f||null,
           ...(m.variant ? { variant: structuredClone(m.variant) } : {})},
         categories:{impact:meta.impact,technical:meta.technical_demand,energySystem:STIMULUS_LIBRARY[proposal.stimulusId]?.sistema_energetico||'unknown',structureStimulus:structure.stimulus_type}});

@@ -1,3 +1,4 @@
+import { openExecution } from './sessionExecution';
 import type { AllowedTrainingContract } from './allowedTrainingContract';
 import type { StructuredSessionProposal, MovementDose } from './structuredSession';
 import type { CanonicalWeekStrategy } from '../planning/canonicalWeekStrategy';
@@ -47,7 +48,7 @@ export function humanCoachingProjection(c: AllowedTrainingContract, p: Structure
     : intent?.role === 'OPTIONAL' ? 'Esta sesión forma parte del trabajo opcional de tu planificación.'
     : 'Consulta los bloques y las cantidades programadas para esta sesión.';
   const duration = estimateSessionDuration(c, p);
-  const durationPresentation = duration.expectedSeconds != null
+  const durationPresentation = openExecution(c) && duration.maximumSeconds === null ? (c.doseContext?.timeBudget.maximumSeconds == null ? 'Duración según ejecución.' : `Respeta el tiempo disponible: máximo ${formatDuration(c.doseContext.timeBudget.maximumSeconds)}.`) : duration.expectedSeconds != null
     ? `Duración estimada: ${duration.expectedSeconds < 60 ? 'menos de 1 min' : `aproximadamente ${Math.round(duration.expectedSeconds / 60)} min`}`
     : duration.maximumSeconds === null ? 'Duración estimada: sin una estimación total acotada.'
     : `Duración estimada: aproximadamente ${Math.floor(duration.minimumSeconds / 60)}–${Math.ceil(duration.maximumSeconds / 60)} min`;
@@ -55,7 +56,8 @@ export function humanCoachingProjection(c: AllowedTrainingContract, p: Structure
   const range = (a: number, b: number) => a === b ? num(a) : `${num(a)}–${num(b)}`;
   const pace = (n: number) => { const s = Math.round(n); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} min/km`; };
   const intensity = (d: MovementDose) => {
-    const i = d.intensity!;
+    const i = d.intensity;
+    if (!i) return "";
     if (i.kind === 'rpe' || i.kind === 'rir') return `${i.kind.toUpperCase()} ${range(i.value, i.max ?? i.value)}`;
     if (i.kind === 'percent_1rm') { const kg = calculatedLoad(c, d)!; return `${range(kg.minimumKg, kg.maximumKg)} kg (${range(i.value, i.max ?? i.value)}% 1RM)`; }
     const ref = doseReference(c, i)!;
@@ -77,10 +79,10 @@ export function humanCoachingProjection(c: AllowedTrainingContract, p: Structure
         const target = showPerceptionGuide && b.blockType === 'main' && c.intensityAuthority?.status === 'RESOLVED'
           ? c.intensityAuthority.targets.find(t => t.movementId === m.movementId) : undefined;
         const guide = target?.primary.kind === 'reference' ? target.secondary : undefined;
-        const amount = d.reps ? `${d.reps}${d.perSide ? ' por lado' : ''}` : d.durationSeconds ? formatDuration(d.durationSeconds)
-          : d.distanceMeters! >= 1000 ? `${num(d.distanceMeters! / 1000)} km` : `${num(d.distanceMeters!)} m`;
+        const amount = d.reps ? `${d.reps}${d.perSide ? ' por lado' : ''}${openExecution(c) && d.durationSeconds ? ` · ${formatDuration(d.durationSeconds)}` : ''}${openExecution(c) && d.distanceMeters ? ` · ${num(d.distanceMeters)} m` : ''}` : d.durationSeconds ? formatDuration(d.durationSeconds) + (openExecution(c) && d.distanceMeters ? ` · ${num(d.distanceMeters)} m` : '')
+          : d.distanceMeters === undefined ? '' : d.distanceMeters >= 1000 ? `${num(d.distanceMeters! / 1000)} km` : `${num(d.distanceMeters!)} m`;
         return { name: m.variant ? resolvedMovement(m)!.displayName : label(movementLabels, m.movementId, 'movement', 'Ejercicio programado'),
-          dose: `${d.sets ? `${d.sets} × ` : ''}${amount} · ${intensity(d)}${guide ? ` · ${guide.metric.toUpperCase()} esperado ${range(guide.value, guide.max ?? guide.value)}` : ''}`,
+          dose: `${d.sets ? `${d.sets}${amount ? ' × ' : ' series'}` : ''}${amount}${!d.reps && d.perSide ? ' por lado' : ''}${d.intensity ? ` · ${intensity(d)}` : ''}${d.doseInstruction ? ` · ${d.doseInstruction}` : ''}${guide ? ` · ${guide.metric.toUpperCase()} esperado ${range(guide.value, guide.max ?? guide.value)}` : ''}`,
           rest: d.restSeconds === undefined ? null : `${b.blockType === 'main' && format === 'intervals' ? 'Descanso entre intervalos' : 'Descanso'}: ${formatDuration(d.restSeconds)}`,
           tempo: d.tempo ? `Tempo: ${d.tempo.join('-')}` : null };
       }) };

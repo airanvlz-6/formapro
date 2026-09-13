@@ -1,7 +1,7 @@
 import { beginWeeklyGeneration } from '../planning/weeklyGeneration';
 import { planBoundedWeek } from '../planning/prepareAllowedWeeklyPlanContract';
 import { calendarDays, calendarKey } from '../planning/weeklyCalendar';
-import { assertWeeklyCalendar } from '../planning/weeklyCalendarAuthority';
+import { assertWeeklyCalendar, admittedWeekObjective, verifyWeeklyCalendarReceipt } from '../planning/weeklyCalendarAuthority';
 import { enforceWholeWeek } from '../planning/enforceWholeWeek';
 import { generateTrainingSession, admitSessionContent, assertFreshSessionRestrictions } from '../sports/sessionAuthority';
 import { prepareWeeklyEntries, admitWeeklyCandidate } from '../planning/prepareWeeklyCandidate';
@@ -29,10 +29,11 @@ export async function adaptChatPlan(db: any, user: string, today: string, impact
         || typeof scope.reason !== 'string' || !scope.reason.trim() || scope.reason.length > 500) throw new Error('CHAT_ADAPTATION_SCOPE_INVALID');
       const preserveDays = calendarDays.filter(day => !scope.reassessDays.includes(day));
       const planned = await planBoundedWeek(db, user, { targetWeekStart: week, today, empezarHoy: true, snapshot,
-        strategyVersion: 1, planningRunId: generation.planningRunId, preserveDays }, complete, generation.token);
+        strategyVersion: 1, coherenceVersion: 1, planningRunId: generation.planningRunId, preserveDays }, complete, generation.token);
       if (!planned.ok) throw new Error(planned.code ?? 'CHAT_WEEK_REASSESSMENT_FAILED');
       const structure = planned.estructura, receipt = structure.calendarReceipt!;
       const sourceSessions: any[] = [];
+      const acceptedCurrentWeek: any[] = [];
       for (const slot of structure.sessions as any[]) {
         if (slot.weeklyProtected || slot.tipo === 'unavailable' || slot.tipo === 'external_blocked' || slot.tipo === 'sin_registrar') {
           const { weeklyProtected: _protected, optionId: _option, targetDate: _date, ...content } = slot;
@@ -40,11 +41,12 @@ export async function adaptChatPlan(db: any, user: string, today: string, impact
         }
         if (slot.state === 'REST') { sourceSessions.push(admitSessionContent({ dia: slot.dia, tipo: 'descanso' }, user, week)); continue; }
         const generated = await generateTrainingSession(db, user, { targetWeekStart: week, day: slot.dia, discipline: slot.tipo,
-          stimulus: slot.stimulusId, intent: slot.intent, state: slot.state,
+          stimulus: slot.stimulusId, intent: slot.intent, state: slot.state, acceptedCurrentWeek,
           weekly: { receipt, generationToken: generation.token, optionId: slot.optionId, claims: slot } }, complete,
         JSON.stringify({ change: 'temporary_availability', affected, reassessmentReason: scope.reason }), generation.planningRunId);
         if (!generated.ok) throw new Error(generated.code ?? 'CHAT_SESSION_REASSESSMENT_FAILED');
         sourceSessions.push(generated.sesion);
+        acceptedCurrentWeek.push(generated.sesion);
       }
       const rows = sourceSessions.map(({ sessionReceipt: _receipt, ...s }) => s);
       const authority = await assertWeeklyCalendar(db, user, week, rows, receipt, { requireV2: true, generationToken: generation.token, sessionEvidence: sourceSessions });
@@ -52,15 +54,19 @@ export async function adaptChatPlan(db: any, user: string, today: string, impact
       if (!checked.ok) throw new Error('CHAT_WHOLE_WEEK_REJECTED');
       const survivors = snapshot.sessions.flatMap((s, i) => preserveDays.includes(calendarKey(s.dia)) || s.completada || s.tipo === 'external_blocked' ? [i] : []);
       const entries = prepareWeeklyEntries(checked.sessions, snapshot, survivors);
-      const admission = admitWeeklyCandidate({ ...snapshot, sessions: checked.sessions }, entries, snapshot);
+      const longitudinal = verifyWeeklyCalendarReceipt(receipt, user, week, true).longitudinal;
+      const admission = admitWeeklyCandidate({ ...snapshot, sessions: checked.sessions,
+        week_number: longitudinal.semana, total_weeks_block: longitudinal.totalSemanas, block_name: longitudinal.bloque,
+        week_objective: admittedWeekObjective(receipt, user, week, snapshot.week_objective ?? null) }, entries, snapshot);
       if (admission.noOp) { outcomes.push({ week, status: 'unchanged' }); continue; }
       const result = await validatePlanMutation({ command: { source: 'weekly_orchestrator', operationType: 'regenerate_week',
         target: { userCodigo: user, weekStart: week }, expectedRevision: snapshot.revision, proposal: admission.candidate },
       context: { existingPlan: snapshot, normalizedWeekStart: week, identityProof: admission.identityProof }, candidate: admission.candidate,
-      changeSet: { operationType: 'regenerate_week', affectedDays: scope.reassessDays, changedFields: ['sessions', 'updated_at'] } });
+      changeSet: { operationType: 'regenerate_week', affectedDays: scope.reassessDays, changedFields: ['sessions', 'week_number', 'total_weeks_block', 'block_name', 'week_objective', 'updated_at'] } });
       if (result.status !== 'ready_for_commit') throw new Error('CHAT_PLAN_MUTATION_REJECTED');
       for (const s of checked.sessionEvidence) if (s.sessionReceipt) await assertFreshSessionRestrictions(db, user, week, s);
-      await assertWeeklyCalendar(db, user, week, checked.sessions, receipt, { requireV2: true, generationToken: generation.token, sessionEvidence: checked.sessionEvidence });
+      await assertWeeklyCalendar(db, user, week, checked.sessions, receipt, { requireV2: true, generationToken: generation.token, sessionEvidence: checked.sessionEvidence,
+        wholeWeekReviewed: checked.repairCount > 0 });
       const persisted = await mutatePlanWithCAS(db, result.mutation);
       outcomes.push({ week, status: persisted.status, ...(persisted.status === 'committed' ? {} : { code: 'CHAT_PLAN_SAVE_NOT_CONFIRMED' }) });
     } catch (error) {

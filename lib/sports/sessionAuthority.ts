@@ -1,4 +1,9 @@
 import { calendarState } from '../planning/weeklyCalendar';
+import { calendarDays, calendarKey } from '../planning/weeklyCalendar';
+import { emitSessionCoachingDiagnostic } from './sessionDoseDiagnostics';
+import { resolvedMovement } from './movementVariants';
+import { currentWeekCoachingContext } from '../planning/currentWeekCoachingContext';
+import { selectedWeekStrategy } from '../planning/selectedWeekObjective';
 import { samePlanData } from '../planning/planMutationValidators';
 import { assertFreshWeeklyAuthority, resolveWeeklySlot, verifyWeeklyCalendarReceipt, weeklyDigest } from '../planning/weeklyCalendarAuthority';
 import type { PrescriptionIntent } from './prescriptionIntent';
@@ -33,6 +38,7 @@ function signature(payload: string) {
   return createHmac('sha256', secret).update(domain + payload).digest('base64url');
 }
 type Request = { targetWeekStart: string; day: string; discipline: string; stimulus: unknown; intent?: PrescriptionIntent; state?: 'TRAIN' | 'RECOVERY';
+  acceptedCurrentWeek?: readonly Record<string, any>[];
   weekly?: { receipt: unknown; generationToken: unknown; optionId: unknown; claims?: Record<string, any> } };
 
 /** One repair proposal under the original authenticated authority; never widen pools or replace intent. */
@@ -60,10 +66,11 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
   try {
     if (request.intent?.kind === 'adaptation' && request.intent.transfer && !request.weekly)
       return { ok: false as const, code: 'TRANSFER_REQUIRES_WEEKLY_AUTHORITY' };
-    let weekly: { calendarReceipt: string; optionId: string } | undefined;
+    let weekly: { calendarReceipt: string; optionId: string; priorSessions?: Record<string, string> } | undefined;
     let weeklyContext: any;
     let confirmedAssignment: SessionEnvironmentInput['confirmedAssignment'];
     let strategicWeek: any = null, neighbours: any[] = [];
+    let currentWeek: ReturnType<typeof currentWeekCoachingContext> | undefined;
     if (Object.hasOwn(request, 'weekly')) {
       const proof = request.weekly!;
       const fresh = await assertFreshWeeklyAuthority(db, userCodigo, request.targetWeekStart, proof.receipt, proof.generationToken);
@@ -74,6 +81,23 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
       weekly = { calendarReceipt: proof.receipt as string, optionId: slot.optionId };
       weeklyContext = fresh.contexts[slot.discipline];
       strategicWeek = fresh.evidence.strategy || null;
+      if (fresh.evidence.coherenceVersion === 1) {
+        const previous = request.acceptedCurrentWeek;
+        if (!Array.isArray(previous) || previous.length > 6) throw new Error('WEEKLY_SIBLING_EVIDENCE_REQUIRED');
+        const slots = fresh.evidence.admittedSlots;
+        const earlier = slots.filter((s: any) => !s.protected && ['TRAIN', 'RECOVERY'].includes(s.state)
+          && calendarDays.indexOf(s.day) < calendarDays.indexOf(slot.day));
+        if (previous.length !== earlier.length || new Set(previous.map(s => calendarKey(s.dia))).size !== previous.length
+          || previous.some(s => !earlier.some((a: any) => a.day === calendarKey(s.dia)))) throw new Error('WEEKLY_SIBLING_SEQUENCE_INVALID');
+        const authenticated = previous.map(s => verifySessionReceipt(s.sessionReceipt, s, userCodigo, request.targetWeekStart, proof.receipt as string));
+        weekly.priorSessions = Object.fromEntries(authenticated.map(s => [calendarKey(s.dia), weeklyDigest(s)]));
+        const stored = await db.from('weekly_plan').select('sessions').eq('user_codigo', userCodigo).eq('week_start', request.targetWeekStart).maybeSingle();
+        if (stored.error) throw new Error('WEEKLY_SIBLING_READ_FAILED');
+        const protectedRows = (stored.data?.sessions ?? []).filter((s: any) => slots.some((a: any) => a.day === calendarKey(s.dia)
+          && a.protectedSessionDigest === weeklyDigest(s)));
+        currentWeek = currentWeekCoachingContext(request.targetWeekStart, [...protectedRows, ...authenticated], slots);
+        if (strategicWeek) strategicWeek = selectedWeekStrategy(strategicWeek, slots, fresh.evidence.coachingDecisions);
+      }
       const ordered = fresh.evidence.admittedSlots, index = ordered.findIndex((s: any) => s.day === slot.day);
       neighbours = [ordered[index - 1], ordered[index + 1]].filter(Boolean).map((s: any) => ({ day: s.day,
         adaptationId: s.intent?.kind === 'adaptation' ? s.intent.adaptationId : null, state: s.state }));
@@ -111,6 +135,12 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
         questionToken: question ? issuePrescriptionQuestion(userCodigo, base.contract.discipline, question) : undefined };
     }
     prepared.contract.generatedMovementAuthority = { ...GENERATED_MOVEMENT_AUTHORITY };
+    emitSessionCoachingDiagnostic('SESSION_WEEK_CONTEXT', { planningRunId: planningRunId ?? null, day: request.day,
+      intent: prepared.contract.intent, pool: prepared.contract.allowedMovementIds.map(movementId => ({ movementId,
+        family: resolvedMovement({ movementId })?.canonicalFamily ?? null })),
+      historicalExposure: { provenance: 'HISTORICAL_COMPLETED', source: prepared.contract.exposureContext.source,
+        movements: prepared.contract.exposureContext.report.exposiciones.map(e => ({ movementId: e.movementId,
+          count: e.vecesUltimas4Semanas, lastExposure: e.ultimaFecha })) }, currentWeek: currentWeek ?? null });
     prepared.contract.intensityAuthority = resolveMethodIntensity(prepared.contract);
     if (prepared.contract.discipline === 'carrera' && prepared.contract.intent?.kind === 'adaptation' && isRunningDoseMethod(prepared.contract.intent))
       prepared.contract.runningMethodDose = resolveRunningMethodDose(resolveCompatibleRunningDoseEvidence(canonical.runningDoseEvidenceAdmission, prepared.contract.intent), prepared.contract.intent, 'coach');
@@ -130,7 +160,7 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
         structuredRunningExecutions: canonical.runningDoseBaseline.structuredExecutions,
         habitualDeclarations: canonical.runningDoseBaseline.habitualDeclarations,
         physiology: canonical.physiology, readiness: canonical.readiness,
-        asOfDate: canonical.asOfDate, requestContext: context }), planningRunId, 'human_v3');
+        asOfDate: canonical.asOfDate, currentWeek: currentWeek ?? null, requestContext: context }), planningRunId, 'human_v3');
     if (!result.ok) return result;
     const payload = Buffer.from(JSON.stringify({ userCodigo, expiresAt: Date.now() + 30 * 60_000,
       contract: result.contract, proposal: result.proposal, presentationVersion: 'human_v3', ...(weekly ? { weekly } : {}) })).toString('base64url');

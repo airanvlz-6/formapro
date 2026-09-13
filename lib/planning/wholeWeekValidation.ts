@@ -10,6 +10,7 @@ export type WeekSessionFacts = {
   adaptationDoseSatisfied?: boolean;
 };
 export type WeekStrategyFacts = {
+  coherenceVersion?: 1;
   weeklyDecisionAuthority?: 'coach';
   goal: string | null; adaptations: { id: string; role: string; weaknessIds: string[] }[];
   required: { id: string; adaptationId?: string; discipline?: string; weaknessId?: string }[];
@@ -88,7 +89,8 @@ export function validateWholeWeek(input: WholeWeekInput) {
         b.load?.vector && Object.fromEntries(Object.entries(b.load.vector).map(([k,v]) => [k, [v.status,v.minimum,v.maximum,v.unit]]))) };
     const exact = similarity.movement === 1 && similarity.structure && similarity.stimulus && similarity.dose && similarity.intensity && similarity.adaptation && similarity.role;
     duplication.push({ sessionIds: [a.id, b.id], similarity, exact });
-    if (exact) add('WEEK_EXACT_DUPLICATE', b.protected && a.protected ? 'WARNING' : 'ERROR', [a, b], 'dose', similarity, 'Identical structured prescription; no signed repetition justification exists.', b.protected && a.protected ? 'none' : 'same_contract');
+    if (exact) add('WEEK_EXACT_DUPLICATE', input.strategy?.coherenceVersion === 1 || b.protected && a.protected ? 'WARNING' : 'ERROR', [a, b], 'dose', similarity,
+      'Identical structured prescription; coordinated Coach may reconsider or knowingly retain it.', b.protected && a.protected ? 'none' : 'same_contract');
     else if (similarity.movement >= 0.55 && similarity.stimulus && similarity.adaptation && similarity.role && similarity.intensity)
       add('WEEK_NEAR_DUPLICATE', 'WARNING', [a, b], 'dose', similarity, 'High overlap with the same stimulus, role and intensity; dose differs.');
     else if (similarity.movement > 0 && a.contributionValid && b.contributionValid)

@@ -16,6 +16,8 @@ import { admitSessionContent } from '../sports/sessionAuthority';
 import { loadAthletePrescriptionContext } from '../athlete/loadAthletePrescriptionContext';
 import { buildCanonicalWeekStrategy } from './canonicalWeekStrategy';
 import { humanWeeklyObjective } from '../sports/humanCoachingProjection';
+import { selectedWeekObjective } from './selectedWeekObjective';
+import { ensureLongitudinalTarget, loadLongitudinalProjection } from './longitudinalAuthority';
 import { strategyDiagnostic } from './planningDiagnostics';
 import { resolveGoalAuthority, goalResolutionDiagnostic } from '../athlete/goalResolution';
 import { resolveEventAuthority } from '../athlete/eventAuthority';
@@ -28,12 +30,17 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
   targetWeekStart: string; today: string; empezarHoy: boolean; snapshot: { sessions: readonly any[] } | null;
   strategyVersion?: 1; strategyProposal?: unknown; planningRunId?: string; diagnosticTemporalDecision?: boolean | null;
   confirmedAvailabilityDigest?: string | null;
+  coherenceVersion?: 1;
   /** Server-selected immutable survivors for a bounded chat reassessment; bound into the receipt. */
   preserveDays?: string[];
 }) {
   const c = await loadWeeklyCalendarContext(db, codigo, request.targetWeekStart);
   if (request.strategyVersion !== undefined && request.strategyVersion !== 1) throw new Error('STRATEGY_VERSION_UNSUPPORTED');
   const athlete = request.strategyVersion === 1 ? await loadAthletePrescriptionContext(db, codigo, { asOfDate: request.today, runningHabitualInteraction: request.planningRunId ? {planningRunId:request.planningRunId,targetWeekStart:request.targetWeekStart} : undefined }) : undefined;
+  const longitudinal = request.coherenceVersion === 1 ? await loadLongitudinalProjection(db, codigo, request.targetWeekStart) : undefined;
+  if (athlete && longitudinal) athlete.cycle = { ...athlete.cycle,
+    block: { ...athlete.cycle.block, value: longitudinal.bloque }, week: { ...athlete.cycle.week, value: longitudinal.semana },
+    totalWeeks: { ...athlete.cycle.totalWeeks, value: longitudinal.totalSemanas } };
   if (athlete) {
     const goal = resolveGoalAuthority(athlete), resolution = resolvePlanningStrategy(athlete), admitted = resolution.status === 'STRATEGY_RESOLVED';
     console.log('GOAL_RESOLUTION_DIAGNOSTIC', goalResolutionDiagnostic(goal));
@@ -126,7 +133,7 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
     ...(runningEventPreparation?.managed && runningEventPreparation.preparationState !== 'GENERAL_DEVELOPMENT' && strategy?.goal.id === 'half_marathon' ? { runningEventPreparation } : {}),
     ...(strategy ? { strategy, doseCapabilities: buildDoseCapabilityProfile(athlete!.runningDoseEvidenceAdmission, c.scope,
       { sessionDecisionAuthority: 'coach', ...(runningEventPreparation?.managed && runningEventPreparation.preparationState !== 'GENERAL_DEVELOPMENT' && strategy.goal.id === 'half_marathon' ? {runningEventPreparation} : {}), goalId: strategy.goal.id, blockPhase: strategy.block.phase, blockWeek: strategy.block.week, athlete, contexts }) } : {}) },
-    athlete, fixedSessions: structuredClone(fixedSessions),
+    athlete, longitudinal, fixedSessions: structuredClone(fixedSessions),
     runningHistoryContext: athlete ? scopeRunningHistory(athlete.runningHistory, c.scope) : null,
     runningEventPreparation,
     availabilityConfirmed };
@@ -145,6 +152,9 @@ export async function prepareAllowedWeeklyPlanContract(db: any, codigo: string, 
   const coachingContext = buildWeeklyCoachingContext(context.input, built.contract, context.athlete, request.snapshot, request.today,
     await loadWeeklyCoachingSupplement(db, codigo, request.today), evidencePolicy);
   if (process.env.FORGE_WEEKLY_COACHING_DIAGNOSTICS === '1') try {
+    for (const [day, options] of Object.entries(built.contract.dayOptions)) console.info('WEEKLY_COACH_OPTIONS', {
+      planningRunId: request.planningRunId ?? null, weekStart: request.targetWeekStart, day,
+      options: options.map(o => ({ optionId: o.optionId, state: o.state, discipline: o.discipline ?? null, intent: o.intent ?? null })) });
     // No raw DB rows, notes, identifiers of executions, provider envelope or secrets.
     console.info('WEEKLY_COACHING_INPUT', JSON.stringify({ planningRunId: request.planningRunId ?? null,
       weekStart: request.targetWeekStart, contextDigest: built.contract.contextDigest,
@@ -177,11 +187,24 @@ export async function prepareAllowedWeeklyPlanContract(db: any, codigo: string, 
 /** Server resolves selections. Model prose never becomes an executable objective. */
 export async function planBoundedWeek(db: any, codigo: string, request: Parameters<typeof prepareAllowedWeeklyPlanContract>[2],
   complete: (prompt: string) => Promise<PlannerCompletion>, generationToken?: string) {
+  // Resolve existing goal, scope, restrictions and target preservation before any cycle write.
+  if (request.coherenceVersion === 1) {
+    const admission = await loadWeeklyPlanningContext(db, codigo, { ...request, coherenceVersion: undefined });
+    if (!admission.ok) return admission;
+  }
+  const longitudinal = request.coherenceVersion === 1 ? await ensureLongitudinalTarget(db, codigo, request.targetWeekStart, request.today, complete, request.planningRunId) : undefined;
   const prepared = await prepareAllowedWeeklyPlanContract(db, codigo, request);
   if (!prepared.ok) return prepared;
   const proposal = await composeBoundedWeek(prepared.contract, complete, prepared.coachingContext);
   if (!proposal.ok) return proposal;
   if (process.env.FORGE_WEEKLY_COACHING_DIAGNOSTICS === '1') try {
+    for (const day of calendarDays) {
+      const option = proposal.selected[day];
+      console.info('WEEKLY_COACH_SELECTION', { planningRunId: request.planningRunId ?? null, weekStart: request.targetWeekStart,
+        day, optionId: option.optionId, state: option.state, intent: option.intent ?? null });
+      console.info('WEEKLY_COACH_RATIONALE', { planningRunId: request.planningRunId ?? null, weekStart: request.targetWeekStart,
+        day, decision: proposal.decisions[day] ?? null });
+    }
     console.info('WEEKLY_COACHING_SELECTION', JSON.stringify({ planningRunId: request.planningRunId ?? null,
       weekStart: request.targetWeekStart, contextDigest: proposal.contract.contextDigest,
       selections: calendarDays.map(day => {
@@ -207,11 +230,13 @@ export async function planBoundedWeek(db: any, codigo: string, request: Paramete
   try { console.info?.('WEEKLY_STRATEGY_DIAGNOSTIC', { planningRunId: request.planningRunId ?? null, weekStart: request.targetWeekStart, contractDigest, ...diagnostic }); }
   catch { /* Observability cannot change the admitted strategy. */ }
   const calendarReceipt = generationToken === undefined ? undefined : await issueWeeklyCalendar(db, codigo, request.targetWeekStart, sessions,
-    { contract: proposal.contract, selections: calendarDays.map(day => ({ day, optionId: proposal.selected[day].optionId })), request, generationToken });
-  return { ok: true as const, evidencePolicy:prepared.evidencePolicy, factualRequirements:prepared.factualRequirements, estructura: { weeklyContractVersion: 1, calendarProtocolVersion: 2, contractDigest, calendarReceipt,
+    { contract: proposal.contract, selections: calendarDays.map(day => ({ day, optionId: proposal.selected[day].optionId })), request, generationToken, decisions: proposal.decisions });
+  return { ok: true as const, evidencePolicy:prepared.evidencePolicy, factualRequirements:prepared.factualRequirements, estructura: { weeklyContractVersion: 1, calendarProtocolVersion: 2, contractDigest, calendarReceipt, longitudinal,
     contextDigest: proposal.contract.contextDigest,
     strategy: { ...(proposal.contract.strategy ? { canonical: proposal.contract.strategy } : {}),
-      adaptacion_principal: proposal.contract.strategy ? humanWeeklyObjective(proposal.contract.strategy) : 'Consulta las sesiones programadas para esta semana.' },
+      adaptacion_principal: proposal.contract.strategy ? request.coherenceVersion === 1
+        ? selectedWeekObjective(proposal.contract.strategy, calendarDays.map(day => ({ day, ...proposal.selected[day] })), proposal.decisions)
+        : humanWeeklyObjective(proposal.contract.strategy) : 'Consulta las sesiones programadas para esta semana.' },
     sessions: sessions.map((s, i) => ('weeklyProtected' in s && s.weeklyProtected) ? s : ({ ...s, optionId: proposal.selected[calendarDays[i]].optionId,
       targetDate: new Date(new Date(request.targetWeekStart + 'T12:00:00Z').getTime() + i * 86400000).toISOString().slice(0, 10) })) },
     coachingDecisions: proposal.decisions, coachingWarnings: proposal.warnings, attempts: proposal.attempts };

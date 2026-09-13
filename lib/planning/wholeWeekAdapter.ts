@@ -68,7 +68,7 @@ export function wholeWeekInput(week: string, rows: readonly any[], evidence: any
   const external = Object.entries(contexts).map(([discipline, context]) => ({discipline,
     sessions:(context.externalLoadContext?.records || []).filter((r:any)=>r.fecha >= week && r.fecha <= new Date(Date.parse(week)+6*86400000).toISOString().slice(0,10))
       .map((r:any,index:number)=>externalActualLoad(r,`context:${discipline}:${index}`)), combinedStatus:'unknown_cross_source_overlap',combined:null }));
-  return {sessions,strategy:strategy ? {weeklyDecisionAuthority:strategy.weeklyDecisionAuthority,goal:strategy.goal.id,adaptations:strategy.adaptations,required:strategy.coverage,deferred:strategy.deferred} : null,exposure,external,
+  return {sessions,strategy:strategy ? {coherenceVersion:evidence.coherenceVersion,weeklyDecisionAuthority:strategy.weeklyDecisionAuthority,goal:strategy.goal.id,adaptations:strategy.adaptations,required:strategy.coverage,deferred:strategy.deferred} : null,exposure,external,
     // Qualitative review relation over existing patterns, not a dose threshold or a new pattern taxonomy.
     interferenceRules:[{id:'demanding-support-before-primary-locomotion-v1',sourcePatterns:['squat','hinge','lunge','olympic_lift'],targetPatterns:['run','jump','locomotion']}],
     contextLimitations:['EXTERNAL_SNAPSHOTS_NOT_SUMMED','EXTERNAL_PATTERNS_UNKNOWN','RECENT_EXECUTION_STRUCTURE_UNAVAILABLE',

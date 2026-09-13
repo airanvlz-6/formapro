@@ -1,3 +1,4 @@
+import { prepareCompletedBlockOutcome } from '@/lib/planning/completedBlockOutcome';
 import { splitExecutionReports, resolveReportExecutionDate } from '@/lib/execution/reportExecutionDate';
 import { runChatCoach } from '@/lib/chat/runChatCoach';
 import { userEvidenceText, conversationalMemoryOnly } from '@/lib/chat/conversationEvidence';
@@ -809,6 +810,16 @@ export async function POST(req: NextRequest) {
 
 async function handlePost(req: NextRequest) {
   const { messages, system, model, max_tokens, action, codigo, datos, email, codigoConjunto, pendingId, coachGrounding, coachMessage } = await req.json();
+  if (process.env.FORGE_WEEKLY_COACHING_DIAGNOSTICS === '1' && typeof action === 'string' &&
+    ['preparar_generacion_semana','preflight_generacion_semana','analizar_bloque_semana','planificar_semana','construir_sesion_dia','guardar_plan_semana'].includes(action)) {
+    let runId: string | null = null;
+    try { runId = resolveWeeklyGeneration(datos?.generationToken, codigo).planningRunId ?? null; } catch { /* No token on the first action. */ }
+    const actionId = req.headers.get('x-forge-action-id');
+    console.info('PLANNING_ACTION_REQUEST', { action, actionId: actionId && /^[a-zA-Z0-9-]{1,80}$/.test(actionId) ? actionId : null,
+      attempt: /^[0-9]{1,2}$/.test(req.headers.get('x-forge-attempt') ?? '') ? req.headers.get('x-forge-attempt') : null,
+      planningRunId: runId, targetWeekStart: /^\d{4}-\d{2}-\d{2}$/.test(datos?.targetWeekStart ?? '') ? datos.targetWeekStart : null });
+  }
+
   // Never accept a client boolean/raw digest as session-environment attestation.
   if (action === 'planificar_semana' && datos && typeof datos === 'object') {
     datos.confirmedAvailabilityDigest = readEnvironmentConfirmation(req.headers?.get('cookie'), {
@@ -2248,7 +2259,7 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
       const result = await planBoundedWeek(supabase, codigo, {
         targetWeekStart: datos.targetWeekStart, today,
         empezarHoy: includeToday, snapshot: generation.snapshots[datos.targetWeekStart],
-        strategyVersion: 1, strategyProposal: datos.analisis?.strategyProposal, planningRunId: generation.planningRunId,
+        strategyVersion: 1, strategyProposal: datos.analisis?.strategyProposal, coherenceVersion: 1, planningRunId: generation.planningRunId,
         confirmedAvailabilityDigest: datos.confirmedAvailabilityDigest,
       }, async (prompt: string) => {
         const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -2299,6 +2310,7 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
         return NextResponse.json({ ok: false, code: "TRAINING_CONTRACT_INVALID", errors: ["CONTRACT_TARGET_OUTSIDE_GENERATION"] });
       const generated = await generateTrainingSession(supabase, codigo,
         { targetWeekStart: datos.targetWeekStart, day: datos.dia, discipline: datos.tipo, stimulus: datos.stimulusId,
+          acceptedCurrentWeek: datos.acceptedCurrentWeek,
           weekly: { receipt: datos.calendarReceipt, generationToken: datos.generationToken, optionId: datos.optionId, claims: datos },
           ...(Object.hasOwn(datos, 'intent') ? { intent: datos.intent } : {}),
           ...(Object.hasOwn(datos, 'state') ? { state: datos.state } : {}) },
@@ -4578,79 +4590,10 @@ if (action === "obtener_daily_briefing") {
       survivorIndices); }
     catch (error: any) { return NextResponse.json({ ok: false, error: error.message, retryable: false }); }
     plan.sessions = weeklyEntries.map(entry => entrySession(entry, planExistente));
-    // FORGE CANONICAL STATE — unico punto autorizado para incrementar ciclo_actual.semana: cuando se
-    // guarda una semana genuinamente NUEVA (week_start posterior a la actual real), no una regeneracion
-    // de la semana en curso. Deterministico, nunca depende de que el LLM lo detecte o recuerde.
-    let cicloPreparado: Record<string, unknown> | null = null;
-    let outcomePreparado: Record<string, unknown> | null = null;
+    // Generation never advances or reconstructs the cycle at save. New clients carry
+    // the target resolved in usuarios.ciclo_actual before Weekly Coach selection.
     let cicloContexto: Record<string, unknown> | undefined;
-
-    if (!esSemanaActual && !planExistente) {
-      try {
-        const { data: usuarioCicloIncr } = await supabase.from("usuarios").select("ciclo_actual").eq("codigo", codigo).single();
-        const cicloIncr = usuarioCicloIncr?.ciclo_actual;
-        cicloContexto = cicloIncr || undefined;
-        if (cicloIncr && typeof cicloIncr.semana === "number") {
-          // FIX CRITICO: bug real confirmado — "semana 23 de 4". El contador se incrementaba SIN
-          // limite ni verificacion contra totalSemanas, nunca transicionaba de bloque. Ahora: si la
-          // nueva semana superaria totalSemanas, el bloque actual TERMINA y arranca uno nuevo en
-          // semana 1 — usando el nombre del bloque tal como lo decidio el plan.block_name real
-          // (viene del Block Analyzer/Coach, ya reflejado en el plan que se esta guardando).
-          const totalSemanasCiclo = cicloIncr.totalSemanas || 4;
-          const superariaLimite = (cicloIncr.semana + 1) > totalSemanasCiclo;
-
-          // FIX CRITICO CONFIRMADO CON EVIDENCIA REAL: block_outcomes existia en el modelo de datos
-          // pero dependia de que el LLM generara el tag [BLOCK_OUTCOME:] en el momento exacto del
-          // cierre — nunca se disparaba en la practica (0 registros reales tras multiples bloques
-          // completados). Ahora: SIEMPRE que se detecta transicion de bloque, el codigo calcula y
-          // guarda el outcome deterministamente, con datos reales de las tablas existentes, sin
-          // depender de que el LLM recuerde generar ningun tag.
-          if (superariaLimite) {
-            try {
-              const { data: usuarioParaOutcome } = await supabase.from("usuarios").select("workout_history").eq("codigo", codigo).single();
-              const workoutHistoryOutcome = usuarioParaOutcome?.workout_history || [];
-              const hoyOutcome = new Date().toISOString().split('T')[0];
-              const fechaInicioBloqueEstimada = (() => {
-                const d = new Date();
-                d.setDate(d.getDate() - (totalSemanasCiclo * 7));
-                return d.toISOString().split('T')[0];
-              })();
-              const sesionesDelBloque = workoutHistoryOutcome.filter((w: any) => w.fecha >= fechaInicioBloqueEstimada);
-              const diasEsperadosBloque = totalSemanasCiclo * 3; // estimacion conservadora, 3 sesiones/semana minimo
-              const adherenciaCalculada = Math.min(100, Math.round((sesionesDelBloque.length / Math.max(diasEsperadosBloque, 1)) * 100));
-
-              const { count: prsDelBloque } = await supabase.from("session_modification_events").select("*", { count: "exact", head: true }).eq("user_codigo", codigo).gte("created_at", fechaInicioBloqueEstimada);
-              const { count: lesionesDelBloque } = await supabase.from("athlete_state_events").select("*", { count: "exact", head: true }).eq("user_codigo", codigo).eq("estado", "restricted").gte("created_at", fechaInicioBloqueEstimada);
-
-              outcomePreparado = {
-                user_codigo: codigo,
-                tipo_bloque: cicloIncr.bloque || "desconocido",
-                duracion_semanas: totalSemanasCiclo,
-                objetivo: cicloIncr.objetivo || null,
-                adherencia: adherenciaCalculada,
-                fatiga_media: null,
-                sesiones_completadas: sesionesDelBloque.length,
-                pr_obtenidos: prsDelBloque || 0,
-                debilidades_resueltas: null,
-                lesiones: (lesionesDelBloque || 0) > 0,
-                resultado_global: adherenciaCalculada >= 80 ? "bueno" : adherenciaCalculada >= 50 ? "regular" : "deficiente",
-                fecha_inicio: fechaInicioBloqueEstimada,
-                fecha_fin: hoyOutcome
-              };
-            } catch (errBlockOutcome) {
-              console.error("Error guardando block_outcome deterministico:", errBlockOutcome);
-            }
-          }
-
-          const nuevoCiclo = superariaLimite
-            ? { ...cicloIncr, bloque: plan.block_name || cicloIncr.bloque, semana: 1, totalSemanas: plan.total_weeks_block || totalSemanasCiclo }
-            : { ...cicloIncr, semana: cicloIncr.semana + 1 };
-          cicloPreparado = nuevoCiclo;
-        }
-      } catch (errIncrCiclo) {
-        console.error("Error incrementando ciclo_actual.semana:", errIncrCiclo);
-      }
-    }
+    let outcomePreparado: Record<string, unknown> | null = null;
 
     // FORGE DETERMINISTIC PLAN VALIDATOR — ultima linea de defensa antes de persistir. El prompt del
     // Block Analyzer ya recibe las restricciones, pero eso es interpretacion, no garantia. Este
@@ -4738,6 +4681,24 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
     try {
       const authority = await assertWeeklyCalendar(supabase, codigo, plan.week_start, plan.sessions, datos.calendarReceipt,
         { requireV2: true, generationToken: datos.generationToken, sessionEvidence: newlyPrescribedSessions });
+      const longitudinal = authority.evidence.longitudinal;
+      if (authority.evidence.coherenceVersion === 1 && (!longitudinal || longitudinal.weekStart !== plan.week_start))
+        throw new Error("LONGITUDINAL_TARGET_UNRESOLVED");
+      if (longitudinal) {
+        plan.block_name = longitudinal.bloque;
+        plan.week_number = longitudinal.semana;
+        plan.total_weeks_block = longitudinal.totalSemanas;
+        cicloContexto = { bloque: longitudinal.bloque, semana: longitudinal.semana, totalSemanas: longitudinal.totalSemanas };
+      }
+      if (!planExistente) {
+        let completedCycle = longitudinal?.decision?.targetWeekStart === plan.week_start
+          && Number.isSafeInteger(longitudinal?.decision?.previousCycle?.totalSemanas) ? longitudinal.decision.previousCycle : null;
+        if (!longitudinal && !esSemanaActual) {
+          const cycleRead = await supabase.from("usuarios").select("ciclo_actual").eq("codigo", codigo).single();
+          if (!cycleRead.error) completedCycle = cycleRead.data?.ciclo_actual;
+        }
+        if (completedCycle) outcomePreparado = await prepareCompletedBlockOutcome(supabase, codigo, completedCycle);
+      }
       wholeWeekAuthority = authority;
       wholeWeek = await enforceWholeWeek(codigo, plan.week_start, plan.sessions, newlyPrescribedSessions, datos.calendarReceipt, authority,
         async (prompt: string) => {
@@ -4766,7 +4727,7 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
       plan.sessions = wholeWeek.sessions;
       newlyPrescribedSessions = wholeWeek.sessionEvidence;
       if (wholeWeek.repairCount) await assertWeeklyCalendar(supabase, codigo, plan.week_start, plan.sessions, datos.calendarReceipt,
-        { requireV2: true, generationToken: datos.generationToken, sessionEvidence: newlyPrescribedSessions });
+        { requireV2: true, generationToken: datos.generationToken, sessionEvidence: newlyPrescribedSessions, wholeWeekReviewed: true });
     }
     catch (error: any) { return NextResponse.json({ ok: false, code: error.message, retryable: false }); }
 
@@ -4866,6 +4827,8 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
       try { if ((await write()).error) warnings.push(label); }
       catch { warnings.push(label); }
     };
+    if (outcomePreparado)
+      await recordWeeklyEffect("BLOCK_OUTCOME_FAILED", () => supabase.from("block_outcomes").insert(outcomePreparado!));
     for (const session of validationResult.candidate.sessions) {
       if ((session as unknown as Record<string, unknown>).origen === "disciplina_forzada" && session.completada !== true)
         await recordWeeklyEffect("DISCIPLINE_AUDIT_FAILED", () => supabase.from("weekly_plan_events").insert({
@@ -4873,10 +4836,7 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
           accion: "regenerar_sesion_disciplina_forzada", motivo: "Correccion de disponibilidad confirmada",
           dia_afectado: session.dia, confirmado_por_usuario: false }));
     }
-    if (outcomePreparado)
-      await recordWeeklyEffect("BLOCK_OUTCOME_FAILED", () => supabase.from("block_outcomes").insert(outcomePreparado!));
-    if (cicloPreparado)
-      await recordWeeklyEffect("CYCLE_UPDATE_FAILED", () => supabase.from("usuarios").update({ ciclo_actual: cicloPreparado }).eq("codigo", codigo));
+
     try {
       const { count: countActual, error: countError } = await supabase.from("weekly_plan_generation_log")
         .select("id", { count: "exact", head: true }).eq("user_codigo", codigo).eq("week_start", plan.week_start);

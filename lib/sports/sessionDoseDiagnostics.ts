@@ -9,7 +9,7 @@ import { MOVEMENT_LIBRARY } from './movementLibrary';
 /** Reuse the existing diagnostic boundary. Never log raw prompts, profiles or receipts. */
 export function emitSessionCoachingDiagnostic(event: 'SESSION_COACH_INPUT' | 'SESSION_COACH_DECISION'
   | 'SESSION_AUTHORITY_RESOLUTION' | 'BUILDER_OUTPUT' | 'SESSION_MOVEMENT_COACH_INPUT' | 'SESSION_MOVEMENT_PROPOSAL'
-  | 'MOVEMENT_RESOLUTION' | 'MOVEMENT_FEASIBILITY' | 'SESSION_MOVEMENT_ADMISSION', projection: unknown) {
+  | 'MOVEMENT_RESOLUTION' | 'MOVEMENT_FEASIBILITY' | 'SESSION_MOVEMENT_ADMISSION' | 'SESSION_WEEK_CONTEXT', projection: unknown) {
   try { if (process.env.FORGE_SESSION_COACHING_DIAGNOSTICS === '1') console.info?.(event, JSON.stringify(projection)); }
   catch { /* Observability never grants or removes prescription authority. */ }
 }

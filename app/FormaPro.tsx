@@ -1045,12 +1045,13 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     console.log("ORCHESTRATOR_BUILDER_TARGETS", {planningRunId:weeklyGeneration.planningRunId ?? null, count:diasAConstruir.length, days:diasAConstruir.map((d:any)=>d.dia)});
     if(!diasAConstruir.length) return noWeeklyPrescription('EMPTY_BUILDER_TARGETS');
     const todasLasSesionesOrden=estructura.sessions||[];
-    const resultadosParalelos=await Promise.all(
-      diasAConstruir.map((diaEstructura:any)=>{
+    const resultadosParalelos:any[]=[];
+    for (const diaEstructura of [...diasAConstruir].sort((a:any,b:any)=>ORDEN_DIAS.indexOf(normalizarDiaOrch(a.dia))-ORDEN_DIAS.indexOf(normalizarDiaOrch(b.dia)))) {
         const idxEnSemana=todasLasSesionesOrden.findIndex((d:any)=>d.dia===diaEstructura.dia);
         const diaAnterior=idxEnSemana>0?todasLasSesionesOrden[idxEnSemana-1]:null;
         const diaSiguiente=idxEnSemana<todasLasSesionesOrden.length-1?todasLasSesionesOrden[idxEnSemana+1]:null;
-        return apiCall({action:"construir_sesion_dia",codigo:codigoUsuario,datos:{
+        const resultado = await apiCall({action:"construir_sesion_dia",codigo:codigoUsuario,datos:{
+          acceptedCurrentWeek: resultadosParalelos.map((r:any)=>r.sesion),
           generationToken:weeklyGeneration.token,
           calendarReceipt:estructura.calendarReceipt,
           optionId:diaEstructura.optionId,
@@ -1079,8 +1080,9 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
             attempts:res?.diagnostics?.attemptCount,stage:res?.diagnostics?.finalStage,violations:res?.diagnostics?.finalViolations,retryExhausted:res?.diagnostics?.retryExhausted});
           return res;
         });
-      })
-    );
+      resultadosParalelos.push(resultado);
+      if (!resultado?.ok || !resultado.sesion) break;
+    }
 
     // A rejected contract is terminal for this proposal; never save a week with missing days.
     if(resultadosParalelos.some((r:any)=>!r?.ok || !r.sesion)){
@@ -1130,15 +1132,12 @@ const [mostrarRecuperar,setMostrarRecuperar]=useState(false);
     // weekStart ya se calculo al principio de la funcion (weekStartOrchestrator) — se reutiliza aqui.
     const weekStart=weekStartOrchestrator;
 
-    // FIX: week_number debe ser SIEMPRE cicloActual.semana (la fuente real del Estado Canonico),
-    // nunca "+1" ciego — sumar +1 solo tenia sentido en el modelo antiguo donde se generaba siempre
-    // la semana SIGUIENTE. Ahora que el Orchestrator puede regenerar la semana ACTUAL, sumar +1
-    // duplicaba el incremento cada vez que se corregia/regeneraba la misma semana.
+    // Display the server's canonical target projection; save independently verifies its receipt.
     const planCompleto={
       week_start:weekStart,
-      week_number:cicloActual.semana||1,
-      total_weeks_block:cicloActual.totalSemanas||null,
-      block_name:cicloActual.bloque||analisis.tipo_semana,
+      week_number:estructura.longitudinal?.semana ?? cicloActual.semana ?? 1,
+      total_weeks_block:estructura.longitudinal ? estructura.longitudinal.totalSemanas : cicloActual.totalSemanas||null,
+      block_name:estructura.longitudinal?.bloque ?? cicloActual.bloque ?? analisis.tipo_semana,
       week_objective:estructura.strategy.adaptacion_principal,
       sessions:sesionesCompletas
     };
@@ -1286,12 +1285,13 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
       ? await apiCall({action:"preparar_generacion_semana",codigo:codigoUsuario}) : null;
     const weeklyGeneration=generationResult?.ok ? generationResult.generation : undefined;
     if(weeklyGeneration) body={...body,system:String(body.system||"")+"\nSnapshot semanal del servidor para esta generación (autoridad sobre contexto previo):\n"+JSON.stringify(weeklyGeneration.snapshots)};
+    const actionRequestId=globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     let intentos=0;
     const maxIntentos=body.action==="planificar_semana"||body.action==="guardar_plan_semana"?1:3;
     while(intentos<maxIntentos){
       try{
         const controller=useAbort?abortControllerRef.current:null;
-        const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:controller?.signal});
+        const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json","x-forge-action-id":actionRequestId,"x-forge-attempt":String(intentos)},body:JSON.stringify(body),signal:controller?.signal});
         if(res.ok) { const result=await res.json();
           if(result.preflightRequirement?.text){
             if(result.preflightRequirement.kind==="availability" && typeof result.snapshotDigest==="string") availabilityConfirmationRef.current=result.snapshotDigest;
@@ -1579,7 +1579,8 @@ const forgeValidator=(texto:string):string=>{
       // Procesa TODAS las ocurrencias del mismo tag en el mensaje, no solo la primera
       // (necesario cuando el modelo genera varios tags iguales seguidos, ej: modificar 2 sesiones distintas)
       let seguirBuscando=true;
-      let intentos=0;
+      const actionRequestId=globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    let intentos=0;
       while(seguirBuscando && intentos<10){ // limite de seguridad para evitar bucle infinito
         intentos++;
         const tagStart=texto.indexOf(tag);

@@ -1,3 +1,6 @@
+import { safeViolations } from './builderDiagnostics';
+import { minimalSessionRepresentation, executableProjection } from './minimalSessionRepresentation';
+import { assessSessionIntent } from './sessionIntentAssessment';
 import { movementShapeFailures, needsModernSessionSchema } from './sessionMovementShape';
 import { sessionShapeDiagnostic, type SessionShapeDiagnostic } from './sessionShapeDiagnostics';
 import { openExecution, resolveExecutableDose, executionInstructionComplete } from './sessionExecution';
@@ -25,7 +28,7 @@ export type StructuredSessionProposal = {
   blocks: { blockType: 'warmup' | 'main' | 'cooldown'; formatDose?: FormatDose; movements: { movementId: string; variant?: MovementVariantProposal; prescription: MovementDose }[] }[];
   explanation?: string;
 };
-export type SessionValidation = { ok: true; proposal: StructuredSessionProposal } | { ok: false; violations: string[] };
+export type SessionValidation = { ok: true; proposal: StructuredSessionProposal; representationAdvisories?: string[] } | { ok: false; violations: string[] };
 const object = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 const keys = (v: Record<string, unknown>, allowed: string[]) => Object.keys(v).every(k => allowed.includes(k));
 const doseKeys = ['sets', 'reps', 'durationSeconds', 'distanceMeters', 'restSeconds'];
@@ -37,6 +40,18 @@ export const GENERATION_SAFETY_BOUNDS: Record<string, number> = {
 
 /** No extraction from prose, ID repair, aliases, fuzzy matching or extra executable fields. */
 export function checkSessionShape(value: unknown, execution = false, observeShape?: (detail: SessionShapeDiagnostic) => void): SessionValidation {
+  if (!execution) return inspectSessionRepresentation(value, false, observeShape);
+  const inspected = inspectSessionRepresentation(value, true, detail => {
+    const advisory = { ...detail, advisory: true };
+    try { observeShape?.(advisory); } catch { /* Observation only. */ }
+  });
+  if (inspected.ok) return inspected;
+  const minimal = minimalSessionRepresentation(value);
+  return minimal.ok ? { ...minimal, representationAdvisories: safeViolations(inspected.violations) } : minimal;
+}
+
+/** Historical representation rules and modern diagnostics; not the modern admission gate. */
+export function inspectSessionRepresentation(value: unknown, execution = false, observeShape?: (detail: SessionShapeDiagnostic) => void): SessionValidation {
   const sourceSchema = object(value) ? value.schemaVersion : undefined;
   let schemaNormalized = false;
   if (execution && object(value)) {
@@ -118,12 +133,25 @@ export function parseStructuredSession(raw: unknown, execution = false, observeS
 
 export function validateSessionAgainstTrainingContract(contract: AllowedTrainingContract, value: unknown,
   observeDose?: Parameters<typeof validateSessionDose>[2],
-  observeMissingSignal?: (signal: string, state: string, blockIndex: number, movementIndex: number) => void): SessionValidation {
+  observeMissingSignal?: (signal: string, state: string, blockIndex: number, movementIndex: number) => void,
+  observeIntent?: (assessment: ReturnType<typeof assessSessionIntent>) => void): SessionValidation {
   const checked = checkSessionShape(value, openExecution(contract));
   if (!checked.ok) return checked;
   const authority = validateAllowedTrainingContract(contract);
   if (!authority.ok) return { ok: false, violations: authority.errors.map(e => `CONTRACT:${e}`) };
   const p = checked.proposal;
+  if (openExecution(contract)) {
+    const projected = executableProjection(p);
+    if (projected.errors.length) return { ok: false, violations: projected.errors };
+    // Factual dose/identity/clock validation runs AFTER minimal interpretation. Decorative
+    // representation fields are not admission constraints and are absent from this projection.
+    const executionCheck = inspectSessionRepresentation(projected.projection, true);
+    if (!executionCheck.ok) {
+      const hard = executionCheck.violations.filter(code => !code.startsWith('DUPLICATE_MOVEMENT:'));
+      if (hard.length) return { ok: false, violations: hard };
+    }
+    try { observeIntent?.(assessSessionIntent(contract, p)); } catch { /* Non-authoritative. */ }
+  }
   const violations: string[] = [];
   if(contract.runningEventPreparation && contract.discipline==='carrera') {
     if(contract.intensityAuthority?.status !== 'RESOLVED') violations.push('D3_C2_INTENSITY_UNRESOLVED');
@@ -131,6 +159,7 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
     if(contract.runningEventPreparation.constraints.longRun==='FORBIDDEN' && p.blocks.some(b=>b.movements.some(m=>m.movementId==='rodaje_largo')))
       violations.push('D3_LONG_RUN_FORBIDDEN');
   }
+  if (openExecution(contract) && Object.hasOwn(p, 'discipline') && (p as unknown as { discipline: unknown }).discipline !== contract.discipline) violations.push('SESSION_DISCIPLINE_SCOPE_MISMATCH');
   if (p.stimulusId !== contract.stimulusId) violations.push('STIMULUS_MISMATCH');
   const structure = Object.hasOwn(WORKOUT_STRUCTURE_LIBRARY, p.structureId) ? WORKOUT_STRUCTURE_LIBRARY[p.structureId] : undefined;
   if (!structure || (contract.contractVersion !== 4 && (!contract.allowedStructureIds.includes(p.structureId) || structure.discipline !== contract.discipline))) violations.push(contract.contractVersion === 4 ? 'STRUCTURE_REPRESENTATION_UNRESOLVED' : 'STRUCTURE_NOT_ALLOWED');
@@ -138,7 +167,7 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
     violations.push('SINGLE_BLOCK_COMPOSITION_NOT_AUTHORIZED');
   const main = p.blocks.find(b => b.blockType === 'main')!.movements;
   violations.push(...validateStructureSemantics(structure, main));
-  if (contract.intent && contract.intent.kind !== 'stimulus_only' && !main.some(entry =>
+  if (!openExecution(contract) && contract.intent && contract.intent.kind !== 'stimulus_only' && !main.some(entry =>
     resolvedMovement(entry)?.descriptor.movement_pattern === (contract.intent as { pattern: string }).pattern
     && (!!entry.variant || contract.allowedMovementIds.includes(entry.movementId)))) violations.push('INTENT_NOT_SATISFIED');
   const restrictions = contract.restrictionsSnapshot;
@@ -147,7 +176,7 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
   const generatedIdentities = new Map<string, string>();
   for (const block of p.blocks) {
     const exact = block.movements.map(m => resolvedMovement(m)?.identity).filter(Boolean);
-    if (new Set(exact).size !== exact.length) violations.push('GENERATED_EXACT_IDENTITY_DUPLICATED');
+    if (!openExecution(contract) && new Set(exact).size !== exact.length) violations.push('GENERATED_EXACT_IDENTITY_DUPLICATED');
   }
   for (const block of p.blocks) for (const entry of block.movements) {
     const resolved = resolvedMovement(entry), m = resolved?.descriptor;

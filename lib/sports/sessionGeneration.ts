@@ -1,3 +1,4 @@
+import { executableProjection } from './minimalSessionRepresentation';
 import type { SessionShapeDiagnostic } from './sessionShapeDiagnostics';
 import { openExecution, EXECUTABLE_DOSE_INSTRUCTIONS } from './sessionExecution';
 import { aerobicExecutionGate } from './aerobicExecutionGate';
@@ -51,7 +52,7 @@ export async function generateContractSession(contract: AllowedTrainingContract,
       ...(authority.intensityAuthority.version === 2 ? { codesCsv: authority.intensityAuthority.diagnostics?.join(',') } : {}) }); } catch { /* Non-authoritative diagnostic. */ }
   }
   const recent = structuredClone(history);
-  const intentInstruction = authority.generatedMovementAuthority && authority.intent && authority.intent.kind !== 'stimulus_only'
+  const intentInstruction = openExecution(authority) ? '\nIntent canónico: conserva su identidad; decide cómo materializarlo. Pattern y candidatos son conocimiento, no una selección obligatoria.' : authority.generatedMovementAuthority && authority.intent && authority.intent.kind !== 'stimulus_only'
     ? `\nIntent canónico: main debe satisfacer el patrón ${authority.intent.pattern} con un movimiento canónico permitido o una variante cuya semántica resuelva ese patrón. explanation y displayName no conceden compatibilidad.`
     : authority.intent && authority.intent.kind !== 'stimulus_only'
     ? `\nIntent canónico: el bloque main debe incluir al menos un ID de ${JSON.stringify(intentMatchingMovementIds(authority.intent, authority.allowedMovementIds))}. Otros IDs permitidos pueden acompañarlo. Un movimiento solo en warmup/cooldown no satisface el intent.` : '';
@@ -101,7 +102,7 @@ BASES CANÓNICAS SUGERIDAS:\n${JSON.stringify(authority.allowedMovementIds.map(i
     equipment: MOVEMENT_LIBRARY[id].equipment, technicalDemand: MOVEMENT_LIBRARY[id].technical_demand, doseBasis: MOVEMENT_LIBRARY[id].dose_basis ?? 'repetitions_or_cyclic' })))}` : '';
   const decisionInstruction = authority.generatedMovementAuthority ? coachInstruction.replace('Solo usa IDs y referencias suministrados.', 'Usa IDs canónicos suministrados o variantes del schema MOVIMIENTOS; las referencias deben ser suministradas.') : coachInstruction;
   const openInstructions = authority.contractVersion === 4 ? `Diseña a partir del intent abierto. Los IDs de movimientos y estructuras son conocimiento, NO acreditan equipo, habilidad o seguridad del atleta. No es necesario suitable_for ni mapping de estímulo/estructura.
-Usa movimientos canónicos o variantes estructuradas resolubles según MOVIMIENTOS, nunca nombres opacos ni garantías biomecánicas inventadas. Una familia no conocida requiere resolución, no permiso automático. El patrón principal del intent debe aparecer en main. Los demás movimientos son decisiones del Coach.
+Usa movimientos canónicos o variantes estructuradas resolubles según MOVIMIENTOS, nunca nombres opacos ni garantías biomecánicas inventadas. Una familia no conocida requiere resolución, no permiso automático. El intent es dirección de coaching, no plantilla: decide una implementación legítima. La ausencia de coincidencia exacta de patrón o mapping se registra UNKNOWN, no obliga a sustituir movimientos. Los demás movimientos son decisiones del Coach.
 Equipo y skill required deben constar available en doseContext.sufficiency. Unknown requiere otra propuesta o aclaración, no afirma contraindicación. Restricciones activas se comprueban sobre la semántica de cada movimiento. Referencias deben ser exactas compatibles. Propón cantidad, estructura, RPE/RIR o referencia válida y descanso; respeta tiempo, cardinalidad y work/rest.
 Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gramática representable, blocks y explanation breve. Mantén el schema de dosis descrito abajo.\n` : '';
   let prompt = `${openInstructions}${coach ? instructions.replace('La explicación y el objetivo se derivan por código, no los escribas.', 'El objetivo se deriva del intent.') + decisionInstruction : instructions}${timeInstruction}${representationInstruction}${intensityInstruction}${methodInstruction}${coach ? '' : doseInstruction + compositionInstruction}${variantInstruction}\nCONTRACT:\n${JSON.stringify(authority)}${intentInstruction}\nContexto no autoritativo:\n${context}\nOpciones ejecutables por alcance (preparationOnly nunca amplía main):\n${JSON.stringify(builderOptions)}\nHistorial para evitar duplicación:\n${JSON.stringify(recent)}`;
@@ -142,24 +143,29 @@ Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gram�
       if (retry) continue;
       return { ok: false as const, code: 'SESSION_PROPOSAL_INVALID', violations: parsed.violations, diagnostics: trace.summary() };
     }
+    if (parsed.representationAdvisories?.length) {
+      try { console.info?.('SESSION_REPRESENTATION_ADVISORY', { planningRunId: trace.summary().planningRunId, day: authority.targetDay, attempt: attempt + 1, codes: parsed.representationAdvisories }); } catch { /* Observation only. */ }
+    }
     missingDetails = [];
     if (authority.generatedMovementAuthority) {
       emitSessionCoachingDiagnostic('SESSION_MOVEMENT_PROPOSAL', parsed.proposal.blocks.flatMap(b => b.movements.map(m => ({
-        movementId: resolvedMovement(m) ? m.movementId : 'UNKNOWN', source: m.variant ? 'generated_variant' : 'canonical', ...(m.variant ? { variant: m.variant } : {}) }))));
+        movementId: resolvedMovement(m) ? m.movementId : 'UNKNOWN', source: m.variant ? 'generated_variant' : 'canonical', ...(m.variant ? { variant: resolvedMovement(m) ? { canonicalFamily: resolvedMovement(m)!.canonicalFamily, modifiers: resolvedMovement(m)!.modifiers } : { status: 'UNRESOLVED' } } : {}) }))));
       emitSessionCoachingDiagnostic('MOVEMENT_RESOLUTION', parsed.proposal.blocks.flatMap(b => b.movements.map(m => resolvedMovement(m) ?? { status: 'UNKNOWN' })));
     }
-    if (coach && !parsed.proposal.explanation?.trim()) {
+    if (coach && !openExecution(authority) && !parsed.proposal.explanation?.trim()) {
       previousErrors = ['SESSION_COACH_REASON_REQUIRED'];
       trace.emit(attempt + 1, 'checkSessionShape', 'SESSION_PROPOSAL_INVALID', previousErrors, !attempt, attempt ? 'attempt_limit' : 'dose_parse_retry');
       if (!attempt) continue;
       return { ok: false as const, code: 'SESSION_PROPOSAL_INVALID', violations: previousErrors, diagnostics: trace.summary() };
     }
-    const coachingDecision = coach ? { reason: parsed.proposal.explanation!, structureId: parsed.proposal.structureId,
+    const coachingDecision = coach ? { reason: typeof parsed.proposal.explanation === 'string' ? parsed.proposal.explanation : undefined, structureId: parsed.proposal.structureId,
       blocks: structuredClone(parsed.proposal.blocks) } : undefined;
-    if (coachingDecision) emitSessionCoachingDiagnostic('SESSION_COACH_DECISION', coachingDecision);
+    if (coachingDecision) emitSessionCoachingDiagnostic('SESSION_COACH_DECISION', { structureId: coachingDecision.structureId, blocks: executableProjection(parsed.proposal).projection.blocks });
     const validation = validateSessionAgainstTrainingContract(authority, parsed.proposal, (estimate, errors) =>
       emitSessionDoseAuthority(authority, { ...estimate, expectedSeconds: estimate.expectedSeconds ?? null }, errors, trace.summary().planningRunId ?? undefined),
-      (signal, state, block, movement) => { missingDetails.push(sufficiencyFailure(signal, state, block, movement)); });
+      (signal, state, block, movement) => { missingDetails.push(sufficiencyFailure(signal, state, block, movement)); }, assessment => {
+        try { console.info?.('SESSION_INTENT_ASSESSMENT', { planningRunId: trace.summary().planningRunId, day: authority.targetDay, attempt: attempt + 1, ...assessment }); } catch { /* Observation only. */ }
+      });
     if (!validation.ok) {
       if (authority.generatedMovementAuthority) emitSessionCoachingDiagnostic('MOVEMENT_FEASIBILITY', { result: 'REJECT', errors: movementDiagnosticCodes(validation.violations) });
       if (coach) emitSessionCoachingDiagnostic('SESSION_AUTHORITY_RESOLUTION', { rejections: validation.violations });
@@ -181,7 +187,7 @@ Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gram�
           calculatedLoad: calculatedLoad(authority, m.prescription), reference: m.prescription.intensity && 'referenceId' in m.prescription.intensity
             ? authority.doseContext?.references.filter(r => r.id === (m.prescription.intensity as { referenceId: string }).referenceId)
               .map(({ id, metric, value, unit }) => ({ id, metric, value, unit }))[0] : null }))) });
-      if (!duplicate) emitSessionCoachingDiagnostic('BUILDER_OUTPUT', validation.proposal);
+      if (!duplicate) emitSessionCoachingDiagnostic('BUILDER_OUTPUT', executableProjection(validation.proposal).projection);
     }
     if (!duplicate && authority.generatedMovementAuthority) emitSessionCoachingDiagnostic('SESSION_MOVEMENT_ADMISSION', {
       result: 'PASS', descriptors: validation.proposal.blocks.flatMap(b => b.movements.map(m => resolvedMovement(m))) });

@@ -32,7 +32,7 @@ export function movementPrescriptionRequirements(context: PrescriptionSignals, r
   const requireSignal = (signal: string, reason: string) => checks.push({
     requirement: { signal, reason, requiredFor: request.movementId, criticality: 'required', acceptableFallbacks: [] }, evidence: [evidence(signal)] });
   const resolved = request.variant ? resolvedMovement(request) : undefined;
-  const movement = request.variant ? resolved?.descriptor : MOVEMENT_LIBRARY[request.movementId];
+  const movement = request.variant ? resolved?.descriptor : Object.hasOwn(MOVEMENT_LIBRARY,request.movementId) ? MOVEMENT_LIBRARY[request.movementId] : undefined;
   if (!movement || (!request.openDesign && !movement.discipline.some(discipline => discipline === request.discipline))) {
     checks.push({ requirement: { signal: 'movement.authorized', reason: 'movement_not_authorized', requiredFor: request.movementId,
       criticality: 'required', acceptableFallbacks: [] }, evidence: [{ signal: 'movement.authorized', ...unknown }] });
@@ -98,7 +98,7 @@ export function prescriptionGenerationOptions(context: PrescriptionSignals, refe
   variants: Record<string, MovementVariantProposal> = {}, openDesign = false) {
   return movementIds.map(movementId => {
     const variant = variants[movementId];
-    const movement = variant ? resolvedMovement({ movementId, variant })?.descriptor : MOVEMENT_LIBRARY[movementId];
+    const movement = variant ? resolvedMovement({ movementId, variant })?.descriptor : Object.hasOwn(MOVEMENT_LIBRARY,movementId) ? MOVEMENT_LIBRARY[movementId] : undefined;
     const enduranceDose = !!movement && ['run', 'cyclic'].includes(movement.movement_pattern);
     // Intensity remains a Builder choice within 3C. No new zone or adaptation-specific intensity is invented here.
     const decision = resolvePrescriptionDataSufficiency(context, references, { movementId, discipline, openDesign, ...(variant ? { variant } : {}),

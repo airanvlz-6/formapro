@@ -1,3 +1,4 @@
+import { coachMovementName, coachReferenceText } from './coachExecutionAdmission';
 import { openExecution } from './sessionExecution';
 import type { AllowedTrainingContract } from './allowedTrainingContract';
 import type { StructuredSessionProposal, MovementDose } from './structuredSession';
@@ -59,7 +60,9 @@ export function humanCoachingProjection(c: AllowedTrainingContract, p: Structure
     const i = d.intensity;
     if (!i) return "";
     if (i.kind === 'rpe' || i.kind === 'rir') return `${i.kind.toUpperCase()} ${range(i.value, i.max ?? i.value)}`;
-    if (i.kind === 'percent_1rm') { const kg = calculatedLoad(c, d)!; return `${range(kg.minimumKg, kg.maximumKg)} kg (${range(i.value, i.max ?? i.value)}% 1RM)`; }
+    const unresolved = coachReferenceText(c, d);
+    if (unresolved) return unresolved;
+    if (i.kind === 'percent_1rm') { const kg = calculatedLoad(c, d); if (!kg) return `${range(i.value, i.max ?? i.value)}% 1RM (sin conversión a kg)`; return `${range(kg.minimumKg, kg.maximumKg)} kg (${range(i.value, i.max ?? i.value)}% 1RM)`; }
     const ref = doseReference(c, i)!;
     const raceLabels: Readonly<Record<string, string>> = { halfMarathon: 'Ritmo medio de media maratón', marathon: 'Ritmo medio de maratón' };
     const name = ref.intensityEvidence?.zoneCompatibility?.sourceZone ?? (showPerceptionGuide && ref.metric && Object.hasOwn(raceLabels, ref.metric) ? raceLabels[ref.metric]
@@ -69,20 +72,21 @@ export function humanCoachingProjection(c: AllowedTrainingContract, p: Structure
   };
   const blocks = p.blocks.map(b => {
     const f = b.formatDose, format = WORKOUT_STRUCTURE_LIBRARY[p.structureId]?.formato;
-    const formatLines = b.blockType !== 'main' ? [] : [label(structureLabels, p.structureId, 'structure', 'Bloque programado'),
+    const formatLines = b.blockType !== 'main' ? [] : [label(structureLabels, p.structureId, 'structure', openExecution(c) ? p.structureId.replaceAll('_',' ') : 'Bloque programado'),
       ...(f?.rounds ? [`${f.rounds} rondas`] : []), ...(f?.durationSeconds ? [`Duración del bloque: ${formatDuration(f.durationSeconds)}`] : []),
       ...(f?.timeCapSeconds ? [`Tiempo límite: ${formatDuration(f.timeCapSeconds)}`] : []),
       ...(f?.intervalSeconds ? [`Cada ${formatDuration(f.intervalSeconds)}${f.workSeconds ? `: ${formatDuration(f.workSeconds)} de trabajo + ${formatDuration(f.restSeconds ?? 0)} de descanso` : ''}`] : []),
       ...(format === 'complex' && f?.restSeconds !== undefined ? [`Descanso entre rondas: ${formatDuration(f.restSeconds)}`] : [])];
-    return { heading: { warmup: 'CALENTAMIENTO', main: 'BLOQUE PRINCIPAL', cooldown: 'VUELTA A LA CALMA' }[b.blockType], formatLines,
+    if (b.formatInstruction) formatLines.push(b.formatInstruction);
+    return { heading: b.title ?? { warmup: 'CALENTAMIENTO', main: 'BLOQUE PRINCIPAL', cooldown: 'VUELTA A LA CALMA' }[b.blockType], formatLines,
       movements: b.movements.map(m => { const d = m.prescription;
         const target = showPerceptionGuide && b.blockType === 'main' && c.intensityAuthority?.status === 'RESOLVED'
           ? c.intensityAuthority.targets.find(t => t.movementId === m.movementId) : undefined;
         const guide = target?.primary.kind === 'reference' ? target.secondary : undefined;
         const amount = d.reps ? `${d.reps}${d.perSide ? ' por lado' : ''}${openExecution(c) && d.durationSeconds ? ` · ${formatDuration(d.durationSeconds)}` : ''}${openExecution(c) && d.distanceMeters ? ` · ${num(d.distanceMeters)} m` : ''}` : d.durationSeconds ? formatDuration(d.durationSeconds) + (openExecution(c) && d.distanceMeters ? ` · ${num(d.distanceMeters)} m` : '')
           : d.distanceMeters === undefined ? '' : d.distanceMeters >= 1000 ? `${num(d.distanceMeters! / 1000)} km` : `${num(d.distanceMeters!)} m`;
-        return { name: m.variant ? resolvedMovement(m)!.displayName : label(movementLabels, m.movementId, 'movement', 'Ejercicio programado'),
-          dose: `${d.sets ? `${d.sets}${amount ? ' × ' : ' series'}` : ''}${amount}${!d.reps && d.perSide ? ' por lado' : ''}${d.intensity ? ` · ${intensity(d)}` : ''}${d.doseInstruction ? ` · ${d.doseInstruction}` : ''}${guide ? ` · ${guide.metric.toUpperCase()} esperado ${range(guide.value, guide.max ?? guide.value)}` : ''}`,
+        return { name: openExecution(c) && !resolvedMovement(m) ? coachMovementName(m) : m.variant ? resolvedMovement(m)!.displayName : label(movementLabels, m.movementId, 'movement', 'Ejercicio programado'),
+          dose: `${d.sets ? `${d.sets}${amount ? ' × ' : ' series'}` : ''}${amount}${!d.reps && d.perSide ? ' por lado' : ''}${d.intensity ? ` · ${intensity(d)}` : ''}${d.doseInstruction ? ` · ${d.doseInstruction}` : ''}${d.unresolvedReferenceInstruction ? ' · Referencia numérica no disponible; se conserva el trabajo sin conversión.' : ''}${guide ? ` · ${guide.metric.toUpperCase()} esperado ${range(guide.value, guide.max ?? guide.value)}` : ''}`,
           rest: d.restSeconds === undefined ? null : `${b.blockType === 'main' && format === 'intervals' ? 'Descanso entre intervalos' : 'Descanso'}: ${formatDuration(d.restSeconds)}`,
           tempo: d.tempo ? `Tempo: ${d.tempo.join('-')}` : null };
       }) };

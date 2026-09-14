@@ -130,7 +130,8 @@ export function buildWeeklyCoachingContext(input: WeeklyContractInput, contract:
       weaknesses: bounded(athlete?.development.filter(d => d.value.estado === 'activa').map(d => ({ source: d.source,
         ...pick(d.value, ['id', 'nombre', 'diagnostico', 'estado', 'prioridad', 'confianza', 'progreso', 'ultimaRevision', 'pattern']) })) ?? [], 6),
       protectedPrescriptions: bounded(week.filter(p => p.date > asOfDate && !!input.fixed[p.day]), 7),
-      availability: input.allowed, ...(input.weeklyAvailability ? { weeklyAvailability: input.weeklyAvailability } : {}), daySignals: { refs: daySignalRefs, sets: signalSets } },
+      availability: input.allowed, ...(input.weeklyAvailability ? { weeklyAvailability: input.weeklyAvailability } : {}),
+      athleteCoachingKnowledge: input.athleteCoachingKnowledge ?? [], daySignals: { refs: daySignalRefs, sets: signalSets } },
     options: optionLinks, trainingKnowledge: optionKnowledge,
   });
 }

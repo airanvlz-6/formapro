@@ -24,7 +24,7 @@ export function wholeWeekInput(week: string, rows: readonly any[], evidence: any
     const intent = stored?.objective?.intent, method = intent?.kind === 'adaptation' ? transferMethod(intent.methodId) : undefined;
     // Recompute from admitted facts, never trust the stored duration estimate.
     let adaptationDoseSatisfied: boolean | undefined;
-    if (structured && stored.timeAuthority?.policyId) {
+    if (structured && stored.executionPolicy !== 'coach-executable-v1' && stored.timeAuthority?.policyId) {
       const temporal = timeAuthorityForIntent(stored.timeBudget, intent);
       const same = sameSessionTimeDoseAuthority(temporal, stored.timeAuthority);
       const estimate = estimateSessionDuration({ doseContext: { references: stored.references || [], timeAuthority: temporal } } as AllowedTrainingContract, proposal);
@@ -47,7 +47,7 @@ export function wholeWeekInput(week: string, rows: readonly any[], evidence: any
     const intensity = main.map((m: any) => ({ movementId:resolvedMovement(m)?.identity ?? m.movementId, intensity:m.prescription.intensity || null,
       reference: stored.references?.filter((r: any) => r.id === m.prescription.intensity?.referenceId).map((r:any)=>({id:r.id,value:r.value,unit:r.unit,movementId:r.movementId})) || [] }));
     const load = ['TRAIN','RECOVERY'].includes(state) ? plannedPrescriptionLoad(row,date,`${day}:${index}`) : null;
-    return { id:`${day}:${index}`,date,discipline:row.tipo || null,state,protected:!!slot.protected,structured,
+    return { coachExecution: stored?.executionPolicy === 'coach-executable-v1', id:`${day}:${index}`,date,discipline:row.tipo || null,state,protected:!!slot.protected,structured,
       ...(adaptationDoseSatisfied !== undefined ? { adaptationDoseSatisfied } : {}),
       adaptationId:['adaptation', 'open_coach'].includes(intent?.kind) ? intent.adaptationId : null,methodId:method?.id || (intent?.method?.kind === 'known' ? intent.method.id : null),weaknessId:intent?.weaknessId || null,role,
       structure:proposal?.structureId || null,stimulus:proposal?.stimulusId || null,movements,patterns,

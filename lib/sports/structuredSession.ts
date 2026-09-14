@@ -1,3 +1,4 @@
+import { preserveWorkWithoutReference, validateCoachExecution } from './coachExecutionAdmission';
 import { safeViolations } from './builderDiagnostics';
 import { minimalSessionRepresentation, executableProjection } from './minimalSessionRepresentation';
 import { assessSessionIntent } from './sessionIntentAssessment';
@@ -20,12 +21,13 @@ import { validateRunningMethodDose } from './runningMethodDoseAuthority';
 import { resolveSessionMovement, resolvedMovement, type MovementVariantProposal } from './movementVariants';
 
 export type MovementDose = { sets?: number; reps?: number; durationSeconds?: number; distanceMeters?: number; restSeconds?: number;
+  referenceNotice?: string; unresolvedReferenceInstruction?: string;
   doseInstruction?: string; intensity?: DoseIntensity; tempo?: [number, number, number, number]; perSide?: boolean };
 export type StructuredSessionProposal = {
   schemaVersion?: 2;
   stimulusId: string;
   structureId: string;
-  blocks: { blockType: 'warmup' | 'main' | 'cooldown'; formatDose?: FormatDose; movements: { movementId: string; variant?: MovementVariantProposal; prescription: MovementDose }[] }[];
+  blocks: { title?: string; formatInstruction?: string; blockType: 'warmup' | 'main' | 'cooldown'; formatDose?: FormatDose; movements: { movementId: string; variant?: MovementVariantProposal; prescription: MovementDose }[] }[];
   explanation?: string;
 };
 export type SessionValidation = { ok: true; proposal: StructuredSessionProposal; representationAdvisories?: string[] } | { ok: false; violations: string[] };
@@ -142,16 +144,13 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
   if (!authority.ok) return { ok: false, violations: authority.errors.map(e => `CONTRACT:${e}`) };
   const p = checked.proposal;
   if (openExecution(contract)) {
+    if (!p.stimulusId) p.stimulusId = contract.stimulusId;
+    preserveWorkWithoutReference(contract, p);
     const projected = executableProjection(p);
     if (projected.errors.length) return { ok: false, violations: projected.errors };
-    // Factual dose/identity/clock validation runs AFTER minimal interpretation. Decorative
-    // representation fields are not admission constraints and are absent from this projection.
-    const executionCheck = inspectSessionRepresentation(projected.projection, true);
-    if (!executionCheck.ok) {
-      const hard = executionCheck.violations.filter(code => !code.startsWith('DUPLICATE_MOVEMENT:'));
-      if (hard.length) return { ok: false, violations: hard };
-    }
-    try { observeIntent?.(assessSessionIntent(contract, p)); } catch { /* Non-authoritative. */ }
+    try { observeIntent?.(assessSessionIntent(contract, p)); } catch { /* Knowledge only. */ }
+    const errors = validateCoachExecution(contract, p, observeRequirement);
+    return errors.length ? { ok: false, violations: errors } : checked;
   }
   const violations: string[] = [];
   if(contract.runningEventPreparation && contract.discipline==='carrera') {

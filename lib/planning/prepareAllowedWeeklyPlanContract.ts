@@ -138,6 +138,7 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
   } catch { /* Diagnostic metadata is never an admission requirement. */ }
   return { ok: true as const, input: { targetWeekStart: request.targetWeekStart, prescriptionScope: c.scope,
     ...(declaration ? { weeklyAvailability: declaration } : {}),
+    ...(Array.isArray(c.profile.perfil?.coaching_knowledge) ? { athleteCoachingKnowledge: c.profile.perfil.coaching_knowledge } : {}),
     ...(request.openCoachVersion ? { openCoachVersion: request.openCoachVersion } : {}),
     maxExecutableDays: c.max, completeNewWeek: !request.snapshot && !hasPast, allowed: c.allowed, contexts, fixed,
     daySufficiency: projectWeeklyPrescriptionSignals(c.profile, request.targetWeekStart, c.scope.managedDisciplines, c.allowed, availabilityConfirmed),

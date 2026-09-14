@@ -42,11 +42,13 @@ export function feasibilityInputErrors(input: ContractInput): string[] {
   const r = input.restrictionsSnapshot;
   if (!r || !dateValid(r.asOfDate) || !Array.isArray(r.areas) || !Array.isArray(r.restrictions) || !Array.isArray(r.reassessments)) return [...errors, 'RESTRICTIONS_INVALID'];
   // Flags are evaluated per candidate; unresolved free-text-only restrictions still reject.
+  if (input.intent?.kind !== 'open_coach' || 'contractVersion' in input && (input as ContractInput & { executionPolicy?: string }).executionPolicy !== 'coach-executable-v1') {
   for (const n of [...r.restrictions, ...r.reassessments]) {
     if (!activeRestrictionFlags([n]).length && !Object.hasOwn(MOVEMENT_LIBRARY, normalizeTrainingKey(n.movement))) errors.push('RESTRICTION_UNRESOLVED');
   }
   if (r.areas.some(area => !Object.values(MOVEMENT_LIBRARY).some(m => m.avoid_with?.includes(area)))) errors.push('RESTRICTION_AREA_UNSUPPORTED');
   if (r.state && r.state.estado !== 'normal' && !r.areas.length && !r.restrictions.length && !r.reassessments.length) errors.push('RESTRICTION_UNRESOLVED');
+  }
   const external = input.externalLoadContext;
   if (!external || external.policy !== 'read_only_context' || external.source !== 'server_training_sources_and_records'
     || !Array.isArray(external.activities) || !Array.isArray(external.records)) errors.push('EXTERNAL_CONTEXT_INVALID');

@@ -16,26 +16,26 @@ export function plannedPrescriptionLoad(row: Record<string,any>, date:string, id
   if(stored.schemaVersion!==2||!checked.ok||checked.proposal.schemaVersion!==2) return resolveSessionLoad({id,date,kind:'planned',discipline:row.tipo||null,
     source,segments:[],executionStatus:row.completada===true?'completed_flag':'unknown',diagnostics:['LEGACY_OR_INVALID_DOSE_UNKNOWN']});
   const proposal=checked.proposal, structure=WORKOUT_STRUCTURE_LIBRARY[proposal.structureId];
-  if(!structure) return resolveSessionLoad({id,date,kind:'planned',discipline:row.tipo||null,source,segments:[],executionStatus:'unknown',diagnostics:['STRUCTURE_UNKNOWN']});
+  if(!structure && !execution) return resolveSessionLoad({id,date,kind:'planned',discipline:row.tipo||null,source,segments:[],executionStatus:'unknown',diagnostics:['STRUCTURE_UNKNOWN']});
   const refs=Array.isArray(stored.references)?stored.references:[], segments:SegmentInput[]=[];
   for(const [bi,b] of proposal.blocks.entries()){
-    const format=b.blockType==='main'?structure.formato:null, f=b.formatDose;
+    const format=b.blockType==='main'?structure?.formato:null, f=b.formatDose;
     // Unknown clock-driven repetition counts are never multiplied as one completed round.
     const open=!!format&&['amrap','density','death_by','emom','e2mom','ladder'].includes(format);
     const multiplier=open?null:f?.rounds??1;
     for(const [mi,m] of b.movements.entries()){
       const meta=resolvedMovement(m)?.descriptor,d=m.prescription;
-      if(!meta)throw new Error('TRAINING_LOAD_MOVEMENT_UNKNOWN');
+      if(!meta && !execution)throw new Error('TRAINING_LOAD_MOVEMENT_UNKNOWN');
       const i=d.intensity,ref=i&&'referenceId'in i?refs.find((r:any)=>r.id===i.referenceId):null;
       let kg:SegmentInput['kg'];
       if(!m.variant&&i?.kind==='percent_1rm'&&ref?.kind==='1rm'&&ref.movementId===m.movementId&&ref.unit==='kg'&&positive(ref.value))
         kg={minimum:Math.round(ref.value*i.value)/100,maximum:Math.round(ref.value*(i.max??i.value))/100};
-      segments.push({id:`${bi}:${mi}`,movementId:m.movementId,pattern:meta.movement_pattern,source:`${source}.proposal.blocks.${bi}.movements.${mi}`,
+      segments.push({id:`${bi}:${mi}`,movementId:m.movementId,pattern:meta?.movement_pattern??null,source:`${source}.proposal.blocks.${bi}.movements.${mi}`,
         sets:d.sets??1,reps:d.reps,durationSeconds:d.durationSeconds===undefined?undefined:d.durationSeconds*(execution&&d.perSide?2:1),distanceMeters:d.distanceMeters===undefined?undefined:d.distanceMeters*(execution&&d.perSide?2:1),restSeconds:execution?d.restSeconds:d.restSeconds??0,
-        perSide:d.perSide,...(execution && d.reps && d.perSide === undefined ? { repetitionSideUnknown: true } : {}),multiplier,externalLoadApplicable:!!kg||meta.equipment.some(e=>['barra','mancuerna','kettlebell','sandbag','balon_medicinal','disco','sled','yoke'].includes(e)),
+        perSide:d.perSide,...(execution && d.reps && d.perSide === undefined ? { repetitionSideUnknown: true } : {}),multiplier,externalLoadApplicable:meta ? !!kg||meta.equipment.some(e=>['barra','mancuerna','kettlebell','sandbag','balon_medicinal','disco','sled','yoke'].includes(e)) : null,
         ...(kg?{kg}:{}),intensity:i?{prescribed:i,reference:ref||null}:null,formatContext:{blockType:b.blockType,format,dose:f||null,
           ...(m.variant ? { variant: structuredClone(m.variant) } : {})},
-        categories:{impact:meta.impact,technical:meta.technical_demand,energySystem:STIMULUS_LIBRARY[proposal.stimulusId]?.sistema_energetico||'unknown',structureStimulus:structure.stimulus_type}});
+        categories:{impact:meta?.impact??'unknown',technical:meta?.technical_demand??'unknown',energySystem:STIMULUS_LIBRARY[proposal.stimulusId]?.sistema_energetico||'unknown',structureStimulus:structure?.stimulus_type??'unknown'}});
     }
     if(format==='complex'&&f?.rounds&&f.restSeconds!==undefined)segments.push({
       id:`${bi}:round_recovery`,movementId:null,pattern:null,source:`${source}.proposal.blocks.${bi}.formatDose`,

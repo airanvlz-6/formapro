@@ -70,6 +70,12 @@ export function projectPrescriptionSignals(raw: unknown, asOfDate?: string, sess
     if (daily && ['available', 'unavailable', 'ambiguous', 'unknown'].includes(daily.state))
       set(id, daily.state, `usuarios.perfil.prescription_access.${asOfDate}.${id}`, daily.updatedAt || null);
   }
+  // Specific athlete-reported movement capability; never derived from general level.
+  for (const [id, raw] of Object.entries(stored)) if (id.startsWith('skill.movement.')) {
+    const entry = object(raw);
+    if (entry.source === 'athlete_report' && ['available','unavailable','unknown'].includes(entry.state))
+      signals[id] = { state: entry.state, source: `usuarios.perfil.prescription_signals.${id}`, updatedAt: entry.updatedAt ?? null };
+  }
   return { version: 1, signals, location: profile.lugar_entreno ?? null, environment,
     maxHrMethod: profile.fc_max_metodo === 'formula_edad' ? 'estimated' : profile.fc_max_metodo === 'real' || (typeof profile.fc_max === 'number' && profile.fc_max > 0 && !profile.fc_max_metodo)
       || (typeof profile.fc_max === 'string' && /^\d+(?:\.\d+)?$/.test(profile.fc_max.trim()) && Number(profile.fc_max) > 0 && !profile.fc_max_metodo) ? 'declared_real' : 'unknown' };

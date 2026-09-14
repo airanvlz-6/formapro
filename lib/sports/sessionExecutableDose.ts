@@ -1,13 +1,14 @@
 import type { AllowedTrainingContract } from './allowedTrainingContract';
 import type { MovementDose, StructuredSessionProposal } from './structuredSession';
 import { WORKOUT_STRUCTURE_LIBRARY } from './workoutStructureLibrary';
-import { executionInstructionComplete } from './sessionExecution';
+import { resolveDoseInstruction, executionInstructionComplete } from './sessionExecution';
 
 /** Facts and explicit cadence only. No universal seconds/rep, setup time or required training duration. */
 function movementTime(c: AllowedTrainingContract, d: MovementDose) {
+  if (d.sets === 0) return {minimumSeconds:0,maximumSeconds:0};
   let min = 0, max: number | null = null;
   if (d.durationSeconds !== undefined) min = max = d.durationSeconds * (d.perSide ? 2 : 1);
-  else if (d.reps && d.tempo) {
+  else if (d.reps && d.tempo?.length === 4 && d.tempo.some(n=>n>0)) {
     min = d.reps * d.tempo.reduce((a,b)=>a+b,0) * (d.perSide ? 2 : 1);
     max = d.perSide === undefined ? null : min;
   } else if (d.distanceMeters && d.intensity && 'referenceId' in d.intensity) {
@@ -17,13 +18,14 @@ function movementTime(c: AllowedTrainingContract, d: MovementDose) {
       min = range.min*d.distanceMeters/1000*(d.perSide?2:1); max = range.max*d.distanceMeters/1000*(d.perSide?2:1);
     }
   }
-  const n = d.sets ?? 1, rest = (n-1)*(d.restSeconds??0);
-  if (n > 1 && d.restSeconds === undefined) max = null;
+  const n = d.sets ?? 1, rest = Math.max(0,n-1)*(d.restSeconds??0);
+  if (n > 1 && d.restSeconds === undefined || d.doseInstruction && !resolveDoseInstruction(d.doseInstruction)) max = null;
   return {minimumSeconds:n*min+rest,maximumSeconds:max===null?null:n*max+rest};
 }
 function blockTime(c: AllowedTrainingContract, b: StructuredSessionProposal['blocks'][number]) {
+  if (b.formatDose?.rounds === 0) return {minimumSeconds:0,maximumSeconds:0};
   const values=b.movements.map(m=>movementTime(c,m.prescription)), rounds=b.formatDose?.rounds??1;
-  const recovery=(rounds-1)*(b.formatDose?.restSeconds??0);
+  const recovery=Math.max(0,rounds-1)*(b.formatDose?.restSeconds??0);
   return { minimumSeconds:values.reduce((n,v)=>n+v.minimumSeconds,0)*rounds+recovery,
     maximumSeconds:values.some(v=>v.maximumSeconds===null)||rounds>1&&b.formatDose?.restSeconds===undefined?null:values.reduce((n,v)=>n+v.maximumSeconds!,0)*rounds+recovery };
 }
@@ -32,12 +34,17 @@ export function estimateExecutableDuration(c: AllowedTrainingContract, p: Struct
     const f=b.formatDose, time=blockTime(c,b);
     // Clock describes the block, not an analytical estimate of repetitions.
     const clock=f?.durationSeconds ?? (f?.rounds&&f.intervalSeconds?f.rounds*f.intervalSeconds:undefined);
-    return {blockType:b.blockType,...(clock!==undefined?{minimumSeconds:clock,maximumSeconds:clock}
+    return {blockType:b.blockType,...(clock!==undefined&&clock>0?{minimumSeconds:clock,maximumSeconds:clock}
       :f?.timeCapSeconds?{minimumSeconds:time.minimumSeconds,maximumSeconds:f.timeCapSeconds}:time)};
   });
-  const minimumSeconds=Math.ceil(parts.reduce((n,v)=>n+v.minimumSeconds,0));
-  const maximumSeconds=parts.some(v=>v.maximumSeconds===null)?null:Math.ceil(parts.reduce((n,v)=>n+v.maximumSeconds!,0));
-  return {minimumSeconds,maximumSeconds,expectedSeconds:maximumSeconds===minimumSeconds?minimumSeconds:null,parts,
+  const rawMinimum=Math.ceil(parts.reduce((n,v)=>n+v.minimumSeconds,0));
+  const rawMaximum=parts.some(v=>v.maximumSeconds===null)?null:Math.ceil(parts.reduce((n,v)=>n+v.maximumSeconds!,0));
+  const minimumSeconds=Number.isFinite(rawMinimum)?rawMinimum:0;
+  const maximumSeconds=rawMaximum!==null&&Number.isFinite(rawMaximum)?rawMaximum:null;
+  const safeParts=parts.map(p=>({...p,minimumSeconds:Number.isFinite(p.minimumSeconds)?p.minimumSeconds:0,
+    maximumSeconds:p.maximumSeconds!==null&&Number.isFinite(p.maximumSeconds)?p.maximumSeconds:null}));
+  return {minimumSeconds,maximumSeconds,expectedSeconds:maximumSeconds===minimumSeconds?minimumSeconds:null,parts:safeParts,
+    ...(rawMinimum===Infinity?{minimumExceedsNumericRange:true}:{}),
     transitionMaximumSeconds:0,policy:'explicit_time_and_cadence_partial_v1'};
 }
 export function validateExecutableFormat(c: AllowedTrainingContract, p: StructuredSessionProposal) {

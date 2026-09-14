@@ -41,6 +41,7 @@ export type WeeklyContractInput = {
   /** Server-projected date/assignment evidence; absent only for legacy pure callers. */
   daySufficiency?: Record<string, Record<string, PrescriptionSignals>>;
   weeklyAvailability?: import('../sports/weeklyAvailabilityDeclaration').WeeklyAvailabilityDeclaration;
+  athleteCoachingKnowledge?: readonly unknown[];
   doseCapabilities?: DoseCapabilityProfile;
   transferPermissions?: CanonicalTransferPermissions;
   targetWeekStart: string; prescriptionScope: PrescriptionScope; maxExecutableDays: number;

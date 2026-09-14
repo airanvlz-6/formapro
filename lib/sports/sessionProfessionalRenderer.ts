@@ -1,3 +1,4 @@
+import { coachMovementName, coachReferenceText } from './coachExecutionAdmission';
 import { openExecution } from './sessionExecution';
 import type { AllowedTrainingContract } from './allowedTrainingContract';
 import type { MovementDose, StructuredSessionProposal } from './structuredSession';
@@ -22,8 +23,11 @@ function intensity(c: AllowedTrainingContract, d: MovementDose): string {
   const i = d.intensity;
   if (!i) return "";
   if (i.kind === 'rpe' || i.kind === 'rir') return `${i.kind.toUpperCase()} ${range(i.value, i.max ?? i.value)}`;
+  const unresolved = coachReferenceText(c, d);
+  if (unresolved) return unresolved;
   const ref = doseReference(c, i)!;
   if (i.kind === 'percent_1rm') { const load = calculatedLoad(c, d)!;
+    if (!load) return `${range(i.value, i.max ?? i.value)}% 1RM (sin conversión a kg)`;
     return `${range(load.minimumKg, load.maximumKg)} kg (${range(i.value, i.max ?? i.value)}% 1RM)`; }
   const v = typeof ref.value === 'number' ? { min: ref.value, max: ref.value } : ref.value;
   const metric = ref.intensityEvidence?.zoneCompatibility?.sourceZone ?? (/^z[1-5]$/.test(ref.metric || '') ? ref.metric!.toUpperCase()
@@ -35,11 +39,12 @@ function movement(c: AllowedTrainingContract, id: string, d: MovementDose, displ
     : [d.durationSeconds ? formatDuration(d.durationSeconds) : '', d.distanceMeters ? d.distanceMeters >= 1000 ? `${number(d.distanceMeters / 1000)} km` : `${number(d.distanceMeters)} m` : ''].filter(Boolean).join(' · ');
   return `- **${displayName ?? label(id)}**\n  ${d.sets ? `${d.sets}${amount ? ' × ' : ' series'}` : ''}${amount}${!d.reps && d.perSide ? ' por lado' : ''}${d.intensity ? ` @ ${intensity(c, d)}` : ''}`
     + (d.doseInstruction ? `\n  Instrucción: ${d.doseInstruction}` : '')
+    + (d.unresolvedReferenceInstruction ? '\n  Referencia numérica no disponible; se conserva el trabajo sin conversión.' : '')
     + (d.restSeconds !== undefined ? `\n  Descanso: ${formatDuration(d.restSeconds)}` : '')
     + (d.tempo ? `\n  Tempo: ${d.tempo.join('-')}` : '');
 }
 function formatTitle(p: StructuredSessionProposal): string {
-  const format = WORKOUT_STRUCTURE_LIBRARY[p.structureId].formato, f = p.blocks.find(b => b.blockType === 'main')!.formatDose;
+  const format = WORKOUT_STRUCTURE_LIBRARY[p.structureId]?.formato ?? p.structureId, f = p.blocks.find(b => b.blockType === 'main')!.formatDose;
   const title = ({ amrap: 'AMRAP', emom: 'EMOM', e2mom: 'Cada 2 min', for_time: 'For Time', strength_sets: 'Series de fuerza',
     complex: 'Complejo', continuous: 'Continuo', intervals: 'Intervalos', skill_practice: 'Práctica técnica' } as Record<string, string>)[format] || label(format);
   return `${f?.rounds ? `${f.rounds} rondas · ` : ''}${title}${f?.durationSeconds ? ` ${formatDuration(f.durationSeconds)}` : ''}`
@@ -82,8 +87,8 @@ export function renderProfessionalSession(c: AllowedTrainingContract, p: Structu
     stimulusId: c.stimulusId, intent: structuredClone(intent), structuredPrescription,
     por_que: why, debilidad_relacionada: dc.weakness?.name || dc.weakness?.id || null,
     descripcion: `**OBJETIVO**\n${objective}\n\n**DURACIÓN**\n${durationText}\n\n`
-      + p.blocks.map(b => `**${headings[b.blockType]}**\n${b.blockType === 'main' ? formatTitle(p) + '\n' : ''}`
-        + b.movements.map(m => movement(c, m.movementId, m.prescription, m.variant ? resolvedMovement(m)!.displayName : undefined)).join('\n')).join('\n\n') };
+      + p.blocks.map(b => `**${b.title ?? headings[b.blockType]}**\n${b.formatInstruction ? b.formatInstruction + '\n' : ''}${b.blockType === 'main' ? formatTitle(p) + '\n' : ''}`
+        + b.movements.map(m => movement(c, m.movementId, m.prescription, openExecution(c) ? coachMovementName(m) : m.variant ? resolvedMovement(m)!.displayName : undefined)).join('\n')).join('\n\n') };
 }
 
 export const STRUCTURED_DOSE_INSTRUCTIONS = `Devuelve SOLO JSON con schemaVersion:2, stimulusId, structureId y blocks. Reutiliza IDs exactos del contrato.

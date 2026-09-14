@@ -1,3 +1,4 @@
+import { validateCoachExecution } from './coachExecutionAdmission';
 import { openExecution, instructionReferenceErrors } from './sessionExecution';
 import { estimateExecutableDuration, validateExecutableFormat } from './sessionExecutableDose';
 import type { AllowedTrainingContract } from './allowedTrainingContract';
@@ -47,22 +48,26 @@ export function doseReference(c: AllowedTrainingContract, intensity: DoseIntensi
   return intensity && 'referenceId' in intensity ? c.doseContext?.references.find(r => r.id === intensity.referenceId) : undefined;
 }
 /** Exact reference movement only in v1. Variants use technical RPE instead of borrowing another lift's RM. */
-function intensityErrors(c: AllowedTrainingContract, entry: MovementEntry, i?: DoseIntensity): string[] {
+export function referenceCompatibilityErrors(c: AllowedTrainingContract, entry: MovementEntry, i?: DoseIntensity): string[] {
   const movementId = entry.movementId;
   if (!i) return openExecution(c) ? [] : ['SESSION_DOSE_INCOMPLETE:INTENSITY'];
   if (i.kind === 'rpe' || i.kind === 'rir') return [];
-  if (entry.variant) return ['GENERATED_REFERENCE_NOT_AUTHORIZED'];
+  if (entry.variant && !openExecution(c)) return ['GENERATED_REFERENCE_NOT_AUTHORIZED'];
   const r = doseReference(c, i);
-  if (!r) return ['BENCHMARK_RESOLUTION:REFERENCE_NOT_ALLOWED'];
+  if (!r) return openExecution(c) ? [] : ['BENCHMARK_RESOLUTION:REFERENCE_NOT_ALLOWED'];
+  if (entry.variant && i.kind === 'percent_1rm') return ['BENCHMARK_RESOLUTION:ONE_RM_MOVEMENT_REQUIRED'];
   if (i.kind === 'percent_1rm') return r.kind === '1rm' && r.movementId === movementId ? [] : ['BENCHMARK_RESOLUTION:ONE_RM_MOVEMENT_REQUIRED'];
+  if (openExecution(c) && !resolvedMovement(entry)) return r.kind === 'running' ? [] : ['BENCHMARK_RESOLUTION:REFERENCE_KIND_MISMATCH'];
   return r.kind === 'running' && (c.contractVersion === 4 ? ['run'] : ['run', 'cyclic']).includes(MOVEMENT_LIBRARY[movementId]?.movement_pattern)
     ? [] : ['BENCHMARK_RESOLUTION:RUNNING_REFERENCE_MISMATCH'];
 }
 export function calculatedLoad(c: AllowedTrainingContract, d: MovementDose) {
   if (d.intensity?.kind !== 'percent_1rm') return null;
-  const ref = doseReference(c, d.intensity)!;
+  const ref = doseReference(c, d.intensity);
+  if (!ref || ref.kind !== '1rm' || typeof ref.value !== 'number' || !Number.isFinite(ref.value)) return null;
   // No equipment increment authority: retain mathematical kg to 0.01, never round up to a fictional plate.
   const kg = (percentage: number) => Math.round(Number(ref.value) * percentage) / 100;
+  if (!Number.isFinite(kg(d.intensity.value)) || !Number.isFinite(kg(d.intensity.max ?? d.intensity.value))) return null;
   return { referenceId: ref.id, minimumKg: kg(d.intensity.value), maximumKg: kg(d.intensity.max ?? d.intensity.value), rounding: 'mathematical_0.01kg_no_plate_increment' };
 }
 type Range = { minimumSeconds: number; maximumSeconds: number | null };
@@ -108,6 +113,7 @@ export function estimateSessionDuration(c: AllowedTrainingContract, p: Structure
 /** Single semantic dose authority, downstream of schema, catalog, scope and restrictions. */
 export function validateSessionDose(c: AllowedTrainingContract, p: StructuredSessionProposal,
   observe?: (estimate: ReturnType<typeof estimateSessionDuration>, errors: readonly string[]) => void): string[] {
+  if (openExecution(c)) return validateCoachExecution(c, p);
   if (c.contractVersion < 3) return p.schemaVersion === 2 ? ['DOSE_CONTRACT_VERSION_REQUIRED'] : [];
   if (p.schemaVersion !== 2) return ['SESSION_DOSE_INCOMPLETE:SCHEMA_VERSION_REQUIRED'];
   const execution = openExecution(c);
@@ -119,7 +125,7 @@ export function validateSessionDose(c: AllowedTrainingContract, p: StructuredSes
     && c.discipline === 'box';
   if (execution) {
     errors.push(...validateExecutableFormat(c, p));
-    for (const b of p.blocks) for (const m of b.movements) errors.push(...intensityErrors(c, m, m.prescription.intensity), ...instructionReferenceErrors(c, m.prescription));
+    for (const b of p.blocks) for (const m of b.movements) errors.push(...referenceCompatibilityErrors(c, m, m.prescription.intensity), ...instructionReferenceErrors(c, m.prescription));
   } else {
   if (f && !metcon && format !== 'complex') errors.push('DOSE_FORMAT_NOT_ALLOWED');
   if (f) {
@@ -139,7 +145,7 @@ export function validateSessionDose(c: AllowedTrainingContract, p: StructuredSes
     const d = m.prescription, descriptor = resolvedMovement(m)?.descriptor, pattern = descriptor?.movement_pattern ?? '';
     if (['reps', 'durationSeconds', 'distanceMeters'].filter(k => Object.hasOwn(d, k)).length !== 1) errors.push('DOSE_VOLUME_CONFLICT');
     if (d.perSide && !d.reps) errors.push('DOSE_SIDE_REPS_REQUIRED');
-    errors.push(...intensityErrors(c, m, d.intensity));
+    errors.push(...referenceCompatibilityErrors(c, m, d.intensity));
     const mainStrength = b.blockType === 'main' && ['strength_sets', 'complex', 'skill_practice'].includes(format) && !['run', 'cyclic'].includes(pattern);
     const running = ['run', 'cyclic'].includes(pattern);
     if (running && d.intensity?.kind === 'rir') errors.push('DOSE_RUNNING_RIR_UNSUPPORTED');

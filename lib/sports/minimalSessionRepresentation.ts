@@ -11,30 +11,62 @@ const pick = (v: Record<string, any>, keys: readonly string[]) => Object.fromEnt
  * This function establishes traversal/identity/dose objects only. It grants no safety. */
 export function minimalSessionRepresentation(value: unknown): SessionValidation {
   const fail = (code: string): SessionValidation => ({ ok: false, violations: [code] });
-  if (!object(value) || !Array.isArray(value.blocks) || !value.blocks.length || value.blocks.length > 3
-    || typeof value.stimulusId !== 'string' || !value.stimulusId || typeof value.structureId !== 'string' || !value.structureId)
+  if (!object(value) || !Array.isArray(value.blocks) || !value.blocks.length)
     return fail('PROPOSAL_STRUCTURE_UNINTERPRETABLE');
   const p = structuredClone(value);
+  if (p.stimulusId == null) p.stimulusId = '';
+  if (typeof p.stimulusId !== 'string') return fail('PROPOSAL_STRUCTURE_UNINTERPRETABLE');
+  if (!p.structureId) p.structureId = 'Sesión';
+  if (typeof p.structureId !== 'string') return fail('PROPOSAL_STRUCTURE_UNINTERPRETABLE');
   p.schemaVersion = 2;
   const seen = new Set<string>();
   for (const b of p.blocks) {
-    if (!object(b) || !['warmup','main','cooldown'].includes(b.blockType) || seen.has(b.blockType)
-      || !Array.isArray(b.movements) || !b.movements.length || b.movements.length > 30) return fail('BLOCK_STRUCTURE_UNINTERPRETABLE');
+    if (object(b) && !['warmup','main','cooldown'].includes(b.blockType)) { b.title = typeof b.blockType === 'string' ? b.blockType : 'Bloque principal'; b.blockType = 'main'; }
+    if (!object(b) || !['warmup','main','cooldown'].includes(b.blockType)
+      || !Array.isArray(b.movements) || !b.movements.length) return fail('BLOCK_STRUCTURE_UNINTERPRETABLE');
     seen.add(b.blockType);
+    if (typeof b.formatDose === 'string') { b.formatInstruction = b.formatDose; delete b.formatDose; }
+    if (object(b.formatDose)) for (const [key, value] of Object.entries(b.formatDose)) {
+      if (!['durationSeconds','timeCapSeconds','rounds','intervalSeconds','workSeconds','restSeconds'].includes(key) || typeof value === 'string') {
+        b.formatInstruction = [b.formatInstruction, typeof value === 'string' ? value : `${key}: ${JSON.stringify(value)}`].filter(Boolean).join(' · ');
+        delete b.formatDose[key];
+      }
+    }
     for (const e of b.movements) {
       if (!object(e)) return fail('MOVEMENT_OBJECT_INVALID');
+      if (e.prescription === undefined && (object(e.dose) || typeof e.dose === 'string')) { e.prescription = e.dose; delete e.dose; }
+      if (typeof e.prescription === 'string' && e.prescription.trim()) e.prescription = { doseInstruction: e.prescription };
       if (!object(e.prescription)) return fail('MOVEMENT_PRESCRIPTION_SHAPE_INVALID');
+      if (typeof e.prescription.intensity === 'string') {
+        e.prescription.doseInstruction = [e.prescription.doseInstruction,e.prescription.intensity].filter(Boolean).join(' · ');
+        delete e.prescription.intensity;
+      }
       // A known explicit alternative is identity evidence; no fuzzy name matching.
-      if ((!known(e.movementId) && !e.variant) && known(e.canonicalMovementId)) e.movementId = e.canonicalMovementId;
+      if ((typeof e.movementId !== 'string' || !e.movementId.trim()) && known(e.canonicalMovementId)) e.movementId = e.canonicalMovementId;
+      if ((!e.movementId || typeof e.movementId !== 'string') && typeof e.name === 'string') e.movementId = e.name;
       if (typeof e.movementId !== 'string' || !e.movementId.trim()) return fail('MOVEMENT_IDENTITY_UNRESOLVED');
       if (object(e.variant) && e.variant.version === undefined) e.variant.version = 1;
+      for (const key of ['tempo','perSide']) if (typeof e.prescription[key] === 'string') {
+        e.prescription.doseInstruction = [e.prescription.doseInstruction, `${key}: ${e.prescription[key]}`].filter(Boolean).join(' · ');
+        delete e.prescription[key];
+      }
+      const doseLabels: Record<string,string> = {sets:'Series',reps:'Repeticiones',durationSeconds:'Segundos',distanceMeters:'Metros',restSeconds:'Descanso'};
+      for (const [key,value] of Object.entries(e.prescription)) if (!['sets','reps','durationSeconds','distanceMeters','restSeconds','intensity','tempo','perSide','doseInstruction','referenceNotice','unresolvedReferenceInstruction'].includes(key)
+        && (typeof value === 'string' && value.trim() || typeof value === 'number' && Number.isFinite(value))) {
+        e.prescription.doseInstruction = [e.prescription.doseInstruction, `${key}: ${value}`].filter(Boolean).join(' · ');
+        delete e.prescription[key];
+      }
+      for (const [key,label] of Object.entries(doseLabels)) if (typeof e.prescription[key] === 'string') {
+        const text = e.prescription[key];
+        if (!text.trim()) return fail('EXECUTION_TEXT_INVALID');
+        e.prescription.doseInstruction = [e.prescription.doseInstruction, `${label}: ${text}`].filter(Boolean).join(' · ');
+        delete e.prescription[key];
+      }
+      if (e.prescription.doseInstruction !== undefined && (typeof e.prescription.doseInstruction !== 'string' || !e.prescription.doseInstruction.trim())) return fail('EXECUTION_TEXT_INVALID');
       const d = resolveExecutableDose(e.prescription);
       if (d.ok) e.prescription = d.dose; // Unresolved work is assessed by substantive validation.
     }
   }
-  if (!seen.has('main')) return fail('MAIN_STRUCTURE_REQUIRED');
-  // Order is presentation, not a sporting decision. Existing valid order is unchanged.
-  p.blocks.sort((a: any,b: any) => ['warmup','main','cooldown'].indexOf(a.blockType)-['warmup','main','cooldown'].indexOf(b.blockType));
   return { ok: true, proposal: p as StructuredSessionProposal };
 }
 
@@ -60,7 +92,7 @@ export function executableProjection(p: StructuredSessionProposal) {
     return { ...pick(b, ['blockType','formatDose']), movements: b.movements.map(e => {
       checkExtras(e, ['movementId','variant','prescription','canonicalMovementId']);
       const alternative = (e as any).canonicalMovementId;
-      if (known(alternative) && alternative !== e.movementId) errors.push('MOVEMENT_IDENTITY_CONFLICT');
+      if (known(alternative) && known(e.movementId) && alternative !== e.movementId) errors.push('MOVEMENT_IDENTITY_CONFLICT');
       checkExtras(e.prescription, [...DOSE_FIELDS,'doseInstruction']);
       return { ...pick(e, ['movementId','variant']), prescription: pick(e.prescription, [...DOSE_FIELDS,'doseInstruction']) };
     }) };

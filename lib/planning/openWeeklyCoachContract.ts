@@ -6,7 +6,7 @@ import { executablePrescriptionCounts, noWeeklyPrescription } from './weeklyRege
 import { TRANSFER_METHODS } from '../sports/goalTransferModel';
 
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-export type OpenWeeklyFacts = Pick<WeeklyContractInput, 'allowed' | 'contexts' | 'daySufficiency' | 'weeklyAvailability'>;
+export type OpenWeeklyFacts = Pick<WeeklyContractInput, 'allowed' | 'contexts' | 'daySufficiency' | 'weeklyAvailability' | 'athleteCoachingKnowledge'>;
 export function buildOpenWeeklyContract(input: WeeklyContractInput) {
   const explicitAvailabilityDecision = !!input.weeklyAvailability && calendarDays.some(day => !input.fixed[day]);
   if (input.regeneration && !input.regeneration.pendingManagedDays.length && !explicitAvailabilityDecision) return noWeeklyPrescription('NO_REMAINING_MANAGED_DAYS');
@@ -24,6 +24,7 @@ export function buildOpenWeeklyContract(input: WeeklyContractInput) {
       ? [{ optionId: `${day}:fixed`, ...input.fixed[day], protected: true as const }]
       : [{ optionId: `${day}:rest`, state: 'REST' as const }]])),
     openFacts: structuredClone({ allowed: input.allowed, contexts: input.contexts, daySufficiency: input.daySufficiency,
+      ...(input.athleteCoachingKnowledge ? { athleteCoachingKnowledge: input.athleteCoachingKnowledge } : {}),
       ...(input.weeklyAvailability ? { weeklyAvailability: input.weeklyAvailability } : {}) }),
     ...(input.strategy ? { strategy: structuredClone(input.strategy) } : {}),
     ...(input.regeneration ? { regeneration: { ...structuredClone(input.regeneration), openCoachDecision: true,

@@ -2,6 +2,7 @@ import { setSimilarity } from '../validators/sessionDuplicationValidator';
 import { aggregateLoadSessions, type SessionLoad } from '../trainingLoad/trainingLoad';
 
 export type WeekSessionFacts = {
+  coachExecution?: boolean;
   id: string; date: string; discipline: string | null; state: string; protected: boolean; structured: boolean;
   adaptationId: string | null; role: string | null; methodId: string | null; weaknessId: string | null;
   structure: string | null; stimulus: string | null; movements: string[]; patterns: string[];
@@ -46,10 +47,10 @@ export function validateWholeWeek(input: WholeWeekInput) {
     if (s.state === 'REST' && s.structured) add('WEEK_REST_CONTENT', 'ERROR', [s], null, null, 'REST cannot contain a prescription.');
     if (!['TRAIN', 'RECOVERY'].includes(s.state)) continue;
     if (!s.structured) add('WEEK_STRUCTURE_UNKNOWN', s.protected ? 'WARNING' : 'ERROR', [s], null, null, 'No structured dose; no inference from prose.');
-    if (s.adaptationDoseSatisfied === false) add('WEEK_ADAPTATION_DOSE_UNSATISFIED', s.protected ? 'WARNING' : 'ERROR', [s], 'duration', s.adaptationId,
+    if (s.adaptationDoseSatisfied === false) add('WEEK_ADAPTATION_DOSE_UNSATISFIED', s.protected || s.coachExecution ? 'WARNING' : 'ERROR', [s], 'duration', s.adaptationId,
       'Explicit temporal dose policy is not satisfied; presence alone cannot establish coverage.', s.protected ? 'none' : 'same_contract');
-    if (s.recoveryContradiction) add('WEEK_SESSION_ROLE_CONTRADICTION', 'ERROR', [s], 'role', s.demanding, 'Recovery contradicts admitted intensity or structure.', s.protected ? 'none' : 'same_contract');
-    if (input.strategy?.goal && s.structured && !s.contributionValid) add('WEEK_SESSION_OBJECTIVE_UNJUSTIFIED', s.protected ? 'WARNING' : 'ERROR', [s], 'adaptation', s.adaptationId, 'No compatible strategy → intent → main-block contribution.', s.protected ? 'none' : 'same_contract');
+    if (s.recoveryContradiction) add('WEEK_SESSION_ROLE_CONTRADICTION', s.coachExecution ? 'WARNING' : 'ERROR', [s], 'role', s.demanding, 'Recovery contradicts admitted intensity or structure.', s.protected ? 'none' : 'same_contract');
+    if (input.strategy?.goal && s.structured && !s.contributionValid) add('WEEK_SESSION_OBJECTIVE_UNJUSTIFIED', s.protected || s.coachExecution ? 'WARNING' : 'ERROR', [s], 'adaptation', s.adaptationId, 'No compatible strategy → intent → main-block contribution.', s.protected ? 'none' : 'same_contract');
     if (s.impact === 'unknown') add('WEEK_IMPACT_UNKNOWN', 'INFO', [s], 'impact', null, 'Missing impact is not low impact.');
   }
   const covered = (g: { adaptationId?: string; discipline?: string; weaknessId?: string }) => train.filter(s => s.structured && s.contributionValid && s.adaptationDoseSatisfied !== false
@@ -89,7 +90,7 @@ export function validateWholeWeek(input: WholeWeekInput) {
         b.load?.vector && Object.fromEntries(Object.entries(b.load.vector).map(([k,v]) => [k, [v.status,v.minimum,v.maximum,v.unit]]))) };
     const exact = similarity.movement === 1 && similarity.structure && similarity.stimulus && similarity.dose && similarity.intensity && similarity.adaptation && similarity.role;
     duplication.push({ sessionIds: [a.id, b.id], similarity, exact });
-    if (exact) add('WEEK_EXACT_DUPLICATE', input.strategy?.coherenceVersion === 1 || b.protected && a.protected ? 'WARNING' : 'ERROR', [a, b], 'dose', similarity,
+    if (exact) add('WEEK_EXACT_DUPLICATE', a.coachExecution && b.coachExecution || input.strategy?.coherenceVersion === 1 || b.protected && a.protected ? 'WARNING' : 'ERROR', [a, b], 'dose', similarity,
       'Identical structured prescription; coordinated Coach may reconsider or knowingly retain it.', b.protected && a.protected ? 'none' : 'same_contract');
     else if (similarity.movement >= 0.55 && similarity.stimulus && similarity.adaptation && similarity.role && similarity.intensity)
       add('WEEK_NEAR_DUPLICATE', 'WARNING', [a, b], 'dose', similarity, 'High overlap with the same stimulus, role and intensity; dose differs.');

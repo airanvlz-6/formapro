@@ -4,7 +4,7 @@ export type Quantity = { status: 'complete' | 'partial' | 'unknown' | 'not_appli
 export type LoadVector = Record<'durationSeconds' | 'workSeconds' | 'recoverySeconds' | 'distanceMeters' | 'repetitions' | 'externalVolumeKg' | 'sessionRpeMinutes', Quantity>;
 export type SegmentInput = { id: string; movementId: string | null; pattern: string | null; source: string;
   sets?: number; reps?: number; kg?: { minimum: number; maximum: number }; durationSeconds?: number; distanceMeters?: number;
-  restSeconds?: number; perSide?: boolean; repetitionSideUnknown?: boolean; multiplier: number | null; externalLoadApplicable: boolean;
+  restSeconds?: number; perSide?: boolean; repetitionSideUnknown?: boolean; multiplier: number | null; externalLoadApplicable: boolean | null;
   intensity?: unknown; categories?: Record<string, string>; formatContext?: unknown; };
 export type SegmentLoad = { input: SegmentInput; vector: LoadVector };
 export type LoadSessionInput = { id: string; date: string; kind: 'planned' | 'actual'; discipline: string | null;
@@ -55,7 +55,7 @@ export function resolveSegmentLoad(input: SegmentInput): SegmentLoad {
     if (input.restSeconds !== undefined) v.recoverySeconds=q(Math.max(0,input.sets!-1)*input.restSeconds*input.multiplier!,'s');
     if (v.workSeconds.status === 'complete' && v.recoverySeconds.status === 'complete') v.durationSeconds=sumQuantities([v.workSeconds,v.recoverySeconds],'s');
   }
-  if (!input.externalLoadApplicable && !input.kg) v.externalVolumeKg=notApplicable('kg');
+  if (input.externalLoadApplicable === false && !input.kg) v.externalVolumeKg=notApplicable('kg');
   else if (input.kg && v.repetitions.status === 'complete') v.externalVolumeKg=q(v.repetitions.minimum!*input.kg.minimum,'kg',v.repetitions.maximum!*input.kg.maximum);
   return { input, vector:v };
 }

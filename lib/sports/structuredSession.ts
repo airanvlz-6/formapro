@@ -1,3 +1,4 @@
+import { movementShapeFailures, needsModernSessionSchema } from './sessionMovementShape';
 import { sessionShapeDiagnostic, type SessionShapeDiagnostic } from './sessionShapeDiagnostics';
 import { openExecution, resolveExecutableDose, executionInstructionComplete } from './sessionExecution';
 import { calendarState } from '../planning/weeklyCalendar';
@@ -36,7 +37,12 @@ export const GENERATION_SAFETY_BOUNDS: Record<string, number> = {
 
 /** No extraction from prose, ID repair, aliases, fuzzy matching or extra executable fields. */
 export function checkSessionShape(value: unknown, execution = false, observeShape?: (detail: SessionShapeDiagnostic) => void): SessionValidation {
-  if (execution && object(value)) value = structuredClone(value);
+  const sourceSchema = object(value) ? value.schemaVersion : undefined;
+  let schemaNormalized = false;
+  if (execution && object(value)) {
+    value = structuredClone(value);
+    if (object(value) && needsModernSessionSchema(value)) { value.schemaVersion = 2; schemaNormalized = true; }
+  }
   const violations: string[] = [];
   const modern = object(value) && value.schemaVersion === 2;
   if (!object(value) || !keys(value, ['stimulusId', 'structureId', 'blocks', 'explanation', ...(modern ? ['schemaVersion'] : [])])
@@ -57,9 +63,9 @@ export function checkSessionShape(value: unknown, execution = false, observeShap
       const start = violations.length;
       const original = object(entry) ? { ...entry } : entry;
       try {
-        if (!object(entry) || !keys(entry, ['movementId', 'prescription', ...(modern ? ['variant'] : [])]) || typeof entry.movementId !== 'string' || !entry.movementId
-          || !['movementId', 'prescription'].every(k => Object.hasOwn(entry, k))
-          || !object(entry.prescription) || (!modern && !keys(entry.prescription, doseKeys))) { violations.push(`MOVEMENT_SHAPE_INVALID:${index}`); return; }
+        if (movementShapeFailures(entry, modern).length) { violations.push(`MOVEMENT_SHAPE_INVALID:${index}`); return; }
+        // The shared predicate establishes these types; keep narrowing explicit for TypeScript.
+        if (!object(entry) || typeof entry.movementId !== 'string' || !object(entry.prescription)) return;
         if (seen.has(entry.movementId)) violations.push(`DUPLICATE_MOVEMENT:${index}:${entry.movementId}`);
         seen.add(entry.movementId);
         if (Object.hasOwn(entry, 'variant')) {
@@ -86,7 +92,7 @@ export function checkSessionShape(value: unknown, execution = false, observeShap
         if (typeof dose.distanceMeters === 'number' && sets * dose.distanceMeters > 100000) violations.push('DOSE_TOTAL_DISTANCE_BOUND');
       } finally {
         if (observeShape && violations.length > start) {
-          try { observeShape(sessionShapeDiagnostic(original, index, blockTypes[index], movementIndex, violations.slice(start))); } catch { /* Observation cannot alter admission. */ }
+          try { observeShape(sessionShapeDiagnostic(original, index, blockTypes[index], movementIndex, violations.slice(start), { modern, sourceSchema, schemaNormalized })); } catch { /* Observation cannot alter admission. */ }
         }
       }
     });

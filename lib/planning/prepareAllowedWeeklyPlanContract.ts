@@ -19,7 +19,7 @@ import { buildCanonicalWeekStrategy } from './canonicalWeekStrategy';
 import { humanWeeklyObjective } from '../sports/humanCoachingProjection';
 import { selectedWeekObjective } from './selectedWeekObjective';
 import { ensureLongitudinalTarget, loadLongitudinalProjection } from './longitudinalAuthority';
-import { strategyDiagnostic } from './planningDiagnostics';
+import { strategyDiagnostic, weeklyCoachStepDiagnostic } from './planningDiagnostics';
 import { resolveGoalAuthority, goalResolutionDiagnostic } from '../athlete/goalResolution';
 import { resolveEventAuthority } from '../athlete/eventAuthority';
 import { decideRunningEventPreparation } from '../sports/runningEventPreparation';
@@ -206,6 +206,8 @@ export async function planBoundedWeek(db: any, codigo: string, request: Paramete
   if (!prepared.ok) return prepared;
   const proposal = await composeBoundedWeek(prepared.contract, complete, prepared.coachingContext, request.planningRunId);
   if (!proposal.ok) return proposal;
+  try { console.info?.('ORCHESTRATOR Paso 2 — Weekly Coach', weeklyCoachStepDiagnostic(proposal.contract.contractVersion, proposal.selected, request.planningRunId)); }
+  catch { /* Observation cannot change the Weekly Coach decision or admission. */ }
   if (process.env.FORGE_WEEKLY_COACHING_DIAGNOSTICS === '1') try {
     for (const day of calendarDays) {
       const option = proposal.selected[day];

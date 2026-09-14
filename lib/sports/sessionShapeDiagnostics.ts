@@ -1,3 +1,4 @@
+import { movementShapeFailures, movementShapeRules, movementShapeSummary } from './sessionMovementShape';
 import { MOVEMENT_LIBRARY } from './movementLibrary';
 import { variantShapeFailures } from './movementVariants';
 import { resolveDoseInstruction } from './sessionExecution';
@@ -8,7 +9,7 @@ const canonical = (v: unknown) => typeof v === 'string' && Object.hasOwn(MOVEMEN
 const type = (v: unknown) => v === undefined ? 'absent' : v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v;
 /** No raw instruction, arbitrary key, label, ID, or reference value crosses this boundary.
  * Unknown prose cannot be classified as hidden work or executable by a token heuristic. */
-export function sessionShapeDiagnostic(entry: unknown, blockIndex: number, blockType: string, movementIndex: number, errors: string[]) {
+export function sessionShapeDiagnostic(entry: unknown, blockIndex: number, blockType: string, movementIndex: number, errors: string[], schema?: { modern: boolean; sourceSchema: unknown; schemaNormalized: boolean }) {
   const e = object(entry) ? entry : {}, d = object(e.prescription) ? e.prescription : {};
   const v = object(e.variant) ? e.variant : {}, mods = object(v.modifiers) ? v.modifiers : {};
   const instruction = resolveDoseInstruction(d.doseInstruction);
@@ -17,7 +18,15 @@ export function sessionShapeDiagnostic(entry: unknown, blockIndex: number, block
       || d.doseInstruction.length > 180 || /[\u0000-\u001f\u007f]/.test(d.doseInstruction) ? 'MALFORMED_OUTPUT'
     : errors.includes('DOSE_INSTRUCTION_CONFLICT') ? 'STRUCTURED_CONFLICT'
     : instruction ? 'RESOLVED' : 'UNRECOGNIZED_GRAMMAR';
+  const failedPredicates = errors.some(e => e.startsWith('MOVEMENT_SHAPE_INVALID:')) ? movementShapeFailures(entry, schema?.modern ?? true) : [];
+  const repairs: string[] = failedPredicates.map(rule => movementShapeRules[rule]);
+  if (errors.some(e => e.startsWith('GENERATED_'))) repairs.push('Repair the indicated typed variant fields and recipe name; no safety or reference claims.');
+  if (errors.some(e => /^(DOSE_|EXECUTION_)/.test(e))) repairs.push('Repair the indicated prescription fields. Express a resolvable quantity, effort or bounded qualitative instruction for this movement only; structured fields must agree and objective references need authority.');
+  if (errors.some(e => e.startsWith('DUPLICATE_MOVEMENT:'))) repairs.push('Use one entry per movement within this block; preserve explicit quantities.');
   return {
+    failedPredicates,
+    receivedShape: movementShapeSummary(entry),
+    representation: { mode: schema?.modern === false ? 'legacy' : 'modern', sourceSchema: schema?.sourceSchema === 2 ? 2 : schema?.sourceSchema === undefined ? 'absent' : 'invalid', normalized: schema?.schemaNormalized ?? false },
     blockIndex, blockType, movementOrdinal: movementIndex + 1,
     proposalPath: `blocks[${blockIndex}].movements[${movementIndex}]`,
     canonicalMovementId: canonical(e.movementId) ?? canonical(v.canonicalFamily),
@@ -35,7 +44,7 @@ export function sessionShapeDiagnostic(entry: unknown, blockIndex: number, block
     instructionSummary: { type: type(d.doseInstruction), length: typeof d.doseInstruction === 'string' ? Math.min(d.doseInstruction.length, 64001) : null,
       resolvedFields: instruction ? Object.keys(instruction.fields) : [], qualitative: instruction?.qualitative ?? null, referenceKind: instruction?.reference?.kind ?? null },
     instructionResolutionCode, violationCodes: safeViolations(errors),
-    repair: 'Correct the indicated movement and failed fields within the same contract. Use the typed variant recipe and its derived display name; unknown operations need a resolvable recipe. Express dose as quantities, supported effort or bounded qualitative sets; preserve matching structured fields. Objective numbers require compatible authorized references. Do not add another movement or facts in doseInstruction. Exercise selection remains yours.',
+    repair: repairs.join(' ') + ' Keep the same contract; exercise selection remains yours.',
   };
 }
 export type SessionShapeDiagnostic = ReturnType<typeof sessionShapeDiagnostic>;

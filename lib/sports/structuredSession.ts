@@ -1,3 +1,4 @@
+import { sessionShapeDiagnostic, type SessionShapeDiagnostic } from './sessionShapeDiagnostics';
 import { openExecution, resolveExecutableDose, executionInstructionComplete } from './sessionExecution';
 import { calendarState } from '../planning/weeklyCalendar';
 import { validateStructureSemantics } from './structureSemantics';
@@ -34,7 +35,7 @@ export const GENERATION_SAFETY_BOUNDS: Record<string, number> = {
 };
 
 /** No extraction from prose, ID repair, aliases, fuzzy matching or extra executable fields. */
-export function checkSessionShape(value: unknown, execution = false): SessionValidation {
+export function checkSessionShape(value: unknown, execution = false, observeShape?: (detail: SessionShapeDiagnostic) => void): SessionValidation {
   if (execution && object(value)) value = structuredClone(value);
   const violations: string[] = [];
   const modern = object(value) && value.schemaVersion === 2;
@@ -52,34 +53,42 @@ export function checkSessionShape(value: unknown, execution = false): SessionVal
     }
     if (Object.hasOwn(block, 'formatDose') && !checkFormatDose(block.formatDose)) violations.push('DOSE_FORMAT_INVALID');
     const seen = new Set<string>();
-    block.movements.forEach((entry: unknown) => {
-      if (!object(entry) || !keys(entry, ['movementId', 'prescription', ...(modern ? ['variant'] : [])]) || typeof entry.movementId !== 'string' || !entry.movementId
-        || !['movementId', 'prescription'].every(k => Object.hasOwn(entry, k))
-        || !object(entry.prescription) || (!modern && !keys(entry.prescription, doseKeys))) { violations.push(`MOVEMENT_SHAPE_INVALID:${index}`); return; }
-      if (seen.has(entry.movementId)) violations.push(`DUPLICATE_MOVEMENT:${index}:${entry.movementId}`);
-      seen.add(entry.movementId);
-      if (Object.hasOwn(entry, 'variant')) {
-        const result = resolveSessionMovement(entry as unknown as { movementId: string; variant: MovementVariantProposal });
-        if (result.status !== 'GENERATED_RESOLVED') violations.push(...('errors' in result ? result.errors : ['GENERATED_VARIANT_SHAPE_INVALID']));
+    block.movements.forEach((entry: unknown, movementIndex: number) => {
+      const start = violations.length;
+      const original = object(entry) ? { ...entry } : entry;
+      try {
+        if (!object(entry) || !keys(entry, ['movementId', 'prescription', ...(modern ? ['variant'] : [])]) || typeof entry.movementId !== 'string' || !entry.movementId
+          || !['movementId', 'prescription'].every(k => Object.hasOwn(entry, k))
+          || !object(entry.prescription) || (!modern && !keys(entry.prescription, doseKeys))) { violations.push(`MOVEMENT_SHAPE_INVALID:${index}`); return; }
+        if (seen.has(entry.movementId)) violations.push(`DUPLICATE_MOVEMENT:${index}:${entry.movementId}`);
+        seen.add(entry.movementId);
+        if (Object.hasOwn(entry, 'variant')) {
+          const result = resolveSessionMovement(entry as unknown as { movementId: string; variant: MovementVariantProposal });
+          if (result.status !== 'GENERATED_RESOLVED') violations.push(...('errors' in result ? result.errors : ['GENERATED_VARIANT_SHAPE_INVALID']));
+        }
+        if (execution) {
+          const resolved = resolveExecutableDose(entry.prescription as MovementDose);
+          if (!resolved.ok) { violations.push(...resolved.errors); return; }
+          entry.prescription = resolved.dose;
+        }
+        const dose = entry.prescription as Record<string, unknown>;
+        if (modern) violations.push(...checkDoseExtension(dose, execution));
+        if (execution ? !executionInstructionComplete(dose as MovementDose) : !['reps', 'durationSeconds', 'distanceMeters'].some(k => Object.hasOwn(dose, k))) violations.push(execution ? 'EXECUTION_INSTRUCTION_INCOMPLETE' : 'DOSE_REQUIRED');
+        for (const [k, n] of Object.entries(dose)) {
+          if (modern && ['intensity', 'tempo', 'perSide', ...(execution ? ['doseInstruction'] : [])].includes(k)) continue;
+          if (typeof n !== 'number' || !Number.isFinite(n) || (k === 'restSeconds' ? n < 0 : n <= 0)
+            || (['sets', 'reps'].includes(k) && !Number.isSafeInteger(n))) violations.push(`DOSE_INVALID:${k}`);
+          else if (n > GENERATION_SAFETY_BOUNDS[k]) violations.push(`DOSE_SAFETY_BOUND:${k}`);
+        }
+        const sets = typeof dose.sets === 'number' ? dose.sets : 1;
+        if (typeof dose.reps === 'number' && sets * dose.reps > 10000) violations.push('DOSE_TOTAL_REPS_BOUND');
+        if (typeof dose.durationSeconds === 'number' && sets * dose.durationSeconds > 28800) violations.push('DOSE_TOTAL_DURATION_BOUND');
+        if (typeof dose.distanceMeters === 'number' && sets * dose.distanceMeters > 100000) violations.push('DOSE_TOTAL_DISTANCE_BOUND');
+      } finally {
+        if (observeShape && violations.length > start) {
+          try { observeShape(sessionShapeDiagnostic(original, index, blockTypes[index], movementIndex, violations.slice(start))); } catch { /* Observation cannot alter admission. */ }
+        }
       }
-      if (execution) {
-        const resolved = resolveExecutableDose(entry.prescription as MovementDose);
-        if (!resolved.ok) { violations.push(...resolved.errors); return; }
-        entry.prescription = resolved.dose;
-      }
-      const dose = entry.prescription as Record<string, unknown>;
-      if (modern) violations.push(...checkDoseExtension(dose, execution));
-      if (execution ? !executionInstructionComplete(dose as MovementDose) : !['reps', 'durationSeconds', 'distanceMeters'].some(k => Object.hasOwn(dose, k))) violations.push(execution ? 'EXECUTION_INSTRUCTION_INCOMPLETE' : 'DOSE_REQUIRED');
-      for (const [k, n] of Object.entries(dose)) {
-        if (modern && ['intensity', 'tempo', 'perSide', ...(execution ? ['doseInstruction'] : [])].includes(k)) continue;
-        if (typeof n !== 'number' || !Number.isFinite(n) || (k === 'restSeconds' ? n < 0 : n <= 0)
-          || (['sets', 'reps'].includes(k) && !Number.isSafeInteger(n))) violations.push(`DOSE_INVALID:${k}`);
-        else if (n > GENERATION_SAFETY_BOUNDS[k]) violations.push(`DOSE_SAFETY_BOUND:${k}`);
-      }
-      const sets = typeof dose.sets === 'number' ? dose.sets : 1;
-      if (typeof dose.reps === 'number' && sets * dose.reps > 10000) violations.push('DOSE_TOTAL_REPS_BOUND');
-      if (typeof dose.durationSeconds === 'number' && sets * dose.durationSeconds > 28800) violations.push('DOSE_TOTAL_DURATION_BOUND');
-      if (typeof dose.distanceMeters === 'number' && sets * dose.distanceMeters > 100000) violations.push('DOSE_TOTAL_DISTANCE_BOUND');
     });
   });
   if (!violations.length) {
@@ -92,12 +101,12 @@ export function checkSessionShape(value: unknown, execution = false): SessionVal
   return violations.length ? { ok: false, violations } : { ok: true, proposal: value as StructuredSessionProposal };
 }
 
-export function parseStructuredSession(raw: unknown, execution = false): SessionValidation {
+export function parseStructuredSession(raw: unknown, execution = false, observeShape?: (detail: SessionShapeDiagnostic) => void): SessionValidation {
   if (typeof raw !== 'string' || raw.length > 64000) return { ok: false, violations: ['JSON_REQUIRED'] };
   let text = raw.trim();
   // Only a complete enclosing JSON fence is trivial syntax; surrounding prose is never searched.
   if (text.startsWith('```json\n') && text.endsWith('\n```')) text = text.slice(8, -4).trim();
-  try { return checkSessionShape(JSON.parse(text), execution); }
+  try { return checkSessionShape(JSON.parse(text), execution, observeShape); }
   catch { return { ok: false, violations: ['JSON_INVALID'] }; }
 }
 

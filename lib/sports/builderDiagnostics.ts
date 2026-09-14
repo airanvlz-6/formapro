@@ -1,3 +1,4 @@
+import type { SessionShapeDiagnostic } from './sessionShapeDiagnostics';
 import { createHash, randomUUID } from 'node:crypto';
 import { signalIds } from '../athlete/prescriptionSignals';
 import { referenceQuestionFields } from './prescriptionReferenceFields';
@@ -74,6 +75,10 @@ export function builderTrace(contract: unknown, runId?: string) {
           contractIdentity: identity, day: c.targetDay, attempt, ...detail, totalCount: details.length, truncated: details.length > 32 })); }
         catch { /* Flat diagnostics must also be non-authoritative. */ }
       }
+    },
+    shape(attempt: number, detail: SessionShapeDiagnostic) {
+      try { console.info?.('SESSION_SHAPE_VIOLATION', { planningRunId, builderInvocationId, contractIdentity: identity,
+        weekStart: c.targetWeekStart, day: c.targetDay, attempt, ...detail }); } catch { /* Observation cannot alter admission. */ }
     },
     summary() { const last = events.at(-1); return { planningRunId, builderInvocationId, contractIdentity: identity,
       attemptCount: last?.attempt || 0, finalStage: last?.stage || 'preflight', finalViolations: last?.violations || [],

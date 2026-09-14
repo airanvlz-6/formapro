@@ -3,7 +3,7 @@ import { MOVEMENT_LIBRARY, MOVEMENT_RESTRICTION_EVIDENCE, type Movimiento, type 
 
 /** Domain adapter, not an exercise-name whitelist or athlete safety authority.
  * Recipes describe changes to a known movement. They never establish athlete facts. */
-export type MovementVariantProposal = { version: 1; canonicalFamily: string; displayName: string;
+export type MovementVariantProposal = { version: 1; canonicalFamily: string; displayName?: string;
   modifiers: { tempo?: [number, number, number, number]; stance?: 'narrow' | 'wide';
     direction?: 'reverse'; loadPosition?: 'contralateral' } };
 export const GENERATED_MOVEMENT_AUTHORITY = { version: 1, resolver: 'canonical_modifiers_v1',
@@ -28,6 +28,20 @@ export function movementVariantDisplayName(family: string, modifiers: MovementVa
   return [modifiers.tempo ? `Tempo ${modifiers.tempo.join('-')}` : '', modifiers.stance ?? '',
     modifiers.loadPosition ?? '', modifiers.direction ?? '', family.replaceAll('_', ' ')].filter(Boolean).join(' ');
 }
+/** Closed field paths only: failed model keys and labels never become diagnostics. */
+export function variantShapeFailures(entry: { movementId?: unknown; variant?: unknown }): string[] {
+  const v = entry.variant;
+  const errors: string[] = [];
+  if (typeof entry.movementId !== 'string' || !/^generated:[a-z0-9_-]{1,32}$/.test(entry.movementId)) errors.push('movementId');
+  if (!object(v)) return [...errors, 'variant'];
+  if (!keys(v, ['version', 'canonicalFamily', 'displayName', 'modifiers'])) errors.push('variant.extraFields');
+  if (v.version !== 1) errors.push('variant.version');
+  if (typeof v.canonicalFamily !== 'string') errors.push('variant.canonicalFamily');
+  if (v.displayName !== undefined && (typeof v.displayName !== 'string' || v.displayName.length > 160)) errors.push('variant.displayName');
+  if (!object(v.modifiers) || !Object.keys(v.modifiers).length) errors.push('variant.modifiers');
+  else if (!keys(v.modifiers, ['tempo', 'stance', 'direction', 'loadPosition'])) errors.push('variant.modifiers.extraFields');
+  return errors;
+}
 export function resolveSessionMovement(entry: MovementEntry): MovementResolution {
   const fail = (...errors: string[]): MovementResolution => ({ status: 'GENERATED_UNRESOLVED', errors });
   if (!entry.variant) {
@@ -38,11 +52,7 @@ export function resolveSessionMovement(entry: MovementEntry): MovementResolution
       referenceCompatibility: m.id, resolverVersion: 1 } } : { status: 'CANONICAL_UNKNOWN', errors: ['MOVEMENT_UNKNOWN'] };
   }
   const v = entry.variant;
-  if (!/^generated:[a-z0-9_-]{1,32}$/.test(entry.movementId) || !object(v)
-    || !keys(v, ['version', 'canonicalFamily', 'displayName', 'modifiers']) || v.version !== 1
-    || typeof v.canonicalFamily !== 'string' || typeof v.displayName !== 'string' || v.displayName.length > 160
-    || !object(v.modifiers) || !Object.keys(v.modifiers).length
-    || !keys(v.modifiers, ['tempo', 'stance', 'direction', 'loadPosition'])) return fail('GENERATED_VARIANT_SHAPE_INVALID');
+  if (variantShapeFailures(entry).length) return fail('GENERATED_VARIANT_SHAPE_INVALID');
   const base = Object.hasOwn(MOVEMENT_LIBRARY, v.canonicalFamily) ? MOVEMENT_LIBRARY[v.canonicalFamily] : undefined;
   if (!base || !controlledPatterns.includes(base.movement_pattern)) return fail('GENERATED_SEMANTICS_UNRESOLVED:canonicalFamily');
   const mods = v.modifiers;
@@ -58,7 +68,7 @@ export function resolveSessionMovement(entry: MovementEntry): MovementResolution
     || base.movement_pattern !== 'lunge' || base.equipment.length !== 1 || base.equipment[0] !== 'mancuerna'))
     return fail('GENERATED_SEMANTICS_UNRESOLVED:loadPosition');
   const displayName = movementVariantDisplayName(base.id, mods);
-  if (v.displayName.trim().toLowerCase() !== displayName.toLowerCase()) return fail('GENERATED_DISPLAY_SEMANTICS_MISMATCH');
+  if (v.displayName !== undefined && v.displayName.trim().toLowerCase() !== displayName.toLowerCase()) return fail('GENERATED_DISPLAY_SEMANTICS_MISMATCH');
   const modifiers = { ...(mods.tempo ? { tempo: [...mods.tempo] as [number, number, number, number] } : {}),
     ...(mods.stance ? { stance: mods.stance } : {}), ...(mods.direction ? { direction: mods.direction } : {}),
     ...(mods.loadPosition ? { loadPosition: mods.loadPosition } : {}) };

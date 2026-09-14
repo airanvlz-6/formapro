@@ -1,3 +1,4 @@
+import type { SessionShapeDiagnostic } from './sessionShapeDiagnostics';
 import { openExecution, EXECUTABLE_DOSE_INSTRUCTIONS } from './sessionExecution';
 import { aerobicExecutionGate } from './aerobicExecutionGate';
 import { builderTrace, contractFailureStage, sufficiencyFailure, type SufficiencyFailure, type BuilderCompletion } from './builderDiagnostics';
@@ -91,7 +92,7 @@ Puedes elegir un canónico con su schema actual, o una variante deportiva recono
 Variante: {movementId:"generated:local_1",variant:{version:1,canonicalFamily:"ID canónico conocido",displayName:"nombre de la receta",modifiers:{...}},prescription:{...}}.
 El servidor v1 resuelve variaciones controladas de squat, hinge, lunge, push/pull, core y carry. Otros patrones/familias quedan UNRESOLVED, no inventes metadata para autorizarlos.
 Modificadores tipados: tempo:[4 componentes en segundos] para movimientos dinámicos controlados (copiar exactamente también en prescription.tempo); stance:"narrow"|"wide" para squat/hinge o plank; direction:"reverse" para lunge o sled_drag/sled_pull; loadPosition:"contralateral" solo para lunge con mancuerna como único material canónico.
-Nombre verificable: concatenar en este orden los campos presentes: "Tempo " + tempo unido por guiones; stance; loadPosition; direction; canonicalFamily con underscores convertidos en espacios. Ejemplo: "Tempo 3-1-1-0 contralateral reverse db lunge". Este nombre expresa una receta, no una afirmación de seguridad.
+displayName es opcional: si falta, el servidor deriva el nombre de la receta. Si lo incluyes debe coincidir. Nombre verificable: concatenar en este orden los campos presentes: "Tempo " + tempo unido por guiones; stance; loadPosition; direction; canonicalFamily con underscores convertidos en espacios. Ejemplo: "Tempo 3-1-1-0 contralateral reverse db lunge". Este nombre expresa una receta, no una afirmación de seguridad.
 No declares pattern, equipment availability, impact, axialLoad, safeForKnee ni referenceAnchor: los resuelve/verifica el servidor. La familia es procedencia, NO referencia de fuerza.
 Variantes v1 usan RPE/RIR y dosis compatibles; NO %1RM ni referencias HR/pace heredadas. No inventes kg. Equipment, skill, restricciones, scope, intent, estructura y tiempo siguen siendo hard.
 La variante conserva las exclusiones del movimiento base. Cambios de geometría no heredan garantías negativas: UNKNOWN relevante rechaza. No uses una variante para eludir una exclusión.
@@ -120,6 +121,7 @@ Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gram�
       executions: authority.runningMethodDose.evidence.structuredMethodExecution?.records.map(({ executionId: _id, ...r }) => r),
     } : null });
   let previousErrors: string[] = [];
+  let shapeDetails: SessionShapeDiagnostic[] = [];
   let missingDetails: SufficiencyFailure[] = [];
   for (let attempt = 0; attempt < 2; attempt++) {
     trace.beginAttempt();
@@ -127,9 +129,10 @@ Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gram�
     const duplicateCorrection = attempt && previousErrors.some(v => v.startsWith('DUPLICATE_MOVEMENT:'))
       ? `\nREPAIR_CONSTRAINTS:\n${JSON.stringify({ previousErrors: ['DUPLICATE_MOVEMENT'], scope: 'within_each_block',
         instruction: 'Cada movementId debe aparecer como máximo una vez dentro de cada bloque. Recompón la propuesta dentro del mismo contrato; no traslades ni elimines dosis automáticamente. Esta restricción no prohíbe repetir un movementId entre warmup y main con dosis apropiadas.' })}` : '';
-    try { raw = trace.completion(await complete(prompt + (attempt ? `\nLa primera propuesta fue rechazada: ${JSON.stringify(previousErrors)}. Devuelve una composición válida dentro del MISMO contrato; no repitas la propuesta rechazada.` : '') + duplicateCorrection)); }
+    try { raw = trace.completion(await complete(prompt + (attempt ? `\nLa primera propuesta fue rechazada: ${JSON.stringify(previousErrors)}. Devuelve una composición válida dentro del MISMO contrato; no repitas la propuesta rechazada.` : '') + (attempt && shapeDetails.length ? `\nREPAIR_SHAPE_DETAILS:\n${JSON.stringify(shapeDetails)}` : '') + duplicateCorrection)); }
     catch { trace.emit(attempt + 1, 'provider', 'SESSION_GENERATION_FAILED', ['LLM_REQUEST_FAILED'], false, 'provider_failure_terminal'); return { ok: false as const, code: 'SESSION_GENERATION_FAILED', violations: ['LLM_REQUEST_FAILED'], diagnostics: trace.summary() }; }
-    const parsed = parseStructuredSession(raw, openExecution(authority));
+    shapeDetails = [];
+    const parsed = parseStructuredSession(raw, openExecution(authority), detail => { shapeDetails.push(detail); trace.shape(attempt + 1, detail); });
     if (!parsed.ok) {
       if (authority.generatedMovementAuthority) emitSessionCoachingDiagnostic('MOVEMENT_RESOLUTION', { status: 'REJECTED', errors: movementDiagnosticCodes(parsed.violations) });
       previousErrors = parsed.violations;

@@ -22,10 +22,10 @@ export function resolveDoseInstruction(value: unknown): Instruction | null {
   let qualitative = false;
   const side = /\s+(?:por lado|por pierna|each side|per side)$/.test(text);
   if (side) { fields.perSide = true; text = text.replace(/\s+(?:por lado|por pierna|each side|per side)$/, ''); }
-  const pair = text.match(/^(\d+)\s*[x×]\s*(\d+)(?:\s*(?:reps|repeticiones))?$/);
+  const pair = text.match(/^(\d+)\s*(?:[x×]|(?:series|sets)\s*(?:de|of|,))\s*(\d+)(?:\s*(?:reps|repeticiones))?$/);
   const timed = text.match(/^(?:(\d+)\s*[x×]\s*)?(\d+(?:\.\d+)?)\s*(s|segundos|min|minutos|m|metros|km)$/);
   const reps = text.match(/^(?:acumula |accumulate )?(\d+)\s*(?:reps|repeticiones)(?: de calidad| quality)?$/);
-  const sets = text.match(/^(\d+)\s*(?:series|sets)(?: (moderadas|moderados|moderate|tecnicas|tecnicos|technical|controladas|controlados|controlled))?$/);
+  const sets = text.match(/^(\d+)\s*(?:series|sets)(?: (moderadas|moderados|moderate|tecnicas|tecnicos|technical|controladas|controlados|controlled))?(?:, (lejos del fallo|sin llegar al fallo|away from failure|short of failure))?$/);
   const passes = text.match(/^(\d+)\s*(?:pasadas controladas|controlled passes)$/);
   if (pair) { fields.sets = Number(pair[1]); fields.reps = Number(pair[2]); }
   else if (timed) {
@@ -34,7 +34,7 @@ export function resolveDoseInstruction(value: unknown): Instruction | null {
     if (['m','metros','km'].includes(unit)) fields.distanceMeters = n * (unit === 'km' ? 1000 : 1);
     else fields.durationSeconds = n * (unit.startsWith('min') ? 60 : 1);
   } else if (reps) fields.reps = Number(reps[1]);
-  else if (sets) { fields.sets = Number(sets[1]); qualitative = !!sets[2]; }
+  else if (sets) { fields.sets = Number(sets[1]); qualitative = !!sets[2] || !!sets[3]; }
   else if (passes && Number(passes[1]) > 0 && Number(passes[1]) <= 100) qualitative = true;
   else if (/^(?:trabajo tecnico(?: y fluido)?|technical(?: flowing)? work)$/.test(text)) qualitative = true;
   else if (text !== '' || (!fields.intensity && !reference)) return null;
@@ -80,7 +80,7 @@ blocks: main solo o warmup/main con cooldown opcional. Cada bloque lleva blockTy
 prescription conserva sets/reps/durationSeconds/distanceMeters/restSeconds/tempo/perSide/intensity. Cantidades positivas finitas, sets/reps enteros; descanso admite cero. Sets<=100, reps<=1000, segundos<=28800, metros<=100000, descanso<=3600; no superar límites totales del schema. Tempo: cuatro duraciones no negativas, suma positiva.
 Elige dosis, bloques, descansos y esfuerzo. No existe una obligación universal de reps, intensidad o descanso numérico si la dosis sigue siendo ejecutable. No prescribas solo sets sin otra instrucción útil.
 perSide solo cuando decidas explícitamente por lado; no lo inventes para analytics. Puede acompañar reps, duración o distancia. Sin lado explícito la cuantificación por lado permanece UNKNOWN y no impide ejecutar la sesión.
-Puedes usar doseInstruction de hasta 180 caracteres, perteneciente SOLO al movimiento actual. Es gramática de dosis, no prosa libre ni otro movimiento: "3 x 8 por pierna", "3 x 30 s por lado", "acumula 30 reps de calidad", "3 series moderadas", "2 sets técnicos", "3 pasadas controladas", "trabajo técnico y fluido a RPE 6". Equivalentes soportados: each side/per side, sets moderate/technical/controlled, controlled passes, technical flowing work. Se resuelven las cantidades inequívocas; si repites campos deben coincidir exactamente. No añadas nombres de ejercicios, condiciones médicas, equipo, instrucciones adicionales ni hechos de seguridad al texto.
+Puedes usar doseInstruction de hasta 180 caracteres, perteneciente SOLO al movimiento actual. Es gramática de dosis, no prosa libre ni otro movimiento: "3 x 8 por pierna", "3 x 30 s por lado", "acumula 30 reps de calidad", "3 series moderadas", "2 sets técnicos", "3 pasadas controladas", "trabajo técnico y fluido a RPE 6". La clase series por repeticiones admite x/×, series de, sets of o sets, (por ejemplo 3 sets of 8 each side). La clase de series cualitativas admite una cláusula de esfuerzo acotado: lejos del fallo/sin llegar al fallo/away from failure/short of failure. No convierte ese esfuerzo en RIR ni inventa reps. Equivalentes soportados: each side/per side, sets moderate/technical/controlled, controlled passes, technical flowing work. Se resuelven las cantidades inequívocas; si repites campos deben coincidir exactamente. No añadas nombres de ejercicios, condiciones médicas, equipo, instrucciones adicionales ni hechos de seguridad al texto.
 Intensity: {kind:"rpe",value:6}, {kind:"rir",value:3}, {kind:"percent_1rm",referenceId:"ID autorizado",value:75}, {kind:"reference",referenceId:"ID autorizado"}. RPE/RIR no requieren RM. Nunca kg, HR ni ritmos libres. Una referencia numérica mencionada en doseInstruction exige también intensity estructurado y referencia compatible; prefiere usar solo intensity para referencias objetivas.
 formatDose describe la gramática elegida: reloj para AMRAP/density/death_by; EMOM/E2MOM usa intervalSeconds=60/120 y workSeconds+restSeconds=intervalSeconds, además durationSeconds o rounds. Rondas/couplet/triplet/chipper/complex pueden expresar rounds/restSeconds/timeCapSeconds. Cantidades y clocks deben ser coherentes. Couplets tienen dos movimientos y triplets tres. Continuo no admite pausas ni series repetidas.
 El tiempo disponible es techo, no objetivo. Respeta siempre el máximo suministrado. Si una parte no es cuantificable con precisión, conserva la instrucción ejecutable sin inventar duración o repeticiones; el servidor valida toda duración calculable y mantiene UNKNOWN lo demás. No ocultes trabajo en texto para eludir el techo.

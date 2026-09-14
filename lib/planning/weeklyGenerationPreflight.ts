@@ -1,7 +1,9 @@
-import { loadWeeklyCalendarContext, weeklyDigest } from './weeklyCalendarAuthority';
+import { loadWeeklyCalendarContext, availabilitySnapshotDigest } from './weeklyCalendarAuthority';
 import { prepareAllowedWeeklyPlanContract } from './prepareAllowedWeeklyPlanContract';
 import { calendarDays, calendarKey } from './weeklyCalendar';
 import { readAvailabilityConfirmation } from '../sports/chatAvailability';
+import { availableDaysAtWeek } from '../sports/temporaryTrainingAccess';
+import { canonicalDiscipline } from '../sports/prescriptionScope';
 
 /** A request-local choice, never a persistent availability or ownership change. */
 export function parseIncludeToday(value: unknown, answeringQuestion = false): boolean | null {
@@ -20,13 +22,12 @@ export async function resolveWeeklyGenerationPreflight(db: any, codigo: string, 
 }) {
   let availabilityStatus: 'VALID' | 'MISSING' | 'INVALID' | 'READ_ERROR' | 'NOT_CHECKED' = 'NOT_CHECKED';
   try {
-    const c = await loadWeeklyCalendarContext(db, codigo);
+    const c = await loadWeeklyCalendarContext(db, codigo, request.targetWeekStart);
     if (Object.values(c.allowed).some(days => days.some(day => !calendarDays.includes(day)))) throw new Error('CALENDAR_AVAILABILITY_INVALID');
     availabilityStatus = 'VALID';
     // Reuse the existing confirmation digest. A temporal answer is not confirmation of changed availability.
-    if (request.confirmedAvailabilityDigest != null && request.confirmedAvailabilityDigest !== weeklyDigest({
-      distribution: c.profile.distribucion_semanal, sources: c.sources, scope: c.scope })) {
-      const confirmation = await readAvailabilityConfirmation(db, codigo);
+    if (request.confirmedAvailabilityDigest != null && request.confirmedAvailabilityDigest !== availabilitySnapshotDigest(c, request.targetWeekStart)) {
+      const confirmation = await readAvailabilityConfirmation(db, codigo, request.targetWeekStart);
       if (!confirmation.ok) return { ok: false, code: confirmation.code, availabilityStatus, canContinue: false, temporalDecision: null };
       return { ok: false, code: 'AVAILABILITY_CONFIRMATION_STALE', availabilityStatus, canContinue: false,
         temporalDecision: null, snapshotDigest: confirmation.snapshotDigest,
@@ -39,8 +40,8 @@ export async function resolveWeeklyGenerationPreflight(db: any, codigo: string, 
     const relevantDays = todayInTarget ? calendarDays.filter((day, i) => i >= index
       && c.scope.managedDisciplines.some(discipline => c.allowed[discipline].includes(day))
       && !request.snapshot?.sessions.some(s => s.completada === true && typeof s.dia === 'string' && calendarKey(s.dia) === day)
-      && !c.sources.some((source: { owner: string; dias?: string[] }) => source.owner === 'external'
-        && Array.isArray(source.dias) && source.dias.some(d => calendarKey(d) === day))) : [];
+      && !c.sources.some((source: { owner: string; disciplina: string; dias?: string[] }) => source.owner === 'external'
+        && availableDaysAtWeek(c.profile.perfil, request.targetWeekStart, Array.isArray(source.dias) ? source.dias.map(calendarKey) : [], canonicalDiscipline(source.disciplina))?.includes(day))) : [];
     if (explicit === null && todayInTarget && relevantDays.length) return {
       ok: true, code: 'TEMPORAL_DECISION_REQUIRED', temporalStatus: 'TEMPORAL_DECISION_UNRESOLVED',
       availabilityStatus, availability: c.allowed, targetWeekStart: request.targetWeekStart,

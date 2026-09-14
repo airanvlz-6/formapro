@@ -40,6 +40,7 @@ export type WeeklyContractInput = {
   runningEventPreparation?: RunningEventPreparationDecisionV1;
   /** Server-projected date/assignment evidence; absent only for legacy pure callers. */
   daySufficiency?: Record<string, Record<string, PrescriptionSignals>>;
+  weeklyAvailability?: import('../sports/weeklyAvailabilityDeclaration').WeeklyAvailabilityDeclaration;
   doseCapabilities?: DoseCapabilityProfile;
   transferPermissions?: CanonicalTransferPermissions;
   targetWeekStart: string; prescriptionScope: PrescriptionScope; maxExecutableDays: number;
@@ -326,6 +327,18 @@ export async function composeBoundedWeek(contract: AllowedWeeklyPlanContract, co
   const immutable = structuredClone(contract);
   const freeze = (v: any) => { if (v && typeof v === 'object') { Object.freeze(v); Object.values(v).forEach(freeze); } };
   freeze(immutable);
+  if (immutable.contractVersion === 2 && immutable.openFacts?.weeklyAvailability?.resolution === 'EXPLICIT_ZERO_TRAINING'
+    && Object.values(immutable.openFacts.allowed).every(days => days.length === 0)) {
+    // This is the user's factual no-training decision, not an invented sports
+    // prescription. It travels through the same selection, receipt and save gates.
+    const selected = validateWeeklySelection(immutable, { contractVersion: 2, contextDigest: immutable.contextDigest,
+      selections: calendarDays.map(day => {
+        const fixed = immutable.dayOptions[day].find(o => o.protected);
+        return fixed ? { day, optionId: fixed.optionId } : { day, state: 'REST', decision: { role: 'RECOVERY', reason: 'Sin entrenamiento por disponibilidad semanal explícita.' } };
+      }) });
+    if (!selected.ok) return selected;
+    return { ok: true as const, contract: immutable, selected: selected.selected, decisions: selected.decisions, warnings: selected.warnings, attempts: 0 };
+  }
   const prompt = weeklyPlannerPrompt(immutable, coachingContext ? structuredClone(coachingContext) : undefined);
   let errors: string[] = [];
   for (let attempt = 1; attempt <= 2; attempt++) {

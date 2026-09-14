@@ -1,6 +1,9 @@
 import { normalizeAvailabilityDays, normalizeAvailabilityForStorage, normalizeTrainingAvailability } from './trainingAvailability';
 import { buildPrescriptionScope, canonicalDiscipline, resolveProfileDisciplines } from './prescriptionScope';
-import { loadWeeklyCalendarContext, weeklyDigest } from '../planning/weeklyCalendarAuthority';
+import { loadWeeklyCalendarContext, weeklyDigest, availabilitySnapshotDigest } from '../planning/weeklyCalendarAuthority';
+import { parseWeeklyAvailabilityDeclaration, validAvailabilityWeek, weeklyDeclaration } from './weeklyAvailabilityDeclaration';
+import { availableDaysAtWeek } from './temporaryTrainingAccess';
+import { samePlanData } from '../planning/planMutationValidators';
 import { isExistingAvailabilityConfirmation, parseAvailabilityChange } from './availabilityResponse';
 
 const fail = (code: string) => ({ ok: false as const, actualizado: false, code, retryable: false });
@@ -18,13 +21,15 @@ function canonicalDays(profile: any, sources: any[], disciplines: string[]) {
   return result;
 }
 /** Read-only snapshot/question using the same managed-day authority as the Planner. */
-export async function readAvailabilityConfirmation(db: any, codigo: string) {
+export async function readAvailabilityConfirmation(db: any, codigo: string, targetWeek?: string) {
   try {
-    const c = await loadWeeklyCalendarContext(db, codigo);
-    const days = canonicalDays(c.profile, c.sources, [...c.scope.managedDisciplines, ...c.scope.externalDisciplines]);
+    if (targetWeek !== undefined && !validAvailabilityWeek(targetWeek)) return fail('AVAILABILITY_WEEK_INVALID');
+    const c = await loadWeeklyCalendarContext(db, codigo, targetWeek);
+    const declared = targetWeek ? weeklyDeclaration(c.profile.perfil, targetWeek) : null;
+    const days = declared?.availability ?? canonicalDays(c.profile, c.sources, [...c.scope.managedDisciplines, ...c.scope.externalDisciplines]);
     if (!days) return fail('AVAILABILITY_EXISTING_REQUIRED');
-    const availability = { ...days, ...c.allowed };
-    const snapshotDigest = weeklyDigest({ distribution: c.profile.distribucion_semanal, sources: c.sources, scope: c.scope });
+    const availability = { ...Object.fromEntries(Object.entries(days).map(([d,v]) => [d, targetWeek ? availableDaysAtWeek(c.profile.perfil, targetWeek, v, d)! : v])), ...c.allowed };
+    const snapshotDigest = availabilitySnapshotDigest(c, targetWeek);
     const labels: Record<string,string> = { box:'Box', carrera:'Carrera', fuerza:'Fuerza' };
     const question = `Actualmente tengo tu disponibilidad así:\n\n${Object.entries(availability).map(([d,v]) => `${labels[d] || d}: ${v.length ? v.join(', ') : 'sin días disponibles'}.`).join('\n')}\n\n¿Sigue siendo correcta para esta semana?`;
     return { ok: true as const, availability, snapshotDigest, question,
@@ -61,7 +66,8 @@ export function parseChatAvailability(value: unknown): Record<string, string[]> 
 }
 
 /** Existing distribution plus explicit source days; ownership and scope never change. */
-export async function updateChatAvailability(db: any, codigo: string, input: unknown, expectedSnapshot?: unknown) {
+export async function updateChatAvailability(db: any, codigo: string, input: unknown, expectedSnapshot?: unknown, targetWeek?: string) {
+  if (targetWeek !== undefined && !validAvailabilityWeek(targetWeek)) return fail('AVAILABILITY_WEEK_INVALID');
   const confirmedUnchanged = isExistingAvailabilityConfirmation(input);
   let update = parseChatAvailability(input) ?? normalizeAvailabilityForStorage(input);
   try {
@@ -72,16 +78,46 @@ export async function updateChatAvailability(db: any, codigo: string, input: unk
     const before = scopeOf(p.data);
     if (!before.ok) return fail('AVAILABILITY_SCOPE_UNRESOLVED');
     let previous = p.data.distribucion_semanal;
-    try { previous = typeof previous === 'string' ? JSON.parse(previous) : previous; } catch { return fail('AVAILABILITY_FORMAT_INVALID'); }
+    try { previous = typeof previous === 'string' ? JSON.parse(previous) : previous; } catch { if (!targetWeek) return fail('AVAILABILITY_FORMAT_INVALID'); previous = {}; }
     if (!previous || typeof previous !== 'object' || Array.isArray(previous)) previous = {};
     if (confirmedUnchanged) {
-      const current = await readAvailabilityConfirmation(db, codigo);
+      const current = await readAvailabilityConfirmation(db, codigo, targetWeek);
       if (!current.ok) return { ...current, responseKind: 'UNRESOLVED_AVAILABILITY_RESPONSE' as const };
       if (expectedSnapshot != null && expectedSnapshot !== current.snapshotDigest) return { ...fail('AVAILABILITY_CONFIRMATION_STALE'),
         responseKind: 'UNRESOLVED_AVAILABILITY_RESPONSE' as const, question: current.question, snapshotDigest: current.snapshotDigest };
       return { ...current, actualizado: false, responseKind: 'CONFIRM_EXISTING_AVAILABILITY' as const };
     }
-    const authorizedDays = canonicalDays(p.data, t.data, [...before.scope.managedDisciplines, ...before.scope.externalDisciplines]) || {};
+    const authorizedDays = Object.assign({}, ...[...before.scope.managedDisciplines, ...before.scope.externalDisciplines]
+      .map(d => canonicalDays(p.data, t.data, [d]) ?? {})) as Record<string, string[]>;
+    if (targetWeek) {
+      const authorized = [...before.scope.managedDisciplines, ...before.scope.externalDisciplines];
+      const prior = Object.fromEntries(authorized.flatMap(d => {
+        const days = availableDaysAtWeek(p.data.perfil, targetWeek, authorizedDays[d] ?? null, d);
+        return days === null ? [] : [[d, days]];
+      })) as Record<string, string[]>;
+      let declaration = parseWeeklyAvailabilityDeclaration(input, authorized, prior);
+      if (!declaration) {
+        const changes = update ?? parseAvailabilityChange(input, prior);
+        if (changes) declaration = { version: 1, source: 'explicit_user_declaration', availability: { ...prior,
+          ...Object.fromEntries(Object.entries(changes).filter(([,v]) => Array.isArray(v)).map(([k,v]) => [canonicalDiscipline(k), v as string[]])) },
+          resolution: 'DECLARED_AVAILABILITY', excludedDisciplines: [], unavailableDays: [], unresolvedDays: [] };
+        if (declaration && !Object.values(declaration.availability).some(days => days.length)) declaration.resolution = 'EXPLICIT_ZERO_TRAINING';
+      }
+      if (!declaration) return { ...fail('UNRESOLVED_AVAILABILITY'), resolution: 'UNRESOLVED_AVAILABILITY' as const, responseKind: 'UNRESOLVED_AVAILABILITY_RESPONSE' as const };
+      if (Object.keys(declaration.availability).some(d => !authorized.includes(d))) return fail('AVAILABILITY_SCOPE_CHANGE_REQUIRED');
+      const snapshot = availabilitySnapshotDigest({ profile: p.data, sources: t.data, scope: before.scope }, targetWeek);
+      if (expectedSnapshot != null && expectedSnapshot !== snapshot) return fail('AVAILABILITY_CONFIRMATION_STALE');
+      const perfil = { ...p.data.perfil, weekly_availability: { ...p.data.perfil?.weekly_availability, [targetWeek]: declaration } };
+      // One JSON write with a compare-and-swap, preserving habitual distribution and sources.
+      let write = db.from('usuarios').update({ perfil }).eq('codigo', codigo);
+      write = p.data.perfil == null ? write.is('perfil', null) : write.eq('perfil', JSON.stringify(p.data.perfil));
+      const saved = await write.select('perfil').single();
+      if (saved.error || !samePlanData(saved.data?.perfil, perfil)) return fail('AVAILABILITY_WRITE_FAILED');
+      const current = await readAvailabilityConfirmation(db, codigo, targetWeek);
+      if (!current.ok) return fail('AVAILABILITY_READBACK_FAILED');
+      return { ...current, actualizado: true, responseKind: 'UPDATE_AVAILABILITY' as const, partial: false,
+        rejectedCategories: [], ownershipPending: [], updatedCategories: Object.keys(declaration.availability), declaration };
+    }
     update ??= parseAvailabilityChange(input, authorizedDays);
     if (!update) return { ...fail('AVAILABILITY_FORMAT_INVALID'), responseKind: 'UNRESOLVED_AVAILABILITY_RESPONSE' as const };
     const requested = Object.keys(update!).filter(k => Array.isArray(update![k]));

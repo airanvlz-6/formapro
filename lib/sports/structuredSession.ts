@@ -134,7 +134,8 @@ export function parseStructuredSession(raw: unknown, execution = false, observeS
 export function validateSessionAgainstTrainingContract(contract: AllowedTrainingContract, value: unknown,
   observeDose?: Parameters<typeof validateSessionDose>[2],
   observeMissingSignal?: (signal: string, state: string, blockIndex: number, movementIndex: number) => void,
-  observeIntent?: (assessment: ReturnType<typeof assessSessionIntent>) => void): SessionValidation {
+  observeIntent?: (assessment: ReturnType<typeof assessSessionIntent>) => void,
+  observeRequirement?: (assessment: { blockIndex: number; movementOrdinal: number; family: string | null; category: string; state: string; evidenceSource: string }) => void): SessionValidation {
   const checked = checkSessionShape(value, openExecution(contract));
   if (!checked.ok) return checked;
   const authority = validateAllowedTrainingContract(contract);
@@ -205,8 +206,22 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
       movementId: m.movementId, ...(m.variant ? { variant: m.variant } : {}), discipline: contract.discipline, openDesign: contract.contractVersion === 4, distance: !!m.prescription.distanceMeters,
       intensity: intensity?.kind === 'percent_1rm' ? '1rm' : intensity?.kind === 'reference' ? ref?.unit === 'bpm' ? 'hr' : 'pace' : intensity?.kind,
       referenceId: ref?.id });
+    for (const signal of new Set([...decision.requirements.map(r => r.signal), ...decision.missingSignals.map(r => r.signal)])) {
+      const missing = decision.missingSignals.find(s => s.signal === signal);
+      const resolved = decision.resolvedSignals.find(s => s.signal === signal);
+      const evidence = contract.doseContext.sufficiency.signals[signal];
+      const state = missing?.state ?? (resolved ? 'available' : evidence?.state ?? 'unknown');
+      const source = resolved?.source ?? evidence?.source;
+      try { observeRequirement?.({ blockIndex, movementOrdinal: movementIndex + 1, family: resolvedMovement(m)?.canonicalFamily ?? resolvedMovement(m)?.descriptor.id ?? null,
+        category: signal.split('.')[0], state: state === 'available' ? 'AVAILABLE' : state === 'unavailable' ? 'UNAVAILABLE' : 'UNKNOWN',
+        evidenceSource: state === 'unavailable' ? 'explicit_absence' : source?.includes('training_environment') ? 'training_environment' : source ? 'explicit_profile' : 'unresolved' }); } catch { /* Observation only. */ }
+    }
     if (decision.status !== 'sufficient') for (const s of decision.missingSignals) {
-      violations.push(contract.contractVersion === 4 ? `${s.state === 'unavailable' ? 'FACTUAL_REQUIREMENT_UNAVAILABLE' : 'REQUIREMENT_UNKNOWN'}:${s.signal}` : `PRESCRIPTION_DATA_MISSING:${s.signal}`);
+      // Knowledge gaps in resources are not athlete limitations. References and
+      // executable identity remain necessary; safety is evaluated separately above.
+      const resource = /^(equipment|skill|capability)\./.test(s.signal);
+      if (!openExecution(contract) || s.state === 'unavailable' || !resource)
+        violations.push(contract.contractVersion === 4 ? `${s.state === 'unavailable' ? 'FACTUAL_REQUIREMENT_UNAVAILABLE' : 'REQUIREMENT_UNKNOWN'}:${s.signal}` : `PRESCRIPTION_DATA_MISSING:${s.signal}`);
       try { observeMissingSignal?.(s.signal, s.state, blockIndex, movementIndex); } catch { /* Observation is non-authoritative. */ }
     }
   }

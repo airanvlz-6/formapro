@@ -5090,11 +5090,11 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
 
 
   if (action === "obtener_confirmacion_disponibilidad") {
-    return NextResponse.json(await readAvailabilityConfirmation(supabase, codigo));
+    return NextResponse.json(await readAvailabilityConfirmation(supabase, codigo, datos?.targetWeekStart));
   }
 
   if (action === "verificar_correccion_disponibilidad_deterministico") {
-    return NextResponse.json(await updateChatAvailability(supabase, codigo, datos.mensajeUsuario, datos.snapshotDigest));
+    return NextResponse.json(await updateChatAvailability(supabase, codigo, datos.mensajeUsuario, datos.snapshotDigest, datos.targetWeekStart));
   }
 
   if (action === "responder_habito_carrera") {

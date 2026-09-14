@@ -14,10 +14,11 @@ export type EnvironmentEvidence = {
   assignedDiscipline?: string | null;
 };
 const key = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
-// Canonical IDs and exact existing questionnaire options only. Mixed locations
+// Canonical environment aliases and existing questionnaire options. Mixed locations
 // deliberately cannot grant a box inventory to a session that may occur at home.
 const locations: Readonly<Record<string, TrainingEnvironment>> = {
-  box: 'BOX', gym: 'GYM', home: 'HOME', outdoor: 'OUTDOOR', unknown: 'UNKNOWN',
+  box: 'BOX', crossfit: 'BOX', 'crossfit box': 'BOX', crossfit_box: 'BOX', 'box crossfit': 'BOX',
+  gym: 'GYM', gimnasio: 'GYM', home: 'HOME', casa: 'HOME', limited: 'HOME', outdoor: 'OUTDOOR', unknown: 'UNKNOWN',
   'box crossfit (equipamiento completo)': 'BOX',
   'gimnasio convencional adaptado': 'GYM',
   'en casa con equipamiento basico': 'HOME',

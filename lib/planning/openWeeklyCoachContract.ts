@@ -6,9 +6,10 @@ import { executablePrescriptionCounts, noWeeklyPrescription } from './weeklyRege
 import { TRANSFER_METHODS } from '../sports/goalTransferModel';
 
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-export type OpenWeeklyFacts = Pick<WeeklyContractInput, 'allowed' | 'contexts' | 'daySufficiency'>;
+export type OpenWeeklyFacts = Pick<WeeklyContractInput, 'allowed' | 'contexts' | 'daySufficiency' | 'weeklyAvailability'>;
 export function buildOpenWeeklyContract(input: WeeklyContractInput) {
-  if (input.regeneration && !input.regeneration.pendingManagedDays.length) return noWeeklyPrescription('NO_REMAINING_MANAGED_DAYS');
+  const explicitAvailabilityDecision = !!input.weeklyAvailability && calendarDays.some(day => !input.fixed[day]);
+  if (input.regeneration && !input.regeneration.pendingManagedDays.length && !explicitAvailabilityDecision) return noWeeklyPrescription('NO_REMAINING_MANAGED_DAYS');
   if (!input.prescriptionScope.prescriptionAllowed || !input.prescriptionScope.managedDisciplines.length
     || !/^\d{4}-\d{2}-\d{2}$/.test(input.targetWeekStart) || new Date(input.targetWeekStart).getUTCDay() !== 1
     || Object.keys(input.fixed).some(day => !calendarDays.includes(day))
@@ -22,9 +23,11 @@ export function buildOpenWeeklyContract(input: WeeklyContractInput) {
     dayOptions: Object.fromEntries(calendarDays.map(day => [day, input.fixed[day]
       ? [{ optionId: `${day}:fixed`, ...input.fixed[day], protected: true as const }]
       : [{ optionId: `${day}:rest`, state: 'REST' as const }]])),
-    openFacts: structuredClone({ allowed: input.allowed, contexts: input.contexts, daySufficiency: input.daySufficiency }),
+    openFacts: structuredClone({ allowed: input.allowed, contexts: input.contexts, daySufficiency: input.daySufficiency,
+      ...(input.weeklyAvailability ? { weeklyAvailability: input.weeklyAvailability } : {}) }),
     ...(input.strategy ? { strategy: structuredClone(input.strategy) } : {}),
-    ...(input.regeneration ? { regeneration: { ...structuredClone(input.regeneration), openCoachDecision: true } } : {}),
+    ...(input.regeneration ? { regeneration: { ...structuredClone(input.regeneration), openCoachDecision: true,
+      ...(explicitAvailabilityDecision ? { explicitAvailabilityDecision: true as const } : {}) } } : {}),
   };
   return { ok: true as const, contract };
 }
@@ -92,7 +95,7 @@ No existe una lista exhaustiva de opciones deportivas. Los métodos conocidos so
 Decide TRAIN, REST, distribución, método, desarrollo/mantenimiento y patrón. No cuotas ni obligación de variar. Considera interferencia, continuidad y respuesta histórica sin inventar datos. No conviertas prescripción previa en ejecución.
 Para días protected copia exactamente {day,optionId}. Otros días: {day,state,decision:{role,reason}} para REST; TRAIN/RECOVERY añade intent:{kind:"open_coach",version:1,discipline,adaptationId,stimulusId,pattern,method:{kind:"coach_defined",label},role}. Método conocido: method:{kind:"known",id}, con semántica exacta del catálogo.
 Pattern es uno de squat,hinge,horizontal_push,vertical_push,horizontal_pull,vertical_pull,olympic_lift,carry,run,jump,core_antirotacion,core_flexion,core_antiextension,locomotion,lunge,rotational,cyclic,inverted_locomotion. Role: PRIMARY,SUPPORTING,MAINTENANCE,OPTIONAL; decision admite también RECOVERY. reason breve, máximo 400 caracteres, sin razonamiento interno. RECOVERY usa stimulusId recuperacion_activa y cuenta como ejecutable.
-Respeta disponibilidad, scope, fixed y frequencyPolicy. No necesitas un método previo para proponer. Devuelve JSON RAW {contractVersion:2,contextDigest,selections:[siete días únicos]}. No envíes hechos autodeclarados ni campos adicionales.
+Respeta disponibilidad, scope, fixed y frequencyPolicy. openFacts.allowed es la disponibilidad efectiva de ESTA semana: una disciplina habitual puede tener cero días. No rellenes días por perfil, ciclo o adaptación preferida ni cambies la disciplina asignada por el usuario. En días disponibles puedes decidir TRAIN/REST y el contenido. No necesitas un método previo para proponer. Devuelve JSON RAW {contractVersion:2,contextDigest,selections:[siete días únicos]}. No envíes hechos autodeclarados ni campos adicionales.
 KNOWLEDGE_EXAMPLES:\n${JSON.stringify(TRANSFER_METHODS)}
 COACHING_CONTEXT:\n${JSON.stringify(context)}
 WEEKLY_CONTRACT:\n${JSON.stringify(contract)}`;

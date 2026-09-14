@@ -1,5 +1,6 @@
 import { weeklyRegenerationOutcome } from './weeklyRegeneration';
 import { availableDaysAtWeek } from '../sports/temporaryTrainingAccess';
+import { weeklyDeclaration } from '../sports/weeklyAvailabilityDeclaration';
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { buildAllowedWeeklyPlanContract, validateWeeklySelection, type AllowedWeeklyPlanContract } from './allowedWeeklyPlanContract';
 import { loadWeeklyPlanningContext } from './prepareAllowedWeeklyPlanContract';
@@ -17,6 +18,9 @@ import { loadLongitudinalProjection } from './longitudinalAuthority';
 import { authenticatedPresentationVersion } from '../sports/sessionPresentation';
 
 export const weeklyDigest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+export const availabilitySnapshotDigest = (c: { profile: any; sources: any[]; scope: unknown }, week?: string) => weeklyDigest({
+  distribution: c.profile.distribucion_semanal, sources: c.sources, scope: c.scope,
+  ...(week && weeklyDeclaration(c.profile.perfil, week) ? { week, declaration: weeklyDeclaration(c.profile.perfil, week) } : {}) });
 const snapshotDigest = (snapshot: any) => weeklyDigest(snapshot ? { id: snapshot.id, revision: snapshot.revision, sessions: snapshot.sessions } : null);
 type Admission = { contract: AllowedWeeklyPlanContract; selections: { day: string; optionId?: string }[];
   request: Parameters<typeof loadWeeklyPlanningContext>[2]; generationToken: string; decisions?: Record<string, unknown> };
@@ -39,18 +43,19 @@ export async function loadWeeklyCalendarContext(db: any, codigo: string, targetW
   if (!scope.ok || !scope.scope.prescriptionAllowed) throw new Error('CALENDAR_SCOPE_INVALID');
   let dist: Record<string, unknown>;
   try { dist = typeof profile.distribucion_semanal === 'string' ? JSON.parse(profile.distribucion_semanal) : profile.distribucion_semanal; }
-  catch { throw new Error('CALENDAR_AVAILABILITY_INVALID'); }
+  catch { if (targetWeek && weeklyDeclaration(profile.perfil, targetWeek)) dist = {}; else throw new Error('CALENDAR_AVAILABILITY_INVALID'); }
+  if (targetWeek && weeklyDeclaration(profile.perfil, targetWeek)) dist = {};
   if (dist == null) throw new Error('CALENDAR_AVAILABILITY_REQUIRED');
   if (typeof dist !== 'object' || Array.isArray(dist)) throw new Error('CALENDAR_AVAILABILITY_INVALID');
   const allowed: Record<string, string[]> = {};
   for (const discipline of scope.scope.managedDisciplines) {
     const sources = t.data.filter((s: any) => s.owner === 'forge' && canonicalDiscipline(s.disciplina) === discipline && s.dias != null);
     const normalized = sources.length ? null : normalizeTrainingAvailability(dist, [discipline]);
-    const value = sources.length ? sources.flatMap((s: any) => s.dias)
+    const habitual = sources.length ? sources.flatMap((s: any) => s.dias)
       : normalized?.ok ? normalized.availability[discipline] : null;
+    const value = targetWeek ? availableDaysAtWeek(profile.perfil, targetWeek, habitual, discipline) : habitual;
     if (!Array.isArray(value) || value.some(v => typeof v !== 'string')) throw weeklyAvailabilityFailure(dist, discipline, scope.scope, sources, value);
     allowed[discipline] = value.map(calendarKey);
-    if (targetWeek) allowed[discipline] = availableDaysAtWeek(profile.perfil, targetWeek, allowed[discipline])!;
   }
   const frequency = calcularFrecuenciaRealRelativa(profile.workout_history || [], Number.parseInt(profile.perfil?.dias || '0'));
   return { profile, sources: t.data, scope: scope.scope, allowed, max: aplicarTrainingFrequencySafetyNet(7, frequency).diasEntrenoSugeridos };
@@ -91,7 +96,7 @@ export async function issueWeeklyCalendar(db: any, codigo: string, week: string,
         ...(request.coherenceVersion === 1 ? { coherenceVersion: 1 } : {}),
         ...(request.preserveDays ? { preserveDays: request.preserveDays } : {}),
         ...(request.planningRunId ? {planningRunId:request.planningRunId} : {}),
-        ...(request.confirmedAvailabilityDigest === weeklyDigest({ distribution: c.profile.distribucion_semanal, sources: c.sources, scope: c.scope })
+        ...(request.confirmedAvailabilityDigest === availabilitySnapshotDigest(c, week)
           ? { confirmedAvailabilityDigest: request.confirmedAvailabilityDigest } : {}),
         ...(request.strategyVersion === 1 ? { strategyVersion: 1, ...(request.strategyProposal !== undefined ? { strategyProposal: request.strategyProposal } : {}) } : {}) } };
   }

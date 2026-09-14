@@ -1,8 +1,11 @@
 import { calendarDays, calendarKey } from '../planning/weeklyCalendar';
 import { resolveCompletionDate } from '../planning/recordCompletion';
+import { weeklyDeclaration } from './weeklyAvailabilityDeclaration';
 
-/** Date-scoped extension of the existing prescription_access store, never habitual availability. */
-export function availableDaysAtWeek(profile: any, week: string, days: readonly string[] | null) {
+/** Explicit week choices followed by dated access restrictions, never a habitual availability write. */
+export function availableDaysAtWeek(profile: any, week: string, days: readonly string[] | null, discipline?: string) {
+  const declaration = weeklyDeclaration(profile, week);
+  if (declaration && discipline) days = declaration.availability[discipline] ?? [];
   const blocked = calendarDays.filter((_, index) => profile?.prescription_access?.[
     new Date(Date.parse(week) + index * 86400000).toISOString().slice(0, 10)]?.availability === 'unavailable');
   return blocked.length ? (days ?? calendarDays).filter(day => !blocked.includes(calendarKey(day))) : days === null ? null : [...days];

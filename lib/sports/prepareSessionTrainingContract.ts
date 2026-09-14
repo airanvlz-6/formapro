@@ -38,14 +38,15 @@ export async function prepareSessionTrainingContext(db: any, userCodigo: string,
     const own = sources.filter(s => s.activo && s.owner === 'forge' && canonicalDiscipline(s.disciplina) === discipline);
     const ownDays = own.flatMap(s => s.dias == null ? [] : days(s.dias) || []);
     const distAvailability = normalizeTrainingAvailability(dist, [discipline]);
-    const availableDays = own.some(s => s.dias != null) ? ownDays : distAvailability.ok ? distAvailability.availability[discipline]
+    const habitualDays = own.some(s => s.dias != null) ? ownDays : distAvailability.ok ? distAvailability.availability[discipline]
       : distAvailability.reason !== 'missing' ? []
       : scope.scope.mode === 'coach' ? days(dist.dias ?? dist.disponibilidad) : null;
+    const availableDays = availableDaysAtWeek(profile.perfil, request.targetWeekStart, habitualDays, discipline);
     // Focus never guesses its delegated calendar when it has not been recorded.
     if (scope.scope.mode === 'focus' && availableDays === null) return { ok: false, errors: ['FOCUS_AVAILABILITY_UNRESOLVED'] };
     const externalSources = sources.filter(s => s.activo && s.owner === 'external');
     const externalLoadContext: ExternalLoadContext = { source: 'server_training_sources_and_records', policy: 'read_only_context',
-      activities: externalSources.map(s => ({ discipline: canonicalDiscipline(s.disciplina), days: days(s.dias) || [] })), records: [] };
+      activities: externalSources.map(s => ({ discipline: canonicalDiscipline(s.disciplina), days: availableDaysAtWeek(profile.perfil, request.targetWeekStart, days(s.dias), canonicalDiscipline(s.disciplina)) || [] })), records: [] };
     if (scope.scope.externalDisciplines.length) {
       // Preserve dated evidence as context; do not invent a load score or selection threshold.
       const read = await db.from('external_training_records').select('fecha,disciplina,duracion,intensidad_percibida,fatiga_post')
@@ -62,7 +63,7 @@ export async function prepareSessionTrainingContext(db: any, userCodigo: string,
       targetDay: normalizeTrainingKey(request.day), discipline, stimulus: request.stimulus,
       restrictionsSnapshot: restrictions, externalLoadContext, exposureContext: { source: 'legacy_completed_weekly_rows', report, limitations: EXPOSURE_LIMITATIONS },
       ...(Object.hasOwn(request, 'intent') ? { intent: request.intent } : {}),
-      availableDays: availableDaysAtWeek(profile.perfil, request.targetWeekStart, availableDays), source: 'weekly_session_builder' } };
+      availableDays, source: 'weekly_session_builder' } };
   } catch { return { ok: false, errors: ['CONTRACT_CONTEXT_READ_FAILED'] }; }
 }
 

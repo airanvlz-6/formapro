@@ -1,3 +1,4 @@
+import { weeklyDeclaration } from '../sports/weeklyAvailabilityDeclaration';
 import { runningPolicyGuidance } from '../sports/runningEvidencePolicy';
 import { transferMethod } from '../sports/goalTransferModel';
 import { buildWeeklyCoachingContext, loadWeeklyCoachingSupplement } from './weeklyCoachingContext';
@@ -6,7 +7,7 @@ import { projectWeeklyPrescriptionSignals } from './weeklyPrescriptionSignals';
 import { buildDoseCapabilityProfile } from '../sports/doseCapabilityProfile';
 import { evaluateTrainingFeasibility } from '../sports/trainingFeasibility';
 import type { PlannerCompletion } from './weeklyPlannerDiagnostics';
-import { loadWeeklyCalendarContext, issueWeeklyCalendar, weeklyDigest } from './weeklyCalendarAuthority';
+import { loadWeeklyCalendarContext, issueWeeklyCalendar, weeklyDigest, availabilitySnapshotDigest } from './weeklyCalendarAuthority';
 import { calendarDays, calendarKey, calendarState, isProtectedCalendarSession, legacyProtectedCalendarSession, calendarProtectionReason, type ProtectionReason } from './weeklyCalendar';
 import { openSelection } from './openWeeklyCoachContract';
 import { getCanonicalRestrictions } from '../athlete/getCanonicalRestrictions';
@@ -38,6 +39,8 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
   preserveDays?: string[];
 }) {
   const c = await loadWeeklyCalendarContext(db, codigo, request.targetWeekStart);
+  const declaration = weeklyDeclaration(c.profile.perfil, request.targetWeekStart);
+  try { console.info('WEEKLY_AVAILABILITY_RESOLVED', { planningRunId: request.planningRunId ?? null, normalizedDays: c.allowed, normalizedDisciplines: Object.keys(c.allowed), source: declaration?.source ?? 'profile_default', resolution: declaration?.resolution ?? 'PROFILE_DEFAULT', explicitExclusions: declaration?.excludedDisciplines ?? [], unresolvedDaysCount: declaration?.unresolvedDays.length ?? 0 }); } catch { /* Observation only. */ }
   if (request.strategyVersion !== undefined && request.strategyVersion !== 1) throw new Error('STRATEGY_VERSION_UNSUPPORTED');
   const athlete = request.strategyVersion === 1 ? await loadAthletePrescriptionContext(db, codigo, { asOfDate: request.today, runningHabitualInteraction: request.planningRunId ? {planningRunId:request.planningRunId,targetWeekStart:request.targetWeekStart} : undefined }) : undefined;
   const longitudinal = request.coherenceVersion === 1 ? await loadLongitudinalProjection(db, codigo, request.targetWeekStart) : undefined;
@@ -131,9 +134,10 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
   let availabilityConfirmed = false;
   try {
     availabilityConfirmed = typeof request.confirmedAvailabilityDigest === 'string'
-      && request.confirmedAvailabilityDigest === weeklyDigest({ distribution: c.profile.distribucion_semanal, sources: c.sources, scope: c.scope });
+      && request.confirmedAvailabilityDigest === availabilitySnapshotDigest(c, request.targetWeekStart);
   } catch { /* Diagnostic metadata is never an admission requirement. */ }
   return { ok: true as const, input: { targetWeekStart: request.targetWeekStart, prescriptionScope: c.scope,
+    ...(declaration ? { weeklyAvailability: declaration } : {}),
     ...(request.openCoachVersion ? { openCoachVersion: request.openCoachVersion } : {}),
     maxExecutableDays: c.max, completeNewWeek: !request.snapshot && !hasPast, allowed: c.allowed, contexts, fixed,
     daySufficiency: projectWeeklyPrescriptionSignals(c.profile, request.targetWeekStart, c.scope.managedDisciplines, c.allowed, availabilityConfirmed),

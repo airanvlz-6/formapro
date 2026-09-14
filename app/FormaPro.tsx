@@ -1795,9 +1795,16 @@ const forgeValidator=(texto:string):string=>{
     weeklyTemporalIntentRef.current={text:temporalAnswer,answeringQuestion};
     if(!availabilityConfirmed){
       weeklyPlanningContinuationRef.current=null;
-      const confirmation=await apiCall({action:"obtener_confirmacion_disponibilidad",codigo:codigoUsuario});
+      setEsperandoConfirmacionDisponibilidad(false);
+      availabilityConfirmationRef.current=null;
+      const generationResult=await apiCall({action:"preparar_generacion_semana",codigo:codigoUsuario});
+      const closure=await apiCall({action:"check_week_closure",codigo:codigoUsuario});
+      if(!generationResult?.ok || closure?.ok!==true) return;
+      const generation=generationResult.generation;
+      weeklyPlanningContinuationRef.current={codigo:codigoUsuario,generation,targetWeekStart:closure.yaCerrada===true?generation.nextWeek:generation.currentWeek};
+      const confirmation=await apiCall({action:"obtener_confirmacion_disponibilidad",codigo:codigoUsuario,datos:{targetWeekStart:weeklyPlanningContinuationRef.current.targetWeekStart}});
       availabilityConfirmationRef.current=confirmation.ok?confirmation.snapshotDigest:null;
-      setEsperandoConfirmacionDisponibilidad(confirmation.ok===true);
+      setEsperandoConfirmacionDisponibilidad(confirmation.ok===true || confirmation.code==="AVAILABILITY_EXISTING_REQUIRED");
       setMensajes(prev=>[...prev,{role:"assistant",content:confirmation.ok?confirmation.question
         :"No tengo una disponibilidad válida configurada para confirmar. Indica qué días puedes entrenar cada disciplina."}]);
       return;
@@ -2073,7 +2080,7 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
 
       // Persistir y verificar la disponibilidad antes de confirmar o avanzar a generación.
       if(esperandoConfirmacionDisponibilidad && codigoUsuario){
-        const resCorreccion = await apiCall({action:"verificar_correccion_disponibilidad_deterministico",codigo:codigoUsuario,datos:{mensajeUsuario:texto,snapshotDigest:availabilityConfirmationRef.current}});
+        const resCorreccion = await apiCall({action:"verificar_correccion_disponibilidad_deterministico",codigo:codigoUsuario,datos:{mensajeUsuario:texto,snapshotDigest:availabilityConfirmationRef.current,targetWeekStart:weeklyPlanningContinuationRef.current?.targetWeekStart}});
         if(resCorreccion?.ok) availabilityConfirmationRef.current=resCorreccion.snapshotDigest ?? null;
         const ownershipPrompt=requestCoachOwnership(resCorreccion,true);
         if(ownershipPrompt){

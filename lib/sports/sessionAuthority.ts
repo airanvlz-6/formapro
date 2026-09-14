@@ -6,6 +6,7 @@ import { resolvedMovement } from './movementVariants';
 import { currentWeekCoachingContext } from '../planning/currentWeekCoachingContext';
 import { selectedWeekStrategy } from '../planning/selectedWeekObjective';
 import { samePlanData } from '../planning/planMutationValidators';
+import { availableDaysAtWeek } from './temporaryTrainingAccess';
 import { assertFreshWeeklyAuthority, resolveWeeklySlot, verifyWeeklyCalendarReceipt, weeklyDigest } from '../planning/weeklyCalendarAuthority';
 import type { PrescriptionIntent } from './prescriptionIntent';
 import { createHmac, timingSafeEqual } from 'node:crypto';
@@ -228,6 +229,8 @@ export async function assertFreshSessionRestrictions(db: any, userCodigo: string
     const access = await db.from('usuarios').select('perfil').eq('codigo', userCodigo).single();
     if (access.error || !access.data) throw new Error('SESSION_AVAILABILITY_READ_FAILED');
     if (access.data.perfil?.prescription_access?.[date]?.availability === 'unavailable') throw new Error('SESSION_TEMPORARY_AVAILABILITY_CHANGED');
+    const declaredDays = availableDaysAtWeek(access.data.perfil, weekStart, null, contract.discipline);
+    if (declaredDays && !declaredDays.includes(contract.targetDay)) throw new Error('SESSION_TEMPORARY_AVAILABILITY_CHANGED');
     let sessionEnvironment: SessionEnvironmentInput | undefined;
     if (contract.doseContext.sufficiency?.environment?.sessionEnvironmentSource) {
       sessionEnvironment = { date, assignedDiscipline: contract.discipline };

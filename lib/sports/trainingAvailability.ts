@@ -11,6 +11,23 @@ export function normalizeAvailabilityDays(value: unknown): string[] | null {
   return days.every(day => calendarDays.includes(day)) ? [...new Set(days)] : null;
 }
 
+/** Source days override the distribution only for their own discipline. Unknown
+ * base is null, while an explicit empty array is a known zero-day calendar. */
+export function baseAvailabilityDays(distribution: unknown, sources: readonly { disciplina: string; dias?: unknown }[], discipline: string): string[] | null {
+  // Keep the existing base-format boundary; historical override recovery must
+  // not also authorize malformed or absent habitual configuration.
+  let parsed = distribution;
+  try { if (typeof parsed === 'string') parsed = JSON.parse(parsed); } catch { return null; }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const matching = sources.filter(s => canonicalDiscipline(s.disciplina) === discipline && s.dias != null);
+  if (matching.length) {
+    const groups = matching.map(s => normalizeAvailabilityDays(s.dias));
+    return groups.some(days => days === null) ? null : [...new Set(groups.flatMap(days => days!))];
+  }
+  const normalized = normalizeTrainingAvailability(parsed as Record<string, unknown>, [discipline]);
+  return normalized.ok ? normalized.availability[discipline] : null;
+}
+
 /** Canonical capabilities are selected by existing scope, never by session titles. */
 export function normalizeTrainingAvailability(distribution: Record<string, unknown>, disciplines: readonly string[]):
   { ok: true; availability: Record<string, string[]> } | { ok: false; discipline: string; reason: 'missing' | 'invalid' } {

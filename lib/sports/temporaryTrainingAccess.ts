@@ -8,7 +8,7 @@ export function availableDaysAtWeek(profile: any, week: string, days: readonly s
   if (declaration && discipline) days = declaration.availability[discipline] ?? [];
   const blocked = calendarDays.filter((_, index) => profile?.prescription_access?.[
     new Date(Date.parse(week) + index * 86400000).toISOString().slice(0, 10)]?.availability === 'unavailable');
-  return blocked.length ? (days ?? calendarDays).filter(day => !blocked.includes(calendarKey(day))) : days === null ? null : [...days];
+  return days === null ? null : days.filter(day => !blocked.includes(calendarKey(day)));
 }
 export function parseTemporaryAvailability(message: string, today: string) {
   const text = calendarKey(message).replace(/[.!]$/, '');

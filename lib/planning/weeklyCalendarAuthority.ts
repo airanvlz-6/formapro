@@ -1,12 +1,12 @@
 import { weeklyRegenerationOutcome } from './weeklyRegeneration';
 import { availableDaysAtWeek } from '../sports/temporaryTrainingAccess';
-import { weeklyDeclaration } from '../sports/weeklyAvailabilityDeclaration';
+import { resolveWeeklyDeclaration } from '../sports/weeklyAvailabilityDeclaration';
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { buildAllowedWeeklyPlanContract, validateWeeklySelection, type AllowedWeeklyPlanContract } from './allowedWeeklyPlanContract';
 import { loadWeeklyPlanningContext } from './prepareAllowedWeeklyPlanContract';
 import { verifySessionReceipt } from '../sports/sessionAuthority';
 import { samePlanData } from './planMutationValidators';
-import { normalizeTrainingAvailability } from '../sports/trainingAvailability';
+import { baseAvailabilityDays } from '../sports/trainingAvailability';
 import { weeklyAvailabilityFailure } from './weeklyAvailabilityDiagnostics';
 import { buildPrescriptionScope, canonicalDiscipline, resolveProfileDisciplines } from '../sports/prescriptionScope';
 import { aplicarTrainingFrequencySafetyNet, calcularFrecuenciaRealRelativa } from '../sports/trainingFrequencySafetyNet';
@@ -18,9 +18,16 @@ import { loadLongitudinalProjection } from './longitudinalAuthority';
 import { authenticatedPresentationVersion } from '../sports/sessionPresentation';
 
 export const weeklyDigest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-export const availabilitySnapshotDigest = (c: { profile: any; sources: any[]; scope: unknown }, week?: string) => weeklyDigest({
-  distribution: c.profile.distribucion_semanal, sources: c.sources, scope: c.scope,
-  ...(week && weeklyDeclaration(c.profile.perfil, week) ? { week, declaration: weeklyDeclaration(c.profile.perfil, week) } : {}) });
+export const availabilitySnapshotDigest = (c: { profile: any; sources: any[]; scope: unknown }, week?: string) => {
+  const override = week ? resolveWeeklyDeclaration(c.profile.perfil, week) : { status: 'absent' as const };
+  const scope = c.scope as { managedDisciplines: string[]; externalDisciplines: string[] };
+  const effective = Object.fromEntries([...scope.managedDisciplines, ...scope.externalDisciplines].map(d => {
+    const base = baseAvailabilityDays(c.profile.distribucion_semanal, c.sources, d);
+    return [d, week ? availableDaysAtWeek(c.profile.perfil, week, base, d) : base];
+  }));
+  return weeklyDigest({ distribution: c.profile.distribucion_semanal, sources: c.sources, scope: c.scope, effective,
+    weeklyOverride: override, ...(override.status === 'valid' ? { week } : {}) });
+};
 const snapshotDigest = (snapshot: any) => weeklyDigest(snapshot ? { id: snapshot.id, revision: snapshot.revision, sessions: snapshot.sessions } : null);
 type Admission = { contract: AllowedWeeklyPlanContract; selections: { day: string; optionId?: string }[];
   request: Parameters<typeof loadWeeklyPlanningContext>[2]; generationToken: string; decisions?: Record<string, unknown> };
@@ -41,24 +48,23 @@ export async function loadWeeklyCalendarContext(db: any, codigo: string, targetW
   const profile = p.data;
   const scope = buildPrescriptionScope({ mode: profile.modo_entrada, sources: t.data, profileDisciplines: resolveProfileDisciplines(profile) });
   if (!scope.ok || !scope.scope.prescriptionAllowed) throw new Error('CALENDAR_SCOPE_INVALID');
-  let dist: Record<string, unknown>;
-  try { dist = typeof profile.distribucion_semanal === 'string' ? JSON.parse(profile.distribucion_semanal) : profile.distribucion_semanal; }
-  catch { if (targetWeek && weeklyDeclaration(profile.perfil, targetWeek)) dist = {}; else throw new Error('CALENDAR_AVAILABILITY_INVALID'); }
-  if (targetWeek && weeklyDeclaration(profile.perfil, targetWeek)) dist = {};
-  if (dist == null) throw new Error('CALENDAR_AVAILABILITY_REQUIRED');
-  if (typeof dist !== 'object' || Array.isArray(dist)) throw new Error('CALENDAR_AVAILABILITY_INVALID');
+  const base = Object.fromEntries(scope.scope.managedDisciplines.map(d => [d, baseAvailabilityDays(profile.distribucion_semanal, t.data, d)]));
+  const weeklyOverride = targetWeek ? resolveWeeklyDeclaration(profile.perfil, targetWeek) : { status: 'absent' as const };
   const allowed: Record<string, string[]> = {};
   for (const discipline of scope.scope.managedDisciplines) {
     const sources = t.data.filter((s: any) => s.owner === 'forge' && canonicalDiscipline(s.disciplina) === discipline && s.dias != null);
-    const normalized = sources.length ? null : normalizeTrainingAvailability(dist, [discipline]);
-    const habitual = sources.length ? sources.flatMap((s: any) => s.dias)
-      : normalized?.ok ? normalized.availability[discipline] : null;
+    const habitual = base[discipline];
     const value = targetWeek ? availableDaysAtWeek(profile.perfil, targetWeek, habitual, discipline) : habitual;
-    if (!Array.isArray(value) || value.some(v => typeof v !== 'string')) throw weeklyAvailabilityFailure(dist, discipline, scope.scope, sources, value);
+    if (!Array.isArray(value) || value.some(v => typeof v !== 'string')) {
+      if (weeklyOverride.status === 'invalid') throw Object.assign(new Error(weeklyOverride.issue), { weeklyOverride });
+      if (profile.distribucion_semanal == null || profile.distribucion_semanal === 'null')
+        throw Object.assign(new Error('CALENDAR_AVAILABILITY_REQUIRED'), { weeklyOverride });
+      throw Object.assign(weeklyAvailabilityFailure(profile.distribucion_semanal ?? {}, discipline, scope.scope, sources, value), { weeklyOverride });
+    }
     allowed[discipline] = value.map(calendarKey);
   }
   const frequency = calcularFrecuenciaRealRelativa(profile.workout_history || [], Number.parseInt(profile.perfil?.dias || '0'));
-  return { profile, sources: t.data, scope: scope.scope, allowed, max: aplicarTrainingFrequencySafetyNet(7, frequency).diasEntrenoSugeridos };
+  return { profile, sources: t.data, scope: scope.scope, allowed, weeklyOverride, max: aplicarTrainingFrequencySafetyNet(7, frequency).diasEntrenoSugeridos };
 }
 export async function issueWeeklyCalendar(db: any, codigo: string, week: string, sessions: any[], admission?: Admission) {
   const c = await loadWeeklyCalendarContext(db, codigo, week);

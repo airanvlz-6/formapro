@@ -1,4 +1,4 @@
-import { normalizeAvailabilityDays, normalizeAvailabilityForStorage, normalizeTrainingAvailability } from './trainingAvailability';
+import { baseAvailabilityDays, normalizeAvailabilityDays, normalizeAvailabilityForStorage, normalizeTrainingAvailability } from './trainingAvailability';
 import { buildPrescriptionScope, canonicalDiscipline, resolveProfileDisciplines } from './prescriptionScope';
 import { loadWeeklyCalendarContext, weeklyDigest, availabilitySnapshotDigest } from '../planning/weeklyCalendarAuthority';
 import { resolveWeeklyAvailabilityResponse, validAvailabilityWeek, weeklyDeclaration } from './weeklyAvailabilityDeclaration';
@@ -8,15 +8,11 @@ import { isExistingAvailabilityConfirmation, parseAvailabilityChange } from './a
 
 const fail = (code: string) => ({ ok: false as const, actualizado: false, code, retryable: false });
 function canonicalDays(profile: any, sources: any[], disciplines: string[]) {
-  let distribution = profile.distribucion_semanal;
-  try { distribution = typeof distribution === 'string' ? JSON.parse(distribution) : distribution; } catch { return null; }
   const result: Record<string, string[]> = {};
   for (const discipline of disciplines) {
-    const matching = sources.filter(s => canonicalDiscipline(s.disciplina) === discipline && s.dias != null);
-    const normalized = normalizeTrainingAvailability(distribution || {}, [discipline]);
-    const groups = matching.map(s => normalizeAvailabilityDays(s.dias));
-    if (matching.length ? groups.some(g => g === null) : !normalized.ok) return null;
-    result[discipline] = matching.length ? [...new Set(groups.flatMap(g => g!))] : normalized.ok ? normalized.availability[discipline] : [];
+    const days = baseAvailabilityDays(profile.distribucion_semanal, sources, discipline);
+    if (days === null) return null;
+    result[discipline] = days;
   }
   return result;
 }
@@ -31,10 +27,16 @@ export async function readAvailabilityConfirmation(db: any, codigo: string, targ
     const availability = { ...Object.fromEntries(Object.entries(days).map(([d,v]) => [d, targetWeek ? availableDaysAtWeek(c.profile.perfil, targetWeek, v, d)! : v])), ...c.allowed };
     const snapshotDigest = availabilitySnapshotDigest(c, targetWeek);
     const labels: Record<string,string> = { box:'Box', carrera:'Carrera', fuerza:'Fuerza' };
-    const question = `Actualmente tengo tu disponibilidad así:\n\n${Object.entries(availability).map(([d,v]) => `${labels[d] || d}: ${v.length ? v.join(', ') : 'sin días disponibles'}.`).join('\n')}\n\n¿Sigue siendo correcta para esta semana?`;
-    return { ok: true as const, availability, snapshotDigest, question,
+    const notice = c.weeklyOverride.status === 'invalid' ? 'La excepción de esta semana no es válida; uso tu disponibilidad habitual con las restricciones temporales vigentes.\n\n' : '';
+    const question = `${notice}Actualmente tengo tu disponibilidad así:\n\n${Object.entries(availability).map(([d,v]) => `${labels[d] || d}: ${v.length ? v.join(', ') : 'sin días disponibles'}.`).join('\n')}\n\n¿Sigue siendo correcta para esta semana?`;
+    return { ok: true as const, availability, snapshotDigest, question, weeklyOverride: c.weeklyOverride,
       distribucion: typeof c.profile.distribucion_semanal === 'string' ? c.profile.distribucion_semanal : JSON.stringify(c.profile.distribucion_semanal) };
-  } catch { return fail('AVAILABILITY_EXISTING_REQUIRED'); }
+  } catch (error) {
+    // Missing base is still blocking, but preserve the historical layer's
+    // diagnosis instead of reporting an invalid override as an absent one.
+    const weeklyOverride = (error as { weeklyOverride?: unknown })?.weeklyOverride;
+    return { ...fail('AVAILABILITY_EXISTING_REQUIRED'), ...(weeklyOverride ? { weeklyOverride } : {}) };
+  }
 }
 /** Complete explicit clauses only; never infer days or ownership from conversational prose. */
 export function parseChatAvailability(value: unknown): Record<string, string[]> | null {
@@ -91,11 +93,15 @@ export async function updateChatAvailability(db: any, codigo: string, input: unk
       .map(d => canonicalDays(p.data, t.data, [d]) ?? {})) as Record<string, string[]>;
     if (targetWeek) {
       const authorized = [...before.scope.managedDisciplines, ...before.scope.externalDisciplines];
-      const prior = Object.fromEntries(authorized.flatMap(d => {
+      // A complete new declaration does not depend on the old calendar being
+      // readable. Patches still require its effective days and cannot repair an
+      // invalid historical snapshot by silently falling back to habitual days.
+      let response = resolveWeeklyAvailabilityResponse(input, authorized);
+      const prior = response.intent === 'FULL_SNAPSHOT' ? {} : Object.fromEntries(authorized.flatMap(d => {
         const days = availableDaysAtWeek(p.data.perfil, targetWeek, authorizedDays[d] ?? null, d);
         return days === null ? [] : [[d, days]];
       })) as Record<string, string[]>;
-      const response = resolveWeeklyAvailabilityResponse(input, authorized, prior);
+      if (response.intent !== 'FULL_SNAPSHOT') response = resolveWeeklyAvailabilityResponse(input, authorized, prior);
       let declaration = response.declaration;
       // Text with unresolved semantics must not be rescued by a second parser
       // that has discarded its negation, unknown tokens or missing context.
@@ -112,8 +118,8 @@ export async function updateChatAvailability(db: any, codigo: string, input: unk
         responseKind: 'UNRESOLVED_AVAILABILITY_RESPONSE' as const,
         question: 'No he guardado cambios. ¿Puedes indicar el cambio completo, aclarando los días y disciplinas que mantienes o excluyes?' };
       if (Object.keys(declaration.availability).some(d => !authorized.includes(d))) return fail('AVAILABILITY_SCOPE_CHANGE_REQUIRED');
-      const snapshot = availabilitySnapshotDigest({ profile: p.data, sources: t.data, scope: before.scope }, targetWeek);
-      if (expectedSnapshot != null && expectedSnapshot !== snapshot) return fail('AVAILABILITY_CONFIRMATION_STALE');
+      if (expectedSnapshot != null && expectedSnapshot !== availabilitySnapshotDigest(
+        { profile: p.data, sources: t.data, scope: before.scope }, targetWeek)) return fail('AVAILABILITY_CONFIRMATION_STALE');
       const perfil = { ...p.data.perfil, weekly_availability: { ...p.data.perfil?.weekly_availability, [targetWeek]: declaration } };
       // One JSON write with a compare-and-swap, preserving habitual distribution and sources.
       let write = db.from('usuarios').update({ perfil }).eq('codigo', codigo);

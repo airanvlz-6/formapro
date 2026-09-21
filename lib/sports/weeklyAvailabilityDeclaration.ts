@@ -16,7 +16,9 @@ const event = /\b(?:tengo|tendre|hay|participo|participare|compito|competire)\b.
 // A finite list declaration in the weekly availability question is a complete
 // answer. Incidental mentions and additions do not acquire that authority.
 const dayList = '(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo)(?:(?:\\s*,\\s*|\\s+(?:y\\s+)?)(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo))*';
-const completeList = new RegExp(`^(?:(?:esta semana\\s+)?(?:box|crossfit|carrera|running|corro|correre|fuerza)\\s+${dayList}|(?:el\\s+)?${dayList}\\s+(?:(?:hago|voy al|entreno en el|salgo a)\\s+)?(?:box|crossfit|carrera|running|corro|correr|fuerza(?: y metcon)?)|puedo entrenar\\s+${dayList}|esta semana entreno\\s+${dayList}\\s+en el (?:box|gimnasio))$`);
+const enumerationHead = '(?:esta semana\\s+)?(?:(?:puedo|podre)\\s+)?(?:(?:hacer|ir al)\\s+)?(?:box|crossfit|carrera|running|corro|correr|correre|fuerza)';
+const enumeratedClause = new RegExp(`^\\s*${enumerationHead}\\s+(.+?)\\s*$`);
+const completeList = new RegExp(`^(?:${enumerationHead}\\s+${dayList}|(?:el\\s+)?${dayList}\\s+(?:(?:hago|voy al|entreno en el|salgo a)\\s+)?(?:box|crossfit|carrera|running|corro|correr|fuerza(?: y metcon)?)|puedo entrenar\\s+${dayList}|esta semana entreno\\s+${dayList}\\s+en el (?:box|gimnasio))$`);
 export type WeeklyAvailabilityIntent = 'CONFIRM' | 'PATCH' | 'FULL_SNAPSHOT' | 'UNRESOLVED';
 export type WeeklyAvailabilityResponse = {
   intent: WeeklyAvailabilityIntent; declaration: WeeklyAvailabilityDeclaration | null; unresolvedDays: string[];
@@ -30,7 +32,13 @@ export function resolveWeeklyAvailabilityResponse(value: unknown, scope: readonl
   const unknown = (days: string[] = []): WeeklyAvailabilityResponse => ({ intent: 'UNRESOLVED', declaration: null, unresolvedDays: days });
   if (typeof value !== 'string' || value.length > 2000) return unknown();
   if (isExistingAvailabilityConfirmation(value)) return { intent: 'CONFIRM', declaration: null, unresolvedDays: [] };
-  const text = calendarKey(value).replace(/^no\s*,\s*/, '').replace(/\bpero\b/g, '.')
+  const text = calendarKey(value).replace(/^no\s*,\s*/, '')
+    // Labels and verbal lists share one grammar. A colon is not missing intent.
+    .replace(/\b(box|crossfit|carrera|running|corro|correr|correre|fuerza)\s*:\s*/g, '$1 ')
+    .replace(/\b(?:pero|porque|ya que|puesto que)\b/g, '.')
+    // Split coordinated activities, not conjunctions between days. Likewise,
+    // causal event context must not swallow the preceding availability edit.
+    .replace(/\s+y\s+(?=(?:hacer|ir al)\s+(?:box|crossfit|carrera|running|fuerza)\b|correr\b)/g, '. ')
     .replace(/,?\s+(?=(?:solo|solamente|unicamente)\b)/g, '. ');
   const availability: Record<string, string[]> = {}, excluded = new Set<string>(), unavailable = new Set<string>(), unresolved = new Set<string>();
   const removals: Record<string, Set<string>> = {}, eventDays = new Set<string>();
@@ -67,7 +75,7 @@ export function resolveWeeklyAvailabilityResponse(value: unknown, scope: readonl
     }
     // A discipline followed by a list must account for every token. This is
     // validation, not spelling correction; unknown items keep the answer open.
-    const list = /^\s*(?:esta semana\s+)?(?:box|crossfit|carrera|running|corro|correre|fuerza)\s+(.+?)\s*$/.exec(clause);
+    const list = enumeratedClause.exec(clause);
     if (list && !/^\s*(?:puedo|quiero|entreno|solo|solamente|unicamente)\b/.test(list[1])
       && list[1].split(/[\s,]+/).some(token => token !== 'y' && !calendarDays.includes(token))) {
       invalidList = true; ds.forEach(d => unresolved.add(d.value)); continue;
@@ -116,16 +124,29 @@ export function parseWeeklyAvailabilityDeclaration(value: unknown, scope: readon
   return resolveWeeklyAvailabilityResponse(value, scope, previous).declaration;
 }
 
-export function weeklyDeclaration(profile: any, week: string): WeeklyAvailabilityDeclaration | null {
+export type StoredWeeklyAvailability =
+  | { status: 'absent' }
+  | { status: 'valid'; declaration: WeeklyAvailabilityDeclaration }
+  | { status: 'invalid'; issue: 'UNRESOLVED_AVAILABILITY' };
+
+/** Historical invalidity rejects only this layer, never the valid habitual base. */
+export function resolveWeeklyDeclaration(profile: any, week: string): StoredWeeklyAvailability {
   const value = profile?.weekly_availability?.[week];
-  if (value === undefined) return null;
+  if (value === undefined) return { status: 'absent' };
+  const invalid = { status: 'invalid', issue: 'UNRESOLVED_AVAILABILITY' } as const;
   if (value?.version !== 1 || value.source !== 'explicit_user_declaration' || !value.availability || typeof value.availability !== 'object'
     || Array.isArray(value.availability) || !['EXPLICIT_ZERO_TRAINING', 'DECLARED_AVAILABILITY'].includes(value.resolution)
     || !['excludedDisciplines', 'unavailableDays', 'unresolvedDays'].every(k => Array.isArray(value[k]))
     || value.unresolvedDays.length > 0
-    || Object.values(value.availability).some(days => !Array.isArray(days) || days.some(d => !calendarDays.includes(d)))) throw new Error('UNRESOLVED_AVAILABILITY');
-  if ((value.resolution === 'EXPLICIT_ZERO_TRAINING') !== !Object.values(value.availability).some((days: any) => days.length)) throw new Error('UNRESOLVED_AVAILABILITY');
-  return value;
+    || Object.values(value.availability).some(days => !Array.isArray(days) || days.some(d => !calendarDays.includes(d)))) return invalid;
+  if ((value.resolution === 'EXPLICIT_ZERO_TRAINING') !== !Object.values(value.availability).some((days: any) => days.length)) return invalid;
+  return { status: 'valid', declaration: value };
+}
+
+/** Compatibility projection: only a validated override can affect effective days. */
+export function weeklyDeclaration(profile: any, week: string): WeeklyAvailabilityDeclaration | null {
+  const result = resolveWeeklyDeclaration(profile, week);
+  return result.status === 'valid' ? result.declaration : null;
 }
 export function validAvailabilityWeek(week: unknown): week is string {
   return typeof week === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(week) && Number.isFinite(Date.parse(week))

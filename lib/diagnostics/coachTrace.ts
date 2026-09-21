@@ -10,7 +10,7 @@ const operations = [
 type Operation = typeof operations[number];
 type Phase = 'success' | 'failure' | 'rejected';
 const classes = ['Error', 'TypeError', 'RangeError', 'SyntaxError', 'ReferenceError', 'AbortError', 'TimeoutError', 'DataCloneError'];
-const codes = ['CHAT_MESSAGE_INVALID', 'CHAT_PROVIDER_FAILED', 'CHAT_RESPONSE_JSON_REQUIRED', 'CHAT_ANSWER_INVALID',
+const codes = ['CHAT_RESPONSE_OBJECT_REQUIRED', 'CHAT_MESSAGE_INVALID', 'CHAT_PROVIDER_FAILED', 'CHAT_RESPONSE_JSON_REQUIRED', 'CHAT_ANSWER_INVALID',
   'CHAT_EPISTEMIC_SCHEMA_INVALID', 'CHAT_CANONICAL_FACT_MISMATCH', 'CHAT_EVIDENCE_NOT_USER_REPORTED',
   'CHAT_GROUNDING_REVIEW_INVALID', 'CHAT_PROSE_UNGROUNDED', 'CHAT_RESPONSE_INVALID',
   'ABORT_ERR', 'ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', 'UND_ERR_CONNECT_TIMEOUT',
@@ -39,7 +39,7 @@ export interface CoachTrace {
   end(operationId: number, phase?: Phase, error?: unknown): void;
   failFrom(operationId: number, error: unknown): void;
 }
-export type ProviderObservation = { trace: CoachTrace; attempt: 1 | 2; kind: 'generation' | 'review' };
+export type ProviderObservation = { trace: CoachTrace; attempt: 1 | 2; kind: 'generation' | 'review'; outputFormat?: { type: 'json_schema'; schema: Record<string, unknown> } };
 export const silentCoachTrace: CoachTrace = { start: () => 0, end() {}, failFrom() {} };
 export function createCoachTrace(runId: string): CoachTrace {
   if (process.env.FORGE_CHAT_COACH_DIAGNOSTICS !== '1') return silentCoachTrace;

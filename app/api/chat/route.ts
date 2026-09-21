@@ -841,7 +841,7 @@ async function handlePost(req: NextRequest) {
     const requestOptions = { method: 'POST',
       signal: AbortSignal.timeout(120000),
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey!, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 6000, system: prompt, messages: conversation }) };
+      body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 6000, system: prompt, messages: conversation, ...(observation?.outputFormat ? { output_config: { format: observation.outputFormat } } : {}) }) };
     if (argumentsOperation !== undefined) trace?.end(argumentsOperation);
     const receiveOperation = trace?.start(`${kind}.provider.receive`, attempt);
     const response = await fetch('https://api.anthropic.com/v1/messages', requestOptions);

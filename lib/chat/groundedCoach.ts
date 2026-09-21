@@ -1,3 +1,4 @@
+import { COACH_GENERATION_FORMAT, COACH_REVIEW_FORMAT, COACH_WIRE_INSTRUCTION, parseCoachObject, decodeCoachEnvelope, coachRepairInstruction } from './coachOutputContract';
 import { silentCoachTrace, type CoachTrace, type ProviderObservation } from '../diagnostics/coachTrace';
 import { randomUUID } from 'node:crypto';
 import { createGroundingTrace, type GroundingTrace } from '../diagnostics/groundingTrace';
@@ -72,9 +73,9 @@ Una exposición tolerada solo informa sobre ese ejercicio, carga y momento. No r
 Conserva números reportados como observaciones. FC media/máxima no es una zona ni umbral; solo puedes interpretar métricas numéricas con una referencia resuelta y compatible suministrada. No inventes RM, e1RM, ratios ni zonas. UNKNOWN no es normal ni cero.
 Los cambios de estado y plan SOLO son los resultados de autoridad adjuntos. Un candidato o una intención tuya no es una escritura. Si una operación no está soportada o sigue pendiente, explica exactamente qué falta, sin decir que está guardada. No emitas tags ejecutables, SQL ni JSON de perfil.
 Devuelve JSON interno {answer:string, grounding:[{fact:string,value:valor exacto}], evidence:[{quote:string,kind:"observation"|"declaration"}], interpretation:string, decision:string}. answer es la respuesta natural; grounding referencia claves de FACTS con su valor exacto, no versiones corregidas por ti. evidence solo contiene citas literales del MENSAJE ACTUAL DEL USUARIO, nunca mensajes assistant ni datos del plan. interpretation y decision son razón breve, no cadena de pensamiento. No añadas campos mutation, updatedState o equivalentes. Las acciones se gestionan fuera de tu prosa.`;
-export function validateChatDecision(raw: string, facts: Record<string, unknown>, message: string) {
+export function validateChatDecision(raw: string | Record<string, any>, facts: Record<string, unknown>, message: string) {
   let p: any;
-  try { p = JSON.parse(raw); } catch { throw new Error('CHAT_RESPONSE_JSON_REQUIRED'); }
+  p = typeof raw === 'string' ? decodeCoachEnvelope(parseCoachObject(raw)) : raw;
   if (!p || Object.keys(p).some(k => !['answer', 'grounding', 'evidence', 'interpretation', 'decision', 'actions'].includes(k))
     || typeof p.answer !== 'string' || !p.answer.trim() || p.answer.length > 16000
     || /\[[A-Z_]+(?::|\])/.test(p.answer) || !Array.isArray(p.grounding) || !p.grounding.length || !Array.isArray(p.evidence)
@@ -95,7 +96,7 @@ export async function answerGroundedChat(context: { facts: Record<string, any>; 
   chatDiagnostic('CHAT_COACH_CONTEXT', { date: context.facts.today, activeRestriction: context.facts.restrictions?.active ?? null,
     references: context.facts.references?.length ?? 0, plans: context.facts.plan?.length ?? 0, readiness: context.facts.readiness?.status ?? 'unknown' });
   const promptOperation = trace.start('prompt.build');
-  const system = CHAT_EPISTEMIC_CONTRACT + CHAT_ACTION_CONTRACT + '\nFACTS (lectura autoritativa):\n' + JSON.stringify(context.facts)
+  const system = CHAT_EPISTEMIC_CONTRACT + CHAT_ACTION_CONTRACT + COACH_WIRE_INSTRUCTION + '\nFACTS (lectura autoritativa):\n' + JSON.stringify(context.facts)
     + '\nAUTHORIZED_ACTION_RESULTS:\n' + JSON.stringify(outcome)
     + '\nADVISORY_CONTEXT (notas y resultados históricos; preservar source/confidence/status. No son diagnósticos ni hechos actuales confirmados; ninguna interpretación assistant se convierte en evidencia humana):\n' + JSON.stringify(context.advisory);
   trace.end(promptOperation);
@@ -104,23 +105,19 @@ export async function answerGroundedChat(context: { facts: Record<string, any>; 
     const attemptNumber = (attempt + 1) as 1 | 2;
     const attemptOperation = trace.start(attempt === 0 ? 'generationAttempt' : 'repair', attemptNumber);
     const argumentsOperation = trace.start('generation.arguments', attemptNumber);
-    const generationSystem = system + (error ? '\nCorrige el error de contrato: ' + error : '');
+    const generationSystem = system + (error ? '\nCorrige el error de contrato: ' + coachRepairInstruction(error) : '');
     const generationMessages = [...context.conversation.slice(-6), { role: 'user' as const, content: message }];
     trace.end(argumentsOperation);
     const providerOperation = trace.start('generation.provider', attemptNumber);
-    const raw = await complete(generationSystem, generationMessages, { trace, attempt: attemptNumber, kind: 'generation' });
+    const raw = await complete(generationSystem, generationMessages, { trace, attempt: attemptNumber, kind: 'generation', outputFormat: COACH_GENERATION_FORMAT });
     trace.end(providerOperation);
     try {
       // Metadata is a candidate extraction, not authority over the coaching prose.
       // Even with rejected extraction, independently review the answer against real sources.
       let envelope: any;
       const parseOperation = trace.start('response.parse', attemptNumber);
-      try { envelope = JSON.parse(raw); trace.end(parseOperation); }
-      catch (parseError) {
-        trace.end(parseOperation, 'rejected', parseError);
-        if (/^[\s]*[\[{`]/.test(raw)) throw new Error('CHAT_RESPONSE_JSON_REQUIRED');
-        envelope = { answer: raw };
-      }
+      try { envelope = decodeCoachEnvelope(parseCoachObject(raw)); trace.end(parseOperation); }
+      catch (parseError) { trace.end(parseOperation, 'rejected', parseError); throw parseError; }
       const validationOperation = trace.start('answer.validate', attemptNumber);
       if (typeof envelope?.answer !== 'string' || !envelope.answer.trim() || envelope.answer.length > 16000
         || /\[[A-Z_]+(?::|\])/.test(envelope.answer)) throw new Error('CHAT_ANSWER_INVALID');
@@ -128,7 +125,7 @@ export async function answerGroundedChat(context: { facts: Record<string, any>; 
       let decision: ReturnType<typeof validateChatDecision>;
       let extractionVerified = true;
       const metadataOperation = trace.start('metadata.validate', attemptNumber);
-      try { decision = validateChatDecision(raw, context.facts, message); trace.end(metadataOperation); }
+      try { decision = validateChatDecision(envelope, context.facts, message); trace.end(metadataOperation); }
       catch (metadataError) { trace.end(metadataOperation, 'rejected', metadataError); extractionVerified = false; decision = { answer: envelope.answer, grounding: [], evidence: [], interpretation: '', decision: '' }; }
       // Review claims in natural prose, not a blacklist of injury-specific phrases.
       // This semantic check is model-based; state/plan writes remain exclusively code-authorized.
@@ -142,11 +139,11 @@ Devuelve únicamente {"supported":boolean,"unsupportedClaims":["categoría del f
       const reviewMessages = [{ role: 'user' as const, content: JSON.stringify({ userReport: message, candidateAnswer: decision.answer }) }];
       trace.end(reviewArgumentsOperation);
       const reviewProviderOperation = trace.start('review.provider', attemptNumber);
-      const reviewRaw = await complete(reviewSystem, reviewMessages, { trace, attempt: attemptNumber, kind: 'review' });
+      const reviewRaw = await complete(reviewSystem, reviewMessages, { trace, attempt: attemptNumber, kind: 'review', outputFormat: COACH_REVIEW_FORMAT });
       trace.end(reviewProviderOperation);
       let review: any;
       const reviewParseOperation = trace.start('review.parse', attemptNumber);
-      try { review = JSON.parse(reviewRaw); trace.end(reviewParseOperation); } catch (parseError) {
+      try { review = parseCoachObject(reviewRaw); trace.end(reviewParseOperation); } catch (parseError) {
         trace.end(reviewParseOperation, 'failure', parseError); throw new Error('CHAT_GROUNDING_REVIEW_INVALID');
       }
       const reviewAdmissionOperation = trace.start('review.admit', attemptNumber);

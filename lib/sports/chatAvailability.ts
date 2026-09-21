@@ -1,7 +1,7 @@
 import { normalizeAvailabilityDays, normalizeAvailabilityForStorage, normalizeTrainingAvailability } from './trainingAvailability';
 import { buildPrescriptionScope, canonicalDiscipline, resolveProfileDisciplines } from './prescriptionScope';
 import { loadWeeklyCalendarContext, weeklyDigest, availabilitySnapshotDigest } from '../planning/weeklyCalendarAuthority';
-import { parseWeeklyAvailabilityDeclaration, validAvailabilityWeek, weeklyDeclaration } from './weeklyAvailabilityDeclaration';
+import { resolveWeeklyAvailabilityResponse, validAvailabilityWeek, weeklyDeclaration } from './weeklyAvailabilityDeclaration';
 import { availableDaysAtWeek } from './temporaryTrainingAccess';
 import { samePlanData } from '../planning/planMutationValidators';
 import { isExistingAvailabilityConfirmation, parseAvailabilityChange } from './availabilityResponse';
@@ -85,7 +85,7 @@ export async function updateChatAvailability(db: any, codigo: string, input: unk
       if (!current.ok) return { ...current, responseKind: 'UNRESOLVED_AVAILABILITY_RESPONSE' as const };
       if (expectedSnapshot != null && expectedSnapshot !== current.snapshotDigest) return { ...fail('AVAILABILITY_CONFIRMATION_STALE'),
         responseKind: 'UNRESOLVED_AVAILABILITY_RESPONSE' as const, question: current.question, snapshotDigest: current.snapshotDigest };
-      return { ...current, actualizado: false, responseKind: 'CONFIRM_EXISTING_AVAILABILITY' as const };
+      return { ...current, actualizado: false, intent: 'CONFIRM' as const, responseKind: 'CONFIRM_EXISTING_AVAILABILITY' as const };
     }
     const authorizedDays = Object.assign({}, ...[...before.scope.managedDisciplines, ...before.scope.externalDisciplines]
       .map(d => canonicalDays(p.data, t.data, [d]) ?? {})) as Record<string, string[]>;
@@ -95,15 +95,22 @@ export async function updateChatAvailability(db: any, codigo: string, input: unk
         const days = availableDaysAtWeek(p.data.perfil, targetWeek, authorizedDays[d] ?? null, d);
         return days === null ? [] : [[d, days]];
       })) as Record<string, string[]>;
-      let declaration = parseWeeklyAvailabilityDeclaration(input, authorized, prior);
-      if (!declaration) {
-        const changes = update ?? parseAvailabilityChange(input, prior);
+      const response = resolveWeeklyAvailabilityResponse(input, authorized, prior);
+      let declaration = response.declaration;
+      // Text with unresolved semantics must not be rescued by a second parser
+      // that has discarded its negation, unknown tokens or missing context.
+      if (!declaration && typeof input !== 'string') {
+        const changes = update;
         if (changes) declaration = { version: 1, source: 'explicit_user_declaration', availability: { ...prior,
           ...Object.fromEntries(Object.entries(changes).filter(([,v]) => Array.isArray(v)).map(([k,v]) => [canonicalDiscipline(k), v as string[]])) },
           resolution: 'DECLARED_AVAILABILITY', excludedDisciplines: [], unavailableDays: [], unresolvedDays: [] };
         if (declaration && !Object.values(declaration.availability).some(days => days.length)) declaration.resolution = 'EXPLICIT_ZERO_TRAINING';
       }
-      if (!declaration) return { ...fail('UNRESOLVED_AVAILABILITY'), resolution: 'UNRESOLVED_AVAILABILITY' as const, responseKind: 'UNRESOLVED_AVAILABILITY_RESPONSE' as const };
+      if (!declaration || (response.intent === 'UNRESOLVED' && typeof input === 'string') || declaration.unresolvedDays.length) return {
+        ...fail('UNRESOLVED_AVAILABILITY'), partial: true, intent: 'UNRESOLVED' as const,
+        unresolvedDays: response.unresolvedDays, resolution: 'UNRESOLVED_AVAILABILITY' as const,
+        responseKind: 'UNRESOLVED_AVAILABILITY_RESPONSE' as const,
+        question: 'No he guardado cambios. ¿Puedes indicar el cambio completo, aclarando los días y disciplinas que mantienes o excluyes?' };
       if (Object.keys(declaration.availability).some(d => !authorized.includes(d))) return fail('AVAILABILITY_SCOPE_CHANGE_REQUIRED');
       const snapshot = availabilitySnapshotDigest({ profile: p.data, sources: t.data, scope: before.scope }, targetWeek);
       if (expectedSnapshot != null && expectedSnapshot !== snapshot) return fail('AVAILABILITY_CONFIRMATION_STALE');
@@ -116,6 +123,7 @@ export async function updateChatAvailability(db: any, codigo: string, input: unk
       const current = await readAvailabilityConfirmation(db, codigo, targetWeek);
       if (!current.ok) return fail('AVAILABILITY_READBACK_FAILED');
       return { ...current, actualizado: true, responseKind: 'UPDATE_AVAILABILITY' as const, partial: false,
+        intent: typeof input === 'string' ? response.intent : 'PATCH' as const,
         rejectedCategories: [], ownershipPending: [], updatedCategories: Object.keys(declaration.availability), declaration };
     }
     update ??= parseAvailabilityChange(input, authorizedDays);

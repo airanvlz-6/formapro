@@ -60,8 +60,37 @@ export async function loadChatGrounding(db: any, user: string, today = chatToday
         knowledgeCount: (profile.data.perfil?.coaching_knowledge ?? []).length },
       longitudinal: trace.sync('projectChatLongitudinal', () => projectChatLongitudinal(profile.data, athlete.history, message, today)),
     }));
-    return { facts, advisory, athlete, profile: profile.data, plans: plans.data, scope: scope.scope, conversation: trace.sync('projectConversation', () => conversationOnly(profile.data.historial)) };
+    return { facts, advisory, athlete, profile: profile.data, plans: plans.data, scope: scope.scope,
+      planRead: { status: 'SUCCESS' as const, weekStart: week.weekStart },
+      conversation: trace.sync('projectConversation', () => conversationOnly(profile.data.historial)) };
   });
+}
+type ChatGenerationContext = {
+  facts: Record<string, any>; advisory?: unknown; conversation: { role: 'user' | 'assistant'; content: string }[];
+  planRead?: { status: 'SUCCESS'; weekStart: string };
+};
+/** Presentation only. The original facts remain unchanged for review and mutation authorities. */
+export function projectChatGenerationFacts(context: ChatGenerationContext) {
+  const { plan, history, runningExecution, longitudinal, coachingKnowledge, ...facts } = context.facts;
+  const weekStart = resolveCompletionDate(facts.today)?.weekStart ?? null;
+  const plans: Record<string, any>[] = Array.isArray(plan) ? plan : [];
+  const dated = plans.filter(p => p && typeof p === 'object' && typeof p.weekStart === 'string'
+    && resolveCompletionDate(p.weekStart)?.weekStart === p.weekStart);
+  const unresolved = Array.isArray(plan) ? plans.filter(p => !dated.includes(p)) : plan === undefined ? [] : [plan];
+  const current = dated.filter(p => p.weekStart === weekStart);
+  const past = dated.filter(p => weekStart && p.weekStart < weekStart);
+  const future = dated.filter(p => weekStart && p.weekStart > weekStart);
+  const known = !!weekStart && context.planRead?.status === 'SUCCESS' && context.planRead.weekStart === weekStart
+    && facts.contextStatus !== 'UNKNOWN' && Array.isArray(plan) && !unresolved.length && current.length <= 1;
+  return { ...facts,
+    CURRENT_WEEK: known && current.length === 1 ? { ...current[0], status: 'ACTIVE' as const }
+      : { status: known ? 'NONE' as const : 'UNKNOWN' as const, weekStart,
+        ...(!known && current.length ? { candidates: current } : {}),
+        ...(unresolved.length || !weekStart && dated.length ? { unresolvedPlans: [...unresolved, ...(!weekStart ? dated : [])] } : {}) },
+    FUTURE_PLANS: future,
+    HISTORICAL_CONTEXT: { ...history, runningExecution, longitudinal, coachingKnowledge, advisory: context.advisory,
+      ...(past.length ? { pastPlans: past } : {}) },
+  };
 }
 export const CHAT_EPISTEMIC_CONTRACT = `ASK WHEN USEFUL, NOT REQUIRE EVERYTHING BEFORE PRESCRIBING. Puedes generar con información incompleta. Pregunta por contexto, material o capacidades cuando mejore una decisión; no impongas cuestionarios exhaustivos. Ante molestia pregunta qué ejercicio y cuándo solo si no se ha reportado y cambia la decisión, sin convertir una observación en diagnóstico.
 COACHING AUTHORITY != MUTATION AUTHORITY. Una escritura fallida no impide interpretar, aconsejar, proponer o adaptar verbalmente. No conviertas un estado técnico pendiente en la respuesta entera; distingue propuesta de cambio guardado.
@@ -89,7 +118,7 @@ export function validateChatDecision(raw: string | Record<string, any>, facts: R
     || !message.includes(evidence.quote)) throw new Error('CHAT_EVIDENCE_NOT_USER_REPORTED');
   return p as { answer: string; grounding: { fact: string; value: unknown }[]; evidence: { quote: string; kind: string }[]; interpretation: string; decision: string };
 }
-export async function answerGroundedChat(context: { facts: Record<string, any>; advisory?: unknown; conversation: { role: 'user' | 'assistant'; content: string }[] }, message: string, complete: ChatCompletion, outcome: unknown = null, trace: CoachTrace = silentCoachTrace) {
+export async function answerGroundedChat(context: ChatGenerationContext, message: string, complete: ChatCompletion, outcome: unknown = null, trace: CoachTrace = silentCoachTrace) {
   const answerOperation = trace.start('answerGroundedChat');
   const messageOperation = trace.start('message.validate');
   if (typeof message !== 'string' || !message.trim() || message.length > 16000) throw new Error('CHAT_MESSAGE_INVALID');
@@ -97,9 +126,12 @@ export async function answerGroundedChat(context: { facts: Record<string, any>; 
   chatDiagnostic('CHAT_COACH_CONTEXT', { date: context.facts.today, activeRestriction: context.facts.restrictions?.active ?? null,
     references: context.facts.references?.length ?? 0, plans: context.facts.plan?.length ?? 0, readiness: context.facts.readiness?.status ?? 'unknown' });
   const promptOperation = trace.start('prompt.build');
-  const system = CHAT_EPISTEMIC_CONTRACT + CHAT_ACTION_CONTRACT + COACH_WIRE_INSTRUCTION + '\nFACTS (lectura autoritativa):\n' + JSON.stringify(context.facts)
-    + '\nAUTHORIZED_ACTION_RESULTS:\n' + JSON.stringify(outcome)
-    + '\nADVISORY_CONTEXT (notas y resultados históricos; preservar source/confidence/status. No son diagnósticos ni hechos actuales confirmados; ninguna interpretación assistant se convierte en evidencia humana):\n' + JSON.stringify(context.advisory);
+  const generationFacts = projectChatGenerationFacts(context);
+  const actionContract = CHAT_ACTION_CONTRACT.replace('FACTS.plan', 'FACTS.CURRENT_WEEK.sessions o FACTS.FUTURE_PLANS[].sessions');
+  const system = CHAT_EPISTEMIC_CONTRACT + actionContract + COACH_WIRE_INSTRUCTION
+    + '\nCURRENT_WEEK, FUTURE_PLANS and HISTORICAL_CONTEXT have distinct temporal meaning.'
+    + '\nFACTS (lectura autoritativa):\n' + JSON.stringify(generationFacts)
+    + '\nAUTHORIZED_ACTION_RESULTS:\n' + JSON.stringify(outcome);
   trace.end(promptOperation);
   let error = '';
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -126,7 +158,7 @@ export async function answerGroundedChat(context: { facts: Record<string, any>; 
       let decision: ReturnType<typeof validateChatDecision>;
       let extractionVerified = true;
       const metadataOperation = trace.start('metadata.validate', attemptNumber);
-      try { decision = validateChatDecision(envelope, context.facts, message); trace.end(metadataOperation); }
+      try { decision = validateChatDecision(envelope, generationFacts, message); trace.end(metadataOperation); }
       catch (metadataError) { trace.end(metadataOperation, 'rejected', metadataError); extractionVerified = false; decision = { answer: envelope.answer, grounding: [], evidence: [], interpretation: '', decision: '' }; }
       // Review claims in natural prose, not a blacklist of injury-specific phrases.
       // This semantic check is model-based; state/plan writes remain exclusively code-authorized.

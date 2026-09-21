@@ -1,3 +1,4 @@
+import { createGroundingTrace } from '../diagnostics/groundingTrace';
 import { randomUUID } from 'node:crypto';
 import { extractCoachingFacts, persistCoachingKnowledge } from './athleteCoachingKnowledge';
 import { loadChatGrounding, answerGroundedChat, chatToday, chatDiagnostic, conversationOnly, type ChatCompletion } from './groundedCoach';
@@ -15,7 +16,7 @@ export async function runChatCoach(db: any, user: string, message: string, compl
     try { return await work(); } catch { pipeline.failures.push(stage); return failed; }
   };
   try {
-    const initial = await attempt('grounding', () => loadChatGrounding(db, user, today, message), null);
+    const initial = await attempt('grounding', () => loadChatGrounding(db, user, today, message, createGroundingTrace(pipeline.runId, 'initial')), null);
     pipeline.groundingLoaded = !!initial;
     pipeline.relevantHistoryCount = initial?.facts.longitudinal.entries.length ?? 0;
     pipeline.activeRestrictionCount = initial?.facts.restrictions.restrictions.length ?? 0;
@@ -39,7 +40,7 @@ export async function runChatCoach(db: any, user: string, message: string, compl
     // An ambiguous write must not make the original snapshot look like confirmed new state.
     const changedOrUncertain = knowledge.count > 0 || mutation.dates.length > 0 || pipeline.failures.length > 0;
     const current = initial && changedOrUncertain
-      ? await attempt('reload', () => loadChatGrounding(db, user, today, message), null) : initial;
+      ? await attempt('reload', () => loadChatGrounding(db, user, today, message, createGroundingTrace(pipeline.runId, 'reload')), null) : initial;
     const outcome = { mutation, adaptation, knowledge,
       supportedAutomaticChanges: ['temporary_unavailability_explicit_weekday'],
       unsupportedAutomaticChanges: ['temporary_equipment_capacity', 'clinical_restriction', 'medical_resolution', 'goal_or_event_change'],

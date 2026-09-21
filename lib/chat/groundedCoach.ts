@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { createGroundingTrace, type GroundingTrace } from '../diagnostics/groundingTrace';
 import { loadAthletePrescriptionContext } from '../athlete/loadAthletePrescriptionContext';
 import { loadEventContext } from '../athlete/eventActions';
 import { buildSessionDoseContext } from '../sports/sessionDoseContext';
@@ -15,38 +17,48 @@ export function chatDiagnostic(event: string, value: Record<string, unknown>) {
   try { if (process.env.FORGE_CHAT_COACH_DIAGNOSTICS === '1') console.info(event, JSON.stringify(value)); } catch { /* Non-authoritative. */ }
 }
 /** Role-specific projection of the same factual authorities used by Weekly and Session Coach. */
-export async function loadChatGrounding(db: any, user: string, today = chatToday(), message = '') {
-  const week = resolveCompletionDate(today);
-  if (!week) throw new Error('CHAT_DATE_INVALID');
-  const [athlete, profile, plans, sources, event, advisory] = await Promise.all([
-    loadAthletePrescriptionContext(db, user, { asOfDate: today }),
-    db.from('usuarios').select('historial,perfil,distribucion_semanal,modo_entrada,categoria,especialidad,workout_history').eq('codigo', user).single(),
-    db.from('weekly_plan').select('*').eq('user_codigo', user).gte('week_start', week.weekStart)
-      .lte('week_start', new Date(Date.parse(week.weekStart) + 21 * 86400000).toISOString().slice(0, 10)).order('week_start'),
-    db.from('athlete_training_sources').select('disciplina,owner,activo,dias').eq('user_codigo', user).eq('activo', true),
-    loadEventContext(db, user, today),
-    loadWeeklyCoachingSupplement(db, user, today),
-  ]);
-  if (profile.error || !profile.data || plans.error || !Array.isArray(plans.data) || sources.error || !Array.isArray(sources.data)) throw new Error('CHAT_CONTEXT_READ_FAILED');
-  const scope = buildPrescriptionScope({ mode: profile.data.modo_entrada, sources: sources.data, profileDisciplines: resolveProfileDisciplines(profile.data) });
-  if (!scope.ok) throw new Error('CHAT_SCOPE_UNRESOLVED');
-  const facts = {
-    today, goal: athlete.goals, cycle: athlete.cycle, restrictions: athlete.restrictions.value,
-    physiology: athlete.physiology, readiness: athlete.readiness, development: athlete.development,
-    references: buildSessionDoseContext(athlete).references, referenceResolution: { strength: athlete.strength, running: athlete.running },
-    equipmentCapabilities: athlete.prescriptionSignals, coachingKnowledge: (profile.data.perfil?.coaching_knowledge ?? []).slice(-64), event: event.authority,
-    availability: { habitual: profile.data.distribucion_semanal, sources: sources.data, dateAccess: profile.data.perfil?.prescription_access ?? {} },
-    ownership: scope.scope,
-    plan: plans.data.map((p: any) => ({ weekStart: p.week_start, revision: p.revision, objective: p.week_objective, sessions: p.sessions.map(projectChatPlanSession) })),
-    history: { ...athlete.history, completedSessions: athlete.history.completedSessions.slice(0, 14).map(s => ({ ...s,
-      actualDescription: typeof s.actualDescription === 'string' ? s.actualDescription.slice(0, 1800) : s.actualDescription })),
-      prescriptions: athlete.history.prescriptions.slice(0, 14) }, runningExecution: athlete.runningHistory,
-    projectionLimits: { completedSessions: 14, prescriptions: 14, knowledge: 64, textCharacters: 1800,
-      completedSessionCount: athlete.history.completedSessions.length, prescriptionCount: athlete.history.prescriptions.length,
-      knowledgeCount: (profile.data.perfil?.coaching_knowledge ?? []).length },
-    longitudinal: projectChatLongitudinal(profile.data, athlete.history, message, today),
-  };
-  return { facts, advisory, athlete, profile: profile.data, plans: plans.data, scope: scope.scope, conversation: conversationOnly(profile.data.historial) };
+export async function loadChatGrounding(db: any, user: string, today = chatToday(), message = '', trace: GroundingTrace = createGroundingTrace(randomUUID(), 'initial')) {
+  return trace.async('loadChatGrounding', async () => {
+    const week = trace.sync('resolveDate', () => {
+      const result = resolveCompletionDate(today);
+      if (!result) throw new Error('CHAT_DATE_INVALID');
+      return result;
+    });
+    const [athlete, profile, plans, sources, event, advisory] = await Promise.all([
+      trace.async('loadAthletePrescriptionContext', () => loadAthletePrescriptionContext(db, user, { asOfDate: today }, trace)),
+      trace.async('profile.read', () => db.from('usuarios').select('historial,perfil,distribucion_semanal,modo_entrada,categoria,especialidad,workout_history').eq('codigo', user).single(), true),
+      trace.async('plans.read', () => db.from('weekly_plan').select('*').eq('user_codigo', user).gte('week_start', week.weekStart)
+        .lte('week_start', new Date(Date.parse(week.weekStart) + 21 * 86400000).toISOString().slice(0, 10)).order('week_start'), true),
+      trace.async('sources.read', () => db.from('athlete_training_sources').select('disciplina,owner,activo,dias').eq('user_codigo', user).eq('activo', true), true),
+      trace.async('loadEventContext', () => loadEventContext(db, user, today)),
+      trace.async('loadWeeklyCoachingSupplement', () => loadWeeklyCoachingSupplement(db, user, today)),
+    ]);
+    trace.sync('validateReadResults', () => {
+      if (profile.error || !profile.data || plans.error || !Array.isArray(plans.data) || sources.error || !Array.isArray(sources.data)) throw new Error('CHAT_CONTEXT_READ_FAILED');
+    });
+    const scope = trace.sync('resolveScope', () => {
+      const scope = buildPrescriptionScope({ mode: profile.data.modo_entrada, sources: sources.data, profileDisciplines: resolveProfileDisciplines(profile.data) });
+      if (!scope.ok) throw new Error('CHAT_SCOPE_UNRESOLVED');
+      return scope;
+    });
+    const facts = trace.sync('buildFacts', () => ({
+      today, goal: athlete.goals, cycle: athlete.cycle, restrictions: athlete.restrictions.value,
+      physiology: athlete.physiology, readiness: athlete.readiness, development: athlete.development,
+      references: trace.sync('buildSessionDoseContext', () => buildSessionDoseContext(athlete).references), referenceResolution: { strength: athlete.strength, running: athlete.running },
+      equipmentCapabilities: athlete.prescriptionSignals, coachingKnowledge: trace.sync('projectCoachingKnowledge', () => (profile.data.perfil?.coaching_knowledge ?? []).slice(-64)), event: event.authority,
+      availability: { habitual: profile.data.distribucion_semanal, sources: sources.data, dateAccess: profile.data.perfil?.prescription_access ?? {} },
+      ownership: scope.scope,
+      plan: trace.sync('projectPlans', () => plans.data.map((p: any) => ({ weekStart: p.week_start, revision: p.revision, objective: p.week_objective, sessions: p.sessions.map(projectChatPlanSession) }))),
+      history: trace.sync('projectHistory', () => ({ ...athlete.history, completedSessions: athlete.history.completedSessions.slice(0, 14).map(s => ({ ...s,
+        actualDescription: typeof s.actualDescription === 'string' ? s.actualDescription.slice(0, 1800) : s.actualDescription })),
+        prescriptions: athlete.history.prescriptions.slice(0, 14) })), runningExecution: athlete.runningHistory,
+      projectionLimits: { completedSessions: 14, prescriptions: 14, knowledge: 64, textCharacters: 1800,
+        completedSessionCount: athlete.history.completedSessions.length, prescriptionCount: athlete.history.prescriptions.length,
+        knowledgeCount: (profile.data.perfil?.coaching_knowledge ?? []).length },
+      longitudinal: trace.sync('projectChatLongitudinal', () => projectChatLongitudinal(profile.data, athlete.history, message, today)),
+    }));
+    return { facts, advisory, athlete, profile: profile.data, plans: plans.data, scope: scope.scope, conversation: trace.sync('projectConversation', () => conversationOnly(profile.data.historial)) };
+  });
 }
 export const CHAT_EPISTEMIC_CONTRACT = `ASK WHEN USEFUL, NOT REQUIRE EVERYTHING BEFORE PRESCRIBING. Puedes generar con información incompleta. Pregunta por contexto, material o capacidades cuando mejore una decisión; no impongas cuestionarios exhaustivos. Ante molestia pregunta qué ejercicio y cuándo solo si no se ha reportado y cambia la decisión, sin convertir una observación en diagnóstico.
 COACHING AUTHORITY != MUTATION AUTHORITY. Una escritura fallida no impide interpretar, aconsejar, proponer o adaptar verbalmente. No conviertas un estado técnico pendiente en la respuesta entera; distingue propuesta de cambio guardado.

@@ -3,6 +3,9 @@ import { resolveCompletionDate } from '../planning/recordCompletion';
 
 const object = (v: any): Record<string, any> => v && typeof v === 'object' && !Array.isArray(v) ? v : {};
 const text = (v: unknown) => typeof v === 'string' ? v.slice(0, 400) : null;
+const lineagePrescription = (s: any) => s ? { tipo: s.tipo ?? null, titulo: text(s.titulo),
+  descripcion: typeof s.descripcion === 'string' ? s.descripcion.slice(0, 1800) : null,
+  duracion_min: s.duracion_min ?? null, structuredProposal: s.structuredPrescription?.proposal ?? null } : null;
 /** Presentation of stored prescriptions, never a source of executed dose or exposure. */
 export function prescriptionHistorySummary(plans: readonly unknown[], asOfDate: string) {
   return plans.flatMap(raw => {
@@ -25,7 +28,16 @@ export function prescriptionHistorySummary(plans: readonly unknown[], asOfDate: 
           durationMinutes: typeof s.duracion_min === 'number' ? s.duracion_min : null },
         execution: s.completada === true ? { title: text(s.titulo_real), description: text(s.descripcion_real),
           quantityStatus: 'NOT_INFERRED_FROM_PRESCRIPTION' } : null,
-        modified: s.modificado ?? null, modificationReason: text(s.motivo_modificacion) }];
+        modified: s.modificado ?? null, modificationReason: text(s.motivo_modificacion),
+        ...(Array.isArray(s.chatPrescriptionHistory) ? { prescriptionLineage: {
+          source: 'weekly_plan.sessions.chatPrescriptionHistory', semantics: 'PLANNED_NOT_PERFORMED',
+          original: lineagePrescription(s.chatPrescriptionHistory[0]?.original),
+          adaptations: s.chatPrescriptionHistory.slice(-8).map((h: any) => ({ id: h.id, source: h.source,
+            createdAt: h.createdAt, reason: text(h.reason), adapted: lineagePrescription(h.adapted) })),
+          truncated: s.chatPrescriptionHistory.length > 8 } } : {}),
+        ...(Array.isArray(s.chatExecutionEvidence) ? { reportedExecution: {
+          source: 'weekly_plan.sessions.chatExecutionEvidence', quantityStatus: 'NOT_INFERRED_FROM_PRESCRIPTION',
+          observations: s.chatExecutionEvidence.slice(-16), truncated: s.chatExecutionEvidence.length > 16 } } : {}) }];
     });
   }).sort((a, b) => b.date.localeCompare(a.date));
 }

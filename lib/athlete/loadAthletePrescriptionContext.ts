@@ -60,8 +60,10 @@ export async function loadAthletePrescriptionContext(db: any, userCodigo: string
       const week = typeof plan.week_start === 'string' ? resolveCompletionDate(plan.week_start) : null;
       const date = week && week.weekStart === plan.week_start && index >= 0
         ? new Date(Date.parse(week.weekStart) + index * 86400000).toISOString().slice(0, 10) : null;
+      const performed = Array.isArray(s.chatExecutionEvidence)
+        ? s.chatExecutionEvidence.find((e: any) => e.kind === 'PERFORMED' && e.source === 'athlete_report') : undefined;
       return { source: 'weekly_plan.sessions', weekStart: plan.week_start, date, sessionId: s.session_id ?? null,
-        type: s.tipo ?? null, title: legacySessionView(s).titulo ?? null, actualDescription: s.descripcion_real ?? null,
+        type: performed?.discipline ?? s.tipo ?? null, title: performed ? s.titulo_real : legacySessionView(s).titulo ?? null, actualDescription: s.descripcion_real ?? null,
         modified: s.modificado ?? null, modificationReason: s.motivo_modificacion ?? null };
     });
   }).filter(s => s.date === null || s.date <= options.asOfDate);

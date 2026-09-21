@@ -1759,7 +1759,7 @@ const forgeValidator=(texto:string):string=>{
     const esSuenoSilencioso=/métricas de sueño|dormí|puntuación de sueño|durante la noche|sueño profundo|sueño rem/i.test(texto.toLowerCase()) && !/entren|wod|sesion realizada|serie|repeticion/i.test(texto.toLowerCase());
     try{
       const resumen=historial.slice(-4).map(m=>`${m.role==="user"?"Usuario":"Coach"}: ${typeof m.content==="string"?m.content.substring(0,150):"[archivo]"}...`).join("\n");
-      const resContextoSilencioso=await apiCall({action:"procesar_mensaje_contexto",codigo:codigoUsuario,datos:{mensaje:textoConFecha}});
+      const resContextoSilencioso=await apiCall({action:"procesar_mensaje_contexto",codigo:codigoUsuario,datos:{mensaje:textoConFecha}}).catch(()=>null);
       const contextoConstruidoSilencioso=resContextoSilencioso?.contexto||"";
       const mensajesParaAPI=contextoConstruidoSilencioso
         ? [{role:"user" as const,content:`[CONTEXTO DE EVENTOS RECIENTES]\n${contextoConstruidoSilencioso}`},{role:"assistant" as const,content:"Entendido, tengo el contexto."},{role:"user" as const,content:textoConFecha}]
@@ -1767,14 +1767,14 @@ const forgeValidator=(texto:string):string=>{
       const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,coachGrounding:true,coachMessage:texto,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal,planSemanal,debilidades,blockOutcomes,estadoCanonico)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:mensajesParaAPI},true);
       if(data.aborted) return;
       const respTextRaw=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.");
-      if(data.adaptation?.status==="adapted"&&codigoUsuario) await cargarPlanSemanal(codigoUsuario,planSemanal?.week_start);
-      const respTextValidado=forgeValidator(respTextRaw);
-      const respText=await procesarTags(respTextValidado, esSuenoSilencioso, texto.trim(), data.weeklyGeneration);
+      if((data.adaptation?.status==="adapted"||data.actions?.some((a:any)=>a.status==="committed"))&&codigoUsuario) await cargarPlanSemanal(codigoUsuario,planSemanal?.week_start).catch(()=>{});
+      const respTextValidado=data.grounded ? respTextRaw : forgeValidator(respTextRaw);
+      const respText=data.grounded ? respTextValidado : await procesarTags(respTextValidado, esSuenoSilencioso, texto.trim(), data.weeklyGeneration);
       const histLimpio=[...historial,{role:"user",content:texto.trim()},{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);
       setHistorial(histLimpio);
       if(codigoUsuario){
-        apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histLimpio}});
+        if(!data.grounded) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histLimpio}});
         console.log("FRONTEND: mostrarBotonNuevaSemana actual=", mostrarBotonNuevaSemana);
         if(!mostrarBotonNuevaSemana){
           console.log("FRONTEND: llamando a check_week_closure");
@@ -2129,7 +2129,7 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
       // FORGE CONTEXT BUILDER: en vez de "ultimos N mensajes" ciegos, el backend construye el contexto
       // real (evento activo + evento anterior relevante) y lo inyectamos como un mensaje de contexto,
       // seguido solo del mensaje actual del usuario — evita perder el hilo de eventos importantes.
-      const resContexto=await apiCall({action:"procesar_mensaje_contexto",codigo:codigoUsuario,datos:{mensaje:textoEnvio}});
+      const resContexto=await apiCall({action:"procesar_mensaje_contexto",codigo:codigoUsuario,datos:{mensaje:textoEnvio}}).catch(()=>null);
 
       // FORGE ORCHESTRATOR OWNERSHIP — la planificacion semanal completa es propiedad exclusiva del
       // Orchestrator, nunca del Coach conversacional. Si el intent lo detecta, disparamos el mismo
@@ -2156,34 +2156,7 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
         return;
       }
 
-      // FORGE RESPONSE ENGINE — si el backend ya compuso una respuesta STATIC (sin LLM), la mostramos
-      // directamente y terminamos aqui, sin llamar al Coach en absoluto. Cero coste, cero latencia, cero riesgo.
-      if(resContexto?.modoRespuesta==="STATIC" && resContexto?.respuestaEstatica){
-        const mensajeDisplayEstatico=texto.trim();
-        // Prefijo interno [FORGE_STATIC] para que el render lo muestre con diseño distintivo (dato verificado)
-        const respuestaConMarcador=`[FORGE_STATIC]${resContexto.respuestaEstatica}`;
-        setMensajes(prev=>[...prev,{role:"user",content:mensajeDisplayEstatico}]);
-        setMensajes(prev=>[...prev,{role:"assistant",content:respuestaConMarcador}]);
-        setInput("");
-        if(inputRef.current){inputRef.current.style.height="auto";}
-        const histConEstatico=[...historial,{role:"user",content:texto.trim()},{role:"assistant",content:resContexto.respuestaEstatica}];
-        setHistorial(histConEstatico);
-        if(codigoUsuario) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histConEstatico}}).then((resActualizarEstatico:any)=>{
-          // FORGE CARDS — la rama STATIC tambien puede disparar deteccion de PR/racha/objetivo
-          // (ej: el usuario reporta un PR y el mensaje se clasifica como BENCHMARK/READ).
-          if(resActualizarEstatico?.nuevoPrDetectado){
-            setPrPendienteCompartir(resActualizarEstatico.nuevoPrDetectado);
-          }
-          if(resActualizarEstatico?.rachaDetectada){
-            setRachaPendienteCompartir(resActualizarEstatico.rachaDetectada);
-          }
-          if(resActualizarEstatico?.objetivoConseguidoDetectado){
-            setObjetivoPendienteCompartir(resActualizarEstatico.objetivoConseguidoDetectado);
-          }
-        });
-        setCargando(false);
-        return;
-      }
+      // Read classifications are advisory; ordinary Chat always reaches the longitudinal Coach.
 
       const contextoConstruido=resContexto?.contexto||"";
       // FORGE INTENT CLASSIFIER: si detecta una consulta de dato existente (familia READ) con confianza alta,
@@ -2213,12 +2186,12 @@ const CONTIENE_CONFIRMACION = /\b(s[ií]|confirmo|confirmado|vale|adelante|ok|ok
 const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,coachGrounding:true,coachMessage:texto,system:buildPrompt(catObj,respuestas,marcas as any,resumen,memoriaCoach,cicloActual,perfilPsicologico,esPremium||esAdmin,athleteState,datosEntrenamiento,estadoFisiologico,historialFisiologico,distribucionSemanal,objetivoPrincipal,planSemanal,debilidades,blockOutcomes,estadoCanonico)+(perfilAmigo?`\n\nSESIÓN CONJUNTA — PERFIL DEL COMPAÑERO:\nEspecialidad: ${perfilAmigo.especialidad||perfilAmigo.categoria}\nPerfil: ${JSON.stringify(perfilAmigo.perfil)}\nCiclo: ${JSON.stringify(perfilAmigo.ciclo_actual)}\nLesiones: ${perfilAmigo.lesiones_actuales||"ninguna"}\nMarcas: ${JSON.stringify(perfilAmigo.marcas_especificas)}\nIMPORTANTE: Genera una sesión que beneficie a AMBOS atletas simultáneamente. Respeta las limitaciones y fases de cada uno. Indica qué hace cada atleta si hay diferencias de nivel o fase.`:""),messages:mensajesParaAPI2},true);
       if(data.aborted) return;
       const respTextRaw2Original=(data.content?.map((b:{text?:string})=>b.text||"").join("")||"Error.");
-      if(data.adaptation?.status==="adapted"&&codigoUsuario) await cargarPlanSemanal(codigoUsuario,planSemanal?.week_start);
-      const respTextRaw2=forgeValidator(respTextRaw2Original);
+      if((data.adaptation?.status==="adapted"||data.actions?.some((a:any)=>a.status==="committed"))&&codigoUsuario) await cargarPlanSemanal(codigoUsuario,planSemanal?.week_start).catch(()=>{});
+      const respTextRaw2=data.grounded ? respTextRaw2Original : forgeValidator(respTextRaw2Original);
       
       // Extraer STATE_UPDATE primero (formato distinto, con cierre [/STATE_UPDATE])
       const stateMatch=respTextRaw2.match(/\[STATE_UPDATE\]([\s\S]*?)\[\/STATE_UPDATE\]/);
-      if(stateMatch){
+      if(stateMatch&&!data.grounded){
         try{
           const newState=JSON.parse(stateMatch[1].trim());
           const updatedState={...newState,updated_at:new Date().toISOString()};
@@ -2227,7 +2200,7 @@ const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,coachGroundi
         }catch{}
       }
 
-      const respText=await procesarTags(respTextRaw2, esSuenoParaResumen, texto, data.weeklyGeneration);
+      const respText=data.grounded ? respTextRaw2 : await procesarTags(respTextRaw2, esSuenoParaResumen, texto, data.weeklyGeneration);
       const hist=[...nuevoHist,{role:"assistant",content:respText}];
       setMensajes(prev=>[...prev,{role:"assistant",content:respText}]);
       // FORGE PROPOSAL PARSER — Nivel 1 deterministico: detecta si el Coach acaba de proponer un
@@ -2241,9 +2214,9 @@ const data=await apiCall({model:"claude-sonnet-4-5",max_tokens:4000,coachGroundi
       }
       const histFinal=hist.length>=20?hist.slice(-10):hist;
       setHistorial(histFinal);
-      if(hist.length>=20) compactarHistorial(hist);
+      if(hist.length>=20&&!data.grounded) compactarHistorial(hist);
       if(codigoUsuario){
-        apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histFinal}}).then((resActualizar:any)=>{
+        if(!data.grounded) apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{historial:histFinal}}).then((resActualizar:any)=>{
           // FORGE CARDS — si se detecto un nuevo PR o hito de racha en esta actualizacion, ofrecer compartirlo
           if(resActualizar?.nuevoPrDetectado){
             setPrPendienteCompartir(resActualizar.nuevoPrDetectado);
@@ -2366,7 +2339,7 @@ Extrae SOLO lo que puedas determinar con certeza. Responde SOLO con este JSON:
             }
           }catch{}
         };
-        extractarMemoria();
+        if(!data.grounded) extractarMemoria();
       }
     }catch{setMensajes(prev=>[...prev,{role:"assistant",content:"Error. Intentalo de nuevo."}]);}
     finally{setCargando(false);}

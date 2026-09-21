@@ -836,6 +836,7 @@ async function handlePost(req: NextRequest) {
   }
   const groundedReply = async (message: string) => runChatCoach(supabase, codigo, message, async (prompt, conversation) => {
     const response = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST',
+      signal: AbortSignal.timeout(120000),
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey!, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 6000, system: prompt, messages: conversation }) });
     if (!response.ok) throw new Error('CHAT_PROVIDER_FAILED');
@@ -5443,8 +5444,8 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
     try {
       const result = await groundedReply(coachMessage);
       return NextResponse.json({ ...result, content: [{ type: 'text', text: result.answer }] });
-    } catch { return NextResponse.json({ ok: false, grounded: true, code: 'CHAT_GROUNDING_FAILED', retryable: false,
-      content: [{ type: 'text', text: 'No he podido verificar toda la información necesaria para responder y confirmar los cambios. Revisa el plan antes de dar por guardada una adaptación.' }] }); }
+    } catch { return NextResponse.json({ ok: false, grounded: true, code: 'CHAT_COACHING_UNAVAILABLE', retryable: false,
+      content: [{ type: 'text', text: 'No he podido completar una respuesta de coaching fiable en este momento. Si solicitaste un cambio, su guardado no queda confirmado por este mensaje.' }] }); }
   }
 
   // Llamada normal a la IA con timeout de 120 segundos (aumentado por prompts largos con Estado Canonico + plan semanal completo)

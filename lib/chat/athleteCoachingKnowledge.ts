@@ -5,7 +5,7 @@ import { samePlanData } from '../planning/planMutationValidators';
 
 const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 const aliases: Record<string,string> = { trineo:'sled', rowerg:'remo', 'ring muscle-ups':'ring_muscle_up', 'ring muscle ups':'ring_muscle_up', rmu:'ring_muscle_up', 'muscle-ups en anillas':'ring_muscle_up' };
-type Fact = { kind:'resource'|'capability'|'discomfort_observation'; subject:string; state:'available'|'unavailable'|'reported'; quote:string; source:'athlete_report'; effectiveDate:string; scope:'current_declaration'|'dated_observation'; signal?:string };
+type Fact = { kind:'resource'|'capability'|'discomfort_observation'|'reported_observation'; subject:string; state:'available'|'unavailable'|'reported'; quote:string; source:'athlete_report'; effectiveDate:string; scope:'current_declaration'|'dated_observation'; signal?:string };
 /** Extract only declarations from the current authenticated athlete message. Catalog
  * lookup enriches a name; unknown resources still remain reusable reported knowledge. */
 export function extractCoachingFacts(message: string, today: string): Fact[] {
@@ -31,8 +31,15 @@ export function extractCoachingFacts(message: string, today: string): Fact[] {
   }
   return facts;
 }
-export async function persistCoachingKnowledge(db:any,user:string,message:string,today:string) {
-  const facts=extractCoachingFacts(message,today);
+export async function persistCoachingKnowledge(db:any,user:string,message:string,today:string, verifiedQuotes: readonly string[] = []) {
+  // The optional learning branch must not replay an earlier ambiguous declaration write.
+  const facts: Fact[]=verifiedQuotes.length ? [] : extractCoachingFacts(message,today);
+  for (const quote of verifiedQuotes.slice(0, 8)) {
+    if (typeof quote !== 'string' || !quote.trim() || quote.length > 1600 || !message.includes(quote)) continue;
+    if (facts.some(f => f.quote === quote)) continue;
+    facts.push({ kind:'reported_observation', subject:'reported_training_evidence', state:'reported', quote,
+      source:'athlete_report', effectiveDate:today, scope:'dated_observation' });
+  }
   if(!facts.length)return {status:'no_supported_fact' as const,count:0};
   const read=await db.from('usuarios').select('perfil').eq('codigo',user).single();
   if(read.error||!read.data)throw new Error('COACHING_KNOWLEDGE_READ_FAILED');

@@ -34,7 +34,9 @@ export function projectRunningDoseBaseline(profile: Record<string, unknown>, pla
     }
     for (const rawSession of plan.sessions) {
       const session = record(rawSession);
-      if (session.tipo !== 'carrera') continue;
+      const performed = Array.isArray(session.chatExecutionEvidence)
+        ? session.chatExecutionEvidence.find((e: any) => e.kind === 'PERFORMED' && e.source === 'athlete_report') : undefined;
+      if ((performed?.discipline ?? session.tipo) !== 'carrera') continue;
       const day = normalizedDay(session.dia), index = days.indexOf(day);
       if (index < 0) { diagnostics.add('RUNNING_DOSE_INVALID_PLAN_EXCLUDED'); continue; }
       const date = new Date(Date.parse(week.date) + index * 86400000).toISOString().slice(0, 10);

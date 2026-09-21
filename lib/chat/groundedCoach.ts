@@ -71,7 +71,115 @@ type ChatGenerationContext = {
   facts: Record<string, any>; advisory?: unknown; conversation: { role: 'user' | 'assistant'; content: string }[];
   planRead?: { status: 'SUCCESS'; weekStart: string };
   temporalConversation?: ReturnType<typeof contextualConversation>; storedCycle?: unknown;
+  profile?: { workout_history?: unknown };
 };
+/** Presentation of existing evidence only: no load calculation, execution inference or DB writes. */
+function projectChatTrainingEvidence(context: ChatGenerationContext) {
+  const history = context.facts.history ?? {}, running = context.facts.runningExecution;
+  const records: any[] = [], legacyResponseEvidence: any[] = [], associatedResponses: any[] = [], unassociatedResponses: any[] = [];
+  const rawHistory = Array.isArray(context.profile?.workout_history) ? context.profile.workout_history : [];
+  const representedLegacy = new Map<string, any>();
+  for (const run of running?.records ?? []) {
+    const { metrics, sensation, ...evidence } = run;
+    const record = { ...evidence, quantities: metrics, supportingEvidence: [] as any[] };
+    records.push(record);
+    for (const source of run.sourceRecords ?? []) if (source.startsWith('usuarios.workout_history.')) representedLegacy.set(source, record);
+    if (sensation != null) legacyResponseEvidence.push({ sourceRecords: run.sourceRecords, date: run.date,
+      value: sensation, evidenceStatus: 'LEGACY_SENSATION_NOT_CONFIRMED_PHYSIOLOGICAL_RESPONSE' });
+  }
+  const planExecutions = new Map<string, any[]>();
+  const planKey = (id: unknown, date: unknown) => typeof id === 'string' && id && typeof date === 'string' ? JSON.stringify([id, date]) : null;
+  for (const [index, session] of (history.completedSessions ?? []).entries()) {
+    // Only modern reconciled records carry a demonstrated plan association in reference.
+    const linked = records.filter(r => r.provenance === 'MODERN_STRUCTURED' && r.countable === true
+      && session.sessionId && r.reference === session.sessionId && r.date === session.date);
+    let record = linked.length === 1 ? linked[0] : null;
+    if (!record) {
+      record = { executionId: `completedSessions:${index}`, date: session.date, discipline: session.type,
+        provenance: 'weekly_plan.sessions', evidenceStatus: 'COMPLETION_RECORDED', quantities: null, supportingEvidence: [] };
+      records.push(record);
+    }
+    // title can be inherited from prescription: keep it as stored evidence, not executed dose.
+    record.supportingEvidence.push({ source: 'completedSessions', value: session });
+    const key = planKey(session.sessionId, session.date);
+    if (key) planExecutions.set(key, [...(planExecutions.get(key) ?? []), record]);
+  }
+  const legacyReferences = new Map<string, string[]>();
+  for (let index = Math.max(0, rawHistory.length - 60); index < rawHistory.length; index++) {
+    const raw = rawHistory[index];
+    const date = resolveCompletionDate(raw?.fecha)?.date;
+    if (!date || date > context.facts.today) continue;
+    const source = `usuarios.workout_history.${index}`;
+    let record = representedLegacy.get(source);
+    if (!record) {
+      record = { executionId: source, date, discipline: raw.tipo ?? null, provenance: source,
+        evidenceStatus: 'LEGACY_REPORTED_UNVERIFIED', quantities: null, supportingEvidence: [] };
+      records.push(record);
+    }
+    const { sensacion, ...report } = raw;
+    record.supportingEvidence.push({ source, evidenceStatus: 'LEGACY_REPORTED_UNVERIFIED', report });
+    if (sensacion != null && !legacyResponseEvidence.some(e => e.value === sensacion && e.sourceRecords?.includes(source))) legacyResponseEvidence.push({ source, date,
+      value: sensacion, evidenceStatus: 'LEGACY_SENSATION_NOT_CONFIRMED_PHYSIOLOGICAL_RESPONSE' });
+    // Exact full serialized record + source, never a date/title/similarity reconciliation.
+    const serialized = JSON.stringify(raw);
+    legacyReferences.set(serialized, [...(legacyReferences.get(serialized) ?? []), record.executionId]);
+  }
+  const withoutExecution: any[] = [], otherPrescriptions: any[] = [];
+  for (const p of history.prescriptions ?? []) {
+    const key = planKey(p.sessionId, p.date);
+    const completed = key ? planExecutions.get(key) ?? [] : [];
+    const linked = records.filter(r => r.provenance === 'MODERN_STRUCTURED' && r.countable === true
+      && p.sessionId && r.reference === p.sessionId && r.date === p.date);
+    let execution = completed.length === 1 ? completed[0] : linked.length === 1 ? linked[0] : null;
+    const performedEvidence = p.reportedExecution?.observations?.find((o: any) => o.kind === 'PERFORMED'
+      && o.source === 'athlete_report' && o.executionDate === p.date);
+    if (!execution && (p.factualState === 'EXECUTED' || performedEvidence)) {
+      execution = { executionId: `prescriptions:${otherPrescriptions.length}`, date: p.date,
+        discipline: performedEvidence?.discipline ?? p.prescription?.discipline ?? null, provenance: p.source,
+        evidenceStatus: performedEvidence ? 'ATHLETE_REPORTED_EXECUTION' : 'COMPLETION_RECORDED',
+        quantities: null, supportingEvidence: [{ source: 'prescriptions.execution', value: p.execution }] };
+      records.push(execution);
+    } else if (execution && p.execution) execution.supportingEvidence.push({ source: 'prescriptions.execution', value: p.execution });
+    const { execution: _execution, reportedExecution, ...storedPrescription } = p;
+    const prescription = { ...storedPrescription, ...(reportedExecution ? { executionEvidenceCoverage: {
+      source: reportedExecution.source, quantityStatus: reportedExecution.quantityStatus, truncated: reportedExecution.truncated } } : {}) };
+    for (const observation of reportedExecution?.observations ?? []) {
+      const associated = execution && observation.source === 'athlete_report' && observation.executionDate === p.date;
+      const destination = associated ? associatedResponses : unassociatedResponses;
+      const provenance = { source: reportedExecution.source, sessionId: p.sessionId, date: p.date };
+      if (observation.kind === 'RESPONSE') destination.push({ ...provenance,
+        executionRef: associated ? execution.executionId : null, observation });
+      else if (observation.kind === 'PERFORMED' && associated) {
+        const { responseQuotes, ...performed } = observation;
+        execution.supportingEvidence.push({ ...provenance, observation: performed });
+        for (const quote of responseQuotes ?? []) associatedResponses.push({ ...provenance,
+          executionRef: execution.executionId, observation: { kind: 'RESPONSE', source: observation.source,
+            reportedAt: observation.reportedAt, executionDate: observation.executionDate, quote } });
+      } else unassociatedResponses.push({ ...provenance, executionRef: null, observation });
+    }
+    if (p.temporal === 'PAST' && p.factualState === 'PLANNED_ONLY' && !execution)
+      withoutExecution.push({ ...prescription, executionStatus: 'NO_EXECUTION_RECORDED' });
+    else otherPrescriptions.push({ ...prescription, executionRef: execution?.executionId ?? null });
+  }
+  const remainingLongitudinal = (context.facts.longitudinal?.entries ?? []).map((entry: any) => {
+    if (entry.truncated) return entry;
+    const legacy = legacyReferences.get(entry.value);
+    if (entry.source === 'usuarios.workout_history' && legacy?.length === 1)
+      return { ...entry, value: undefined, executionRef: legacy[0] };
+    if (entry.source === 'weekly_plan.sessions') {
+      try {
+        const stored = JSON.parse(entry.value), key = planKey(stored.sessionId, stored.date);
+        const matches = key ? planExecutions.get(key) ?? [] : [];
+        if (matches.length === 1) return { ...entry, value: undefined, executionRef: matches[0].executionId };
+      } catch { /* Keep unresolvable evidence unchanged. */ }
+    }
+    return entry;
+  });
+  const { completedSessions: _completed, prescriptions: _prescriptions, ...remainingHistory } = history;
+  const { records: _records, ...runningSummary } = running ?? {};
+  return { records, withoutExecution, associatedResponses, unassociatedResponses, legacyResponseEvidence,
+    remainingHistory, otherPrescriptions, runningSummary, remainingLongitudinal };
+}
 /** Presentation only. The original facts remain unchanged for review and mutation authorities. */
 export function projectChatGenerationFacts(context: ChatGenerationContext) {
   const { plan, history, runningExecution, longitudinal, coachingKnowledge, cycle, ...facts } = context.facts;
@@ -91,7 +199,8 @@ export function projectChatGenerationFacts(context: ChatGenerationContext) {
     catch { /* No demonstrated position for this week; retain the stored declaration below. */ }
   }
   const immediate = context.temporalConversation?.slice(-6) ?? [];
-  const historicalLongitudinal = longitudinal && { ...longitudinal, entries: longitudinal.entries.filter((e: any) =>
+  const training = projectChatTrainingEvidence(context);
+  const historicalLongitudinal = longitudinal && { ...longitudinal, entries: training.remainingLongitudinal.filter((e: any) =>
     !immediate.some(m => e.provenance?.source === m.provenance.source && e.provenance?.index === m.provenance.index)) };
   return { ...facts, CURRENT_CYCLE: currentCycle,
     CURRENT_WEEK: known && current.length === 1 ? { ...current[0], status: 'ACTIVE' as const }
@@ -99,7 +208,12 @@ export function projectChatGenerationFacts(context: ChatGenerationContext) {
         ...(!known && current.length ? { candidates: current } : {}),
         ...(unresolved.length || !weekStart && dated.length ? { unresolvedPlans: [...unresolved, ...(!weekStart ? dated : [])] } : {}) },
     FUTURE_PLANS: future,
-    HISTORICAL_CONTEXT: { ...history, runningExecution, longitudinal: historicalLongitudinal, coachingKnowledge, advisory: context.advisory,
+    RECENT_EXECUTED_TRAINING: training.records,
+    PAST_PRESCRIPTIONS_WITHOUT_EXECUTION: training.withoutExecution,
+    RESPONSE: training.associatedResponses,
+    HISTORICAL_CONTEXT: { ...training.remainingHistory, prescriptions: training.otherPrescriptions,
+      runningExecution: training.runningSummary, longitudinal: historicalLongitudinal, coachingKnowledge, advisory: context.advisory,
+      unassociatedExecutionEvidence: training.unassociatedResponses, legacyResponseEvidence: training.legacyResponseEvidence,
       declaredCycle: { source: 'usuarios.ciclo_actual', stored: context.storedCycle ?? null, projected: cycle ?? null },
       ...(past.length ? { pastPlans: past } : {}) },
   };

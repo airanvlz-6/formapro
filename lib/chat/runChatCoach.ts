@@ -1,3 +1,4 @@
+import { createCoachTrace } from '../diagnostics/coachTrace';
 import { createGroundingTrace } from '../diagnostics/groundingTrace';
 import { randomUUID } from 'node:crypto';
 import { extractCoachingFacts, persistCoachingKnowledge } from './athleteCoachingKnowledge';
@@ -12,15 +13,19 @@ export async function runChatCoach(db: any, user: string, message: string, compl
     candidateFactCount: 0, verifiedFactCount: 0, rejectedFactCount: 0, coachingResponseProduced: false,
     mutationAttempted: false, mutationSucceeded: false, historySaved: false, fallbackReason: null as string | null,
     failures: [] as string[] };
+  const coachTrace = createCoachTrace(pipeline.runId);
   const attempt = async <T>(stage: string, work: () => Promise<T>, failed: T): Promise<T> => {
     try { return await work(); } catch { pipeline.failures.push(stage); return failed; }
   };
   try {
     const initial = await attempt('grounding', () => loadChatGrounding(db, user, today, message, createGroundingTrace(pipeline.runId, 'initial')), null);
+    const preparationOperation = coachTrace.start('postGrounding.prepare');
     pipeline.groundingLoaded = !!initial;
     pipeline.relevantHistoryCount = initial?.facts.longitudinal.entries.length ?? 0;
     pipeline.activeRestrictionCount = initial?.facts.restrictions.restrictions.length ?? 0;
+    const extractionOperation = coachTrace.start('postGrounding.extractFacts');
     const candidates = extractCoachingFacts(message, today);
+    coachTrace.end(extractionOperation);
     pipeline.candidateFactCount = candidates.length;
     let knowledge: { status: string; count: number } = { status: 'not_attempted', count: 0 };
     let mutation: { status: string; dates: string[] } = { status: initial ? 'scope_read_only' : 'context_unavailable', dates: [] };
@@ -33,7 +38,9 @@ export async function runChatCoach(db: any, user: string, message: string, compl
       mutation = initial.scope.prescriptionAllowed
         ? await attempt<{ status: string; dates: string[] }>('state', () => applyChatStateChange(db, user, message, today), { status: 'unverified', dates: [] }) : mutation;
       pipeline.mutationAttempted ||= !['no_supported_mutation', 'scope_read_only'].includes(mutation.status);
+      const impactOperation = coachTrace.start('postGrounding.affectedFuturePlans');
       const impact = affectedFuturePlans(initial.plans, mutation.dates, today, initial.scope.managedDisciplines);
+      coachTrace.end(impactOperation);
       // Explicit availability is factual; only the Coach decides which prescriptions need changing.
       adaptation = { status: impact.length ? 'coach_decision_pending' : 'not_needed', weeks: impact };
     }
@@ -41,13 +48,16 @@ export async function runChatCoach(db: any, user: string, message: string, compl
     const changedOrUncertain = knowledge.count > 0 || mutation.dates.length > 0 || pipeline.failures.length > 0;
     const current = initial && changedOrUncertain
       ? await attempt('reload', () => loadChatGrounding(db, user, today, message, createGroundingTrace(pipeline.runId, 'reload')), null) : initial;
+    const contextOperation = coachTrace.start('postGrounding.context');
     const outcome = { mutation, adaptation, knowledge,
       supportedAutomaticChanges: ['temporary_unavailability_explicit_weekday'],
       unsupportedAutomaticChanges: ['temporary_equipment_capacity', 'clinical_restriction', 'medical_resolution', 'goal_or_event_change'],
       instruction: 'Los estados unverified pueden representar una escritura no confirmada: no afirmar guardado ni ausencia de escritura, no repetir automáticamente. Puedes aconsejar y adaptar verbalmente sin persistencia. Explica el estado técnico solo cuando sea relevante.' };
     const context = current ?? { facts: { today, contextStatus: 'UNKNOWN', restrictions: { active: null }, references: [], plan: [], readiness: { status: 'unknown' } },
       advisory: { status: 'unavailable', instruction: 'Solo dispones del reporte actual. No inventes memoria, plan ni ausencia de restricciones. Ofrece interpretación provisional y pregunta solo lo que cambiaría la decisión.' }, conversation: [] };
-    const decision = await answerGroundedChat(context, message, complete, outcome);
+    coachTrace.end(contextOperation);
+    coachTrace.end(preparationOperation);
+    const decision = await answerGroundedChat(context, message, complete, outcome, coachTrace);
     pipeline.coachingResponseProduced = true;
     const actions = await attempt('actions', () => applyChatCoachActions(db, user, message, decision.actions, complete, today, decision.answer),
       [{ kind: 'unknown', date: today, status: 'unknown', code: 'CHAT_ACTION_UNAVAILABLE' }]);
@@ -98,6 +108,7 @@ export async function runChatCoach(db: any, user: string, message: string, compl
     return { answer, grounded: true, groundingLoaded: !!current, mutation, adaptation, knowledge, actions,
       historySaved, pipeline: { ...pipeline } };
   } catch (error) {
+    coachTrace.failFrom(0, error);
     pipeline.fallbackReason = error instanceof Error && error.message === 'CHAT_PROVIDER_FAILED' ? 'provider_failed' : 'coaching_unavailable';
     throw error;
   } finally { chatDiagnostic('CHAT_COACHING_PIPELINE', pipeline); }

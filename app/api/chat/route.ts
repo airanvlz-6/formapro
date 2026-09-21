@@ -834,14 +834,26 @@ async function handlePost(req: NextRequest) {
   if (!apiKey) {
     return NextResponse.json({ error: "API key not found" }, { status: 500 });
   }
-  const groundedReply = async (message: string) => runChatCoach(supabase, codigo, message, async (prompt, conversation) => {
-    const response = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST',
+  const groundedReply = async (message: string) => runChatCoach(supabase, codigo, message, async (prompt, conversation, observation) => {
+    const trace = observation?.trace, attempt = observation?.attempt;
+    const kind = observation?.kind === 'review' ? 'review' : 'generation';
+    const argumentsOperation = trace?.start(`${kind}.provider.requestArguments`, attempt);
+    const requestOptions = { method: 'POST',
       signal: AbortSignal.timeout(120000),
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey!, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 6000, system: prompt, messages: conversation }) });
+      body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 6000, system: prompt, messages: conversation }) };
+    if (argumentsOperation !== undefined) trace?.end(argumentsOperation);
+    const receiveOperation = trace?.start(`${kind}.provider.receive`, attempt);
+    const response = await fetch('https://api.anthropic.com/v1/messages', requestOptions);
     if (!response.ok) throw new Error('CHAT_PROVIDER_FAILED');
+    if (receiveOperation !== undefined) trace?.end(receiveOperation);
+    const deserializeOperation = trace?.start(`${kind}.provider.deserialize`, attempt);
     const output = await response.json();
-    return output.content?.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('') || '';
+    if (deserializeOperation !== undefined) trace?.end(deserializeOperation);
+    const textOperation = trace?.start(`${kind}.provider.extractText`, attempt);
+    const text = output.content?.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('') || '';
+    if (textOperation !== undefined) trace?.end(textOperation);
+    return text;
   });
 
 

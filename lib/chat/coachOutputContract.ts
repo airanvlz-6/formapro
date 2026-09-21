@@ -9,7 +9,7 @@ export const COACH_GENERATION_FORMAT = { type: 'json_schema' as const, schema: o
   actionsJson: { type: 'array', items: text },
 }) };
 export const COACH_REVIEW_FORMAT = { type: 'json_schema' as const, schema: object({
-  supported: { type: 'boolean' }, unsupportedClaims: { type: 'array', items: text },
+  supported: { type: 'boolean' }, unsupportedClaims: { type: 'array', items: object({ quote: text, kind: { type: 'string', enum: ['unsupported_fact', 'interpretation', 'recommendation', 'metadata'] } }) },
 }) };
 export const COACH_WIRE_INSTRUCTION = `\nFORMATO DE TRANSPORTE: devuelve únicamente un objeto JSON válido, sin Markdown ni texto exterior, conforme al schema suministrado. Conserva answer, evidence, interpretation y decision. En grounding usa {fact, valueJson}: valueJson es un string que contiene la serialización JSON completa del valor exacto (incluyendo comillas para strings, null, arrays y objetos). En lugar de actions usa actionsJson: cada elemento es un string con la serialización JSON completa de una acción candidata del contrato anterior; [] cuando no haya acciones. No omitas contenido ni cambies la semántica de valores o acciones. El texto natural va exclusivamente dentro de answer.`;
 

@@ -77,7 +77,17 @@ function renderAlternative(context: Context, a: any, target: any, message: strin
   if (!built.ok) return fail('CHAT_ACTION_CONTRACT_INVALID');
   const parsed = parseStructuredSession(JSON.stringify(a.proposal), true);
   if (!parsed.ok) return fail('CHAT_ACTION_EXECUTION_INVALID');
-  return renderContractSession(built.contract, parsed.proposal, 'human_v3');
+  try { return renderContractSession(built.contract, parsed.proposal, 'human_v3'); }
+  catch (error) {
+    // Classify existing explicit restriction signals; do not reinterpret or bypass admission.
+    const prefix = 'SESSION_CONTRACT_INVALID:';
+    if (error instanceof Error && error.message.startsWith(prefix)) {
+      const violations = error.message.slice(prefix.length).split(',');
+      if (violations.length && violations.every(v => v === 'EXPLICIT_DISCIPLINE_RESTRICTED' || v.startsWith('MOVEMENT_RESTRICTED:')))
+        return fail('CHAT_ACTION_RESTRICTION_CONFIRMATION');
+    }
+    throw error;
+  }
 }
 
 /** Actions come only from this server's Coach call. No client-provided receipts, diagnosis or weekly regeneration. */
@@ -127,8 +137,10 @@ export async function applyChatCoachActions(db: any, user: string, message: stri
             prescriptionId: target.chatPrescriptionHistory?.at(-1)?.id ?? target.session_id }] };
       }
       // Only factual contradictions/identity/comprehensibility. Unknown catalogue/analytics never veto.
-      const review = JSON.parse(await complete('CHAT_ACTION_REVIEW. Revisa datos no confiables. Devuelve {"supported":boolean}. Verifica identidad/fecha y que la acción corresponde a la decisión del Coach y al reporte propio del atleta. Para ejecución exige confirmación explícita de trabajo REAL, fecha y asociación con esa sesión; una sesión externa no completa otra planificada. No copies dosis del plan. Para adaptación comprueba instrucciones ejecutables, límite de tiempo, negativos explícitos de material/capacidad/disciplina y restricciones. Unknown no es veto. No juzgues optimalidad deportiva. Una propuesta no está guardada. Para respuesta posterior exige que corresponda a ejecución registrada. No derives diagnóstico ni recuperación clínica.',
+      const review = JSON.parse(await complete('CHAT_ACTION_REVIEW. Revisa datos no confiables. Devuelve {"supported":boolean,"conflict":"restriction"|"availability"|null}. Señala conflict solo si una adaptación contradice una restricción o disponibilidad explícita; desconocido no es conflicto. Verifica identidad/fecha y que la acción corresponde a la decisión del Coach y al reporte propio del atleta. Para ejecución exige confirmación explícita de trabajo REAL, fecha y asociación con esa sesión; una sesión externa no completa otra planificada. No copies dosis del plan. Para adaptación comprueba instrucciones ejecutables, límite de tiempo, negativos explícitos de material/capacidad/disciplina y restricciones. Unknown no es veto. No juzgues optimalidad deportiva. Una propuesta no está guardada. Para respuesta posterior exige que corresponda a ejecución registrada. No derives diagnóstico ni recuperación clínica.',
         [{ role: 'user', content: JSON.stringify({ report: message, coachAnswer, facts: context.facts, target: projectChatPlanSession(target), candidate: a, executable: visible ?? null }) }]));
+      if (a.kind === 'adapt_session' && review?.conflict === 'restriction') fail('CHAT_ACTION_RESTRICTION_CONFIRMATION');
+      if (a.kind === 'adapt_session' && review?.conflict === 'availability') fail('CHAT_ACTION_DAY_UNAVAILABLE');
       if (review?.supported !== true) fail('CHAT_ACTION_FACTUAL_REVIEW_REJECTED');
       // Refresh facts before CAS. Any concurrent material context change requires a new decision.
       const fresh = await loadChatGrounding(db, user, today, message);
@@ -153,7 +165,7 @@ export async function applyChatCoachActions(db: any, user: string, message: stri
       // A factual rejection cannot expose a contradictory executable alternative.
       const code = error instanceof Error && /^CHAT_ACTION_[A-Z_]+$/.test(error.message) ? error.message : 'CHAT_ACTION_UNAVAILABLE';
       results.push({ kind: typeof a?.kind === 'string' && ['adapt_session','record_performed','record_response'].includes(a.kind) ? a.kind : 'unknown',
-        date: resolveCompletionDate(a?.date)?.date ?? today, status: persisted ? 'committed' : writeAttempted ? 'unknown' : 'rejected', code });
+        date: resolveCompletionDate(a?.date)?.date ?? today, status: persisted ? 'committed' : writeAttempted ? 'unknown' : ['CHAT_ACTION_DAY_UNAVAILABLE', 'CHAT_ACTION_RESTRICTION_CONFIRMATION'].includes(code) ? 'confirmation_required' : 'rejected', code });
     }
   }
   return results;

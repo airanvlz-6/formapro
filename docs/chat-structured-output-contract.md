@@ -1,5 +1,9 @@
 # Chat: structured provider boundary
 
+The review authority and post-answer rejection policy described below are superseded
+by [chat-factual-review-authority.md](chat-factual-review-authority.md). The Generation
+wire contract and strict parser remain unchanged.
+
 BUG #1 identity and longitudinal grounding are validated in Production. BUG #2
 was demonstrated as two generation parsing failures before review. This change
 is local; no Production acceptance is claimed.

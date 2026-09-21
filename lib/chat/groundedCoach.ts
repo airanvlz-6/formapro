@@ -15,7 +15,8 @@ import { CHAT_ACTION_CONTRACT } from './chatCoachActions';
 export const chatToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Atlantic/Canary' });
 export type ChatCompletion = (system: string, messages: { role: 'user' | 'assistant'; content: string }[], observation?: ProviderObservation) => Promise<string>;
 export { conversationOnly, userEvidenceText, conversationalMemoryOnly } from './conversationEvidence';
-import { conversationOnly } from './conversationEvidence';
+import { conversationOnly, contextualConversation } from './conversationEvidence';
+import { longitudinalProjection } from '../planning/longitudinalAuthority';
 export function chatDiagnostic(event: string, value: Record<string, unknown>) {
   try { if (process.env.FORGE_CHAT_COACH_DIAGNOSTICS === '1') console.info(event, JSON.stringify(value)); } catch { /* Non-authoritative. */ }
 }
@@ -29,7 +30,7 @@ export async function loadChatGrounding(db: any, user: string, today = chatToday
     });
     const [athlete, profile, plans, sources, event, advisory] = await Promise.all([
       trace.async('loadAthletePrescriptionContext', () => loadAthletePrescriptionContext(db, user, { asOfDate: today }, trace)),
-      trace.async('profile.read', () => db.from('usuarios').select('historial,perfil,distribucion_semanal,modo_entrada,categoria,especialidad,workout_history').eq('codigo', user).single(), true),
+      trace.async('profile.read', () => db.from('usuarios').select('historial,perfil,distribucion_semanal,modo_entrada,categoria,especialidad,workout_history,ciclo_actual').eq('codigo', user).single(), true),
       trace.async('plans.read', () => db.from('weekly_plan').select('*').eq('user_codigo', user).gte('week_start', week.weekStart)
         .lte('week_start', new Date(Date.parse(week.weekStart) + 21 * 86400000).toISOString().slice(0, 10)).order('week_start'), true),
       trace.async('sources.read', () => db.from('athlete_training_sources').select('disciplina,owner,activo,dias').eq('user_codigo', user).eq('activo', true), true),
@@ -62,16 +63,18 @@ export async function loadChatGrounding(db: any, user: string, today = chatToday
     }));
     return { facts, advisory, athlete, profile: profile.data, plans: plans.data, scope: scope.scope,
       planRead: { status: 'SUCCESS' as const, weekStart: week.weekStart },
+      temporalConversation: contextualConversation(profile.data.historial), storedCycle: profile.data.ciclo_actual,
       conversation: trace.sync('projectConversation', () => conversationOnly(profile.data.historial)) };
   });
 }
 type ChatGenerationContext = {
   facts: Record<string, any>; advisory?: unknown; conversation: { role: 'user' | 'assistant'; content: string }[];
   planRead?: { status: 'SUCCESS'; weekStart: string };
+  temporalConversation?: ReturnType<typeof contextualConversation>; storedCycle?: unknown;
 };
 /** Presentation only. The original facts remain unchanged for review and mutation authorities. */
 export function projectChatGenerationFacts(context: ChatGenerationContext) {
-  const { plan, history, runningExecution, longitudinal, coachingKnowledge, ...facts } = context.facts;
+  const { plan, history, runningExecution, longitudinal, coachingKnowledge, cycle, ...facts } = context.facts;
   const weekStart = resolveCompletionDate(facts.today)?.weekStart ?? null;
   const plans: Record<string, any>[] = Array.isArray(plan) ? plan : [];
   const dated = plans.filter(p => p && typeof p === 'object' && typeof p.weekStart === 'string'
@@ -82,13 +85,22 @@ export function projectChatGenerationFacts(context: ChatGenerationContext) {
   const future = dated.filter(p => weekStart && p.weekStart > weekStart);
   const known = !!weekStart && context.planRead?.status === 'SUCCESS' && context.planRead.weekStart === weekStart
     && facts.contextStatus !== 'UNKNOWN' && Array.isArray(plan) && !unresolved.length && current.length <= 1;
-  return { ...facts,
+  let currentCycle: Record<string, unknown> = { status: 'UNKNOWN', weekStart };
+  if (weekStart) {
+    try { currentCycle = { status: 'ACTIVE', ...longitudinalProjection(context.storedCycle, weekStart) }; }
+    catch { /* No demonstrated position for this week; retain the stored declaration below. */ }
+  }
+  const immediate = context.temporalConversation?.slice(-6) ?? [];
+  const historicalLongitudinal = longitudinal && { ...longitudinal, entries: longitudinal.entries.filter((e: any) =>
+    !immediate.some(m => e.provenance?.source === m.provenance.source && e.provenance?.index === m.provenance.index)) };
+  return { ...facts, CURRENT_CYCLE: currentCycle,
     CURRENT_WEEK: known && current.length === 1 ? { ...current[0], status: 'ACTIVE' as const }
       : { status: known ? 'NONE' as const : 'UNKNOWN' as const, weekStart,
         ...(!known && current.length ? { candidates: current } : {}),
         ...(unresolved.length || !weekStart && dated.length ? { unresolvedPlans: [...unresolved, ...(!weekStart ? dated : [])] } : {}) },
     FUTURE_PLANS: future,
-    HISTORICAL_CONTEXT: { ...history, runningExecution, longitudinal, coachingKnowledge, advisory: context.advisory,
+    HISTORICAL_CONTEXT: { ...history, runningExecution, longitudinal: historicalLongitudinal, coachingKnowledge, advisory: context.advisory,
+      declaredCycle: { source: 'usuarios.ciclo_actual', stored: context.storedCycle ?? null, projected: cycle ?? null },
       ...(past.length ? { pastPlans: past } : {}) },
   };
 }
@@ -139,7 +151,10 @@ export async function answerGroundedChat(context: ChatGenerationContext, message
     const attemptOperation = trace.start(attempt === 0 ? 'generationAttempt' : 'repair', attemptNumber);
     const argumentsOperation = trace.start('generation.arguments', attemptNumber);
     const generationSystem = system + (error ? '\nCorrige el error de contrato: ' + coachRepairInstruction(error) : '');
-    const generationMessages = [...context.conversation.slice(-6), { role: 'user' as const, content: message }];
+    const recent = context.temporalConversation?.slice(-6) ?? context.conversation.slice(-6).map(m => ({ ...m,
+      provenance: { source: 'conversation', index: null }, temporal: { status: 'UNKNOWN', timestamp: null, source: null } }));
+    const generationMessages = [...recent.map(({ role, ...contextualMessage }) => ({ role, content: JSON.stringify(contextualMessage) })),
+      { role: 'user' as const, content: message }];
     trace.end(argumentsOperation);
     const providerOperation = trace.start('generation.provider', attemptNumber);
     const raw = await complete(generationSystem, generationMessages, { trace, attempt: attemptNumber, kind: 'generation', outputFormat: COACH_GENERATION_FORMAT });

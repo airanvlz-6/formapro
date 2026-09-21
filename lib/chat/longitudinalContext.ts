@@ -1,12 +1,14 @@
+import { contextualConversation } from './conversationEvidence';
+
 /** Read-only selection. Ranking is textual relevance + recency, never sporting authority. */
 export function projectChatLongitudinal(profile: any, history: any, message: string, today: string) {
   const terms = (s: string) => new Set(s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().match(/[a-z0-9]{3,}/g) ?? []);
   const query = terms(message);
-  const entries: { source: string; kind: string; date: string | null; value: unknown }[] = [];
-  for (const m of Array.isArray(profile.historial) ? profile.historial.slice(-15) : []) {
-    if (!['user', 'assistant'].includes(m?.role) || typeof m.content !== 'string') continue;
+  const entries: { source: string; kind: string; date: string | null; value: unknown;
+    provenance?: { source: string; index: number }; temporal?: ReturnType<typeof contextualConversation>[number]['temporal'] }[] = [];
+  for (const m of contextualConversation(profile.historial)) {
     entries.push({ source: `usuarios.historial.${m.role}`, kind: m.role === 'user' ? 'USER_REPORTED_EVIDENCE' : 'COACH_INTERPRETATION',
-      date: null, value: m.content });
+      date: m.temporal.timestamp, value: m.content, provenance: m.provenance, temporal: m.temporal });
   }
   for (const w of Array.isArray(profile.workout_history) ? profile.workout_history.slice(-60) : []) {
     const date = typeof w?.fecha === 'string' && /^\d{4}-\d{2}-\d{2}/.test(w.fecha) ? w.fecha.slice(0, 10) : null;

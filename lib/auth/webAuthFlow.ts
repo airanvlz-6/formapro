@@ -10,11 +10,25 @@ export async function authenticatedIdentityRequest(auth: any, body?: unknown, tr
   return response.json(); // No automatic replay or retry of bootstrap.
 }
 
-export async function signupForNewAccount(auth: any, email: string, password: string, origin: string) {
+export async function signupForNewAccount(auth: any, email: string, password: string, origin: string, confirmation: string) {
+  if (!password || password !== confirmation) return { state: 'password_mismatch' as const };
   const { data, error } = await auth.signUp({ email, password,
     options: { emailRedirectTo: `${origin}/auth/callback` } });
   if (error) return { state: 'error' as const };
   return { state: data.session ? 'authenticated' as const : 'confirmation_required' as const };
+}
+
+export async function requestPasswordRecovery(auth: any, email: string, origin: string) {
+  const { error } = await auth.resetPasswordForEmail(email, { redirectTo: `${origin}/auth/reset` });
+  return { ok: !error };
+}
+
+export async function saveRecoveredPassword(auth: any, password: string, confirmation: string) {
+  if (!password || password !== confirmation) return { ok: false, code: 'PASSWORD_MISMATCH' };
+  const { data, error } = await auth.getSession();
+  if (error || !data.session?.access_token) return { ok: false, code: 'AUTH_REQUIRED' };
+  const updated = await auth.updateUser({ password });
+  return updated.error ? { ok: false, code: 'PASSWORD_UPDATE_FAILED' } : { ok: true };
 }
 
 let callbackRun: Promise<any> | undefined;

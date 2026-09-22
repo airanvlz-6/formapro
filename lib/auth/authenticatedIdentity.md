@@ -1,5 +1,66 @@
 # AUTH-1B2B — authenticated athlete identity
 
+## Auth base sprint — web login, signup and password recovery
+
+`/auth` retains email/password login and explicit new-profile bootstrap. Signup now
+requires matching password fields before calling Auth. Login only resolves the linked
+athlete; it never creates or claims a profile. The legacy code entry is unchanged.
+
+Forgot password calls Supabase `resetPasswordForEmail` with `/auth/reset` as the fixed
+redirect. That page exchanges the PKCE code, then allows the user to choose and repeat
+a password via `updateUser`. Missing/invalid links cannot open the update form. No
+password, email token or session is written by Forge; session persistence remains in
+the Supabase SDK. Open confirmation/recovery links in the browser that requested them
+(PKCE verifier required). A lost verifier requires a new recovery request from that
+browser. Do not substitute hand-written recovery tokens or an admin password setter.
+
+### Manual production configuration (not applied by this sprint)
+
+1. In the existing Resend account, verify that `forgeapp.es` is a verified sending
+   domain with the DNS records Resend requires. Use an authorized Resend sending API
+   key; never paste it into source, logs or public environment variables.
+2. Supabase project → Authentication → Email (Notifications) → SMTP Settings:
+   enable custom SMTP; sender email `noreply@forgeapp.es`; sender name `Forge`;
+   host `smtp.resend.com`; port `465` (TLS); username `resend`; password is the
+   Resend API key, entered only in the private dashboard field. Reuse the existing
+   Resend account/domain. `Forge_Production` is used by the current application email
+   helper, but Supabase does not automatically read that application environment variable.
+3. Keep email/password Auth and email confirmation enabled. Configure the required
+   password policy in Supabase; its validation is authoritative.
+4. Auth URL Configuration: Site URL `https://forgeapp.es`; allow exact redirects
+   `https://forgeapp.es/auth/callback` and `https://forgeapp.es/auth/reset`.
+   For local development only, allow `http://localhost:3000/auth/callback` and
+   `http://localhost:3000/auth/reset`. Avoid broad redirect wildcards in production.
+5. Confirm-signup and reset-password email templates must retain Supabase's
+   `{{ .ConfirmationURL }}` link so Auth verifies the token before redirecting to
+   the app. Do not send a raw token to these pages, which expect a PKCE `code`.
+   Disable email click tracking if enabled for these Auth links.
+6. Deployment build must receive `NEXT_PUBLIC_SUPABASE_URL` and
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY` for the same project. The server additionally
+   needs `SUPABASE_SERVICE_ROLE_KEY`; it must never be public. Rebuild if public
+   build-time configuration changes. No production configuration was changed here.
+
+SMTP uses Supabase's own confirmation/recovery tokens. The existing founder email
+helper and `email_log` are not involved; do not pass Auth links to their logging.
+No real email is sent by automated tests. End-to-end delivery and the deployed
+browser remain unverified until the manual configuration and authorized smoke check.
+
+Official references:
+- https://resend.com/docs/send-with-supabase-smtp
+- https://supabase.com/docs/guides/auth/auth-smtp
+- https://supabase.com/docs/reference/javascript/auth-resetpasswordforemail
+
+### Black-screen diagnosis
+
+The production root cause remains UNKNOWN. Static render emits the form independently
+of Auth availability. `data-auth-panel` identifies its DOM; `data-auth-mounted=true`
+indicates the mount effect ran. `[FORGE_AUTH_DIAGNOSTIC]` reports mount dimensions,
+computed colors, CSS hidden state and initialization stage without credentials or
+exception content. `render_boundary` identifies an error handled by the local Next
+error boundary, which presents a retry control. A missing mount marker requires
+checking script loading/hydration; a mounted hidden panel requires computed-style
+inspection. These markers do not prove that a production CSS/runtime issue is fixed.
+
 User-certified AUTH-1B2A evidence: usuarios.id is UUID PK NOT NULL with
 gen_random_uuid(); codigo is unique NOT NULL text; auth_user_id is nullable
 unique UUID FK to auth.users.id (ON DELETE NO ACTION). There are 74 profiles,

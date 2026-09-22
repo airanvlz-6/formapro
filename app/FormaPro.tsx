@@ -1842,28 +1842,52 @@ const forgeValidator=(texto:string):string=>{
       setCargando(true); setInput("");
       setMensajes(prev => [...prev, { role: "user", content: texto }]);
       const messageId = crypto.randomUUID();
+      let coachFirstStage = "start";
       try {
-        const token = (await getBrowserAuth().getSession()).data.session?.access_token;
+        coachFirstStage = "auth_client";
+        const auth = getBrowserAuth();
+        coachFirstStage = "get_session";
+        const sessionResult = await auth.getSession();
+        coachFirstStage = "token_check";
+        const token = sessionResult.data.session?.access_token;
         if (!token) throw new Error("Inicia sesión para usar Coach-first.");
-        const response = await fetch("/api/chat", { method: "POST", headers: {
-          "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ action: "coach_first", codigo: codigoUsuario, message: texto, messageId,
-            conversation: historial.slice(-10).map(m => ({ role: m.role, content: m.content })),
-            attachments: imagenesAdjuntas.map(img => ({ ...img, base64: img.base64.split(',')[1] })),
+        coachFirstStage = "build_history";
+        const conversation = historial.slice(-10).map(m => ({ role: m.role, content: m.content }));
+        coachFirstStage = "build_attachments";
+        const attachments = imagenesAdjuntas.map(img => ({ ...img, base64: img.base64.split(',')[1] }));
+        coachFirstStage = "build_payload";
+        const payload = { action: "coach_first", codigo: codigoUsuario, message: texto, messageId,
+            conversation, attachments,
             pending: { goal: pendingGoalQuestion ? { kind: 'primary_goal', includeToday: pendingGoalQuestion.empezarHoy } : null,
               habitual: pendingRunningHabitualQuestion ? { kind: 'running_habitual', field: pendingRunningHabitualQuestion.field,
                 expectedDurationMinutes: pendingRunningHabitualQuestion.expectedDurationMinutes,
                 targetWeekStart: pendingRunningHabitualQuestion.targetWeekStart, includeToday: pendingRunningHabitualQuestion.includeToday } : null,
               prescription: pendingPrescriptionQuestion ? { kind: 'prescription' } : null, ownership: pendingCoachOwnership,
-              availability: esperandoConfirmacionDisponibilidad, includeToday: esperandoConfirmacionEmpezarHoy } }) });
+              availability: esperandoConfirmacionDisponibilidad, includeToday: esperandoConfirmacionEmpezarHoy } };
+        coachFirstStage = "serialize_payload";
+        const serializedPayload = JSON.stringify(payload);
+        coachFirstStage = "fetch_invoked";
+        const response = await fetch("/api/chat", { method: "POST", headers: {
+          "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: serializedPayload });
+        coachFirstStage = "response_received";
+        coachFirstStage = "response_parse";
         const result = await response.json();
+        coachFirstStage = "response_process";
         const answer = typeof result.answer === "string" ? result.answer : "No se ha podido iniciar el turno con la identidad actual.";
         setMensajes(prev => [...prev, { role: "assistant", content: answer }]);
         setHistorial(prev => [...prev, { role: "user", content: texto }, { role: "assistant", content: answer }]);
         if (result.results?.some((r: any) => r.status === "committed" && ["update_session","record_execution","generate_week"].includes(r.name)))
           await cargarPlanSemanal(codigoUsuario).catch(() => {});
         setImagenesAdjuntas([]); setImagenAdjunta(null); setImagenPreview(null);
-      } catch {
+      } catch (error) {
+        // Arbitrary SDK/parser messages can contain URLs or response content: never log them verbatim.
+        const safeMessages = ["AUTH_CONFIGURATION_REQUIRED", "Inicia sesión para usar Coach-first.",
+          "Failed to fetch", "Load failed", "NetworkError when attempting to fetch resource."];
+        console.error("[COACH_FIRST_CLIENT_ERROR]", {
+          stage: coachFirstStage,
+          name: error instanceof Error && ["Error", "TypeError", "SyntaxError", "ReferenceError", "RangeError", "AbortError", "AuthSessionMissingError", "AuthRetryableFetchError", "AuthApiError"].includes(error.name) ? error.name : "UnknownError",
+          message: error instanceof Error && safeMessages.includes(error.message) ? error.message : "[redacted]",
+        });
         setMensajes(prev => [...prev, { role: "assistant", content: "No puedo confirmar el resultado. No se ha reintentado el turno ni activado el flujo anterior." }]);
       } finally { setCargando(false); }
       return;

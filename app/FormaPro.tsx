@@ -1,4 +1,7 @@
 'use client';
+import { observeSemanticShadow } from '@/lib/chat/semanticShadowClient';
+import { coachFirstEnabled } from '@/lib/chat/coachFirstFlag';
+import { getBrowserAuth } from '@/lib/auth/supabaseBrowser';
 import { athleteStatePresentation } from '@/lib/athlete/athleteStatePresentation';
 import { splitExecutionReports } from '@/lib/execution/reportExecutionDate';
 import { RunningHrBootstrap } from '@/components/RunningHrBootstrap';
@@ -1826,6 +1829,43 @@ const forgeValidator=(texto:string):string=>{
   const enviar=async(texto:string=input)=>{
     console.log("=== ENTRA A FUNCION enviar() ===");
     if((!texto.trim()&&imagenesAdjuntas.length===0)||cargando||bloqueado) return;
+    if (coachFirstEnabled()) {
+      setCargando(true); setInput("");
+      setMensajes(prev => [...prev, { role: "user", content: texto }]);
+      const messageId = crypto.randomUUID();
+      try {
+        const token = (await getBrowserAuth().getSession()).data.session?.access_token;
+        if (!token) throw new Error("Inicia sesión para usar Coach-first.");
+        const response = await fetch("/api/chat", { method: "POST", headers: {
+          "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ action: "coach_first", codigo: codigoUsuario, message: texto, messageId,
+            conversation: historial.slice(-10).map(m => ({ role: m.role, content: m.content })),
+            attachments: imagenesAdjuntas.map(img => ({ ...img, base64: img.base64.split(',')[1] })),
+            pending: { goal: pendingGoalQuestion ? { kind: 'primary_goal', includeToday: pendingGoalQuestion.empezarHoy } : null,
+              habitual: pendingRunningHabitualQuestion ? { kind: 'running_habitual', field: pendingRunningHabitualQuestion.field,
+                expectedDurationMinutes: pendingRunningHabitualQuestion.expectedDurationMinutes,
+                targetWeekStart: pendingRunningHabitualQuestion.targetWeekStart, includeToday: pendingRunningHabitualQuestion.includeToday } : null,
+              prescription: pendingPrescriptionQuestion ? { kind: 'prescription' } : null, ownership: pendingCoachOwnership,
+              availability: esperandoConfirmacionDisponibilidad, includeToday: esperandoConfirmacionEmpezarHoy } }) });
+        const result = await response.json();
+        const answer = typeof result.answer === "string" ? result.answer : "No se ha podido iniciar el turno con la identidad actual.";
+        setMensajes(prev => [...prev, { role: "assistant", content: answer }]);
+        setHistorial(prev => [...prev, { role: "user", content: texto }, { role: "assistant", content: answer }]);
+        if (result.results?.some((r: any) => r.status === "committed" && ["update_session","record_execution","generate_week"].includes(r.name)))
+          await cargarPlanSemanal(codigoUsuario).catch(() => {});
+        setImagenesAdjuntas([]); setImagenAdjunta(null); setImagenPreview(null);
+      } catch {
+        setMensajes(prev => [...prev, { role: "assistant", content: "No puedo confirmar el resultado. No se ha reintentado el turno ni activado el flujo anterior." }]);
+      } finally { setCargando(false); }
+      return;
+    }
+    // Observation only, before pending-question branches can consume the message. Never await or use its result.
+    if (process.env.NEXT_PUBLIC_FORGE_SEMANTIC_INTAKE_SHADOW === '1') void observeSemanticShadow(texto, historial,
+      pendingGoalQuestion ? 'primary_goal' : pendingRunningHabitualQuestion ? 'running_habitual' : pendingPrescriptionQuestion ? 'prescription'
+        : pendingCoachOwnership ? 'ownership' : esperandoConfirmacionDisponibilidad ? 'availability' : esperandoConfirmacionEmpezarHoy ? 'include_today' : null,
+      { enabled: true, token: async () => (await getBrowserAuth().getSession()).data.session?.access_token ?? null,
+        send: fetch, messageId: () => crypto.randomUUID(), now: () => new Date().toISOString(),
+        timezone: () => Intl.DateTimeFormat().resolvedOptions().timeZone });
     if(pendingGoalQuestion){
       if(pendingGoalQuestion.codigo!==codigoUsuario){setPendingGoalQuestion(null);return;}
       setCargando(true);setInput("");setMensajes(prev=>[...prev,{role:"user",content:texto}]);

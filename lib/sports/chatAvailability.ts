@@ -1,3 +1,5 @@
+import { calendarDays } from '../planning/weeklyCalendar';
+import { resolveCompletionDate } from '../planning/recordCompletion';
 import { baseAvailabilityDays, normalizeAvailabilityDays, normalizeAvailabilityForStorage, normalizeTrainingAvailability } from './trainingAvailability';
 import { buildPrescriptionScope, canonicalDiscipline, resolveProfileDisciplines } from './prescriptionScope';
 import { loadWeeklyCalendarContext, weeklyDigest, availabilitySnapshotDigest } from '../planning/weeklyCalendarAuthority';
@@ -67,11 +69,26 @@ export function parseChatAvailability(value: unknown): Record<string, string[]> 
   return category && !needDay ? normalizeAvailabilityForStorage(result) as Record<string, string[]> : null;
 }
 
+export type StructuredAvailabilityOperation = { operation: 'confirm' | 'patch' | 'replace' | 'exception'; week: string;
+  snapshotDigest: string; availability?: Record<string, string[]>; date?: string; unavailable?: boolean };
+/** Typed adapter shares the existing weekly CAS/readback and fallback. No human text parser. */
+export async function updateStructuredChatAvailability(db: any, user: string, operation: StructuredAvailabilityOperation) {
+  if (!operation || !['confirm','patch','replace','exception'].includes(operation.operation)
+    || Object.keys(operation).some(k => !['operation','week','snapshotDigest','availability','date','unavailable'].includes(k))
+    || !validAvailabilityWeek(operation.week) || typeof operation.snapshotDigest !== 'string') return fail('AVAILABILITY_OPERATION_INVALID');
+  if (['patch','replace'].includes(operation.operation) && (!operation.availability || Array.isArray(operation.availability)
+    || !Object.keys(operation.availability).length || Object.values(operation.availability).some(v => !Array.isArray(v)
+      || v.some(d => !calendarDays.includes(d)) || new Set(v).size !== v.length))) return fail('AVAILABILITY_OPERATION_INVALID');
+  if (operation.operation === 'exception' && (typeof operation.unavailable !== 'boolean'
+    || resolveCompletionDate(operation.date)?.weekStart !== operation.week)) return fail('AVAILABILITY_OPERATION_INVALID');
+  return updateChatAvailability(db, user, operation.availability ?? {}, operation.snapshotDigest, operation.week, operation);
+}
+
 /** Existing distribution plus explicit source days; ownership and scope never change. */
-export async function updateChatAvailability(db: any, codigo: string, input: unknown, expectedSnapshot?: unknown, targetWeek?: string) {
+export async function updateChatAvailability(db: any, codigo: string, input: unknown, expectedSnapshot?: unknown, targetWeek?: string, structured?: StructuredAvailabilityOperation) {
   if (targetWeek !== undefined && !validAvailabilityWeek(targetWeek)) return fail('AVAILABILITY_WEEK_INVALID');
-  const confirmedUnchanged = isExistingAvailabilityConfirmation(input);
-  let update = parseChatAvailability(input) ?? normalizeAvailabilityForStorage(input);
+  const confirmedUnchanged = structured ? structured.operation === 'confirm' : isExistingAvailabilityConfirmation(input);
+  let update = structured ? structured.availability ?? null : parseChatAvailability(input) ?? normalizeAvailabilityForStorage(input);
   try {
     const p = await db.from('usuarios').select('modo_entrada,perfil,workout_history,distribucion_semanal,especialidad,categoria').eq('codigo', codigo).single();
     const t = await db.from('athlete_training_sources').select('disciplina,owner,activo,dias').eq('user_codigo', codigo).eq('activo', true);
@@ -96,13 +113,21 @@ export async function updateChatAvailability(db: any, codigo: string, input: unk
       // A complete new declaration does not depend on the old calendar being
       // readable. Patches still require its effective days and cannot repair an
       // invalid historical snapshot by silently falling back to habitual days.
-      let response = resolveWeeklyAvailabilityResponse(input, authorized);
+      let response = structured ? { intent: structured.operation === 'replace' ? 'FULL_SNAPSHOT' as const : 'PATCH' as const, declaration: null, unresolvedDays: [] } : resolveWeeklyAvailabilityResponse(input, authorized);
       const prior = response.intent === 'FULL_SNAPSHOT' ? {} : Object.fromEntries(authorized.flatMap(d => {
         const days = availableDaysAtWeek(p.data.perfil, targetWeek, authorizedDays[d] ?? null, d);
         return days === null ? [] : [[d, days]];
       })) as Record<string, string[]>;
-      if (response.intent !== 'FULL_SNAPSHOT') response = resolveWeeklyAvailabilityResponse(input, authorized, prior);
+      if (!structured && response.intent !== 'FULL_SNAPSHOT') response = resolveWeeklyAvailabilityResponse(input, authorized, prior);
+      if (structured && structured.operation !== 'replace' && authorized.some(d => !Object.hasOwn(prior, d))) return fail('AVAILABILITY_EXISTING_REQUIRED');
+      if (structured?.operation === 'replace' && authorized.some(d => !Object.hasOwn(structured.availability!, d))) return fail('AVAILABILITY_SNAPSHOT_INCOMPLETE');
       let declaration = response.declaration;
+      if (structured) {
+        const availability = { ...prior, ...structured.availability };
+        declaration = { version: 1, source: 'explicit_user_declaration', availability,
+          resolution: Object.values(availability).some(v => v.length) ? 'DECLARED_AVAILABILITY' : 'EXPLICIT_ZERO_TRAINING',
+          excludedDisciplines: [], unavailableDays: [], unresolvedDays: [] };
+      }
       // Text with unresolved semantics must not be rescued by a second parser
       // that has discarded its negation, unknown tokens or missing context.
       if (!declaration && typeof input !== 'string') {
@@ -121,6 +146,13 @@ export async function updateChatAvailability(db: any, codigo: string, input: unk
       if (expectedSnapshot != null && expectedSnapshot !== availabilitySnapshotDigest(
         { profile: p.data, sources: t.data, scope: before.scope }, targetWeek)) return fail('AVAILABILITY_CONFIRMATION_STALE');
       const perfil = { ...p.data.perfil, weekly_availability: { ...p.data.perfil?.weekly_availability, [targetWeek]: declaration } };
+      if (structured?.operation === 'exception') {
+        perfil.weekly_availability = p.data.perfil?.weekly_availability;
+        if (perfil.weekly_availability === undefined) delete perfil.weekly_availability;
+        const access = { ...perfil.prescription_access }, entry = { ...access[structured.date!] };
+        if (structured.unavailable) entry.availability = 'unavailable'; else delete entry.availability;
+        access[structured.date!] = entry; perfil.prescription_access = access;
+      }
       // One JSON write with a compare-and-swap, preserving habitual distribution and sources.
       let write = db.from('usuarios').update({ perfil }).eq('codigo', codigo);
       write = p.data.perfil == null ? write.is('perfil', null) : write.eq('perfil', JSON.stringify(p.data.perfil));
@@ -129,7 +161,7 @@ export async function updateChatAvailability(db: any, codigo: string, input: unk
       const current = await readAvailabilityConfirmation(db, codigo, targetWeek);
       if (!current.ok) return fail('AVAILABILITY_READBACK_FAILED');
       return { ...current, actualizado: true, responseKind: 'UPDATE_AVAILABILITY' as const, partial: false,
-        intent: typeof input === 'string' ? response.intent : 'PATCH' as const,
+        intent: structured || typeof input === 'string' ? response.intent : 'PATCH' as const,
         rejectedCategories: [], ownershipPending: [], updatedCategories: Object.keys(declaration.availability), declaration };
     }
     update ??= parseAvailabilityChange(input, authorizedDays);

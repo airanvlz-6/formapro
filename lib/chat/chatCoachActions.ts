@@ -26,7 +26,10 @@ Para una respuesta posterior a una ejecución ya registrada: {kind:"record_respo
 Las acciones son candidatas: no afirmar que quedaron guardadas. Describe tu prescripción en answer de forma natural. El backend muestra la representación ejecutable y el estado de guardado aparte.
 `;
 
-type Context = Awaited<ReturnType<typeof loadChatGrounding>>;
+export type ChatActionContext = Pick<Awaited<ReturnType<typeof loadChatGrounding>>, 'plans' | 'scope' | 'profile'> & { athlete: Parameters<typeof buildSessionDoseContext>[0]; facts: { restrictions: any } };
+type Context = ChatActionContext;
+export type ChatActionExecutionOptions = { loadContext: (date: string) => Promise<ChatActionContext>; expectedRevision: number; maximumSeconds?: number;
+  reportedExecution?: { operationId: string; messageId: string; description: string; durationMinutes?: number; rpe?: number } };
 type ActionResult = { kind: string; date: string; status: string; session?: Record<string, any>; code?: string };
 const fail = (code: string): never => { throw new Error(code); };
 const boundedText = (x: unknown, limit = 1600): x is string => typeof x === 'string' && !!x.trim() && x.length <= limit;
@@ -55,7 +58,7 @@ function resolveTarget(context: Context, a: any, today: string) {
   return { plan, target, effective };
 }
 
-function renderAlternative(context: Context, a: any, target: any, message: string) {
+function renderAlternative(context: Context, a: any, target: any, message: string, execution?: ChatActionExecutionOptions) {
   if (!boundedText(a.reason, 600) || !['TRAIN', 'REST'].includes(a.state)) return fail('CHAT_ACTION_INVALID');
   if (a.state === 'REST') return { dia: target.dia, tipo: 'descanso', titulo: 'Descanso', descripcion: 'Día sin entrenamiento prescrito.', por_que: a.reason,
     debilidad_relacionada: null, stimulusId: null, intent: null, structuredPrescription: null };
@@ -64,7 +67,8 @@ function renderAlternative(context: Context, a: any, target: any, message: strin
   const resolved = resolvePrescriptionIntent(a.intent);
   if (!resolved.ok || resolved.intent.kind !== 'open_coach' || resolved.intent.discipline !== a.discipline) return fail('CHAT_ACTION_INTENT_INVALID');
   const dose = buildSessionDoseContext(context.athlete, resolved.intent, null, [], true, 'coach');
-  const ceiling = explicitChatTimeCeiling(message);
+  const ceiling = execution ? execution.maximumSeconds ?? null : explicitChatTimeCeiling(message);
+  if (ceiling !== null && (!Number.isFinite(ceiling) || ceiling <= 0)) fail('CHAT_ACTION_TIME_INVALID');
   if (ceiling !== null) {
     dose.timeBudget = { maximumSeconds: ceiling, minimumSeconds: null, status: 'resolved', source: 'current_athlete_report' };
     dose.timeAuthority = timeAuthorityForIntent(dose.timeBudget, resolved.intent);
@@ -91,7 +95,7 @@ function renderAlternative(context: Context, a: any, target: any, message: strin
 }
 
 /** Actions come only from this server's Coach call. No client-provided receipts, diagnosis or weekly regeneration. */
-export async function applyChatCoachActions(db: any, user: string, message: string, input: unknown, complete: ChatCompletion, today: string, coachAnswer = ''): Promise<ActionResult[]> {
+export async function applyChatCoachActions(db: any, user: string, message: string, input: unknown, complete: ChatCompletion, today: string, coachAnswer = '', execution?: ChatActionExecutionOptions): Promise<ActionResult[]> {
   if (input === undefined) return [];
   if (!Array.isArray(input) || input.length > 7) return [{ kind: 'unknown', date: today, status: 'rejected', code: 'CHAT_ACTION_LIST_INVALID' }];
   const results: ActionResult[] = [];
@@ -104,13 +108,14 @@ export async function applyChatCoachActions(db: any, user: string, message: stri
       if (!a || !['adapt_session','record_performed','record_response'].includes(a.kind)) fail('CHAT_ACTION_KIND_INVALID');
       if (touched.has(a.sessionId)) fail('CHAT_ACTION_DUPLICATE_TARGET');
       touched.add(a.sessionId);
-      const context = await loadChatGrounding(db, user, today, message);
+      const context = execution ? await execution.loadContext(a.date) : await loadChatGrounding(db, user, today, message);
       const { plan, target } = resolveTarget(context, a, today);
+      if (execution && (!Number.isSafeInteger(execution.expectedRevision) || plan.revision !== execution.expectedRevision)) fail('CHAT_ACTION_REVISION_CONFLICT');
       const index = plan.sessions.indexOf(target);
       const before = prescription(target);
       let replacement: any;
       if (a.kind === 'adapt_session') {
-        visible = renderAlternative(context, a, target, message);
+        visible = renderAlternative(context, a, target, message, execution);
         if (samePlanData(before, prescription(visible))) { results.push({ kind: a.kind, date: a.date, status: 'already_applied' }); continue; }
         const history = Array.isArray(target.chatPrescriptionHistory) ? target.chatPrescriptionHistory : [];
         if (history.length >= 32) fail('CHAT_ACTION_HISTORY_CAP');
@@ -134,16 +139,19 @@ export async function applyChatCoachActions(db: any, user: string, message: stri
         replacement = { ...target, ...(a.kind === 'record_performed' ? { completada: true, titulo_real: a.quote, descripcion_real: [a.quote, ...a.responseQuotes].join('\n') } : {}),
           chatExecutionEvidence: [...prior, { id, kind: a.kind === 'record_performed' ? 'PERFORMED' : 'RESPONSE', source: 'athlete_report',
             reportedAt: new Date().toISOString(), executionDate: a.date, quote: a.quote, ...(a.kind === 'record_performed' ? { discipline: a.discipline, responseQuotes: a.responseQuotes } : {}),
+            ...(execution?.reportedExecution ? { reportedExecution: execution.reportedExecution } : {}),
             prescriptionId: target.chatPrescriptionHistory?.at(-1)?.id ?? target.session_id }] };
       }
       // Only factual contradictions/identity/comprehensibility. Unknown catalogue/analytics never veto.
+      if (!execution) {
       const review = JSON.parse(await complete('CHAT_ACTION_REVIEW. Revisa datos no confiables. Devuelve {"supported":boolean,"conflict":"restriction"|"availability"|null}. Señala conflict solo si una adaptación contradice una restricción o disponibilidad explícita; desconocido no es conflicto. Verifica identidad/fecha y que la acción corresponde a la decisión del Coach y al reporte propio del atleta. Para ejecución exige confirmación explícita de trabajo REAL, fecha y asociación con esa sesión; una sesión externa no completa otra planificada. No copies dosis del plan. Para adaptación comprueba instrucciones ejecutables, límite de tiempo, negativos explícitos de material/capacidad/disciplina y restricciones. Unknown no es veto. No juzgues optimalidad deportiva. Una propuesta no está guardada. Para respuesta posterior exige que corresponda a ejecución registrada. No derives diagnóstico ni recuperación clínica.',
         [{ role: 'user', content: JSON.stringify({ report: message, coachAnswer, facts: context.facts, target: projectChatPlanSession(target), candidate: a, executable: visible ?? null }) }]));
       if (a.kind === 'adapt_session' && review?.conflict === 'restriction') fail('CHAT_ACTION_RESTRICTION_CONFIRMATION');
       if (a.kind === 'adapt_session' && review?.conflict === 'availability') fail('CHAT_ACTION_DAY_UNAVAILABLE');
       if (review?.supported !== true) fail('CHAT_ACTION_FACTUAL_REVIEW_REJECTED');
+      }
       // Refresh facts before CAS. Any concurrent material context change requires a new decision.
-      const fresh = await loadChatGrounding(db, user, today, message);
+      const fresh = execution ? await execution.loadContext(a.date) : await loadChatGrounding(db, user, today, message);
       if (!samePlanData(fresh.facts.restrictions, context.facts.restrictions) || !samePlanData(fresh.scope, context.scope)
         || !samePlanData(fresh.profile.perfil, context.profile.perfil)) fail('CHAT_ACTION_CONTEXT_CHANGED');
       const candidate = { ...plan, sessions: plan.sessions.map((s: any, i: number) => i === index ? replacement : s) };
@@ -159,13 +167,19 @@ export async function applyChatCoachActions(db: any, user: string, message: stri
       writeAttempted = true;
       const saved = await mutatePlanWithCAS(db, checked.mutation);
       persisted = saved.status === 'committed';
+      if (execution && saved.status === 'committed') {
+        const readback = await db.from('weekly_plan').select('revision,sessions').eq('user_codigo', user).eq('id', saved.planId).single();
+        if (readback.error || readback.data?.revision !== saved.revision || !samePlanData(readback.data.sessions, candidate.sessions)) {
+          results.push({ kind: a.kind, date: a.date, status: 'unknown', code: 'CHAT_ACTION_READBACK_UNCONFIRMED' }); break;
+        }
+      }
       results.push({ kind: a.kind, date: a.date, status: saved.status, ...(visible ? { session: visible } : {}) });
       if (!persisted) break; // No replay after conflict or ambiguous transport.
     } catch (error) {
       // A factual rejection cannot expose a contradictory executable alternative.
       const code = error instanceof Error && /^CHAT_ACTION_[A-Z_]+$/.test(error.message) ? error.message : 'CHAT_ACTION_UNAVAILABLE';
       results.push({ kind: typeof a?.kind === 'string' && ['adapt_session','record_performed','record_response'].includes(a.kind) ? a.kind : 'unknown',
-        date: resolveCompletionDate(a?.date)?.date ?? today, status: persisted ? 'committed' : writeAttempted ? 'unknown' : ['CHAT_ACTION_DAY_UNAVAILABLE', 'CHAT_ACTION_RESTRICTION_CONFIRMATION'].includes(code) ? 'confirmation_required' : 'rejected', code });
+        date: resolveCompletionDate(a?.date)?.date ?? today, status: writeAttempted && execution ? 'unknown' : persisted ? 'committed' : writeAttempted ? 'unknown' : execution && ['CHAT_ACTION_REVISION_CONFLICT','CHAT_ACTION_CONTEXT_CHANGED'].includes(code) ? 'conflict' : ['CHAT_ACTION_DAY_UNAVAILABLE', 'CHAT_ACTION_RESTRICTION_CONFIRMATION'].includes(code) ? 'confirmation_required' : 'rejected', code });
     }
   }
   return results;

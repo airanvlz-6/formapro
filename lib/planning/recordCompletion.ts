@@ -1,8 +1,43 @@
 import { validatePlanMutation } from './planMutation';
 import { mutatePlanWithCAS, planPersistenceFailure, type PlanDatabase } from './planPersistence';
 import type { PlanCandidate, PlanMutationCommand, PlanMutationContext, PlanChangeSet } from './planMutationTypes';
+import { samePlanData } from './planMutationValidators';
 
 const normalizeDay = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+/** Structured external report in the existing history store. Never calls plan completion.
+ * The turn claim prevents ambiguous retries; the operation ID also deduplicates this writer. */
+export async function recordExternalExecution(db: any, user: string, input: {
+  date: string; description: string; discipline: string; durationMinutes?: number; rpe?: number;
+}, source: { operationId: string; messageId: string; message: string }, today: string) {
+  if (resolveCompletionDate(input.date)?.date !== input.date || input.date > today
+    || typeof input.description !== 'string' || !input.description.trim() || input.description.length > 3000
+    || typeof input.discipline !== 'string' || !input.discipline.trim() || input.discipline.length > 80
+    || input.durationMinutes !== undefined && (!Number.isFinite(input.durationMinutes) || input.durationMinutes < 0)
+    || input.rpe !== undefined && (!Number.isFinite(input.rpe) || input.rpe < 0 || input.rpe > 10))
+    return { status: 'rejected', code: 'EXTERNAL_EXECUTION_INVALID' };
+  const r = await db.from('usuarios').select('workout_history').eq('codigo', user).single();
+  if (r.error || !r.data || r.data.workout_history != null && !Array.isArray(r.data.workout_history))
+    return { status: 'rejected', code: 'EXTERNAL_EXECUTION_READ_FAILED' };
+  const before = r.data.workout_history, history = before ?? [];
+  const record = { fecha: input.date, tipo: input.discipline, descripcion: input.description,
+    source: 'coach_first_external_report', external: true, ...source,
+    ...(input.durationMinutes === undefined ? {} : { duracion: input.durationMinutes }),
+    ...(input.rpe === undefined ? {} : { intensidad_percibida: input.rpe }) };
+  const existing = history.find((e: any) => e.operationId === source.operationId);
+  if (existing) return { status: samePlanData(existing, record) ? 'already_applied' : 'conflict', planCompleted: false };
+  let q = db.from('usuarios').update({ workout_history: [...history, record] }).eq('codigo', user);
+  q = before == null ? q.is('workout_history', null) : q.eq('workout_history', JSON.stringify(before));
+  try {
+    const written = await q.select('codigo');
+    if (written.error) return { status: 'unknown', planCompleted: false };
+    if (!written.data?.length) return { status: 'conflict', planCompleted: false };
+    const verify = await db.from('usuarios').select('workout_history').eq('codigo', user).single();
+    if (verify.error || !verify.data?.workout_history?.some((e: any) => samePlanData(e, record)))
+      return { status: 'unknown', planCompleted: false };
+    return { status: 'committed', planCompleted: false, operationId: source.operationId };
+  } catch { return { status: 'unknown', planCompleted: false }; }
+}
 
 /** Date-only means a Canary civil date; timestamps must carry an explicit offset.
  * UTC arithmetic below is calendar arithmetic, never the process timezone. */

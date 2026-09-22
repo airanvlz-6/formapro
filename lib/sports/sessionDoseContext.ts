@@ -26,7 +26,7 @@ export type SessionDoseContext = { version: 1; policy: 'structured-dose-v1'; ref
 
 /** Projection of 3A only. Resolved declared references are usable, not promoted to laboratory measurements.
  * No e1RM, age zones, fuzzy reference substitutions or fresh-score calculations. */
-export function buildSessionDoseContext(context: AthletePrescriptionContext, intent?: PrescriptionIntent,
+export function buildSessionDoseContext(context: Pick<AthletePrescriptionContext, 'sessionTimeBudget' | 'strength' | 'running' | 'prescriptionSignals' | 'development' | 'goals' | 'cycle' | 'hrZoneBootstrap'>, intent?: PrescriptionIntent,
   weekStrategy: CanonicalWeekStrategy | null = null, neighbours: SessionDoseContext['neighbours'] = [], enforceSufficiency = false,
   sessionDecisionAuthority?: 'coach'): SessionDoseContext {
   if (intent?.kind === 'adaptation' && resolveStrategyGoal(context) !== intent.goalId) throw new Error('SESSION_GOAL_CONTEXT_CHANGED');

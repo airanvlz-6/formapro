@@ -1,3 +1,7 @@
+import { coachFirstEnabled, legacyConversationOperations } from '@/lib/chat/coachFirstFlag';
+import { handleCoachFirst } from '@/lib/chat/coachFirstHandler';
+import { coachFirstPlanningText, type CoachFirstPlanning } from '@/lib/chat/coachFirstGeneration';
+import { legacyPlanningCanReadReports } from '@/lib/chat/coachFirstStore';
 import { transitionAthleteState } from '@/lib/athlete/athleteStateTransition';
 import { prepareCompletedBlockOutcome } from '@/lib/planning/completedBlockOutcome';
 import { splitExecutionReports, resolveReportExecutionDate } from '@/lib/execution/reportExecutionDate';
@@ -801,6 +805,23 @@ async function marcarEventoComoExtraido(supabase: any, apiKey: string, codigo: s
 }
 
 export async function POST(req: NextRequest) {
+  if (coachFirstEnabled()) {
+    const body = await req.clone().json().catch(() => null);
+    if (!body) return NextResponse.json({ code: 'INPUT_INVALID' }, { status: 400 });
+    if (body.action === 'coach_first' || body.action === 'enviar_mensaje_coach') {
+      return handleCoachFirst(req, async (action, datos, context) => {
+        if (!['analizar_bloque_semana','planificar_semana','construir_sesion_dia','guardar_plan_semana'].includes(action))
+          throw new Error('COACH_FIRST_PLANNING_OPERATION_INVALID');
+        const internal = new NextRequest(req.url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, codigo: context.user, datos }) });
+        const response = await handlePost(internal, context);
+        return response.json();
+      });
+    }
+    if (!body.action || legacyConversationOperations.has(body.action)) return NextResponse.json({
+      ok: false, code: 'COACH_FIRST_ROUTE_REQUIRED', route: 'coach_first', retryable: false }, { status: 409 });
+  }
+
   try { return await handlePost(req); }
   catch (error) {
     if (error instanceof RecoveryReadError) return NextResponse.json(error.failure,
@@ -809,8 +830,9 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function handlePost(req: NextRequest) {
+async function handlePost(req: NextRequest, coachFirstPlanning?: CoachFirstPlanning) {
   const { messages, system, model, max_tokens, action, codigo, datos, email, codigoConjunto, pendingId, coachGrounding, coachMessage } = await req.json();
+  if (!coachFirstPlanning && (!action || action === 'enviar_mensaje_coach')) console.info('CHAT_ROUTE', { route: 'legacy' });
   if (process.env.FORGE_WEEKLY_COACHING_DIAGNOSTICS === '1' && typeof action === 'string' &&
     ['preparar_generacion_semana','preflight_generacion_semana','analizar_bloque_semana','planificar_semana','construir_sesion_dia','guardar_plan_semana'].includes(action)) {
     let runId: string | null = null;
@@ -822,13 +844,21 @@ async function handlePost(req: NextRequest) {
   }
 
   // Never accept a client boolean/raw digest as session-environment attestation.
-  if (action === 'planificar_semana' && datos && typeof datos === 'object') {
+  if (action === 'planificar_semana' && datos && typeof datos === 'object' && !coachFirstPlanning) {
     datos.confirmedAvailabilityDigest = readEnvironmentConfirmation(req.headers?.get('cookie'), {
       user: codigo, weekStart: datos.targetWeekStart, generationToken: datos.generationToken,
     });
   }
   const disabled = disabledLegacyOperation(action);
   if (disabled) return NextResponse.json(disabled);
+  if (action === 'coach_first' || action === 'enviar_mensaje_coach' && datos?.messageId)
+    return NextResponse.json({ ok: false, code: 'COACH_FIRST_DISABLED', retryable: false });
+  if (!coachFirstPlanning && ['analizar_bloque_semana','planificar_semana','construir_sesion_dia','guardar_plan_semana'].includes(action)) {
+    try {
+      if (!await legacyPlanningCanReadReports(supabase, codigo, datos?.targetWeekStart))
+        return NextResponse.json({ ok: false, code: 'REPORTED_EVENTS_REQUIRE_COACH_FIRST', retryable: false });
+    } catch { return NextResponse.json({ ok: false, code: 'REPORTED_EVENTS_READ_UNAVAILABLE', retryable: false }); }
+  }
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {
@@ -2105,7 +2135,7 @@ const { data: exposicionesParaSeguimiento } = await supabase.from("weakness_expo
     });
     // Persistir el recalculo solo si algo cambio realmente (evita escrituras innecesarias)
     const huboRecalculo = JSON.stringify(desarrolloConSeguimientoRecalculado) !== JSON.stringify(usuarioAnalyzer?.athlete_development || []);
-    if (huboRecalculo) {
+    if (huboRecalculo && (typeof coachFirstPlanning === 'undefined' || !coachFirstPlanning)) {
       await supabase.from("usuarios").update({ athlete_development: desarrolloConSeguimientoRecalculado }).eq("codigo", codigo);
       console.log(`🔄 WEAKNESS FOLLOW-UP: recalculado estado de debilidades por antiguedad para ${codigo}`);
     }
@@ -2216,7 +2246,7 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
       const analyzerRes = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 500, messages: [{ role: "user", content: analyzerPrompt }] }),
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 500, messages: [{ role: "user", content: analyzerPrompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning) : '') }] }),
       });
       const analyzerData = await analyzerRes.json();
       const analyzerTexto = analyzerData.content?.map((b: any) => b.text || "").join("") || "{}";
@@ -2244,7 +2274,7 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
 
       // Marcar como "considerada" las notas que el Block Analyzer decidio incorporar al analisis
       // de esta semana — avanza su ciclo de vida sin borrarlas, siguen visibles para Weekly Strategy.
-      if (Array.isArray(analisisBloque.coaching_notes_incorporadas) && analisisBloque.coaching_notes_incorporadas.length > 0) {
+      if ((typeof coachFirstPlanning === 'undefined' || !coachFirstPlanning) && Array.isArray(analisisBloque.coaching_notes_incorporadas) && analisisBloque.coaching_notes_incorporadas.length > 0) {
         await supabase.from("athlete_coaching_notes").update({ status: "considerada", updated_at: new Date().toISOString() }).in("id", analisisBloque.coaching_notes_incorporadas).eq("user_codigo", codigo);
       }
 
@@ -2278,7 +2308,7 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
       }, async (prompt: string) => {
         const response = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-          body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1800, messages: [{ role: "user", content: prompt }] }),
+          body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1800, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning) : '') }] }),
         });
         if (!response.ok) throw new Error("LLM_REQUEST_FAILED");
         const output = await response.json();
@@ -2304,7 +2334,7 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
         async (prompt: string) => {
           const response = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 2400, messages: [{ role: "user", content: prompt }] }),
+            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 2400, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning) : '') }] }),
           });
           if (!response.ok) throw new Error("LLM_REQUEST_FAILED");
           const output = await response.json();
@@ -2331,7 +2361,7 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
         async (prompt: string) => {
           const response = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 2400, messages: [{ role: "user", content: prompt }] }),
+            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 2400, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning) : '') }] }),
           });
           if (!response.ok) throw new Error("LLM_REQUEST_FAILED");
           const output = await response.json();
@@ -3396,7 +3426,7 @@ IMPORTANTE sobre "dia": si el coach esta claramente adaptando la sesion de HOY (
         async (prompt: string) => {
           const response = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 2400, messages: [{ role: "user", content: prompt }] }),
+            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 2400, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning) : '') }] }),
           });
           if (!response.ok) throw new Error("LLM_REQUEST_FAILED");
           const output = await response.json();
@@ -4699,7 +4729,7 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
         async (prompt: string) => {
           const response = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 2400, messages: [{ role: "user", content: prompt }] }),
+            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 2400, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning) : '') }] }),
           });
           if (!response.ok) throw new Error("LLM_REQUEST_FAILED");
           const output = await response.json();
@@ -4813,10 +4843,15 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
       console.error("WEEKLY_SAVE_FAILED", { code: "WEEK_RECEIPT_ISSUE_FAILED", stage: "receipt", detail: error?.message || "receipt" });
       return NextResponse.json({ ok: false, code: "WEEK_RECEIPT_ISSUE_FAILED", saveStage: "receipt", retryable: false });
     }
+    if (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning) await coachFirstPlanning.assertFresh();
     const persisted = planExistente
       ? await mutatePlanWithCAS(supabase, validationResult.mutation)
       : await createPlan(supabase, validationResult.mutation);
     if (persisted.status !== "committed") return NextResponse.json({ ...planPersistenceFailure(persisted), saveStage: "persistence" });
+    if (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning &&
+      !await coachFirstPlanning.confirmSaved(persisted.planId, persisted.revision, validationResult.candidate.sessions))
+      return NextResponse.json({ ok: false, persistenceStatus: 'unknown', commitConfirmed: false,
+        code: 'COACH_FIRST_WEEK_READBACK_UNCONFIRMED', retryable: false });
     const warnings: string[] = [];
     const recordWeeklyEffect = async (label: string, write: () => PromiseLike<{ error: unknown }>) => {
       try { if ((await write()).error) warnings.push(label); }
@@ -4843,7 +4878,10 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
     await recordWeeklyEffect("WEEKLY_AUDIT_FAILED", () => supabase.from("weekly_plan_events").insert({
       user_codigo: codigo, week_start: plan.week_start, nivel: "A_regeneracion_completa",
       accion: esSemanaActual ? "regenerar_semana" : "generar_semana_nueva",
-      motivo: JSON.stringify({ weekObjective: plan.week_objective || null, wholeWeekReceipt }), confirmado_por_usuario: true }));
+      motivo: JSON.stringify({ weekObjective: plan.week_objective || null, wholeWeekReceipt,
+        ...(typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? { coachFirst: {
+          operationId: coachFirstPlanning.operationId, reportedEventsDigest: coachFirstPlanning.reportedEvents.digest,
+          availabilityDigest: coachFirstPlanning.availabilityDigest } } : {}) }), confirmado_por_usuario: true }));
     return NextResponse.json({ ok: true, persistenceStatus: "committed", commitConfirmed: true, revision: persisted.revision,
       persistenceReceipt: { planId: persisted.planId, revision: persisted.revision, weekStart: plan.week_start }, warnings,
       wholeWeekValidation: finalWeekValidation, wholeWeekReceipt, repairOrchestration: wholeWeek.orchestration, sessions: validationResult.candidate.sessions });

@@ -1,0 +1,29 @@
+# Fase 1A.2 — auditoría previa y decisión de diseño
+
+Auditoría comunicada antes de modificar código. Baseline: resultados live de 22/09, 120 ejecuciones, fuentes y hashes preservados en `semantic-intake-1a2-before-snapshot-2026-09-22.json`. Corpus `semanticIntakeLiveCorpus.mjs` y `semanticIntakeFixtures.mjs` congelados. Los mensajes y criterios no se cambian.
+
+## Traza y causas
+
+SemanticInput → validación de entrada → JSON Schema del proveedor → parseCoachObject/decode → validación estructural y de citas → ContextRequirements → reviewer global → aceptación con scope previamente calculado.
+
+El proveedor valida forma, no entailment. decode verifica fechas ISO civiles, no significado del día mencionado. La llamada semanticReviewAccepted solo comprueba tres booleanos y una lista vacía de issues; no exige ni prueba de soporte por campo ni cobertura explícita de sujetos/modalidades. Los motivos libres del intérprete además inducen la revisión a confirmar su explicación. No hay verificación semántica independiente de especialización, ni aritmética de calendario fuera del LLM.
+
+- **72 U (UNRESOLVED_WITHOUT_CLARIFICATION):** el schema permite cualquier combinación; prompt pide conservar incertidumbre pero también no bloquear conversación. El decoder interpreta presencia de unresolved como obligación de requiresClarification, aunque el modelo usa el booleano como necesidad conversacional de preguntar. Dos fuentes de verdad para estados relacionados.
+- **17 T (TEMPORAL_STATUS_DATE_CONTRADICTION):** tres datos independientes — status, startDate, endDate — pueden contradecirse. El modelo además calcula fechas, y el validator solo prueba existencia civil. Una fecha válida pero del día equivocado pasa.
+- **3 E (NON_LITERAL_EVIDENCE):** citas de referencias históricas se introducen como evidencia del mensaje actual; el wire no identifica origen por cita. contextReferenceIds no vincula cada fragmento a su fuente.
+- Intersecciones: U solo56; U+T14; T solo3; U+E2; E solo1. Unión76. El rechazo77 es K02/3: reported_issue EXPLICIT con valueJson=null. No son92 fallos distintos.
+- **43 revisiones y43 aprobaciones:**15 aprobaciones semánticamente erróneas. La tarea global permite confundir plausibilidad deportiva con consecuencia del texto; sujeto/modalidad no están tipados, se esconden en fields libres. No se exige revisar exhaustivamente cada afirmación. Citas literales no demuestran que el valor, rol del número, especialización o fecha estén respaldados.
+- **Scopes:** LOCAL5, WEEK21, LONGITUDINAL94. Los77 rechazos fuerzan LONGITUDINAL por código. De17 longitudinales aceptados,13 partían de WEEK y4 de LONGITUDINAL. En total16 aceptados escalan respecto a su scope original (13 a longitudinal,3 a semanal). El prompt invita a añadir alternativas por duda; el selector siempre toma el máximo. No hay duplicados dentro de cada catálogo de requisitos: el problema es selección, no repetición de strings.
+
+## Diseño elegido antes de implementación
+
+1. Wire nuevo versionado, sin requiresClarification, unknownFields, fechas civiles ni scopeAlternatives producidos por LLM. Los campos derivados no se aceptan del proveedor. Se conservan en salida normalizada cuando son útiles al consumidor.
+2. Compromiso factual mínimo: valor null significa UNKNOWN; un valor conocido lleva base EXPLICIT/INTERPRETED y evidencia. INTERPRETED debe ser consecuencia semántica, nunca especialización probable. Negación, petición e hipótesis tienen modalidad tipada por proposición, sujeto y fuente separados del actor que reporta. Hechos externos continúan siendo reportes no verificados.
+3. Evidencia por fuente: mensaje actual o ID de referencia recibido. Se conservan citas exactas, rol, procedencia y autoridad; una cita histórica no se atribuye al mensaje actual. No se promueven datos de assistant a hechos del atleta.
+4. Temporalidad: relación tipada y parámetros numéricos/estructurados interpretados por LLM. Resolver puro usa fecha local de reportedAt/timezone; nunca lee la expresión humana. Semanas exigen convención explícita; si falta, mantiene la relación y devuelve fechas desconocidas. Intervalos abiertos no se confunden con fechas ausentes por incertidumbre.
+5. Derivaciones: UNKNOWN desde valor null; unknownFields desde campos desconocidos; effectiveTime.status/fechas/granularidad desde relación + resolver; requiresClarification desde cuestiones unresolved, incluidas referencias calendáricas ausentes. No se transforma desconocido en fecha para satisfacer schema.
+6. Revisor con tarea distinta: ledger exhaustivo de proposiciones, campos conocidos y relaciones temporales; evaluación de entailment, sujeto, modalidad y sobreespecialización por target, con evidencia y contraejemplo. No ve razones autojustificativas del intérprete ni aritmética LLM de fechas. Completitud desde cláusulas del mensaje. Un target omitido, duplicado o no entailed impide aceptación. Mismo proveedor/modelo, correlación residual explícita.
+7. Scope único justificado por necesidad de contexto, revisado en suficiencia y proporcionalidad. No alternativas genéricas ni incertidumbre→historia. Fallo sin evaluación fiable → scope null/unassessed y solo originalMessage, no falso LOCAL ni LONGITUDINAL automático. Sin loaders ni decisiones productivas.
+8. Tests actuales antes del cambio45/45. Se adaptarán únicamente pruebas de transporte/contrato a la nueva versión, manteniendo mensajes y semántica esperada congelados. Nuevos tests paramétricos de calendario, entailment exhaustivo, sujeto/modalidad/negación y scope, sin gramática lingüística.
+
+Baseline y artefactos anteriores no se sobrescriben. Reevaluación nueva: los mismos40 casos ×3; categorías y aceptaciones inseguras separadas. No se ajustarán prompts/corpus durante ese lote para perseguir fixtures. Sin Fase1B, writers, cambios en Availability/Coach/planning, commit o push.

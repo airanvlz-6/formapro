@@ -148,7 +148,7 @@ export default function AuthPanel({ callback = false, recovery = false }: { call
       <label><input type="checkbox" checked={consentNew} onChange={e => setConsentNew(e.target.checked)} /> Quiero crear un perfil nuevo, no recuperar uno anterior.</label>
       <button disabled={busy || !consentNew}>Crear mi nuevo perfil</button>
     </form>}
-    {athlete && <p><a href={`/app?codigo=${encodeURIComponent(athlete.legacyCodigo)}`}>Continuar en Forge</a></p>}
+    {athlete && <p><a href={`/hoy?codigo=${encodeURIComponent(athlete.legacyCodigo)}`}>Continuar en Forge</a></p>}
     {(athlete || unlinked) && <button disabled={busy} onClick={async () => {
       try { const { error } = await getBrowserAuth().signOut(); if (error) throw error;
         setAthlete(null); setUnlinked(false); setConsentNew(false); setMessage('Sesión cerrada.');

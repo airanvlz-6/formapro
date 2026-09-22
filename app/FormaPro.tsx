@@ -825,7 +825,7 @@ export default function Forge() {
           }
         });
         if((u as any).is_beta_founder){ apiCall({action:"verificar_renovacion_beta",codigo:u.codigo}); }
-        apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
+        await registrarVisita();
       },500);
     }
   },[]);
@@ -1285,6 +1285,14 @@ const [pendingRunningHabitualQuestion,setPendingRunningHabitualQuestion]=useStat
 const [pendingPrescriptionQuestion,setPendingPrescriptionQuestion]=useState<{codigo:string;token:string}|null>(null);
 const [pendingGoalQuestion,setPendingGoalQuestion]=useState<{codigo:string;token:string;empezarHoy?:boolean;temporalAnswer?:string;temporalReply?:boolean}|null>(null);
 const weeklyTemporalIntentRef=useRef<{text?:string;answeringQuestion:boolean}>({answeringQuestion:false});
+const registrarVisita=async()=>{
+  try {
+    const token=(await getBrowserAuth().getSession()).data.session?.access_token;
+    if(!token) return {ok:false,code:"AUTH_REQUIRED"};
+    const response=await fetch("/api/user/visit",{method:"POST",headers:{Authorization:`Bearer ${token}`},keepalive:true});
+    return await response.json();
+  } catch { return {ok:false,code:"VISIT_UNCONFIRMED"}; }
+};
 const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     const generationResult=!body.action && codigoUsuario
       ? await apiCall({action:"preparar_generacion_semana",codigo:codigoUsuario}) : null;
@@ -1332,14 +1340,15 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
             setMensajes(prev=>[...prev,{role:"assistant",content:result.question.text}]);
           }
           return weeklyGeneration ? {...result,weeklyGeneration} : result; }
+        let result:any;
+        try { result=await res.json(); }
+        catch { result={}; }
         if(body.action==="guardar_plan_semana") {
-          let result:any;
-          try { result=await res.json(); }
-          catch { result={}; }
           return { ...result, ok:false, canContinue:false,
             code:typeof result?.code==='string' ? result.code : `WEEKLY_SAVE_HTTP_${res.status}`,
             ...(result?.saveStage ? {saveStage:result.saveStage} : {}) };
         }
+        if(result?.retryable===false) return result;
         intentos++;
         await new Promise(r=>setTimeout(r,1000));
       }catch(e:any){
@@ -1403,7 +1412,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     verificarDescubrimientoPendiente(u.codigo);
         verificarSaludoProactivo(u.codigo);
     if((u as any).is_beta_founder){ apiCall({action:"verificar_renovacion_beta",codigo:u.codigo}); }
-    apiCall({action:"actualizar_usuario",codigo:u.codigo,datos:{ultima_visita:new Date().toISOString(),total_visitas:((u as any).total_visitas||1)+1}});
+    await registrarVisita();
     // Punto de entrada principal: la pantalla "Hoy" (Daily Briefing) en vez del chat directo
     window.location.href=`/hoy?codigo=${u.codigo}`;
     // reanudarSesion eliminada para reducir consumo de tokens

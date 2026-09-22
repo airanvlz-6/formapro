@@ -22,6 +22,7 @@ When several independent writes are necessary issue them separately; retain all 
 export async function runCoachFirstLoop(input: CoachFirstInput, dependencies: {
   complete: CoachFirstCompletion; dispatch: (call: CoachFirstCall, ordinal: number) => Promise<any>;
   observe?: (event: Record<string, unknown>) => void;
+  observeInvalidRaw?: (metadata: Record<string, number | boolean>) => void;
 }) {
   const started = Date.now(); let coachCalls = 0, ordinal = 0;
   const results: any[] = [];
@@ -33,7 +34,21 @@ export async function runCoachFirstLoop(input: CoachFirstInput, dependencies: {
     for (let round = 0; round < 8; round++) {
       coachCalls++;
       const raw = await dependencies.complete(messages, input);
-      const decision = JSON.parse(raw);
+      let decision;
+      try { decision = JSON.parse(raw); }
+      catch (error) {
+        try {
+          const trimmed = raw.trim();
+          dependencies.observeInvalidRaw?.({
+            rawLength: raw.length, trimmedLength: trimmed.length, empty: trimmed.length === 0,
+            startsWithBrace: trimmed.startsWith('{'), endsWithBrace: trimmed.endsWith('}'),
+            startsWithFence: trimmed.startsWith('```'), endsWithFence: trimmed.endsWith('```'),
+            containsFence: raw.includes('```'), leadingWhitespace: raw.length !== raw.trimStart().length,
+            trailingWhitespace: raw.length !== raw.trimEnd().length,
+          });
+        } catch { /* Observation must not replace the original parse failure. */ }
+        throw error;
+      }
       if (!decision || Object.keys(decision).some(k => !['answer', 'calls'].includes(k))
         || typeof decision.answer !== 'string' || decision.answer.length > 16000 || !Array.isArray(decision.calls)
         || decision.calls.length > 8) throw new Error('COACH_FIRST_OUTPUT_INVALID');

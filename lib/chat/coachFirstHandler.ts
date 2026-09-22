@@ -47,6 +47,7 @@ export async function handleCoachFirst(request: Request,
     claimed = { db, user: athlete.legacyCodigo, id: claim.id };
     stage = 'setup';
     const observe = (value: Record<string, unknown>) => console.info('COACH_FIRST_OPERATION', value);
+    let completionMetadata: Record<string, number | string> = {};
     const complete = async (messages: { role: 'user' | 'assistant'; content: string }[]) => {
       stage = 'provider_prepare';
       const key = process.env.ANTHROPIC_API_KEY;
@@ -71,6 +72,18 @@ export async function handleCoachFirst(request: Request,
       const output = await response.json();
       stage = 'provider_text_extract';
       const text = output.content?.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('') ?? '';
+      // Diagnostics only: never retain provider text, usage tokens or arbitrary stop strings.
+      try {
+        const stopReason = ['end_turn', 'max_tokens', 'stop_sequence', 'tool_use', 'pause_turn', 'refusal', 'model_context_window_exceeded']
+          .includes(output.stop_reason) ? output.stop_reason as string : 'unknown';
+        completionMetadata = {
+          contentBlockCount: Array.isArray(output.content) ? output.content.length : 0,
+          textBlockCount: Array.isArray(output.content) ? output.content.filter((b: any) => b.type === 'text').length : 0,
+          stopReason,
+          truncation: stopReason === 'max_tokens' ? 'output_token_limit'
+            : stopReason === 'model_context_window_exceeded' ? 'context_window_limit' : 'not_reported',
+        };
+      } catch { completionMetadata = { stopReason: 'unknown', truncation: 'not_reported' }; }
       stage = 'coach_loop';
       return text;
     };
@@ -78,7 +91,9 @@ export async function handleCoachFirst(request: Request,
     const dispatch = coachFirstTools(db, athlete.legacyCodigo, input, claim.id,
       (args, operationId) => generateCoachFirstWeek(db, athlete.legacyCodigo, args, operationId, today, planning), observe, policy);
     stage = 'coach_loop';
-    const result = await runCoachFirstLoop(input, { complete, dispatch, observe });
+    const result = await runCoachFirstLoop(input, { complete, dispatch, observe,
+      observeInvalidRaw: metadata => console.info('COACH_FIRST_RAW_INVALID', { ...metadata, ...completionMetadata }),
+    });
     stage = 'receipts';
     const receipts = result.results.filter(r => r.name !== 'read_context').map(r => ({
       tool: r.name, status: r.status, operationId: r.operationId ?? null, code: r.code ?? null,

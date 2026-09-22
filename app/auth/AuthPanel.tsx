@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import styles from './AuthPanel.module.css';
 import { getBrowserAuth } from '@/lib/auth/supabaseBrowser';
 import { authenticatedIdentityRequest, completeAuthCallback, signupForNewAccount, requestPasswordRecovery, saveRecoveredPassword } from '@/lib/auth/webAuthFlow';
 
@@ -114,7 +115,7 @@ export default function AuthPanel({ callback = false, recovery = false }: { call
     finally { setBusy(false); }
   }
 
-  return <main ref={panelRef} data-auth-panel="true" style={{ maxWidth: 480, margin: '40px auto', padding: 24 }}>
+  return <main ref={panelRef} data-auth-panel="true" className={styles.panel}>
     <h1>Acceso a Forge</h1>
     <p>{recovery ? 'Elige tu nueva contraseña.' : forgot ? 'Recupera tu contraseña por email.' : 'Entra con email o registra una cuenta nueva.'}</p>
     {!recovery && <form onSubmit={submit} style={{ display: 'grid', gap: 12, marginTop: 20 }}>

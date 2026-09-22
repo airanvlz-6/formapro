@@ -1,0 +1,56 @@
+/* Existing Forge palette: app/FormaPro.tsx and app/hoy/page.tsx (C).
+   Those values are component-local; no shared Forge theme tokens exist. */
+.panel {
+  --auth-bg: #0D0D0D;
+  --auth-card: #1A1A1A;
+  --auth-ink: #F0EDE8;
+  --auth-muted: #9A9590;
+  --auth-border: #2A2A2A;
+  --auth-accent: #FF6B00;
+  --auth-accent-light: #2A1A0D;
+  color-scheme: dark;
+  color: var(--auth-ink);
+  background: var(--auth-card);
+  border: 1px solid var(--auth-border);
+  border-radius: 20px;
+  max-width: 480px;
+  margin: 40px auto;
+  padding: 24px;
+}
+
+.panel h1 { font-size: 24px; font-weight: 700; }
+.panel h2 { font-size: 18px; font-weight: 600; }
+.panel p { color: var(--auth-muted); margin-top: 16px; }
+.panel label { display: block; }
+.panel input:not([type='checkbox']), .panel select {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--auth-border);
+  border-radius: 12px;
+  background: var(--auth-bg);
+  color: var(--auth-ink);
+}
+.panel input[type='checkbox'] { accent-color: var(--auth-accent); }
+.panel button {
+  padding: 12px 14px;
+  border: 1px solid var(--auth-accent);
+  border-radius: 12px;
+  background: var(--auth-accent);
+  color: var(--auth-bg);
+  font-weight: 600;
+  cursor: pointer;
+}
+.panel button[type='button'] {
+  background: var(--auth-bg);
+  border-color: var(--auth-border);
+  color: var(--auth-ink);
+}
+.panel a { color: var(--auth-ink); text-decoration: underline; text-underline-offset: 3px; }
+.panel button:not(:disabled):hover { filter: brightness(1.1); }
+.panel button[type='button']:not(:disabled):hover { background: var(--auth-accent-light); border-color: var(--auth-accent); }
+.panel a:hover { color: var(--auth-accent); }
+.panel :is(input, select, button, a):focus-visible { outline: 2px solid var(--auth-accent); outline-offset: 3px; }
+.panel button:disabled { opacity: 0.6; cursor: not-allowed; }
+@media (max-width: 512px) { .panel { margin: 24px 16px; } }

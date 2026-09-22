@@ -4,6 +4,7 @@ import { claimCoachTurn, finishCoachTurn } from './coachFirstStore';
 import { COACH_FIRST_INSTRUCTION, runCoachFirstLoop, type CoachFirstInput } from './coachFirstLoop';
 import { coachFirstTools, resolveCoachFirstPolicy } from './coachFirstTools';
 import { generateCoachFirstWeek, type CoachFirstPlanning } from './coachFirstGeneration';
+import { COACH_FIRST_OUTPUT_TOOL, readCoachFirstOutput } from './coachFirstOutput';
 
 export async function handleCoachFirst(request: Request,
   planning: (action: string, datos: any, context: CoachFirstPlanning) => Promise<any>) {
@@ -47,7 +48,6 @@ export async function handleCoachFirst(request: Request,
     claimed = { db, user: athlete.legacyCodigo, id: claim.id };
     stage = 'setup';
     const observe = (value: Record<string, unknown>) => console.info('COACH_FIRST_OPERATION', value);
-    let completionMetadata: Record<string, number | string> = {};
     const complete = async (messages: { role: 'user' | 'assistant'; content: string }[]) => {
       stage = 'provider_prepare';
       const key = process.env.ANTHROPIC_API_KEY;
@@ -65,35 +65,22 @@ export async function handleCoachFirst(request: Request,
       const response = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
         signal: AbortSignal.timeout(120000), body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 6000,
-          system: COACH_FIRST_INSTRUCTION, messages: outgoing }) });
+          system: COACH_FIRST_INSTRUCTION, messages: outgoing, tools: [COACH_FIRST_OUTPUT_TOOL],
+          tool_choice: { type: 'tool', name: COACH_FIRST_OUTPUT_TOOL.name, disable_parallel_tool_use: true } }) });
       stage = 'provider_http';
       if (!response.ok) throw new Error('COACH_PROVIDER_UNAVAILABLE');
       stage = 'provider_response_parse';
       const output = await response.json();
-      stage = 'provider_text_extract';
-      const text = output.content?.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('') ?? '';
-      // Diagnostics only: never retain provider text, usage tokens or arbitrary stop strings.
-      try {
-        const stopReason = ['end_turn', 'max_tokens', 'stop_sequence', 'tool_use', 'pause_turn', 'refusal', 'model_context_window_exceeded']
-          .includes(output.stop_reason) ? output.stop_reason as string : 'unknown';
-        completionMetadata = {
-          contentBlockCount: Array.isArray(output.content) ? output.content.length : 0,
-          textBlockCount: Array.isArray(output.content) ? output.content.filter((b: any) => b.type === 'text').length : 0,
-          stopReason,
-          truncation: stopReason === 'max_tokens' ? 'output_token_limit'
-            : stopReason === 'model_context_window_exceeded' ? 'context_window_limit' : 'not_reported',
-        };
-      } catch { completionMetadata = { stopReason: 'unknown', truncation: 'not_reported' }; }
+      stage = 'provider_structured_output';
+      const decision = readCoachFirstOutput(output);
       stage = 'coach_loop';
-      return text;
+      return decision;
     };
     const today = new Date(input.timestamp).toLocaleDateString('en-CA', { timeZone: input.timezone });
     const dispatch = coachFirstTools(db, athlete.legacyCodigo, input, claim.id,
       (args, operationId) => generateCoachFirstWeek(db, athlete.legacyCodigo, args, operationId, today, planning), observe, policy);
     stage = 'coach_loop';
-    const result = await runCoachFirstLoop(input, { complete, dispatch, observe,
-      observeInvalidRaw: metadata => console.info('COACH_FIRST_RAW_INVALID', { ...metadata, ...completionMetadata }),
-    });
+    const result = await runCoachFirstLoop(input, { complete, dispatch, observe });
     stage = 'receipts';
     const receipts = result.results.filter(r => r.name !== 'read_context').map(r => ({
       tool: r.name, status: r.status, operationId: r.operationId ?? null, code: r.code ?? null,

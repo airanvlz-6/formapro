@@ -1,4 +1,6 @@
 'use client';
+import AuthenticatedSurface from '../auth/AuthenticatedSurface';
+import { authenticatedFetch } from '@/lib/auth/authenticatedFetch';
 import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import WorkoutShareCard from "@/components/WorkoutShareCard";
@@ -19,7 +21,10 @@ const TIPO_CONFIG: Record<string, {emoji:string;label:string;color:string}> = {
 };
 
 export default function Historia() {
-  const [codigo, setCodigo] = useState("");
+  return <AuthenticatedSurface>{codigo => <HistoriaContent codigo={codigo} />}</AuthenticatedSurface>;
+}
+
+function HistoriaContent({ codigo }: { codigo: string }) {
   const [autenticado, setAutenticado] = useState(false);
   const [eventos, setEventos] = useState<any[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -35,18 +40,9 @@ export default function Historia() {
     bg:"#0D0D0D", card:"#1A1A1A", ink:"#F0EDE8", muted:"#9A9590",
     border:"#2A2A2A", accent:"#FF6B00"
   };
-
-  useEffect(()=>{
-    const params = new URLSearchParams(window.location.search);
-    const codigoUrl = params.get("codigo");
-    if(codigoUrl){
-      setCodigo(codigoUrl.toUpperCase());
-      cargarDatos(codigoUrl.toUpperCase());
-    } else {
-      setCargando(false);
-      setIniciado(true);
-    }
-  },[]);
+  useEffect(() => {
+    void cargarDatos(codigo);
+  }, [codigo]);
 
   const [bloques, setBloques] = useState<any[]>([]);
   const [historialMarcas, setHistorialMarcas] = useState<{fecha:string;ejercicio:string;valor:string}[]>([]);
@@ -65,18 +61,18 @@ export default function Historia() {
   const cargarDatos = async(cod:string)=>{
     setCargando(true);
     try{
-      const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"obtener_historia",codigo:cod})});
+      const res = await authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"obtener_historia",codigo:cod})});
       const data = await res.json();
-      if(data.error){ setError("Código no encontrado"); return; }
+      if(data.error){ setError("No se pudieron cargar tus datos"); return; }
       setEventos(data.eventos||[]);
-      const resUser = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"recuperar_usuario",codigo:cod})});
+      const resUser = await authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"recuperar_usuario",codigo:cod})});
       const dataUser = await resUser.json();
       setBloques(dataUser?.data?.analisis_bloques||[]);
       setHistorialMarcas(dataUser?.data?.historial_marcas||[]);
       setWorkoutHistory(dataUser?.data?.workout_history||[]);
       setHistorialFisiologico(dataUser?.data?.historial_fisiologico||[]);
       setModoEntradaUsuario(dataUser?.data?.modo_entrada||"planificacion");
-      fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"calcular_logros",codigo:cod})})
+      authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"calcular_logros",codigo:cod})})
         .then(r=>r.json()).then(d=>setLogros(d.logros||[])).catch(()=>{});
       setAutenticado(true);
     }catch{ setError("Error de conexión"); }
@@ -85,7 +81,7 @@ export default function Historia() {
 
   const registrarEvento = async()=>{
     if(!nuevoEvento.date||!nuevoEvento.title) return;
-    await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+    await authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
       action:"registrar_evento",
       codigo,
       datos:{ evento:{ date:nuevoEvento.date, type:nuevoEvento.type, title:nuevoEvento.title, data:{notas:nuevoEvento.notas} } }
@@ -114,25 +110,7 @@ export default function Historia() {
     </div>
   );
 
-  if(!autenticado) return (
-    <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",padding:24}}>
-      <div style={{background:C.card,borderRadius:20,padding:32,width:"100%",maxWidth:360,border:`1px solid ${C.border}`}}>
-        <div style={{textAlign:"center",marginBottom:24}}>
-          <img src="/logo-forge.png" alt="Forge" style={{width:60,height:60,objectFit:"contain",marginBottom:12}}/>
-          <h1 style={{fontSize:24,fontWeight:700,color:C.ink,fontFamily:"Georgia,serif"}}>Mi Historia</h1>
-          <p style={{color:C.muted,fontSize:13,marginTop:4}}>Tu evolución como atleta</p>
-        </div>
-        <input value={codigo} onChange={e=>setCodigo(e.target.value.toUpperCase())}
-          placeholder="Tu código FP-XXXXX"
-          onKeyDown={e=>e.key==="Enter"&&cargarDatos(codigo)}
-          style={{width:"100%",border:`2px solid ${C.accent}`,borderRadius:12,padding:"12px 14px",fontSize:15,color:C.ink,background:C.bg,letterSpacing:2,textAlign:"center",marginBottom:12,fontFamily:"inherit"}}/>
-        {error&&<p style={{color:C.accent,fontSize:12,marginBottom:12,textAlign:"center"}}>{error}</p>}
-        <button onClick={()=>cargarDatos(codigo)} style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:12,padding:14,fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-          Ver mi historia
-        </button>
-      </div>
-    </div>
-  );
+  if (!autenticado) return <main style={{ padding: 32 }} role="status">{error || 'Cargando tus datos…'} <button onClick={() => window.location.reload()}>Reintentar</button></main>;
 
   return (
     <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'DM Sans',sans-serif",padding:"24px 16px",paddingBottom:90}}>
@@ -177,7 +155,7 @@ export default function Historia() {
               <div style={{display:"flex",gap:8}}>
                 <button onClick={async()=>{
                   if(eventoEditando){
-                    await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+                    await authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
                       action:"editar_evento",codigo,
                       datos:{eventoId:eventoEditando.id,date:nuevoEvento.date,type:nuevoEvento.type,title:nuevoEvento.title,notas:nuevoEvento.notas}
                     })});
@@ -274,7 +252,7 @@ export default function Historia() {
                     <div key={i} onClick={()=>{
                       if(items){
                         setDiaSeleccionado({fecha:fechaKey,items});
-                        fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"obtener_plan_por_fecha",codigo,datos:{fecha:fechaKey}})})
+                        authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"obtener_plan_por_fecha",codigo,datos:{fecha:fechaKey}})})
                           .then(r=>r.json()).then(d=>setDecisionDia(d.sesion||null)).catch(()=>setDecisionDia(null));
                       }
                     }}
@@ -445,7 +423,7 @@ export default function Historia() {
                                   </button>
                                   <button onClick={async()=>{
                                     if(!confirm(`¿Eliminar "${ev.title}"?`)) return;
-                                    await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"eliminar_evento",codigo,datos:{eventoId:ev.id}})});
+                                    await authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"eliminar_evento",codigo,datos:{eventoId:ev.id}})});
                                     setMenuEventoAbierto(null);
                                     cargarDatos(codigo);
                                   }} style={{width:"100%",background:"none",border:"none",color:"#ff4444",fontSize:12,padding:"6px 10px",cursor:"pointer",textAlign:"left",borderRadius:6}}>

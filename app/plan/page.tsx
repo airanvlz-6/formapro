@@ -1,4 +1,6 @@
 'use client';
+import AuthenticatedSurface from '../auth/AuthenticatedSurface';
+import { authenticatedFetch } from '@/lib/auth/authenticatedFetch';
 import { useState, useEffect } from "react";
 import { legacySessionView } from '@/lib/sports/sessionPresentation';
 import { planBlockLabel } from '@/lib/sports/planPresentation';
@@ -18,7 +20,10 @@ const TIPO_CONFIG: Record<string, {emoji:string;color:string}> = {
 };
 
 export default function Plan() {
-  const [codigo, setCodigo] = useState("");
+  return <AuthenticatedSurface>{codigo => <PlanContent codigo={codigo} />}</AuthenticatedSurface>;
+}
+
+function PlanContent({ codigo }: { codigo: string }) {
   const [autenticado, setAutenticado] = useState(false);
   const [plan, setPlan] = useState<any>(null);
   const [objetivoPrincipal, setObjetivoPrincipal] = useState<any>(null);
@@ -35,32 +40,23 @@ export default function Plan() {
     bg:"#0D0D0D", card:"#1A1A1A", ink:"#F0EDE8", muted:"#9A9590",
     border:"#2A2A2A", accent:"#FF6B00"
   };
-
-  useEffect(()=>{
-    const params = new URLSearchParams(window.location.search);
-    const codigoUrl = params.get("codigo");
-    if(codigoUrl){
-      setCodigo(codigoUrl.toUpperCase());
-      cargarDatos(codigoUrl.toUpperCase(),params.get("week_start") ?? undefined);
-    } else {
-      setCargando(false);
-      setIniciado(true);
-    }
-  },[]);
+  useEffect(() => {
+    void cargarDatos(codigo, new URLSearchParams(window.location.search).get('week_start') ?? undefined);
+  }, [codigo]);
 
   const cargarDatos = async(cod:string,targetWeekStart?:string)=>{
     setCargando(true);
     try{
-      const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"obtener_plan_semana",codigo:cod,...(targetWeekStart !== undefined ? {datos:{week_start:targetWeekStart}} : {})})});
+      const res = await authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"obtener_plan_semana",codigo:cod,...(targetWeekStart !== undefined ? {datos:{week_start:targetWeekStart}} : {})})});
       const data = await res.json();
-      if(data.error){ setError(data.error==="INVALID_WEEK_START" ? "Semana no válida" : "Código no encontrado"); return; }
+      if(data.error){ setError(data.error==="INVALID_WEEK_START" ? "Semana no válida" : "No se pudieron cargar tus datos"); return; }
       setPlan(data.plan);
       setWeekStart(data.weekStart);
       setAutenticado(true);
-      fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"recuperar_usuario",codigo:cod})})
+      authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"recuperar_usuario",codigo:cod})})
         .then(r=>r.json()).then(d=>setObjetivoPrincipal(d?.data?.objetivo_principal||null)).catch(()=>{});
       // FORGE OBJETIVOS VIVOS — mismo dato real que Hoy, consulta independiente y simetrica
-      fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"obtener_progreso_objetivo",codigo:cod})})
+      authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"obtener_progreso_objetivo",codigo:cod})})
         .then(r=>r.json()).then(d=>{ if(d?.progreso) setProgresoObjetivoPlan(d.progreso); }).catch(()=>{});
     }catch{ setError("Error de conexión"); }
     finally{ setCargando(false); setIniciado(true); }
@@ -86,25 +82,7 @@ export default function Plan() {
     </div>
   );
 
-  if(!autenticado) return (
-    <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",padding:24}}>
-      <div style={{background:C.card,borderRadius:20,padding:32,width:"100%",maxWidth:360,border:`1px solid ${C.border}`}}>
-        <div style={{textAlign:"center",marginBottom:24}}>
-          <img src="/logo-forge.png" alt="Forge" style={{width:60,height:60,objectFit:"contain",marginBottom:12}}/>
-          <h1 style={{fontSize:24,fontWeight:700,color:C.ink,fontFamily:"Georgia,serif"}}>Mi Plan</h1>
-          <p style={{color:C.muted,fontSize:13,marginTop:4}}>Tu semana de entrenamiento</p>
-        </div>
-        <input value={codigo} onChange={e=>setCodigo(e.target.value.toUpperCase())}
-          placeholder="Tu código FP-XXXXX"
-          onKeyDown={e=>e.key==="Enter"&&cargarDatos(codigo)}
-          style={{width:"100%",border:`2px solid ${C.accent}`,borderRadius:12,padding:"12px 14px",fontSize:15,color:C.ink,background:C.bg,letterSpacing:2,textAlign:"center",marginBottom:12,fontFamily:"inherit"}}/>
-        {error&&<p style={{color:C.accent,fontSize:12,marginBottom:12,textAlign:"center"}}>{error}</p>}
-        <button onClick={()=>cargarDatos(codigo)} style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:12,padding:14,fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-          Ver mi plan
-        </button>
-      </div>
-    </div>
-  );
+  if (!autenticado) return <main style={{ padding: 32 }} role="status">{error || 'Cargando tus datos…'} <button onClick={() => window.location.reload()}>Reintentar</button></main>;
 
   const sesiones = plan?.sessions || [];
   const sesionesCompletadas = sesiones.filter((s:any) => s.completada).length;

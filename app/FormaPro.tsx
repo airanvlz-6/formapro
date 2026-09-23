@@ -1,4 +1,5 @@
 'use client';
+import { Logout } from './auth/Logout';
 import { observeSemanticShadow } from '@/lib/chat/semanticShadowClient';
 import { coachFirstEnabled } from '@/lib/chat/coachFirstFlag';
 import { authenticatedFetch } from '@/lib/auth/authenticatedFetch';
@@ -599,7 +600,7 @@ const MensajeTexto = ({texto}:{texto:string}) => (
 );
 
 export default function Forge({ authenticatedCodigo }: { authenticatedCodigo?: string } = {}) {
-  const [pantalla,setPantalla]=useState("inicio");
+  const [pantalla,setPantalla]=useState(authenticatedCodigo ? "cargando" : "inicio");
   const [categoria,setCategoria]=useState<string|null>(null);
   const [pregIdx,setPregIdx]=useState(0);
   const [respuestas,setRespuestas]=useState<Record<string,string|string[]>>({});
@@ -2595,7 +2596,7 @@ ${testStr}`}]});
         </div>
       )}
 
-      {!pestanaBloqueada&&pantalla==="inicio"&&(
+      {!authenticatedCodigo&&!pestanaBloqueada&&pantalla==="inicio"&&(
         <div className="fade-up" style={{maxWidth:520,width:"100%",textAlign:"center"}}>
           <div style={{marginBottom:16,display:"flex",alignItems:"center",justifyContent:"center",gap:12}}>
             <img src="/logo-forge.png" alt="Forge" style={{width:80,height:80,objectFit:"contain"}}/>
@@ -2652,7 +2653,7 @@ ${testStr}`}]});
 
       {pantalla==="bifurcacion"&&(
         <div className="fade-up" style={{maxWidth:560,width:"100%"}}>
-          <button onClick={()=>setPantalla("inicio")} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14,marginBottom:28}}>Volver</button>
+          <button onClick={()=>{window.location.href="/hoy";}} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14,marginBottom:28}}>Volver</button>
           <h2 style={{fontSize:"clamp(24px,5vw,32px)",color:C.ink,marginBottom:10,fontFamily:"'Playfair Display',serif",fontWeight:700}}>¿Qué papel quieres que tenga Forge en tu entrenamiento?</h2>
           <p style={{color:C.muted,fontSize:14,marginBottom:6}}>Elige cómo quieres empezar. Forge se adaptará a tu forma de entrenar — puedes cambiarlo más adelante.</p>
           <p style={{color:C.muted,fontSize:13,marginBottom:28,lineHeight:1.5}}>Forge puede tener distintos papeles en tu entrenamiento. Para darte recomendaciones coherentes, primero necesitamos saber cuánto quieres que intervenga en tu planificación.</p>
@@ -3151,7 +3152,7 @@ ${testStr}`}]});
             </div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <div style={{display:"flex",gap:6}}>
-                <button onClick={()=>{setPantalla("inicio");setMensajes([]);setHistorial([]);setMsgCount(0);setCodigoGuardado("");}} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"6px 10px",fontSize:12}}>←</button>
+                <Logout compact />
                 {(esPremium||esAdmin)&&<a href="https://t.me/forgeapp_es" target="_blank" rel="noopener noreferrer" style={{background:"#1E5C3A",border:"none",color:"#fff",cursor:"pointer",borderRadius:10,padding:"6px 9px",fontSize:12,textDecoration:"none"}}>👨‍💻</a>}
                 {!esPremium&&!esAdmin&&<a href={`mailto:coachforgeapp@gmail.com?subject=Consulta Forge - ${codigoUsuario}&body=Hola, tengo una consulta sobre mi programación en Forge.`} style={{background:C.card,border:`1px solid ${C.border}`,color:C.muted,cursor:"pointer",borderRadius:10,padding:"6px 9px",fontSize:12,textDecoration:"none"}}>✉️</a>}
               </div>

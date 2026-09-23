@@ -1,9 +1,14 @@
 'use client';
+import AuthenticatedSurface from '../auth/AuthenticatedSurface';
+import { authenticatedFetch } from '@/lib/auth/authenticatedFetch';
 import { useState, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function Progreso() {
-  const [codigo, setCodigo] = useState("");
+  return <AuthenticatedSurface>{codigo => <ProgresoContent codigo={codigo} />}</AuthenticatedSurface>;
+}
+
+function ProgresoContent({ codigo }: { codigo: string }) {
   const [autenticado, setAutenticado] = useState(false);
   const [datos, setDatos] = useState<any>(null);
   const [cargando, setCargando] = useState(true);
@@ -17,34 +22,25 @@ export default function Progreso() {
     bg: "#0D0D0D", card: "#1A1A1A", ink: "#F0EDE8", muted: "#9A9590",
     border: "#2A2A2A", accent: "#FF6B00"
   };
-
-useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const codigoUrl = params.get("codigo");
-    if (codigoUrl) {
-      setCodigo(codigoUrl.toUpperCase());
-      cargarDatos(codigoUrl.toUpperCase());
-    } else {
-      setCargando(false);
-      setIniciado(true);
-    }
-  }, []);
+  useEffect(() => {
+    void cargarDatos(codigo);
+  }, [codigo]);
 
   const cargarDatos = async (cod: string) => {
     setCargando(true);
     setError("");
     try {
-      const res = await fetch("/api/chat", {
+      const res = await authenticatedFetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "recuperar_usuario", codigo: cod })
       });
       const data = await res.json();
-      if (data.error) { setError("Código no encontrado"); return; }
+      if (data.error) { setError("No se pudieron cargar tus datos"); return; }
       setDatos(data.data);
       setAutenticado(true);
     } catch { setError("Error de conexión"); }
-    finally { setCargando(false); }
+    finally { setCargando(false); setIniciado(true); }
   };
 
   const totalSesiones = datos?.workout_history?.length || 0;
@@ -73,7 +69,7 @@ useEffect(() => {
 
   useEffect(()=>{
     if(autenticado && codigo){
-      fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"calcular_adherencia",codigo})})
+      authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"calcular_adherencia",codigo})})
         .then(r=>r.json()).then(d=>setAdherencia(d)).catch(()=>{});
     }
   },[autenticado,codigo]);
@@ -88,26 +84,7 @@ useEffect(() => {
     </div>
   );
 
-  if (!autenticado) return (
-    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif", padding: 24 }}>
-      <div style={{ background: C.card, borderRadius: 20, padding: 32, width: "100%", maxWidth: 360, border: `1px solid ${C.border}` }}>
-        <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <img src="/logo-forge.png" alt="Forge" style={{ width: 60, height: 60, objectFit: "contain", marginBottom: 12 }} />
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: C.ink, fontFamily: "Georgia, serif" }}>Mi Progreso</h1>
-          <p style={{ color: C.muted, fontSize: 13, marginTop: 4 }}>Introduce tu código para ver tu evolución</p>
-        </div>
-        <input value={codigo} onChange={e => setCodigo(e.target.value.toUpperCase())}
-          placeholder="Tu código FP-XXXXX"
-          onKeyDown={e => e.key === "Enter" && cargarDatos(codigo)}
-          style={{ width: "100%", border: `2px solid ${C.accent}`, borderRadius: 12, padding: "12px 14px", fontSize: 15, color: C.ink, background: C.bg, letterSpacing: 2, textAlign: "center", marginBottom: 12, fontFamily: "inherit" }} />
-        {error && <p style={{ color: C.accent, fontSize: 12, marginBottom: 12, textAlign: "center" }}>{error}</p>}
-        <button onClick={() => cargarDatos(codigo)} disabled={cargando}
-          style={{ width: "100%", background: C.accent, color: "#fff", border: "none", borderRadius: 12, padding: 14, fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-          {cargando ? "Cargando..." : "Ver mi progreso"}
-        </button>
-      </div>
-    </div>
-  );
+  if (!autenticado) return <main style={{ padding: 32 }} role="status">{error || 'Cargando tus datos…'} <button onClick={() => window.location.reload()}>Reintentar</button></main>;
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'DM Sans', sans-serif", padding: "24px 16px", paddingBottom: 90 }}>
@@ -148,7 +125,7 @@ useEffect(() => {
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={async()=>{
                   if(!formMetrica.fecha) return;
-                  await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+                  await authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
                     action:"registrar_metrica_pasada",
                     codigo,
                     datos:{fecha:formMetrica.fecha,hrv:formMetrica.hrv?parseInt(formMetrica.hrv):undefined,sueno:formMetrica.sueno?parseInt(formMetrica.sueno):undefined,rhr:formMetrica.rhr?parseInt(formMetrica.rhr):undefined}

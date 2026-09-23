@@ -1,12 +1,13 @@
 'use client';
+import AuthenticatedSurface from '../auth/AuthenticatedSurface';
 import { useState, useEffect } from "react";
 import { authenticatedFetch } from '@/lib/auth/authenticatedFetch';
-import { getBrowserAuth } from '@/lib/auth/supabaseBrowser';
-import { authenticatedIdentityRequest } from '@/lib/auth/webAuthFlow';
-import { Logout } from '../auth/Logout';
 
 export default function Hoy() {
-  const [codigo, setCodigo] = useState("");
+  return <AuthenticatedSurface>{codigo => <HoyContent codigo={codigo} />}</AuthenticatedSurface>;
+}
+
+function HoyContent({ codigo }: { codigo: string }) {
   const [autenticado, setAutenticado] = useState(false);
   const [datos, setDatos] = useState<any>(null);
   const [briefing, setBriefing] = useState<any>(null);
@@ -23,21 +24,9 @@ export default function Hoy() {
     border: "#2A2A2A", accent: "#FF6B00", accentLight: "#2A1A0D",
     success: "#4CAF50", successLight: "#1A2A1A"
   };
-
   useEffect(() => {
-    void (async () => {
-      try {
-        const result = await authenticatedIdentityRequest(getBrowserAuth());
-        if (!result.ok) { window.location.replace('/'); return; }
-        const requested = new URLSearchParams(window.location.search).get('codigo');
-        if (requested !== null && requested !== result.athlete.legacyCodigo) {
-          setError('Este acceso no corresponde a tu cuenta.'); setCargando(false); setIniciado(true); return;
-        }
-        setCodigo(result.athlete.legacyCodigo);
-        await cargarDatos(result.athlete.legacyCodigo);
-      } catch { setError('No se pudo comprobar tu sesión.'); setCargando(false); setIniciado(true); }
-    })();
-  }, []);
+    void cargarDatos(codigo);
+  }, [codigo]);
 
   const cargarDatos = async (cod: string) => {
     setCargando(true);
@@ -83,7 +72,6 @@ export default function Hoy() {
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'DM Sans', sans-serif", paddingBottom: 90 }}>
-      <Logout />
       <div style={{ maxWidth: 600, margin: "0 auto", padding: "24px 16px" }}>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>

@@ -1,8 +1,13 @@
 'use client';
+import AuthenticatedSurface from '../auth/AuthenticatedSurface';
+import { authenticatedFetch } from '@/lib/auth/authenticatedFetch';
 import { useState, useEffect } from "react";
 
 export default function MiPerfil() {
-  const [codigo, setCodigo] = useState("");
+  return <AuthenticatedSurface>{codigo => <MiPerfilContent codigo={codigo} />}</AuthenticatedSurface>;
+}
+
+function MiPerfilContent({ codigo }: { codigo: string }) {
   const [autenticado, setAutenticado] = useState(false);
   const [datos, setDatos] = useState<any>(null);
   const [fuentesTraining, setFuentesTraining] = useState<any[]>([]);
@@ -40,29 +45,20 @@ export default function MiPerfil() {
     focus: {titulo:"Focus", desc:"Forge gestiona una disciplina, respeta tu entrenamiento externo.", emoji:"🎯"},
     coach: {titulo:"Coach", desc:"Forge diseña tu planificación completa.", emoji:"📅"},
   };
-
-  useEffect(()=>{
-    const params = new URLSearchParams(window.location.search);
-    const codigoUrl = params.get("codigo");
-    if(codigoUrl){
-      setCodigo(codigoUrl.toUpperCase());
-      cargarDatos(codigoUrl.toUpperCase());
-    } else {
-      setCargando(false);
-      setIniciado(true);
-    }
-  },[]);
+  useEffect(() => {
+    void cargarDatos(codigo);
+  }, [codigo]);
 
   const cargarDatos = async(cod:string)=>{
     setCargando(true);
     try{
-      const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"recuperar_usuario",codigo:cod})});
+      const res = await authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"recuperar_usuario",codigo:cod})});
       const data = await res.json();
-      if(data.error){ setError("Código no encontrado"); return; }
+      if(data.error){ setError("No se pudieron cargar tus datos"); return; }
       setDatos(data.data);
       setAutenticado(true);
       if(data.data.modo_entrada==="focus"){
-        const resFuentes = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"obtener_training_sources",codigo:cod})});
+        const resFuentes = await authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"obtener_training_sources",codigo:cod})});
         const dataFuentes = await resFuentes.json();
         setFuentesTraining(dataFuentes?.fuentes || []);
       }
@@ -81,7 +77,7 @@ export default function MiPerfil() {
     setMostrarCambioModo(true);
     setPasoActualModo(0);
     setRespuestaTemp(null);
-    const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"verificar_cambio_modo",codigo,datos:{targetMode:destino}})});
+    const res = await authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"verificar_cambio_modo",codigo,datos:{targetMode:destino}})});
     const data = await res.json();
     setMissingFieldsModo(data?.missingFields || []);
     setMissingFieldsDef(data?.missingFieldsConDefinicion || []);
@@ -92,14 +88,14 @@ export default function MiPerfil() {
     const campo = missingFieldsDef[pasoActualModo];
     if(!campo || respuestaTemp===null || (Array.isArray(respuestaTemp)&&respuestaTemp.length===0)) return;
     setGuardandoCampo(true);
-    await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"guardar_campo_mode_change",codigo,datos:{fieldId:campo.id,value:respuestaTemp}})});
+    await authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"guardar_campo_mode_change",codigo,datos:{fieldId:campo.id,value:respuestaTemp}})});
     setGuardandoCampo(false);
     setRespuestaTemp(null);
     if(pasoActualModo<missingFieldsDef.length-1){
       setPasoActualModo(pasoActualModo+1);
     }else{
       // Todos los campos guardados — reverificar por si acaso y pasar a confirmacion
-      const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"verificar_cambio_modo",codigo,datos:{targetMode:modoDestino}})});
+      const res = await authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"verificar_cambio_modo",codigo,datos:{targetMode:modoDestino}})});
       const data = await res.json();
       setMissingFieldsModo(data?.missingFields || []);
       setMissingFieldsDef(data?.missingFieldsConDefinicion || []);
@@ -108,7 +104,7 @@ export default function MiPerfil() {
 
   const confirmarCambioModo = async()=>{
     setCambiandoModo(true);
-    const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"cambiar_modo_atleta",codigo,datos:{targetMode:modoDestino}})});
+    const res = await authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"cambiar_modo_atleta",codigo,datos:{targetMode:modoDestino}})});
     const data = await res.json();
     setCambiandoModo(false);
     if(data?.ok){
@@ -123,13 +119,13 @@ export default function MiPerfil() {
     let codigoDestino = codigo;
     if(nuevoCodigo.trim().length>0){
       if(nuevoCodigo.trim().length<5){ setErrorPerfil("El código debe tener al menos 5 caracteres."); return; }
-      const resCambio = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"cambiar_codigo_usuario",codigo,datos:{nuevoCodigo:nuevoCodigo.trim().toUpperCase()}})});
+      const resCambio = await authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"cambiar_codigo_usuario",codigo,datos:{nuevoCodigo:nuevoCodigo.trim().toUpperCase()}})});
       const dataCambio = await resCambio.json();
       if(dataCambio?.error){ setErrorPerfil(dataCambio.error); return; }
       codigoDestino = nuevoCodigo.trim().toUpperCase();
     }
     if(nuevoEmail.trim().length>0){
-      const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"actualizar_usuario",codigo:codigoDestino,datos:{email:nuevoEmail.trim().toLowerCase()}})});
+      const res = await authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"actualizar_usuario",codigo:codigoDestino,datos:{email:nuevoEmail.trim().toLowerCase()}})});
       const data = await res.json();
       if(data?.error){ setErrorPerfil(data.error); return; }
     }
@@ -144,7 +140,7 @@ export default function MiPerfil() {
 
   const guardarEdicionPerfil = async()=>{
     const nuevosPerfil = {...datos.perfil, ...perfilEdit};
-    await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"actualizar_usuario",codigo,datos:{perfil:nuevosPerfil}})});
+    await authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"actualizar_usuario",codigo,datos:{perfil:nuevosPerfil}})});
     setDatos((d:any)=>({...d, perfil:nuevosPerfil}));
     setEditandoPerfil(false);
     setMensajePerfil("Perfil actualizado. El coach tendrá en cuenta los cambios.");
@@ -153,7 +149,7 @@ export default function MiPerfil() {
 
   const ejecutarEliminarCuenta = async()=>{
     setEliminandoCuenta(true);
-    const res = await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"eliminar_cuenta",codigo})});
+    const res = await authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"eliminar_cuenta",codigo})});
     const data = await res.json();
     if(data?.ok){
       window.location.href="/";
@@ -170,24 +166,7 @@ export default function MiPerfil() {
     </div>
   );
 
-  if(!autenticado) return (
-    <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif",padding:24}}>
-      <div style={{background:C.card,borderRadius:20,padding:32,width:"100%",maxWidth:360,border:`1px solid ${C.border}`}}>
-        <div style={{textAlign:"center",marginBottom:24}}>
-          <img src="/logo-forge.png" alt="Forge" style={{width:60,height:60,objectFit:"contain",marginBottom:12}}/>
-          <h1 style={{fontSize:24,fontWeight:700,color:C.ink,fontFamily:"Georgia,serif"}}>Mi Perfil</h1>
-        </div>
-        <input value={codigo} onChange={e=>setCodigo(e.target.value.toUpperCase())}
-          placeholder="Tu código FP-XXXXX"
-          onKeyDown={e=>e.key==="Enter"&&cargarDatos(codigo)}
-          style={{width:"100%",border:`2px solid ${C.accent}`,borderRadius:12,padding:"12px 14px",fontSize:15,color:C.ink,background:C.bg,letterSpacing:2,textAlign:"center",marginBottom:12,fontFamily:"inherit"}}/>
-        {error&&<p style={{color:C.accent,fontSize:12,marginBottom:12,textAlign:"center"}}>{error}</p>}
-        <button onClick={()=>cargarDatos(codigo)} style={{width:"100%",background:C.accent,color:"#fff",border:"none",borderRadius:12,padding:14,fontSize:15,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-          Ver mi perfil
-        </button>
-      </div>
-    </div>
-  );
+  if (!autenticado) return <main style={{ padding: 32 }} role="status">{error || 'Cargando tus datos…'} <button onClick={() => window.location.reload()}>Reintentar</button></main>;
 
   const modoActual = datos?.modo_entrada || "supervision";
 
@@ -219,11 +198,11 @@ export default function MiPerfil() {
           </div>
         </div>
 
-        {/* Código de acceso */}
+        {/* Código Forge */}
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <div>
-              <p style={{ color: C.muted, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Código de acceso</p>
+              <p style={{ color: C.muted, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>Código Forge</p>
               <p style={{ color: C.accent, fontSize: 15, fontWeight: 700, letterSpacing: 2 }}>{mostrarCodigoReal ? codigo : "••••••"}</p>
             </div>
             <button onClick={()=>setMostrarCodigoReal(!mostrarCodigoReal)} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, padding: "5px 10px", fontSize: 11, color: C.muted, cursor: "pointer" }}>

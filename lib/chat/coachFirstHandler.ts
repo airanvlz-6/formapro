@@ -1,6 +1,6 @@
 import { verifySupabasePrincipal, resolveAuthenticatedAthlete, IdentityError } from '../auth/athleteIdentity';
 import { identityDependencies } from '../auth/supabaseServer';
-import { claimCoachTurn, finishCoachTurn } from './coachFirstStore';
+import { conversationSession, conversationTurn } from './conversationSession';
 import { COACH_FIRST_INSTRUCTION, runCoachFirstLoop, type CoachFirstInput } from './coachFirstLoop';
 import { coachFirstTools, resolveCoachFirstPolicy } from './coachFirstTools';
 import { generateCoachFirstWeek, type CoachFirstPlanning } from './coachFirstGeneration';
@@ -9,7 +9,8 @@ import { COACH_FIRST_OUTPUT_TOOL, readCoachFirstOutput } from './coachFirstOutpu
 export async function handleCoachFirst(request: Request,
   planning: (action: string, datos: any, context: CoachFirstPlanning) => Promise<any>) {
   const respond = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
-  let claimed: { db: any; user: string; id: string } | undefined;
+  let claimed: { db: any; user: string; id: string; sessionId: string; epoch: string; before: any[] } | undefined;
+  const receipts: any[] = [];
   let stage = 'initialization';
   let messageId: string | null = null;
   try {
@@ -26,10 +27,8 @@ export async function handleCoachFirst(request: Request,
       return respond({ route: 'coach_first', code: 'INPUT_INVALID', retryable: false }, 400);
     // Only UUIDs are safe to echo; other accepted client IDs use the server claim digest.
     if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(supplied.messageId)) messageId = supplied.messageId;
-    const conversation = supplied.conversation ?? [];
-    if (!Array.isArray(conversation) || conversation.length > 15 || conversation.some((m: any) => !m
-      || !['user','assistant'].includes(m.role) || typeof m.content !== 'string' || m.content.length > 8000))
-      return respond({ route: 'coach_first', code: 'CONVERSATION_INVALID', retryable: false }, 400);
+    // Client conversation is intentionally ignored. Only persisted history feeds the Coach.
+    let conversation: { role: 'user' | 'assistant'; content: string }[] = [];
     const attachments = supplied.attachments ?? [];
     if (!Array.isArray(attachments) || attachments.length > 3 || attachments.some((a: any) => !a
       || !['image/jpeg','image/png','image/webp','application/pdf'].includes(a.tipo)
@@ -41,11 +40,15 @@ export async function handleCoachFirst(request: Request,
       pending: supplied.pending ?? null, references: supplied.references ?? null, attachments };
     if (JSON.stringify(input).length > 6500000) return respond({ code: 'INPUT_TOO_LARGE' }, 413);
     stage = 'claim';
-    const claim = await claimCoachTurn(db, athlete.legacyCodigo, input.messageId,
-      { message: input.message, conversation, attachments, pending: input.pending, references: input.references });
-    if (claim.status !== 'committed') return respond({ route: 'coach_first', status: claim.status,
-      code: 'TURN_NOT_REPLAYED', retryable: false, answer: 'Este turno no se ha vuelto a ejecutar. Comprueba el estado antes de repetir una operación.' });
-    claimed = { db, user: athlete.legacyCodigo, id: claim.id };
+    const turn = conversationTurn(athlete.legacyCodigo, input.messageId,
+      { message: input.message, attachments, pending: input.pending, references: input.references });
+    const claim = await conversationSession(db, athlete.legacyCodigo, supplied.sessionId, 'begin', turn);
+    if (!claim.ok || claim.status !== 'committed') return respond({ route: 'coach_first', ...claim,
+      retryable: false, answer: claim.answer ?? 'Este turno no se ha vuelto a ejecutar. Comprueba el acceso y el historial antes de continuar.' });
+    claimed = { db, user: athlete.legacyCodigo, id: turn.id, sessionId: supplied.sessionId, epoch: claim.epoch, before: claim.historial };
+    conversation = claim.historial.slice(-10).filter((m: any) => m && ['user','assistant'].includes(m.role) && typeof m.content === 'string')
+      .map((m: any) => ({ role: m.role, content: m.content }));
+    input.conversation = conversation;
     stage = 'setup';
     const observe = (value: Record<string, unknown>) => console.info('COACH_FIRST_OPERATION', value);
     const complete = async (messages: { role: 'user' | 'assistant'; content: string }[]) => {
@@ -77,21 +80,29 @@ export async function handleCoachFirst(request: Request,
       return decision;
     };
     const today = new Date(input.timestamp).toLocaleDateString('en-CA', { timeZone: input.timezone });
-    const dispatch = coachFirstTools(db, athlete.legacyCodigo, input, claim.id,
+    const dispatchTool = coachFirstTools(db, athlete.legacyCodigo, input, turn.id,
       (args, operationId) => generateCoachFirstWeek(db, athlete.legacyCodigo, args, operationId, today, planning), observe, policy);
+    const dispatch: typeof dispatchTool = async (call, ordinal) => {
+      const r = await dispatchTool(call, ordinal);
+      if (call.name !== 'read_context') receipts.push({ tool: call.name, status: r.status,
+        operationId: r.operationId ?? null, code: r.code ?? null,
+        reportedEventsDigest: r.reportedEventsDigest ?? null, revision: r.revision ?? null });
+      return r;
+    };
     stage = 'coach_loop';
     const result = await runCoachFirstLoop(input, { complete, dispatch, observe });
-    stage = 'receipts';
-    const receipts = result.results.filter(r => r.name !== 'read_context').map(r => ({
-      tool: r.name, status: r.status, operationId: r.operationId ?? null, code: r.code ?? null,
-      reportedEventsDigest: r.reportedEventsDigest ?? null, revision: r.revision ?? null,
-    }));
     stage = 'finish_turn';
-    const finished = await finishCoachTurn(db, athlete.legacyCodigo, claim.id, result.ok ? 'completed' : 'terminal', receipts);
+    const finished = await conversationSession(db, athlete.legacyCodigo, supplied.sessionId, 'finish', {
+      id: turn.id, epoch: claimed.epoch, before: claimed.before, message: input.message,
+      answer: result.answer, status: result.ok ? 'completed' : 'terminal', receipts });
     stage = 'response';
-    return respond({ ...result, operationId: claim.id, retryable: false, journalStatus: finished.status });
+    return respond({ ...result, operationId: turn.id, retryable: false, ...finished,
+      ok: result.ok && finished.persisted === true, journalStatus: finished.status,
+      answer: finished.persisted ? result.answer : 'El turno no tiene una conversación guardada confirmada. Recarga el historial; no se ha reintentado.' });
   } catch (error) {
     if (error instanceof IdentityError) return respond({ route: 'coach_first', code: error.code, retryable: false }, error.status);
+    const failedFinish = claimed ? await conversationSession(claimed.db, claimed.user, claimed.sessionId, 'finish', {
+      id: claimed.id, epoch: claimed.epoch, before: claimed.before, status: 'unknown', receipts }) : null;
     // Error text (especially JSON.parse excerpts) can include the entire user/provider payload.
     // Keep known diagnostics only, never stringify an arbitrary exception or its cause/stack.
     try {
@@ -112,7 +123,8 @@ export async function handleCoachFirst(request: Request,
       });
     } catch { /* Diagnostics must never change the terminal response. */ }
     // A claimed turn may have writes even when response transport failed. Never fall back or retry.
-    return respond({ route: 'coach_first', status: claimed ? 'unknown' : 'rejected', code: 'COACH_FIRST_UNAVAILABLE',
-      retryable: false, answer: claimed ? 'No puedo confirmar el resultado del turno. No lo he reintentado.' : 'No se ha iniciado el turno.' });
+    return respond({ route: 'coach_first', status: failedFinish?.status === 'conflict' ? 'conflict' : claimed ? 'unknown' : 'rejected',
+      code: failedFinish?.status === 'conflict' ? 'CHAT_COMMIT_CONFLICT' : 'COACH_FIRST_UNAVAILABLE',
+      persisted: false, retryable: false, answer: claimed ? 'No puedo confirmar el resultado del turno. No lo he reintentado.' : 'No se ha iniciado el turno.' });
   }
 }

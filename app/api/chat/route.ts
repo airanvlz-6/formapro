@@ -1,3 +1,4 @@
+import { conversationSession } from '@/lib/chat/conversationSession';
 import { authorizeChatRequest } from '@/lib/auth/chatIdentity';
 import { identityDependencies } from '@/lib/auth/supabaseServer';
 import { IdentityError } from '@/lib/auth/athleteIdentity';
@@ -4111,59 +4112,11 @@ Menciona el numero exacto de dias en la frase.`;
     return NextResponse.json({ valido: true });
   }
 
-  if (action === "verificar_sesion_activa") {
-    // VERIFY (solo lectura, NUNCA escribe): distingue 3 casos claramente.
-    // 1. Nadie ha adquirido nunca -> sinDueñoRegistrado=true (unico caso donde el frontend puede auto-adquirir)
-    // 2. El dueño soy yo mismo -> haySesionActiva=false, no hacer nada
-    // 3. Otra sesion viva y distinta a la mia -> haySesionActiva=true, mostrar conflicto
-    // NOTA: "viva" ahora se basa en ACTIVIDAD REAL (last_message_at), no solo heartbeat — una pestaña
-    // abierta en background (ej: movil sin usar) no debe bloquear indefinidamente a otras pestañas.
-    const { sessionId: miSessionId } = datos || {};
-    const SESSION_REAL_ACTIVITY_THRESHOLD_MS = 45 * 60 * 1000; // 45 min sin enviar ningun mensaje real
-    const { data: sesionActiva } = await supabase.from("active_sessions").select("*").eq("user_codigo", codigo).single();
-
-    if (!sesionActiva) {
-      return NextResponse.json({ haySesionActiva: false, sinDueñoRegistrado: true, sesionActiva: null });
-    }
-    const soyElDueño = sesionActiva.session_id === miSessionId;
-    if (soyElDueño) {
-      return NextResponse.json({ haySesionActiva: false, sinDueñoRegistrado: false, sesionActiva: null });
-    }
-    const ultimaActividadReal = sesionActiva.last_message_at || sesionActiva.owner_since;
-    const otraEstaViva = (Date.now() - new Date(ultimaActividadReal).getTime()) < SESSION_REAL_ACTIVITY_THRESHOLD_MS;
-    if (!otraEstaViva) {
-      // El otro dueño no ha enviado ningun mensaje real en 45+ min -> tratar como sin dueño registrado
-      return NextResponse.json({ haySesionActiva: false, sinDueñoRegistrado: true, sesionActiva: null });
-    }
-    return NextResponse.json({ haySesionActiva: true, sinDueñoRegistrado: false, sesionActiva });
-  }
-
-  if (action === "tomar_control_sesion") {
-    // Esta pestaña toma el control explicitamente (el usuario confirmo "Continuar aqui")
-    const { sessionId } = datos;
-    const ahora = new Date().toISOString();
-    const { error: errorUpsert } = await supabase.from("active_sessions").upsert({
-      user_codigo: codigo,
-      session_id: sessionId,
-      owner_since: ahora,
-      updated_at: ahora
-    });
-    if (errorUpsert) {
-      console.error("ERROR upsert active_sessions:", errorUpsert);
-      return NextResponse.json({ ok: false, error: errorUpsert.message });
-    }
-    return NextResponse.json({ ok: true });
-  }
-
-  if (action === "heartbeat_sesion") {
-    // Actualiza el heartbeat SOLO si esta sesion sigue siendo la propietaria del lock
-    const { sessionId } = datos;
-    const { data: sesionActual } = await supabase.from("active_sessions").select("session_id").eq("user_codigo", codigo).single();
-    if (sesionActual?.session_id !== sessionId) {
-      return NextResponse.json({ ok: false, motivo: "ya_no_eres_propietario" });
-    }
-    await supabase.from("active_sessions").update({ updated_at: new Date().toISOString() }).eq("user_codigo", codigo);
-    return NextResponse.json({ ok: true });
+  if (["verificar_sesion_activa", "tomar_control_sesion", "heartbeat_sesion"].includes(action)) {
+    const operation = action === "verificar_sesion_activa" ? "verify"
+      : action === "heartbeat_sesion" ? "heartbeat" : datos?.takeover === true ? "takeover" : "acquire";
+    const result = await conversationSession(supabase, codigo, datos?.sessionId, operation);
+    return NextResponse.json(result, { headers: { 'Cache-Control': 'no-store' } });
   }
 
   if (action === "procesar_mensaje_contexto") {

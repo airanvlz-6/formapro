@@ -662,6 +662,13 @@ export default function Forge({ authenticatedCodigo }: { authenticatedCodigo?: s
   const [codigoInput,setCodigoInput]=useState("");
   const [pestanaBloqueada,setPestanaBloqueada]=useState(false);
   const [mostrarConflictoSesion,setMostrarConflictoSesion]=useState(false);
+  const [verificandoSesion,setVerificandoSesion]=useState(true);
+  const [errorSesion,setErrorSesion]=useState("");
+  const escritorListoRef=useRef(false);
+  const aplicarHistorialCanonico=(history:any[])=>{
+    setHistorial(history);
+    setMensajes(history.slice(-6).map((m:any)=>typeof m.content==="string"?{...m,content:m.content.replace(/\n*\[Fecha actual del sistema:[\s\S]*?\]/,"").replace(/\n*\[Contexto temporal del mensaje:[\s\S]*?\]/,"").trim()}:m));
+  };
   const generarUUID=():string=>{
     if(typeof crypto!=="undefined"&&crypto.randomUUID) return crypto.randomUUID();
     // Fallback simple con formato UUID v4 valido para navegadores antiguos
@@ -680,39 +687,51 @@ export default function Forge({ authenticatedCodigo }: { authenticatedCodigo?: s
     return nuevo;
   };
   const sessionIdRef=useRef<string>(obtenerOCrearSessionId());
-  const yaVerificoSesionRef=useRef<boolean>(false);
 
   // SESSION LOCK MANAGER: el backend arbitra cual pestaña tiene el control real.
   // Al detectar el codigo de usuario, verificamos si hay otra sesion activa antes de tomar el control.
   useEffect(()=>{
     if(!codigoUsuario) return;
 
-    if(yaVerificoSesionRef.current) return;
-    yaVerificoSesionRef.current=true;
+    let cancelled=false;
+    escritorListoRef.current=false;
+    setVerificandoSesion(true);
 
-    // SOLO VERIFICA, NUNCA ADQUIERE. La adquisicion (acquireSession) es exclusivamente
-    // voluntaria: al cargar por primera vez si no hay dueño registrado, o al pulsar "Continuar aqui".
+    // La adquisición automática solo procede sin propietario vigente; el RPC
+    // comprueba de nuevo esa condición atómicamente. El takeover es explícito.
     const verificarYSolicitarControl=async()=>{
       const res=await apiCall({action:"verificar_sesion_activa",codigo:codigoUsuario,datos:{sessionId:sessionIdRef.current}});
-      if(res?.haySesionActiva){
+      if(cancelled)return;
+      if(!res?.ok){setErrorSesion("No se ha podido verificar el acceso al chat.");setVerificandoSesion(false);return;}
+      if(res.haySesionActiva){
         setMostrarConflictoSesion(true);
-      } else if(res?.sinDueñoRegistrado){
-        // Nadie es dueño aun (primera carga real de la app) — unica adquisicion automatica permitida
-        await apiCall({action:"tomar_control_sesion",codigo:codigoUsuario,datos:{sessionId:sessionIdRef.current}});
+        setVerificandoSesion(false);
+      } else if(res.sinDueñoRegistrado){
+        // Ausencia o inactividad real de 45 minutos, confirmada otra vez en servidor.
+        const acquired=await apiCall({action:"tomar_control_sesion",codigo:codigoUsuario,datos:{sessionId:sessionIdRef.current}});
+        if(cancelled)return;
+        if(acquired?.ok&&acquired.owned&&Array.isArray(acquired.historial)){
+          aplicarHistorialCanonico(acquired.historial);escritorListoRef.current=true;
+        }else if(acquired?.haySesionActiva){setMostrarConflictoSesion(true);}
+        else setErrorSesion("No se ha podido abrir el chat. Vuelve a intentarlo.");
+        setVerificandoSesion(false);
+      } else if(res.owned&&Array.isArray(res.historial)){
+        aplicarHistorialCanonico(res.historial);escritorListoRef.current=true;setVerificandoSesion(false);
       }
-      // Si haySesionActiva=false porque el dueño soy YO, no hacer nada (ni adquirir ni bloquear)
     };
     verificarYSolicitarControl();
 
     // Heartbeat cada 25 segundos: si dejamos de ser propietarios, bloqueamos esta pestaña
     const interval=setInterval(async()=>{
       const res=await apiCall({action:"heartbeat_sesion",codigo:codigoUsuario,datos:{sessionId:sessionIdRef.current}});
-      if(res?.ok===false){
+      if(cancelled)return;
+      if(res?.ok!==true){
+        escritorListoRef.current=false;
         setPestanaBloqueada(true);
       }
     },25000);
 
-    return ()=>clearInterval(interval);
+    return ()=>{cancelled=true;escritorListoRef.current=false;clearInterval(interval);};
   },[codigoUsuario]);
 
   useEffect(()=>{
@@ -1302,7 +1321,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     if(weeklyGeneration) body={...body,system:String(body.system||"")+"\nSnapshot semanal del servidor para esta generación (autoridad sobre contexto previo):\n"+JSON.stringify(weeklyGeneration.snapshots)};
     const actionRequestId=globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     let intentos=0;
-    const maxIntentos=body.action==="planificar_semana"||body.action==="guardar_plan_semana"?1:3;
+    const maxIntentos=body.action==="planificar_semana"||body.action==="guardar_plan_semana"||body.action==="tomar_control_sesion"?1:3;
     while(intentos<maxIntentos){
       try{
         const controller=useAbort?abortControllerRef.current:null;
@@ -1839,7 +1858,7 @@ const forgeValidator=(texto:string):string=>{
 
   const enviar=async(texto:string=input)=>{
     console.log("=== ENTRA A FUNCION enviar() ===");
-    if((!texto.trim()&&imagenesAdjuntas.length===0)||cargando||bloqueado) return;
+    if((!texto.trim()&&imagenesAdjuntas.length===0)||cargando||bloqueado||!escritorListoRef.current||verificandoSesion||mostrarConflictoSesion||pestanaBloqueada) return;
     if (coachFirstEnabled()) {
       setCargando(true); setInput("");
       setMensajes(prev => [...prev, { role: "user", content: texto }]);
@@ -1853,13 +1872,11 @@ const forgeValidator=(texto:string):string=>{
         coachFirstStage = "token_check";
         const token = sessionResult.data.session?.access_token;
         if (!token) throw new Error("Inicia sesión para usar Coach-first.");
-        coachFirstStage = "build_history";
-        const conversation = historial.slice(-10).map(m => ({ role: m.role, content: m.content }));
         coachFirstStage = "build_attachments";
         const attachments = imagenesAdjuntas.map(img => ({ ...img, base64: img.base64.split(',')[1] }));
         coachFirstStage = "build_payload";
         const payload = { action: "coach_first", codigo: codigoUsuario, message: texto, messageId,
-            conversation, attachments,
+            sessionId: sessionIdRef.current, attachments,
             pending: { goal: pendingGoalQuestion ? { kind: 'primary_goal', includeToday: pendingGoalQuestion.empezarHoy } : null,
               habitual: pendingRunningHabitualQuestion ? { kind: 'running_habitual', field: pendingRunningHabitualQuestion.field,
                 expectedDurationMinutes: pendingRunningHabitualQuestion.expectedDurationMinutes,
@@ -1876,8 +1893,11 @@ const forgeValidator=(texto:string):string=>{
         const result = await response.json();
         coachFirstStage = "response_process";
         const answer = typeof result.answer === "string" ? result.answer : "No se ha podido iniciar el turno con la identidad actual.";
-        setMensajes(prev => [...prev, { role: "assistant", content: answer }]);
-        setHistorial(prev => [...prev, { role: "user", content: texto }, { role: "assistant", content: answer }]);
+        if(Array.isArray(result.historial)) aplicarHistorialCanonico(result.historial);
+        if(result.persisted!==true) setMensajes(prev => [...prev, { role: "assistant", content: answer }]);
+        if(["CHAT_NOT_OWNER","CHAT_SESSION_REQUIRED","CHAT_COMMIT_CONFLICT"].includes(result.code)){
+          escritorListoRef.current=false;setPestanaBloqueada(true);
+        }
         if (result.results?.some((r: any) => r.status === "committed" && ["update_session","record_execution","generate_week"].includes(r.name)))
           await cargarPlanSemanal(codigoUsuario).catch(() => {});
         setImagenesAdjuntas([]); setImagenAdjunta(null); setImagenPreview(null);
@@ -2566,26 +2586,25 @@ ${testStr}`}]});
         .sugg:hover{opacity:0.75;}
       `}</style>
 
-      {mostrarConflictoSesion&&(
+      {verificandoSesion&&pantalla==="chat"&&<p role="status">Abriendo conversación…</p>}
+      {errorSesion&&<p role="alert">{errorSesion} <button onClick={()=>window.location.reload()}>Reintentar</button></p>}
+      {(mostrarConflictoSesion||pestanaBloqueada)&&(
         <div className="fade-up" style={{maxWidth:420,width:"100%",textAlign:"center"}}>
           <div style={{fontSize:40,marginBottom:16}}>🔒</div>
-          <h2 style={{fontSize:20,color:C.ink,marginBottom:12}}>Forge ya está abierto en otra pestaña</h2>
+          <h2 style={{fontSize:20,color:C.ink,marginBottom:12}}>{pestanaBloqueada?"Esta conversación está bloqueada":"Forge ya está abierto en otra pestaña"}</h2>
           <p style={{color:C.muted,fontSize:14,lineHeight:1.6,marginBottom:24}}>Para evitar incoherencias en tu planificación, solo una pestaña puede estar activa a la vez.</p>
           <button onClick={async()=>{
-            await apiCall({action:"tomar_control_sesion",codigo:codigoUsuario,datos:{sessionId:sessionIdRef.current}});
-            setMostrarConflictoSesion(false);
-          }} style={{background:"#FF6B00",color:"#fff",border:"none",borderRadius:14,padding:"14px 32px",fontSize:15,fontWeight:600,cursor:"pointer",width:"100%",maxWidth:300,marginBottom:12}}>
+            escritorListoRef.current=false;setVerificandoSesion(true);setErrorSesion("");
+            const result=await apiCall({action:"tomar_control_sesion",codigo:codigoUsuario,datos:{sessionId:sessionIdRef.current,takeover:true}});
+            if(result?.ok&&result.owned&&Array.isArray(result.historial)){
+              aplicarHistorialCanonico(result.historial);
+              setMostrarConflictoSesion(false);setPestanaBloqueada(false);escritorListoRef.current=true;
+            }else setErrorSesion("No se ha podido transferir la conversación. Vuelve a intentarlo.");
+            setVerificandoSesion(false);
+          }} disabled={verificandoSesion} style={{background:"#FF6B00",color:"#fff",border:"none",borderRadius:14,padding:"14px 32px",fontSize:15,fontWeight:600,cursor:"pointer",width:"100%",maxWidth:300,marginBottom:12}}>
             Continuar aquí
           </button>
           <p style={{color:C.muted,fontSize:12}}>La otra pestaña pasará a modo bloqueado</p>
-        </div>
-      )}
-
-      {pestanaBloqueada&&(
-        <div className="fade-up" style={{maxWidth:420,width:"100%",textAlign:"center"}}>
-          <div style={{fontSize:40,marginBottom:16}}>🔒</div>
-          <h2 style={{fontSize:20,color:C.ink,marginBottom:12}}>Se ha abierto Forge en otra pestaña</h2>
-          <p style={{color:C.muted,fontSize:14,lineHeight:1.6,marginBottom:24}}>Esta pestaña ha pasado a modo bloqueado para proteger la coherencia de tu planificación.</p>
         </div>
       )}
 
@@ -3105,7 +3124,7 @@ ${testStr}`}]});
         </div>
       )}
 
-      {!mostrarConflictoSesion&&pantalla==="chat"&&cat&&(
+      {!verificandoSesion&&!mostrarConflictoSesion&&!pestanaBloqueada&&!errorSesion&&pantalla==="chat"&&cat&&(
         <div style={{width:"100%",maxWidth:700,display:"flex",flexDirection:"column",height:"100dvh",maxHeight:"100dvh",paddingTop:"max(50px, env(safe-area-inset-top))",paddingBottom:"max(16px, env(safe-area-inset-bottom))"}}>
           {codigoGuardado&&(
             <div style={{background:C.successLight,border:`1px solid ${C.success}33`,borderRadius:12,padding:"10px 16px",marginBottom:10,display:"flex",alignItems:"center",gap:10}}>

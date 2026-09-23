@@ -1,3 +1,6 @@
+import { authorizeChatRequest } from '@/lib/auth/chatIdentity';
+import { identityDependencies } from '@/lib/auth/supabaseServer';
+import { IdentityError } from '@/lib/auth/athleteIdentity';
 import { coachFirstEnabled, legacyConversationOperations } from '@/lib/chat/coachFirstFlag';
 import { handleCoachFirst } from '@/lib/chat/coachFirstHandler';
 import { coachFirstPlanningText, type CoachFirstPlanning } from '@/lib/chat/coachFirstGeneration';
@@ -805,6 +808,15 @@ async function marcarEventoComoExtraido(supabase: any, apiKey: string, codigo: s
 }
 
 export async function POST(req: NextRequest) {
+  try {
+    const body = await authorizeChatRequest(req, identityDependencies);
+    req = new NextRequest(req.url, { method: 'POST', headers: req.headers, body: JSON.stringify(body) });
+  } catch (error) {
+    return NextResponse.json({ ok: false, retryable: false,
+      code: error instanceof IdentityError ? error.code : 'AUTH_VERIFICATION_UNAVAILABLE',
+      error: 'No se ha podido verificar el acceso.' },
+      { status: error instanceof IdentityError ? error.status : 503 });
+  }
   if (coachFirstEnabled()) {
     const body = await req.clone().json().catch(() => null);
     if (!body) return NextResponse.json({ code: 'INPUT_INVALID' }, { status: 400 });

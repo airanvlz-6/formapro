@@ -1,3 +1,9 @@
+// Production callbacks always use the canonical host. Local development stays local.
+export function authOrigin(origin: string) {
+  const url = new URL(origin);
+  return ['localhost', '127.0.0.1'].includes(url.hostname) ? url.origin : 'https://www.forgeapp.es';
+}
+
 // SDK session is only a transport credential; the API independently verifies it.
 export async function authenticatedIdentityRequest(auth: any, body?: unknown, transport: typeof fetch = fetch) {
   const { data, error } = await auth.getSession();
@@ -13,13 +19,13 @@ export async function authenticatedIdentityRequest(auth: any, body?: unknown, tr
 export async function signupForNewAccount(auth: any, email: string, password: string, origin: string, confirmation: string) {
   if (!password || password !== confirmation) return { state: 'password_mismatch' as const };
   const { data, error } = await auth.signUp({ email, password,
-    options: { emailRedirectTo: `${origin}/auth/callback` } });
+    options: { emailRedirectTo: `${authOrigin(origin)}/auth/callback` } });
   if (error) return { state: 'error' as const };
   return { state: data.session ? 'authenticated' as const : 'confirmation_required' as const };
 }
 
 export async function requestPasswordRecovery(auth: any, email: string, origin: string) {
-  const { error } = await auth.resetPasswordForEmail(email, { redirectTo: `${origin}/auth/reset` });
+  const { error } = await auth.resetPasswordForEmail(email, { redirectTo: `${authOrigin(origin)}/auth/reset` });
   return { ok: !error };
 }
 

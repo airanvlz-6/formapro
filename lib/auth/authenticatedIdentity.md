@@ -1,5 +1,9 @@
 # AUTH-1B2B — authenticated athlete identity
 
+> Historical sprint notes below. Phase 2 supersedes entry, navigation, canonical
+> domain and manual legacy linking: see [Auth Phase 2](../../docs/auth-phase-2.md).
+> Production canonical host is now **https://www.forgeapp.es**.
+
 ## Auth base sprint — web login, signup and password recovery
 
 `/auth` retains email/password login and explicit new-profile bootstrap. Signup now

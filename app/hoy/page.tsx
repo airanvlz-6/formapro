@@ -1,5 +1,9 @@
 'use client';
 import { useState, useEffect } from "react";
+import { authenticatedFetch } from '@/lib/auth/authenticatedFetch';
+import { getBrowserAuth } from '@/lib/auth/supabaseBrowser';
+import { authenticatedIdentityRequest } from '@/lib/auth/webAuthFlow';
+import { Logout } from '../auth/Logout';
 
 export default function Hoy() {
   const [codigo, setCodigo] = useState("");
@@ -21,32 +25,35 @@ export default function Hoy() {
   };
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const codigoUrl = params.get("codigo");
-    if (codigoUrl) {
-      setCodigo(codigoUrl.toUpperCase());
-      cargarDatos(codigoUrl.toUpperCase());
-    } else {
-      setCargando(false);
-      setIniciado(true);
-    }
+    void (async () => {
+      try {
+        const result = await authenticatedIdentityRequest(getBrowserAuth());
+        if (!result.ok) { window.location.replace('/'); return; }
+        const requested = new URLSearchParams(window.location.search).get('codigo');
+        if (requested !== null && requested !== result.athlete.legacyCodigo) {
+          setError('Este acceso no corresponde a tu cuenta.'); setCargando(false); setIniciado(true); return;
+        }
+        setCodigo(result.athlete.legacyCodigo);
+        await cargarDatos(result.athlete.legacyCodigo);
+      } catch { setError('No se pudo comprobar tu sesión.'); setCargando(false); setIniciado(true); }
+    })();
   }, []);
 
   const cargarDatos = async (cod: string) => {
     setCargando(true);
     try {
-      const resUsuario = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "recuperar_usuario", codigo: cod }) });
+      const resUsuario = await authenticatedFetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "recuperar_usuario", codigo: cod }) });
       const dataUsuario = await resUsuario.json();
-      if (dataUsuario.error) { setError("Código no encontrado"); return; }
+      if (dataUsuario.error) { setError("No se pudo acceder a tu perfil. Vuelve a iniciar sesión."); return; }
       setDatos(dataUsuario.data);
       setAutenticado(true);
 
-      const resBriefing = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "obtener_daily_briefing", codigo: cod }) });
+      const resBriefing = await authenticatedFetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "obtener_daily_briefing", codigo: cod }) });
       const dataBriefing = await resBriefing.json();
       if (dataBriefing?.briefing) setBriefing(dataBriefing.briefing);
 
       // FORGE READINESS — verificar si ya respondio hoy, para no volver a preguntar
-      const resReadiness = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "obtener_readiness_hoy", codigo: cod }) });
+      const resReadiness = await authenticatedFetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "obtener_readiness_hoy", codigo: cod }) });
       const dataReadiness = await resReadiness.json();
       setReadinessHoy(dataReadiness?.readinessScore ?? null);
       setReadinessCargado(true);
@@ -56,7 +63,7 @@ export default function Hoy() {
 
   const guardarReadiness = async (score: number) => {
     setGuardandoReadiness(true);
-    await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "guardar_readiness_checkin", codigo, datos: { readinessScore: score } }) });
+    await authenticatedFetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "guardar_readiness_checkin", codigo, datos: { readinessScore: score } }) });
     setReadinessHoy(score);
     setGuardandoReadiness(false);
   };
@@ -67,25 +74,7 @@ export default function Hoy() {
     </div>
   );
 
-  if (!autenticado) return (
-    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif", padding: 24 }}>
-      <div style={{ background: C.card, borderRadius: 20, padding: 32, width: "100%", maxWidth: 360, border: `1px solid ${C.border}` }}>
-        <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <img src="/logo-forge.png" alt="Forge" style={{ width: 60, height: 60, objectFit: "contain", marginBottom: 12 }} />
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: C.ink, fontFamily: "Georgia,serif" }}>Hoy</h1>
-          <p style={{ color: C.muted, fontSize: 13, marginTop: 4 }}>Tu briefing diario</p>
-        </div>
-        <input value={codigo} onChange={e => setCodigo(e.target.value.toUpperCase())}
-          placeholder="Tu código FP-XXXXX"
-          onKeyDown={e => e.key === "Enter" && cargarDatos(codigo)}
-          style={{ width: "100%", border: `2px solid ${C.accent}`, borderRadius: 12, padding: "12px 14px", fontSize: 15, color: C.ink, background: C.bg, letterSpacing: 2, textAlign: "center", marginBottom: 12, fontFamily: "inherit" }} />
-        {error && <p style={{ color: C.accent, fontSize: 12, marginBottom: 12, textAlign: "center" }}>{error}</p>}
-        <button onClick={() => cargarDatos(codigo)} style={{ width: "100%", background: C.accent, color: "#fff", border: "none", borderRadius: 12, padding: 14, fontSize: 15, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-          Ver mi briefing
-        </button>
-      </div>
-    </div>
-  );
+  if (!autenticado) return <main style={{ padding: 32 }} role="status">{error || 'Comprobando acceso…'} <a href="/">Volver al acceso</a></main>;
 
   const primerNombre = datos?.perfil?.nombre || "";
   const horaActual = new Date().getHours();
@@ -94,6 +83,7 @@ export default function Hoy() {
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "'DM Sans', sans-serif", paddingBottom: 90 }}>
+      <Logout />
       <div style={{ maxWidth: 600, margin: "0 auto", padding: "24px 16px" }}>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
@@ -101,7 +91,7 @@ export default function Hoy() {
             <img src="/logo-forge.png" alt="Forge" style={{ width: 36, height: 36, objectFit: "contain" }} />
             <span style={{ fontSize: 18, fontWeight: 900, color: C.ink, letterSpacing: 1 }}>FORGE</span>
           </div>
-          <a href={`/app?codigo=${codigo}`} style={{ width: 36, height: 36, borderRadius: "50%", background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", fontSize: 16 }}>
+          <a href="/app/chat" style={{ width: 36, height: 36, borderRadius: "50%", background: C.card, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", fontSize: 16 }}>
             💬
           </a>
         </div>

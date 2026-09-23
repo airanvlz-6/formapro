@@ -54,3 +54,8 @@
 .panel :is(input, select, button, a):focus-visible { outline: 2px solid var(--auth-accent); outline-offset: 3px; }
 .panel button:disabled { opacity: 0.6; cursor: not-allowed; }
 @media (max-width: 512px) { .panel { margin: 24px 16px; } }
+
+.logo { display: block; margin: 0 auto 12px; object-fit: contain; }
+.panel h1 { text-align: center; letter-spacing: .16em; }
+.panel { width: calc(100% - 32px); margin: 48px auto; }
+.panel input, .panel select { font-size: 16px; }

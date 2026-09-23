@@ -1,6 +1,7 @@
 'use client';
 import { observeSemanticShadow } from '@/lib/chat/semanticShadowClient';
 import { coachFirstEnabled } from '@/lib/chat/coachFirstFlag';
+import { authenticatedFetch } from '@/lib/auth/authenticatedFetch';
 import { getBrowserAuth } from '@/lib/auth/supabaseBrowser';
 import { athleteStatePresentation } from '@/lib/athlete/athleteStatePresentation';
 import { splitExecutionReports } from '@/lib/execution/reportExecutionDate';
@@ -597,7 +598,7 @@ const MensajeTexto = ({texto}:{texto:string}) => (
   </div>
 );
 
-export default function Forge() {
+export default function Forge({ authenticatedCodigo }: { authenticatedCodigo?: string } = {}) {
   const [pantalla,setPantalla]=useState("inicio");
   const [categoria,setCategoria]=useState<string|null>(null);
   const [pregIdx,setPregIdx]=useState(0);
@@ -715,7 +716,7 @@ export default function Forge() {
 
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search);
-    const codigoUrl=params.get("codigo");
+    const codigoUrl=authenticatedCodigo ?? params.get("codigo");
     if(codigoUrl&&codigoUrl.length>=5){
       setCodigoInput(codigoUrl);
       setPantalla("cargando");
@@ -1304,7 +1305,7 @@ const apiCall=async(body:Record<string,unknown>,useAbort=false):Promise<any>=>{
     while(intentos<maxIntentos){
       try{
         const controller=useAbort?abortControllerRef.current:null;
-        const res=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json","x-forge-action-id":actionRequestId,"x-forge-attempt":String(intentos)},body:JSON.stringify(body),signal:controller?.signal});
+        const res=await authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json","x-forge-action-id":actionRequestId,"x-forge-attempt":String(intentos)},body:JSON.stringify(body),signal:controller?.signal});
         if(res.ok) { const result=await res.json();
           if(result.preflightRequirement?.text){
             if(result.preflightRequirement.kind==="availability" && typeof result.snapshotDigest==="string") availabilityConfirmationRef.current=result.snapshotDigest;

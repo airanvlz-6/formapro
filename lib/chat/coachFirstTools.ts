@@ -7,6 +7,29 @@ import type { CoachFirstCall, CoachFirstInput } from './coachFirstLoop';
 import { GENERATION_ARGUMENT_REASONS, type GenerationArgumentReason } from './coachFirstGeneration';
 
 export type CoachFirstPolicy = 'normal' | 'read_only';
+/** Inspect the existing Planner envelope only; diagnostics never change its public result. */
+function plannerRejectionDiagnostic(planner: any) {
+  let failureReason = 'UNKNOWN_PLANNER_REJECTION';
+  try {
+    if (planner?.ok) {
+      if (planner.estructura?.weeklyContractVersion !== 2) failureReason = 'WEEKLY_CONTRACT_VERSION_INVALID';
+    } else if (planner?.code === 'STRATEGY_PROPOSAL_INVALID') {
+      failureReason = 'STRATEGY_PROPOSAL_INVALID';
+    } else if (['LONGITUDINAL_TARGET_UNRESOLVED', 'LONGITUDINAL_READ_FAILED',
+      'LONGITUDINAL_TARGET_INVALID', 'LONGITUDINAL_ANCHOR_READ_FAILED',
+      'LONGITUDINAL_LEGACY_POSITION_AMBIGUOUS', 'LONGITUDINAL_DECISION_INVALID'].includes(planner?.code)) {
+      failureReason = 'LONGITUDINAL_TARGET_FAILED';
+    } else if (planner?.code === 'WEEKLY_CONTEXT_INVALID') {
+      failureReason = ['EXISTING_DAYS_INVALID', 'FUTURE_COMPLETION_NOT_ALLOWED']
+        .find(reason => Array.isArray(planner.errors) && planner.errors.includes(reason)) ?? 'WEEKLY_CONTEXT_INVALID';
+    } else if (planner?.code === 'WEEKLY_CONTRACT_UNSATISFIABLE') {
+      failureReason = ['EXTERNAL_DAY_AMBIGUOUS', 'EXTERNAL_PROTECTED_CONFLICT',
+        'PROTECTED_RECOVERY_UNRESOLVED', 'PROTECTED_RECOVERY_INFEASIBLE']
+        .find(reason => Array.isArray(planner.errors) && planner.errors.includes(reason)) ?? 'WEEKLY_CONTRACT_UNSATISFIABLE';
+    }
+  } catch { failureReason = 'UNKNOWN_PLANNER_REJECTION'; }
+  return { failureCode: 'PLANNER_NOT_ADMITTED', failureReason };
+}
 /** Operational diagnostics only. Never copy arguments, requirements or exception text. */
 function generationRejectionDiagnostic(result: any, argumentReason?: GenerationArgumentReason) {
   const fallback = { failureCode: 'UNCLASSIFIED_PREFLIGHT_REJECTION', failureStage: 'preflight' };
@@ -175,6 +198,9 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
     finally { observe({ route: 'coach_first', policy: mode, tool: authority || result?.reason === 'read_only_policy' ? call.name : 'unsupported', authority, status: result?.status ?? 'rejected', operationId,
       ...(result?.reason === 'read_only_policy' ? { reason: 'read_only_policy' } : {}),
       ...failure,
+      ...(call.name === 'generate_week' && authority === 'weekly_generation_authorities'
+        && result?.status === 'partial' && result.code === 'PLANNER_NOT_ADMITTED'
+        ? plannerRejectionDiagnostic(result.requirements) : {}),
       ...(call.name === 'generate_week' && authority === 'weekly_generation_authorities' && result?.status === 'rejected'
         ? generationRejectionDiagnostic(result, argumentReason) : {}),
       ...(call.name === 'read_context' && ['session','week','availability','state','restrictions','goals','reported_events','history','load','planning'].includes(a.resource) ? { resource: a.resource } : {}) }); }

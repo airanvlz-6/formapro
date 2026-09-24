@@ -11,6 +11,9 @@ export type CoachFirstPolicy = 'normal' | 'read_only';
 function generationRejectionDiagnostic(result: any, argumentReason?: GenerationArgumentReason) {
   const fallback = { failureCode: 'UNCLASSIFIED_PREFLIGHT_REJECTION', failureStage: 'preflight' };
   try {
+    if (['GENERATION_READ_ARGUMENT_INVALID', 'GENERATION_AVAILABILITY_READ_REQUIRED',
+      'GENERATION_READ_DIGEST_MISMATCH', 'GENERATION_PLANNING_READ_REQUIRED'].includes(result.code))
+      return { failureCode: result.code, failureStage: 'validation' };
     if (result.code === 'GENERATION_ARGUMENT_INVALID')
       return { failureCode: 'GENERATION_ARGUMENT_INVALID', failureStage: 'validation',
         ...(GENERATION_ARGUMENT_REASONS.some(reason => reason === argumentReason) ? { failureReason: argumentReason } : {}) };
@@ -82,6 +85,9 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
   const mode = resolveCoachFirstPolicy(policy);
   const today = new Date(input.timestamp).toLocaleDateString('en-CA', { timeZone: input.timezone });
   const reads = coachFirstReads(db, user, today);
+  const availabilityReads = new Map<string, { week: string; snapshotDigest: string }>();
+  const planningWeeks = new Set<string>();
+  const invalidateReads = () => { reads.invalidate(); availabilityReads.clear(); planningWeeks.clear(); };
   const attempted = new Set<string>();
   return async (call: CoachFirstCall, ordinal: number) => {
     const a: any = call.arguments, operationId = `${turnId}:${ordinal}`;
@@ -100,7 +106,16 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
         attempted.add(key);
       }
       switch (call.name) {
-        case 'read_context': authority = 'canonical_read_projection'; result = await reads.read(a, stage => { readStage = stage; }); break;
+        case 'read_context': {
+          authority = 'canonical_read_projection'; result = await reads.read(a, stage => { readStage = stage; });
+          if (result.status === 'read' && a.resource === 'availability' && result.data?.ok === true
+            && typeof result.data.snapshotDigest === 'string') {
+            availabilityReads.set(operationId, { week: result.coverage.week, snapshotDigest: result.data.snapshotDigest });
+            result = { ...result, availabilityReadId: operationId };
+          }
+          if (result.status === 'read' && a.resource === 'planning') planningWeeks.add(result.coverage.week);
+          break;
+        }
         case 'update_availability': {
           authority = 'updateStructuredChatAvailability'; const r = await updateStructuredChatAvailability(db, user, a);
           result = { ...r, status: r.ok ? r.actualizado ? 'committed' : 'confirmed' :
@@ -134,14 +149,26 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
         case 'transition_restriction': authority = 'transitionAthleteState/protected_ui';
           result = { status: 'confirmation_required', code: 'PROTECTED_RESTRICTION_FLOW_REQUIRED',
             message: 'La resolución requiere el flujo explícito de restricción y reevaluación; el chat no da el alta.' }; break;
-        case 'generate_week': authority = 'weekly_generation_authorities';
-          result = await generate(a, operationId, reason => { argumentReason = reason; }); break;
+        case 'generate_week': {
+          authority = 'weekly_generation_authorities';
+          if (!a || Object.keys(a).some(key => !['availabilityReadId', 'includeToday', 'snapshotDigest'].includes(key))
+            || typeof a.availabilityReadId !== 'string' || typeof a.includeToday !== 'boolean' || typeof a.snapshotDigest !== 'string') {
+            result = { status: 'rejected', code: 'GENERATION_READ_ARGUMENT_INVALID' }; break;
+          }
+          const selected = availabilityReads.get(a.availabilityReadId);
+          if (!selected) { result = { status: 'rejected', code: 'GENERATION_AVAILABILITY_READ_REQUIRED' }; break; }
+          if (a.snapshotDigest !== selected.snapshotDigest) { result = { status: 'rejected', code: 'GENERATION_READ_DIGEST_MISMATCH' }; break; }
+          if (!planningWeeks.has(selected.week)) { result = { status: 'rejected', code: 'GENERATION_PLANNING_READ_REQUIRED' }; break; }
+          result = await generate({ week: selected.week, includeToday: a.includeToday, snapshotDigest: a.snapshotDigest },
+            operationId, reason => { argumentReason = reason; }); break;
+        }
         default: result = { status: 'rejected', code: 'TOOL_NOT_SUPPORTED' };
       }
-      if (call.name !== 'read_context') reads.invalidate();
+      if (call.name !== 'read_context') invalidateReads();
       result = { ...result, operationId };
       return result;
     } catch (error) {
+      if (call.name !== 'read_context') invalidateReads();
       if (call.name === 'read_context') failure = readFailureDiagnostic(error, readStage);
       result = { status: call.name === 'read_context' ? 'rejected' : 'unknown', code: 'TOOL_UNAVAILABLE' }; return result;
     }

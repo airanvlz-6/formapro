@@ -6,6 +6,10 @@ import { resolveCompletionDate } from '../planning/recordCompletion';
 import { readCoachProfile, reportedEventProjection } from './coachFirstStore';
 import { samePlanData } from '../planning/planMutationValidators';
 
+export const GENERATION_ARGUMENT_REASONS = ['ARGUMENTS_FALSY', 'UNKNOWN_ARGUMENT_KEY', 'WEEK_RESOLUTION_MISMATCH',
+  'INCLUDE_TODAY_NOT_BOOLEAN', 'SNAPSHOT_DIGEST_NOT_STRING'] as const;
+export type GenerationArgumentReason = typeof GENERATION_ARGUMENT_REASONS[number];
+
 export type CoachFirstPlanning = { user: string; operationId: string; reportedEvents: ReturnType<typeof reportedEventProjection>;
   availabilityDigest: string; availability: unknown; week: string; includeToday: boolean;
   assertFresh: () => Promise<void>; confirmSaved: (planId: string, revision: number, sessions: unknown) => Promise<boolean> };
@@ -17,10 +21,18 @@ export const coachFirstPlanningText = (c?: CoachFirstPlanning) => c ?
 
 /** Coordinates the existing Analyzer/Weekly/Builder/save handlers in process. No HTTP replay. */
 export async function generateCoachFirstWeek(db: any, user: string, a: any, operationId: string, today: string,
-  execute: (action: string, datos: any, context: CoachFirstPlanning) => Promise<any>) {
-  if (!a || Object.keys(a).some(k => !['week','includeToday','snapshotDigest'].includes(k))
-    || resolveCompletionDate(a.week)?.weekStart !== a.week || typeof a.includeToday !== 'boolean' || typeof a.snapshotDigest !== 'string')
+  execute: (action: string, datos: any, context: CoachFirstPlanning) => Promise<any>,
+  onArgumentRejection?: (reason: GenerationArgumentReason) => void) {
+  // Preserve the original predicates and short-circuit order, including absent week semantics.
+  const argumentReason: GenerationArgumentReason | undefined = !a ? 'ARGUMENTS_FALSY'
+    : Object.keys(a).some(k => !['week','includeToday','snapshotDigest'].includes(k)) ? 'UNKNOWN_ARGUMENT_KEY'
+    : resolveCompletionDate(a.week)?.weekStart !== a.week ? 'WEEK_RESOLUTION_MISMATCH'
+    : typeof a.includeToday !== 'boolean' ? 'INCLUDE_TODAY_NOT_BOOLEAN'
+    : typeof a.snapshotDigest !== 'string' ? 'SNAPSHOT_DIGEST_NOT_STRING' : undefined;
+  if (argumentReason) {
+    try { onArgumentRejection?.(argumentReason); } catch { /* Diagnostics cannot change validation. */ }
     return { status: 'rejected', code: 'GENERATION_ARGUMENT_INVALID' };
+  }
   const availability = await readAvailabilityConfirmation(db, user, a.week);
   if (!availability.ok || availability.snapshotDigest !== a.snapshotDigest) return { status: 'conflict', code: 'GENERATION_AVAILABILITY_CHANGED' };
   const events = reportedEventProjection(await readCoachProfile(db, user));

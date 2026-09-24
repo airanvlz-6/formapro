@@ -81,7 +81,7 @@ export async function handleCoachFirst(request: Request,
     };
     const today = new Date(input.timestamp).toLocaleDateString('en-CA', { timeZone: input.timezone });
     const dispatchTool = coachFirstTools(db, athlete.legacyCodigo, input, turn.id,
-      (args, operationId) => generateCoachFirstWeek(db, athlete.legacyCodigo, args, operationId, today, planning), observe, policy);
+      (args, operationId, onArgumentRejection) => generateCoachFirstWeek(db, athlete.legacyCodigo, args, operationId, today, planning, onArgumentRejection), observe, policy);
     const dispatch: typeof dispatchTool = async (call, ordinal) => {
       const r = await dispatchTool(call, ordinal);
       if (call.name !== 'read_context') receipts.push({ tool: call.name, status: r.status,

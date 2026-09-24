@@ -4,14 +4,16 @@ import { recordExternalExecution } from '../planning/recordCompletion';
 import { updateStructuredChatAvailability } from '../sports/chatAvailability';
 import { recordReportedEvent } from './coachFirstStore';
 import type { CoachFirstCall, CoachFirstInput } from './coachFirstLoop';
+import { GENERATION_ARGUMENT_REASONS, type GenerationArgumentReason } from './coachFirstGeneration';
 
 export type CoachFirstPolicy = 'normal' | 'read_only';
 /** Operational diagnostics only. Never copy arguments, requirements or exception text. */
-function generationRejectionDiagnostic(result: any) {
+function generationRejectionDiagnostic(result: any, argumentReason?: GenerationArgumentReason) {
   const fallback = { failureCode: 'UNCLASSIFIED_PREFLIGHT_REJECTION', failureStage: 'preflight' };
   try {
     if (result.code === 'GENERATION_ARGUMENT_INVALID')
-      return { failureCode: 'GENERATION_ARGUMENT_INVALID', failureStage: 'validation' };
+      return { failureCode: 'GENERATION_ARGUMENT_INVALID', failureStage: 'validation',
+        ...(GENERATION_ARGUMENT_REASONS.some(reason => reason === argumentReason) ? { failureReason: argumentReason } : {}) };
     if (result.code === 'GENERATION_WEEK_INVALID')
       return { failureCode: 'GENERATION_WEEK_INVALID', failureStage: 'target_validation' };
     const codes = [
@@ -75,7 +77,7 @@ export function resolveCoachFirstPolicy(value: string | undefined): CoachFirstPo
 }
 
 export function coachFirstTools(db: any, user: string, input: CoachFirstInput, turnId: string,
-  generate: (args: any, operationId: string) => Promise<any>, observe: (event: Record<string, unknown>) => void,
+  generate: (args: any, operationId: string, onArgumentRejection?: (reason: GenerationArgumentReason) => void) => Promise<any>, observe: (event: Record<string, unknown>) => void,
   policy: CoachFirstPolicy = 'normal') {
   const mode = resolveCoachFirstPolicy(policy);
   const today = new Date(input.timestamp).toLocaleDateString('en-CA', { timeZone: input.timezone });
@@ -84,6 +86,7 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
   return async (call: CoachFirstCall, ordinal: number) => {
     const a: any = call.arguments, operationId = `${turnId}:${ordinal}`;
     let result: any, authority = '';
+    let argumentReason: GenerationArgumentReason | undefined;
     let readStage: CoachReadStage = 'canonical_read';
     let failure: ReturnType<typeof readFailureDiagnostic> | undefined;
     try {
@@ -131,7 +134,8 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
         case 'transition_restriction': authority = 'transitionAthleteState/protected_ui';
           result = { status: 'confirmation_required', code: 'PROTECTED_RESTRICTION_FLOW_REQUIRED',
             message: 'La resolución requiere el flujo explícito de restricción y reevaluación; el chat no da el alta.' }; break;
-        case 'generate_week': authority = 'weekly_generation_authorities'; result = await generate(a, operationId); break;
+        case 'generate_week': authority = 'weekly_generation_authorities';
+          result = await generate(a, operationId, reason => { argumentReason = reason; }); break;
         default: result = { status: 'rejected', code: 'TOOL_NOT_SUPPORTED' };
       }
       if (call.name !== 'read_context') reads.invalidate();
@@ -145,7 +149,7 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
       ...(result?.reason === 'read_only_policy' ? { reason: 'read_only_policy' } : {}),
       ...failure,
       ...(call.name === 'generate_week' && authority === 'weekly_generation_authorities' && result?.status === 'rejected'
-        ? generationRejectionDiagnostic(result) : {}),
+        ? generationRejectionDiagnostic(result, argumentReason) : {}),
       ...(call.name === 'read_context' && ['session','week','availability','state','restrictions','goals','reported_events','history','load','planning'].includes(a.resource) ? { resource: a.resource } : {}) }); }
   };
 }

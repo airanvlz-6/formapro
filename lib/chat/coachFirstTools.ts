@@ -6,6 +6,41 @@ import { recordReportedEvent } from './coachFirstStore';
 import type { CoachFirstCall, CoachFirstInput } from './coachFirstLoop';
 
 export type CoachFirstPolicy = 'normal' | 'read_only';
+/** Operational diagnostics only. Never copy arguments, requirements or exception text. */
+function generationRejectionDiagnostic(result: any) {
+  const fallback = { failureCode: 'UNCLASSIFIED_PREFLIGHT_REJECTION', failureStage: 'preflight' };
+  try {
+    if (result.code === 'GENERATION_ARGUMENT_INVALID')
+      return { failureCode: 'GENERATION_ARGUMENT_INVALID', failureStage: 'validation' };
+    if (result.code === 'GENERATION_WEEK_INVALID')
+      return { failureCode: 'GENERATION_WEEK_INVALID', failureStage: 'target_validation' };
+    const codes = [
+      'CALENDAR_CONTEXT_READ_FAILED', 'CALENDAR_SCOPE_INVALID', 'CALENDAR_AVAILABILITY_REQUIRED',
+      'CALENDAR_AVAILABILITY_INVALID', 'CALENDAR_AVAILABILITY_UNRESOLVED', 'UNRESOLVED_AVAILABILITY',
+      'AVAILABILITY_EXISTING_REQUIRED', 'AVAILABILITY_CONFIRMATION_STALE', 'TEMPORAL_DECISION_REQUIRED',
+      'GOAL_MISSING', 'GOAL_CONFLICT', 'STRATEGY_UNSUPPORTED', 'WEEKLY_CONTEXT_INVALID',
+      'WEEKLY_CONTRACT_UNSATISFIABLE', 'WEEKLY_REGENERATION_NO_OP', 'PREFLIGHT_READ_FAILED',
+      'RESTRICTIONS_AMBIGUOUS_STATE', 'RESTRICTIONS_INVALID_STATE', 'RESTRICTIONS_INVALID_VALID_UNTIL',
+      'RESTRICTIONS_STATE_READ_FAILED', 'RESTRICTIONS_NOTES_READ_FAILED', 'RESTRICTIONS_READ_FAILED',
+      'PRESCRIPTION_CONTEXT_READ_FAILED:usuarios', 'PRESCRIPTION_CONTEXT_READ_FAILED:weekly_plan',
+      'PRESCRIPTION_CONTEXT_READ_FAILED:session_modification_events',
+    ];
+    const requirement = result.requirements;
+    const code = requirement?.code;
+    if (!codes.includes(code)) return fallback;
+    const reasons: Record<string, readonly string[]> = {
+      WEEKLY_REGENERATION_NO_OP: ['NO_REMAINING_MANAGED_DAYS'],
+      WEEKLY_CONTEXT_INVALID: ['EXISTING_DAYS_INVALID', 'FUTURE_COMPLETION_NOT_ALLOWED', 'OPEN_WEEKLY_FACTS_INVALID',
+        'SCOPE_SOURCES_READ_FAILED', 'PRESCRIPTION_NOT_ALLOWED', 'DISCIPLINE_OUTSIDE_MANAGED_SCOPE',
+        'FOCUS_AVAILABILITY_UNRESOLVED', 'EXTERNAL_LOAD_READ_FAILED', 'EXPOSURE_READ_FAILED', 'CONTRACT_CONTEXT_READ_FAILED'],
+      WEEKLY_CONTRACT_UNSATISFIABLE: ['EXTERNAL_DAY_AMBIGUOUS', 'EXTERNAL_PROTECTED_CONFLICT',
+        'PROTECTED_RECOVERY_UNRESOLVED', 'PROTECTED_RECOVERY_INFEASIBLE'],
+    };
+    const reason = (reasons[code] ?? []).find(value => requirement.reason === value
+      || Array.isArray(requirement.errors) && requirement.errors.includes(value));
+    return { failureCode: code, failureStage: 'preflight', ...(reason ? { failureReason: reason } : {}) };
+  } catch { return fallback; }
+}
 /** Exact allowlist only: never emit exception text, suffixes, stack or database details. */
 function readFailureDiagnostic(error: unknown, stage: CoachReadStage) {
   const fallback = { failureCode: 'UNEXPECTED_READ_ERROR', failureStage: stage };
@@ -109,6 +144,8 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
     finally { observe({ route: 'coach_first', policy: mode, tool: authority || result?.reason === 'read_only_policy' ? call.name : 'unsupported', authority, status: result?.status ?? 'rejected', operationId,
       ...(result?.reason === 'read_only_policy' ? { reason: 'read_only_policy' } : {}),
       ...failure,
+      ...(call.name === 'generate_week' && authority === 'weekly_generation_authorities' && result?.status === 'rejected'
+        ? generationRejectionDiagnostic(result) : {}),
       ...(call.name === 'read_context' && ['session','week','availability','state','restrictions','goals','reported_events','history','load','planning'].includes(a.resource) ? { resource: a.resource } : {}) }); }
   };
 }

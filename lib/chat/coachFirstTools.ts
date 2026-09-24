@@ -1,4 +1,4 @@
-import { coachFirstReads, loadCoachActionContext } from './coachFirstReads';
+import { coachFirstReads, loadCoachActionContext, type CoachReadStage } from './coachFirstReads';
 import { applyChatCoachActions } from './chatCoachActions';
 import { recordExternalExecution } from '../planning/recordCompletion';
 import { updateStructuredChatAvailability } from '../sports/chatAvailability';
@@ -6,6 +6,28 @@ import { recordReportedEvent } from './coachFirstStore';
 import type { CoachFirstCall, CoachFirstInput } from './coachFirstLoop';
 
 export type CoachFirstPolicy = 'normal' | 'read_only';
+/** Exact allowlist only: never emit exception text, suffixes, stack or database details. */
+function readFailureDiagnostic(error: unknown, stage: CoachReadStage) {
+  const fallback = { failureCode: 'UNEXPECTED_READ_ERROR', failureStage: stage };
+  try {
+    const message = error && typeof error === 'object' ? (error as { message?: unknown }).message : undefined;
+    for (const table of ['usuarios', 'weekly_plan', 'session_modification_events']) {
+      if (message === `PRESCRIPTION_CONTEXT_READ_FAILED:${table}`)
+        return { failureCode: 'PRESCRIPTION_CONTEXT_READ_FAILED', failureStage: table };
+    }
+    const codes: Record<string, string> = {
+      READ_INVALID: 'validation', READ_RANGE_INVALID: 'validation', READ_LIMIT_INVALID: 'validation',
+      READ_RESOURCE_INVALID: 'validation', READ_UNAVAILABLE: 'canonical_read', READ_SIZE_LIMIT: 'read_result',
+      COACH_FIRST_PROFILE_UNAVAILABLE: 'profile', REPORTED_EVENTS_INVALID: 'reported_events',
+      PRESCRIPTION_CONTEXT_INVALID_INPUT: 'planning_loader', SESSION_ENVIRONMENT_DATE_MISMATCH: 'planning_loader',
+      PRESCRIPTION_READINESS_IDENTITY_MISMATCH: 'planning_loader',
+    };
+    if (typeof message === 'string' && Object.hasOwn(codes, message))
+      return { failureCode: message, failureStage: codes[message] };
+  } catch { /* Even an unreadable exception must not change the tool result. */ }
+  return fallback;
+}
+
 /** Server configuration only. A malformed policy must never restore write access. */
 export function resolveCoachFirstPolicy(value: string | undefined): CoachFirstPolicy {
   if (value === undefined) return 'normal';
@@ -23,6 +45,8 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
   return async (call: CoachFirstCall, ordinal: number) => {
     const a: any = call.arguments, operationId = `${turnId}:${ordinal}`;
     let result: any, authority = '';
+    let readStage: CoachReadStage = 'canonical_read';
+    let failure: ReturnType<typeof readFailureDiagnostic> | undefined;
     try {
       if (mode === 'read_only' && call.name !== 'read_context') {
         result = { status: 'rejected', reason: 'read_only_policy', code: 'COACH_FIRST_READ_ONLY', operationId };
@@ -34,7 +58,7 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
         attempted.add(key);
       }
       switch (call.name) {
-        case 'read_context': authority = 'canonical_read_projection'; result = await reads.read(a); break;
+        case 'read_context': authority = 'canonical_read_projection'; result = await reads.read(a, stage => { readStage = stage; }); break;
         case 'update_availability': {
           authority = 'updateStructuredChatAvailability'; const r = await updateStructuredChatAvailability(db, user, a);
           result = { ...r, status: r.ok ? r.actualizado ? 'committed' : 'confirmed' :
@@ -74,9 +98,13 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
       if (call.name !== 'read_context') reads.invalidate();
       result = { ...result, operationId };
       return result;
-    } catch { result = { status: call.name === 'read_context' ? 'rejected' : 'unknown', code: 'TOOL_UNAVAILABLE' }; return result; }
+    } catch (error) {
+      if (call.name === 'read_context') failure = readFailureDiagnostic(error, readStage);
+      result = { status: call.name === 'read_context' ? 'rejected' : 'unknown', code: 'TOOL_UNAVAILABLE' }; return result;
+    }
     finally { observe({ route: 'coach_first', policy: mode, tool: authority || result?.reason === 'read_only_policy' ? call.name : 'unsupported', authority, status: result?.status ?? 'rejected', operationId,
       ...(result?.reason === 'read_only_policy' ? { reason: 'read_only_policy' } : {}),
+      ...failure,
       ...(call.name === 'read_context' && ['session','week','availability','state','restrictions','goals','reported_events','history','load','planning'].includes(a.resource) ? { resource: a.resource } : {}) }); }
   };
 }

@@ -29,6 +29,8 @@ export async function loadCoachActionContext(db: any, user: string, date: string
 }
 
 export type CoachReadStage = 'validation' | 'canonical_read' | 'planning_loader' | 'profile' | 'reported_events' | 'read_result';
+export const COACH_READ_RANGE_REASONS = ['INVALID_DATE_FORMAT', 'INVALID_WEEK_FORMAT', 'INVALID_DATE_VALUE',
+  'INVALID_WEEK_VALUE', 'DATE_OUT_OF_RANGE', 'WEEK_OUT_OF_RANGE', 'SERVER_TODAY_INVALID'] as const;
 
 export function coachFirstReads(db: any, user: string, today: string) {
   const cache = new Map<string, any>();
@@ -36,7 +38,14 @@ export function coachFirstReads(db: any, user: string, today: string) {
     onStage?.('validation');
     if (!a || Object.keys(a).some(k => !['resource','date','week','sessionId','limit'].includes(k))) throw new Error('READ_INVALID');
     const date = a.date ?? a.week ?? today, civil = resolveCompletionDate(date);
-    if (!civil || civil.date !== date || Math.abs(Date.parse(date) - Date.parse(today)) > 366 * 86400000) throw new Error('READ_RANGE_INVALID');
+    if (!civil || civil.date !== date || Math.abs(Date.parse(date) - Date.parse(today)) > 366 * 86400000) {
+      // Diagnose only an already rejected value; preserve the exact nullish precedence and acceptance rules.
+      const field = a.date != null ? 'DATE' : a.week != null ? 'WEEK' : null;
+      const failureReason: typeof COACH_READ_RANGE_REASONS[number] = field === null ? 'SERVER_TODAY_INVALID'
+        : typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date) ? `INVALID_${field}_FORMAT`
+        : !civil ? `INVALID_${field}_VALUE` : `${field}_OUT_OF_RANGE`;
+      throw Object.assign(new Error('READ_RANGE_INVALID'), { failureReason });
+    }
     const limit = a.limit ?? 14;
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 60) throw new Error('READ_LIMIT_INVALID');
     const key = JSON.stringify(a); if (cache.has(key)) return cache.get(key);

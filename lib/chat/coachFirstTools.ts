@@ -1,4 +1,4 @@
-import { coachFirstReads, loadCoachActionContext, type CoachReadStage } from './coachFirstReads';
+import { coachFirstReads, loadCoachActionContext, COACH_READ_RANGE_REASONS, type CoachReadStage } from './coachFirstReads';
 import { applyChatCoachActions } from './chatCoachActions';
 import { recordExternalExecution } from '../planning/recordCompletion';
 import { updateStructuredChatAvailability } from '../sports/chatAvailability';
@@ -23,8 +23,11 @@ function readFailureDiagnostic(error: unknown, stage: CoachReadStage) {
       PRESCRIPTION_READINESS_IDENTITY_MISMATCH: 'planning_loader',
       LONGITUDINAL_READ_FAILED: 'planning_loader',
     };
-    if (typeof message === 'string' && Object.hasOwn(codes, message))
-      return { failureCode: message, failureStage: codes[message] };
+    if (typeof message === 'string' && Object.hasOwn(codes, message)) {
+      const reason = message === 'READ_RANGE_INVALID' ? (error as { failureReason?: unknown }).failureReason : undefined;
+      return { failureCode: message, failureStage: codes[message],
+        ...(typeof reason === 'string' && COACH_READ_RANGE_REASONS.some(value => value === reason) ? { failureReason: reason } : {}) };
+    }
   } catch { /* Even an unreadable exception must not change the tool result. */ }
   return fallback;
 }

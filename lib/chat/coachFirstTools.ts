@@ -21,6 +21,7 @@ function readFailureDiagnostic(error: unknown, stage: CoachReadStage) {
       COACH_FIRST_PROFILE_UNAVAILABLE: 'profile', REPORTED_EVENTS_INVALID: 'reported_events',
       PRESCRIPTION_CONTEXT_INVALID_INPUT: 'planning_loader', SESSION_ENVIRONMENT_DATE_MISMATCH: 'planning_loader',
       PRESCRIPTION_READINESS_IDENTITY_MISMATCH: 'planning_loader',
+      LONGITUDINAL_READ_FAILED: 'planning_loader',
     };
     if (typeof message === 'string' && Object.hasOwn(codes, message))
       return { failureCode: message, failureStage: codes[message] };

@@ -17,10 +17,13 @@ export function longitudinalProjection(cycle: any, week: string) {
   return { weekStart: week, bloque: position.bloque, semana: position.semana, totalSemanas: position.totalSemanas ?? null,
     blockId: position.blockId, decision: position.decision, source: 'usuarios.ciclo_actual' };
 }
-export async function loadLongitudinalProjection(db: any, codigo: string, week: string) {
+export async function loadStoredLongitudinalCycle(db: any, codigo: string) {
   const r = await db.from('usuarios').select('ciclo_actual').eq('codigo', codigo).single();
   if (r.error || !r.data) throw new Error('LONGITUDINAL_READ_FAILED');
-  return longitudinalProjection(r.data.ciclo_actual, week);
+  return r.data.ciclo_actual;
+}
+export async function loadLongitudinalProjection(db: any, codigo: string, week: string) {
+  return longitudinalProjection(await loadStoredLongitudinalCycle(db, codigo), week);
 }
 
 /** The existing cycle remains the only state. Resolve once per target, before weekly intent selection.

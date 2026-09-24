@@ -1,7 +1,7 @@
 import { calendarKey } from '../planning/weeklyCalendar';
 import { getCanonicalRestrictions } from '../athlete/getCanonicalRestrictions';
 import { projectAthletePrescriptionProfile } from '../athlete/athletePrescriptionContext';
-import { loadAthletePrescriptionContext } from '../athlete/loadAthletePrescriptionContext';
+import { loadCoachPlanningRead, COACH_PLANNING_READ_MAX_BYTES } from './coachPlanningRead';
 import { buildPrescriptionScope, resolveProfileDisciplines } from '../sports/prescriptionScope';
 import { buildSessionDoseContext } from '../sports/sessionDoseContext';
 import { readAvailabilityConfirmation } from '../sports/chatAvailability';
@@ -77,17 +77,15 @@ export function coachFirstReads(db: any, user: string, today: string) {
       }
       case 'planning': {
         onStage?.('planning_loader');
-        const athlete = await loadAthletePrescriptionContext(db, user, { asOfDate: today });
-        onStage?.('profile');
-        const profile = await readCoachProfile(db, user);
-        onStage?.('reported_events');
-        data = { athlete, reportedEvents: reportedEventProjection(profile) }; break;
+        data = await loadCoachPlanningRead(db, user, date, civil.weekStart); break;
       }
       default: throw new Error('READ_RESOURCE_INVALID');
     }
     onStage?.('read_result');
     const result = { status: 'read', data, coverage: { date, week: civil.weekStart, limit } };
     if (JSON.stringify(result).length > 120000) throw new Error('READ_SIZE_LIMIT');
+    if (a.resource === 'planning' && Buffer.byteLength(JSON.stringify(result), 'utf8') > COACH_PLANNING_READ_MAX_BYTES)
+      throw new Error('READ_SIZE_LIMIT');
     cache.set(key, result); return result;
   } };
 }

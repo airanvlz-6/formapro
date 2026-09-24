@@ -24,16 +24,19 @@ const historicalSummary = (s: unknown) => s ? pick(s, ['startDate', 'endDate', '
 type SupplementalRows = { status: 'available' | 'unavailable'; rows: Record<string, unknown>[] };
 export type WeeklyCoachingSupplement = { blockOutcomes: SupplementalRows; notes: SupplementalRows };
 /** Advisory reads only. Failures remain explicit unknowns, never evidence of no incidents. */
-export async function loadWeeklyCoachingSupplement(db: any, user: string, asOfDate: string): Promise<WeeklyCoachingSupplement> {
-  const read = async (query: () => PromiseLike<{ data: unknown; error: unknown }>): Promise<SupplementalRows> => {
+const readSupplement = async (query: () => PromiseLike<{ data: unknown; error: unknown }>): Promise<SupplementalRows> => {
     try { const r = await query(); return !r.error && Array.isArray(r.data)
       ? { status: 'available', rows: r.data } : { status: 'unavailable', rows: [] }; }
     catch { return { status: 'unavailable', rows: [] }; }
-  };
+};
+export async function loadRecordedBlockOutcomes(db: any, user: string, asOfDate: string): Promise<SupplementalRows> {
+  return readSupplement(() => db.from('block_outcomes').select('fecha_fin,tipo_bloque,adherencia,resultado_global,sesiones_completadas,lesiones')
+    .eq('user_codigo', user).lte('fecha_fin', asOfDate).order('fecha_fin', { ascending: false }).limit(2));
+}
+export async function loadWeeklyCoachingSupplement(db: any, user: string, asOfDate: string): Promise<WeeklyCoachingSupplement> {
   const [blockOutcomes, notes] = await Promise.all([
-    read(() => db.from('block_outcomes').select('fecha_fin,tipo_bloque,adherencia,resultado_global,sesiones_completadas,lesiones')
-      .eq('user_codigo', user).lte('fecha_fin', asOfDate).order('fecha_fin', { ascending: false }).limit(2)),
-    read(() => db.from('athlete_coaching_notes').select('id,type,domain,movement,issue,priority,confidence,veces_mencionado,source,constraint_level,updated_at,status')
+    loadRecordedBlockOutcomes(db, user, asOfDate),
+    readSupplement(() => db.from('athlete_coaching_notes').select('id,type,domain,movement,issue,priority,confidence,veces_mencionado,source,constraint_level,updated_at,status')
       .eq('user_codigo', user).in('status', ['pending', 'considerada']).order('updated_at', { ascending: false }).limit(8)),
   ]);
   return { blockOutcomes, notes };

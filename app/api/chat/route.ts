@@ -27,6 +27,7 @@ import { wholeWeekFailure } from "@/lib/planning/wholeWeekFailure";
 import { loadAthletePrescriptionContext } from "@/lib/athlete/loadAthletePrescriptionContext";
 import { strategyDemandIds, normalizeStrategyProposal } from "@/lib/planning/canonicalWeekStrategy";
 import { plannerProviderMetadata } from "@/lib/planning/weeklyPlannerDiagnostics";
+import { LONGITUDINAL_DECISION_MARKER, LONGITUDINAL_DECISION_TOOL, readLongitudinalDecisionOutput } from '@/lib/planning/longitudinalDecisionOutput';
 import { assertWeeklyCalendar, assertCalendarMutation } from "@/lib/planning/weeklyCalendarAuthority";
 import { updateChatAvailability, readAvailabilityConfirmation } from "@/lib/sports/chatAvailability";
 import { confirmCoachOwnership, persistTrainingSources } from "@/lib/sports/coachOwnership";
@@ -2319,12 +2320,16 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
         strategyVersion: 1, strategyProposal: datos.analisis?.strategyProposal, coherenceVersion: 1, openCoachVersion: 1, planningRunId: generation.planningRunId,
         confirmedAvailabilityDigest: datos.confirmedAvailabilityDigest,
       }, async (prompt: string) => {
+        const longitudinalDecision = prompt.startsWith(LONGITUDINAL_DECISION_MARKER);
         const response = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-          body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1800, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning) : '') }] }),
+          body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1800, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning) : '') }],
+            ...(longitudinalDecision ? { tools: [LONGITUDINAL_DECISION_TOOL],
+              tool_choice: { type: 'tool', name: LONGITUDINAL_DECISION_TOOL.name, disable_parallel_tool_use: true } } : {}) }),
         });
         if (!response.ok) throw new Error("LLM_REQUEST_FAILED");
         const output = await response.json();
+        if (longitudinalDecision) return readLongitudinalDecisionOutput(output);
         return { text: output.content?.map((b: any) => b.text || "").join("") || "", metadata: plannerProviderMetadata(output) };
       }, datos.generationToken);
       if (!result.ok) return NextResponse.json({ ...result, retryable: false });

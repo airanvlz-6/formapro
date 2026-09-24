@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { PlannerCompletion } from './weeklyPlannerDiagnostics';
 import { loadAthletePrescriptionContext } from '../athlete/loadAthletePrescriptionContext';
 import { loadWeeklyCoachingSupplement } from './weeklyCoachingContext';
+import { LONGITUDINAL_DECISION_MARKER } from './longitudinalDecisionOutput';
 
 const digest = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
 const normalized = (v: any) => v && { ...v,
@@ -48,11 +49,11 @@ export async function ensureLongitudinalTarget(db: any, codigo: string, week: st
   if (transition) {
     const athlete = await loadAthletePrescriptionContext(db, codigo, { asOfDate: today });
     const supplemental = await loadWeeklyCoachingSupplement(db, codigo, today);
-    const result = await complete(`LONGITUDINAL_COACH_TRANSITION\nChoose the next block explicitly. Progression is your coaching decision. Another deload is allowed with an explicit reason; never copy an exhausted block implicitly. Return only JSON {"bloque":"acumulacion|intensificacion|realizacion|deload","totalSemanas":positive integer,"reason":"brief coaching rationale"}. Duration must be a positive safe integer. No other fields.\nFACTS:\n${JSON.stringify({ targetWeekStart: week, asOfDate: today, previousCycle: previous, previousWeekStart: anchor,
+    const result = await complete(`${LONGITUDINAL_DECISION_MARKER}Choose the next block explicitly. Progression is your coaching decision. Another deload is allowed with an explicit reason; never copy an exhausted block implicitly. Submit your decision through submit_longitudinal_decision with exactly bloque, totalSemanas and reason. bloque must be acumulacion, intensificacion, realizacion or deload. Duration must be a positive safe integer. reason must be nonblank and at most 600 characters. No other fields.\nFACTS:\n${JSON.stringify({ targetWeekStart: week, asOfDate: today, previousCycle: previous, previousWeekStart: anchor,
       goal: athlete.goals, cycle: athlete.cycle, history: athlete.history, readiness: athlete.readiness, physiology: athlete.physiology,
       event: athlete.eventInput, supplemental })}`);
-    let decision: any;
-    try { decision = JSON.parse(typeof result === 'string' ? result : result.text); } catch { throw new Error('LONGITUDINAL_DECISION_INVALID'); }
+    const decision: any = result && typeof result === 'object' && 'longitudinalDecision' in result
+      ? result.longitudinalDecision : undefined;
     if (!decision || Object.keys(decision).sort().join(',') !== 'bloque,reason,totalSemanas'
       || !['acumulacion', 'intensificacion', 'realizacion', 'deload'].includes(decision.bloque)
       || !Number.isSafeInteger(decision.totalSemanas) || decision.totalSemanas < 1

@@ -1,4 +1,5 @@
 'use client';
+import { logOrchestratorTrace } from '@/lib/diagnostics/orchestratorTrace';
 import { Logout } from './auth/Logout';
 import { observeSemanticShadow } from '@/lib/chat/semanticShadowClient';
 import { coachFirstEnabled } from '@/lib/chat/coachFirstFlag';
@@ -1891,6 +1892,7 @@ const forgeValidator=(texto:string):string=>{
         coachFirstStage = "response_received";
         coachFirstStage = "response_parse";
         const result = await response.json();
+        logOrchestratorTrace(result);
         coachFirstStage = "response_process";
         const answer = typeof result.answer === "string" ? result.answer : "No se ha podido iniciar el turno con la identidad actual.";
         if(Array.isArray(result.historial)) aplicarHistorialCanonico(result.historial);

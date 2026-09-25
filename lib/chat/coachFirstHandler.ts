@@ -5,10 +5,13 @@ import { COACH_FIRST_INSTRUCTION, runCoachFirstLoop, type CoachFirstInput } from
 import { coachFirstTools, resolveCoachFirstPolicy } from './coachFirstTools';
 import { generateCoachFirstWeek, type CoachFirstPlanning } from './coachFirstGeneration';
 import { COACH_FIRST_OUTPUT_TOOL, readCoachFirstOutput } from './coachFirstOutput';
+import { createOrchestratorTrace } from '../diagnostics/orchestratorTrace';
 
 export async function handleCoachFirst(request: Request,
   planning: (action: string, datos: any, context: CoachFirstPlanning) => Promise<any>) {
-  const respond = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
+  const trace = createOrchestratorTrace(process.env.FORGE_WEEKLY_COACHING_DIAGNOSTICS === '1');
+  const tracedPlanning = trace.wrap(planning);
+  const respond = (value: object, status = 200) => Response.json({ ...value, ...trace.response() }, { status, headers: { 'Cache-Control': 'no-store' } });
   let claimed: { db: any; user: string; id: string; sessionId: string; epoch: string; before: any[] } | undefined;
   const receipts: any[] = [];
   let stage = 'initialization';
@@ -81,7 +84,7 @@ export async function handleCoachFirst(request: Request,
     };
     const today = new Date(input.timestamp).toLocaleDateString('en-CA', { timeZone: input.timezone });
     const dispatchTool = coachFirstTools(db, athlete.legacyCodigo, input, turn.id,
-      (args, operationId, onArgumentRejection) => generateCoachFirstWeek(db, athlete.legacyCodigo, args, operationId, today, planning, onArgumentRejection), observe, policy);
+      (args, operationId, onArgumentRejection) => generateCoachFirstWeek(db, athlete.legacyCodigo, args, operationId, today, tracedPlanning, onArgumentRejection), observe, policy);
     const dispatch: typeof dispatchTool = async (call, ordinal) => {
       const r = await dispatchTool(call, ordinal);
       if (call.name !== 'read_context') receipts.push({ tool: call.name, status: r.status,

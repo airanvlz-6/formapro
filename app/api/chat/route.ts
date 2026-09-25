@@ -1,4 +1,4 @@
-import { WEEKLY_GUIDANCE_TOOL, readWeeklyGuidanceOutput } from '@/lib/planning/weeklyGuidanceOutput';
+import { weeklyGuidanceTool, readWeeklyGuidanceOutput } from '@/lib/planning/weeklyGuidanceOutput';
 import { conversationSession } from '@/lib/chat/conversationSession';
 import { authorizeChatRequest } from '@/lib/auth/chatIdentity';
 import { identityDependencies } from '@/lib/auth/supabaseServer';
@@ -2320,10 +2320,11 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
         empezarHoy: includeToday, snapshot: generation.snapshots[datos.targetWeekStart],
         strategyVersion: 1, strategyProposal: datos.analisis?.strategyProposal, coherenceVersion: 1, openCoachVersion: coachFirstPlanning ? 2 : 1, planningRunId: generation.planningRunId,
         confirmedAvailabilityDigest: datos.confirmedAvailabilityDigest,
-      }, async (prompt: string) => {
+      }, async (prompt: string, weeklyContract) => {
         const longitudinalDecision = prompt.startsWith(LONGITUDINAL_DECISION_MARKER);
         const weeklyGuidance = prompt.startsWith('WEEKLY_GUIDANCE_V2:');
-        const outputTool = longitudinalDecision ? LONGITUDINAL_DECISION_TOOL : weeklyGuidance ? WEEKLY_GUIDANCE_TOOL : null;
+        if (weeklyGuidance && !weeklyContract) throw new Error('WEEKLY_CONTEXT_INVALID');
+        const outputTool = longitudinalDecision ? LONGITUDINAL_DECISION_TOOL : weeklyGuidance ? weeklyGuidanceTool(weeklyContract!) : null;
         const response = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
           body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1800, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning, longitudinalDecision ? 'Longitudinal' : 'Weekly') : '') }],

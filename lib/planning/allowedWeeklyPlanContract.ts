@@ -325,7 +325,7 @@ COACHING_CONTEXT:\n${JSON.stringify(coachingContext ?? { status: 'unknown', reas
 WEEKLY_CONTRACT:\n${JSON.stringify(contract)}`;
 }
 
-export async function composeBoundedWeek(contract: AllowedWeeklyPlanContract, complete: (prompt: string) => Promise<PlannerCompletion>, coachingContext?: WeeklyCoachingContext, planningRunId?: string) {
+export async function composeBoundedWeek(contract: AllowedWeeklyPlanContract, complete: (prompt: string, contract?: AllowedWeeklyPlanContract) => Promise<PlannerCompletion>, coachingContext?: WeeklyCoachingContext, planningRunId?: string) {
   const immutable = structuredClone(contract);
   const freeze = (v: any) => { if (v && typeof v === 'object') { Object.freeze(v); Object.values(v).forEach(freeze); } };
   freeze(immutable);
@@ -352,7 +352,7 @@ export async function composeBoundedWeek(contract: AllowedWeeklyPlanContract, co
       emitWeeklyPlannerDiagnostic(attempt as 1 | 2, text, metadata, parsed, codes, reason, normalizedMarkdownFence);
     try {
       const completed = await complete(prompt + (attempt === 2 ? `\nPropuesta rechazada: ${JSON.stringify(errors)}. Selecciona otra vez dentro del MISMO contrato.`
-        + (errors.includes('WEEKLY_JSON_INVALID') ? '\nLa respuesta anterior fue rechazada en la lectura del JSON RAW. Devuelve el objeto directamente, sin fences Markdown ni prosa. El primer carácter DEBE ser { y el último DEBE ser }. No añadas explicaciones ni comentarios.' : '') : ''));
+        + (errors.includes('WEEKLY_JSON_INVALID') ? '\nLa respuesta anterior fue rechazada en la lectura del JSON RAW. Devuelve el objeto directamente, sin fences Markdown ni prosa. El primer carácter DEBE ser { y el último DEBE ser }. No añadas explicaciones ni comentarios.' : '') : ''), immutable);
       if (immutable.contractVersion === 3 && typeof completed !== 'string') structuredSelection = completed.weeklySelection;
       raw = structuredSelection === undefined ? typeof completed === 'string' ? completed : completed.text : JSON.stringify(structuredSelection);
       metadata = typeof completed === 'string' ? undefined : completed.metadata;

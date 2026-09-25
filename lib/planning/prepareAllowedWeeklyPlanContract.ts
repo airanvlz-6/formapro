@@ -13,7 +13,7 @@ import { openSelection } from './openWeeklyCoachContract';
 import { getCanonicalRestrictions } from '../athlete/getCanonicalRestrictions';
 import { prepareSessionTrainingContext } from '../sports/prepareSessionTrainingContract';
 import type { ContractInput } from '../sports/allowedTrainingContract';
-import { buildAllowedWeeklyPlanContract, composeBoundedWeek, type WeeklyContractInput } from './allowedWeeklyPlanContract';
+import { buildAllowedWeeklyPlanContract, composeBoundedWeek, type WeeklyContractInput, type AllowedWeeklyPlanContract } from './allowedWeeklyPlanContract';
 import { admitSessionContent } from '../sports/sessionAuthority';
 import { loadAthletePrescriptionContext } from '../athlete/loadAthletePrescriptionContext';
 import { buildCanonicalWeekStrategy } from './canonicalWeekStrategy';
@@ -200,7 +200,7 @@ export async function prepareAllowedWeeklyPlanContract(db: any, codigo: string, 
 
 /** Server resolves selections. Model prose never becomes an executable objective. */
 export async function planBoundedWeek(db: any, codigo: string, request: Parameters<typeof prepareAllowedWeeklyPlanContract>[2],
-  complete: (prompt: string) => Promise<PlannerCompletion>, generationToken?: string) {
+  complete: (prompt: string, contract?: AllowedWeeklyPlanContract) => Promise<PlannerCompletion>, generationToken?: string) {
   // Resolve existing goal, scope, restrictions and target preservation before any cycle write.
   if (request.coherenceVersion === 1) {
     const admission = await loadWeeklyPlanningContext(db, codigo, { ...request, coherenceVersion: undefined });

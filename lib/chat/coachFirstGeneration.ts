@@ -74,23 +74,46 @@ export async function generateCoachFirstWeek(db: any, user: string, a: any, oper
     if (!analyzer.ok) return { status: 'partial', code: 'ANALYZER_FAILED', operationId };
     const planner = await run('planificar_semana', { ...common, weeklyContractVersion: 2, empezarHoy: a.includeToday, analisis: analyzer.analisis });
     if (!planner.ok || ![2,3].includes(planner.estructura?.weeklyContractVersion)) return { status: 'partial', code: 'PLANNER_NOT_ADMITTED', requirements: planner, operationId };
-    const structure = planner.estructura, sessions: any[] = [], accepted: any[] = [];
+    const structure = planner.estructura;
     const old = generation.snapshots[a.week]?.sessions ?? [];
-    for (const [index, slot] of structure.sessions.entries()) {
+    const slots = structure.sessions as any[];
+    if (!Array.isArray(slots) || slots.length !== 7 || new Set(slots.map(s => calendarKey(s.dia))).size !== 7
+      || slots.some(s => !calendarDays.includes(calendarKey(s.dia)))) return { status: 'partial', code: 'WEEKLY_SLOT_COVERAGE_INVALID', operationId };
+    const executable = (slot: any) => !slot.weeklyProtected && !old.some((s: any) => calendarKey(s.dia) === calendarKey(slot.dia) && s.completada)
+      && !['descanso','external_blocked','sin_registrar','unavailable'].includes(slot.tipo);
+    if (slots.some(slot => slot.weeklyProtected && !old.some((s: any) => calendarKey(s.dia) === calendarKey(slot.dia))))
+      return { status: 'partial', code: 'PROTECTED_SESSION_MISSING', operationId };
+    const targets = slots.filter(executable);
+    const diagnostic = (name: string, fields: Record<string, unknown>) => {
+      try { console.info(name, { planningRunId: generation.planningRunId ?? null, ...fields }); } catch { /* Observation only. */ }
+    };
+    const started = Date.now();
+    diagnostic('PARALLEL_BUILDERS_START', { count: targets.length, days: targets.map(s => calendarKey(s.dia)) });
+    // allSettled waits for every in-flight call, including failures. No session is persisted here.
+    const results = await Promise.allSettled(slots.map(async (slot, index) => {
       const original = old.find((s: any) => calendarKey(s.dia) === calendarKey(slot.dia));
       if (slot.weeklyProtected || original?.completada) {
-        if (!original) return { status: 'partial', code: 'PROTECTED_SESSION_MISSING', operationId };
-        sessions.push(original); continue;
+        return original;
       }
-      if (slot.tipo === 'descanso') { sessions.push({ dia: slot.dia, tipo: 'descanso', titulo: 'Descanso',
-        por_que: 'Recuperación programada', descripcion: 'Día de descanso — prioriza sueño, hidratación y nutrición.' }); continue; }
-      if (['external_blocked','sin_registrar','unavailable'].includes(slot.tipo)) { sessions.push(slot); continue; }
-      const built = await run('construir_sesion_dia', { ...common, ...slot, acceptedCurrentWeek: accepted,
-        calendarReceipt: structure.calendarReceipt, contractDigest: structure.contractDigest, contextDigest: structure.contextDigest, analisis: analyzer.analisis,
-        diaAnterior: structure.sessions[index - 1] ?? null, diaSiguiente: structure.sessions[index + 1] ?? null });
-      if (!built.ok || !built.sesion) return { status: 'partial', code: 'BUILDER_NOT_ADMITTED', operationId };
-      accepted.push(built.sesion); sessions.push(built.sesion);
-    }
+      if (slot.tipo === 'descanso') return { dia: slot.dia, tipo: 'descanso', titulo: 'Descanso',
+        por_que: 'Recuperación programada', descripcion: 'Día de descanso — prioriza sueño, hidratación y nutrición.' };
+      if (!executable(slot)) return slot;
+      const slotStarted = Date.now();
+      let passed = false;
+      try {
+        const built = await run('construir_sesion_dia', { ...common, ...slot,
+          calendarReceipt: structure.calendarReceipt, contractDigest: structure.contractDigest, contextDigest: structure.contextDigest, analisis: analyzer.analisis,
+          diaAnterior: structure.sessions[index - 1] ?? null, diaSiguiente: structure.sessions[index + 1] ?? null });
+        if (!built.ok || !built.sesion || calendarKey(built.sesion.dia) !== calendarKey(slot.dia) || built.sesion.tipo !== slot.tipo)
+          throw new Error('BUILDER_NOT_ADMITTED');
+        passed = true;
+        return built.sesion;
+      } finally { diagnostic('PARALLEL_BUILDER_COMPLETE', { day: calendarKey(slot.dia), durationMs: Date.now() - slotStarted, result: passed ? 'PASS' : 'FAIL' }); }
+    }));
+    const failureCount = results.filter(r => r.status === 'rejected').length;
+    diagnostic('PARALLEL_BUILDERS_FAN_IN', { totalDurationMs: Date.now() - started, successCount: targets.length - failureCount, failureCount });
+    if (failureCount) return { status: 'partial', code: 'BUILDER_NOT_ADMITTED', operationId };
+    const sessions = results.map(r => (r as PromiseFulfilledResult<any>).value);
     sessions.sort((x,y) => calendarDays.indexOf(calendarKey(x.dia)) - calendarDays.indexOf(calendarKey(y.dia)));
     const plan = { week_start: a.week, week_number: structure.longitudinal?.semana ?? 1,
       total_weeks_block: structure.longitudinal?.totalSemanas ?? null,

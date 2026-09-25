@@ -34,6 +34,8 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
   confirmedAvailabilityDigest?: string | null;
   coherenceVersion?: 1;
   openCoachVersion?: 1 | 2;
+  parallelBuilders?: true;
+  builderTurnIntent?: import('./turnPlanningIntent').TurnPlanningProjection;
   preservationVersion?: 1 | 2;
   /** Server-selected immutable survivors for a bounded chat reassessment; bound into the receipt. */
   preserveDays?: string[];
@@ -247,7 +249,8 @@ export async function planBoundedWeek(db: any, codigo: string, request: Paramete
   catch { /* Observability cannot change the admitted strategy. */ }
   const calendarReceipt = generationToken === undefined ? undefined : await issueWeeklyCalendar(db, codigo, request.targetWeekStart, sessions,
     { contract: proposal.contract, selections: calendarDays.map(day => proposal.contract.contractVersion >= 2
-      ? openSelection(day, proposal.selected[day], proposal.decisions[day], proposal.contract.contractVersion) : { day, optionId: proposal.selected[day].optionId }), request, generationToken, decisions: proposal.decisions });
+      ? openSelection(day, proposal.selected[day], proposal.decisions[day], proposal.contract.contractVersion) : { day, optionId: proposal.selected[day].optionId }), request, generationToken, decisions: proposal.decisions,
+      ...(request.parallelBuilders ? { builderCoachingContext: prepared.coachingContext } : {}) });
   return { ok: true as const, evidencePolicy:prepared.evidencePolicy, factualRequirements:prepared.factualRequirements, estructura: { weeklyContractVersion: proposal.contract.contractVersion, calendarProtocolVersion: 2, contractDigest, calendarReceipt, longitudinal,
     contextDigest: proposal.contract.contextDigest,
     strategy: { ...(proposal.contract.strategy ? { canonical: proposal.contract.strategy } : {}),

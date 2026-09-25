@@ -2319,6 +2319,7 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
         targetWeekStart: datos.targetWeekStart, today,
         empezarHoy: includeToday, snapshot: generation.snapshots[datos.targetWeekStart],
         strategyVersion: 1, strategyProposal: datos.analisis?.strategyProposal, coherenceVersion: 1, openCoachVersion: coachFirstPlanning ? 2 : 1, planningRunId: generation.planningRunId,
+        ...(coachFirstPlanning ? { parallelBuilders: true as const, builderTurnIntent: coachFirstPlanning.turnIntent } : {}),
         confirmedAvailabilityDigest: datos.confirmedAvailabilityDigest,
       }, async (prompt: string, weeklyContract) => {
         const longitudinalDecision = prompt.startsWith(LONGITUDINAL_DECISION_MARKER);

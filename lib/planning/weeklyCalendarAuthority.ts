@@ -1,4 +1,6 @@
 import { weeklyRegenerationOutcome } from './weeklyRegeneration';
+import { buildCommonWeekContext, commonContextDigest, PARALLEL_BUILDER_PROTOCOL, verifyCommonWeekContext } from './commonWeekContext';
+import type { WeeklyCoachingContext } from './weeklyCoachingContext';
 import { availableDaysAtWeek } from '../sports/temporaryTrainingAccess';
 import { resolveWeeklyDeclaration } from '../sports/weeklyAvailabilityDeclaration';
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
@@ -30,7 +32,8 @@ export const availabilitySnapshotDigest = (c: { profile: any; sources: any[]; sc
 };
 const snapshotDigest = (snapshot: any) => weeklyDigest(snapshot ? { id: snapshot.id, revision: snapshot.revision, sessions: snapshot.sessions } : null);
 type Admission = { contract: AllowedWeeklyPlanContract; selections: { day: string; optionId?: string }[];
-  request: Parameters<typeof loadWeeklyPlanningContext>[2]; generationToken: string; decisions?: Record<string, unknown> };
+  request: Parameters<typeof loadWeeklyPlanningContext>[2]; generationToken: string; decisions?: Record<string, unknown>;
+  builderCoachingContext?: WeeklyCoachingContext };
 function rejectWeekly(code: string): never {
   console.warn('WEEKLY_AUTHORITY_REJECTED', { code, protocolVersion: 2 });
   throw new Error(code);
@@ -89,7 +92,17 @@ export async function issueWeeklyCalendar(db: any, codigo: string, week: string,
         ...(option.protected && original && sessions.some(s => calendarKey(s.dia) === day
           && weeklyDigest(Object.fromEntries(Object.entries(s).filter(([key]) => key !== 'weeklyProtected'))) === weeklyDigest(original)) ? { protectedSessionDigest: weeklyDigest(original) } : {}) };
     });
-    authority = { protocolVersion: 2, presentationVersion: 'human_v2', contractVersion: contract.contractVersion, policyVersion: contract.policyVersion,
+    let builderBinding = {};
+    if (request.parallelBuilders) {
+      if (contract.contractVersion !== 3 || !admission.builderCoachingContext) rejectWeekly('COMMON_WEEK_CONTEXT_REQUIRED');
+      const commonWeekContext = buildCommonWeekContext({ user: codigo, weekStart: week, planningRunId: request.planningRunId,
+        generationDigest: weeklyDigest(generationToken), sourceSnapshotDigest: snapshotDigest(request.snapshot),
+        weeklyContractDigest: weeklyDigest(contract), asOfDate: request.today, strategy: contract.strategy,
+        slots: admittedSlots, coaching: admission.builderCoachingContext!, turnPlanningIntent: request.builderTurnIntent });
+      builderBinding = { builderProtocol: PARALLEL_BUILDER_PROTOCOL, commonWeekContext,
+        commonWeekContextDigest: commonContextDigest(commonWeekContext) };
+    }
+    authority = { ...builderBinding, protocolVersion: 2, presentationVersion: 'human_v2', contractVersion: contract.contractVersion, policyVersion: contract.policyVersion,
       contractDigest: weeklyDigest(contract), contextDigest: contract.contextDigest, prescriptionScope: contract.prescriptionScope,
       admittedSlots, snapshotDigest: snapshotDigest(request.snapshot), generationDigest: weeklyDigest(generationToken),
       ...(request.coherenceVersion === 1 ? { coherenceVersion: 1, coachingDecisions: admission.decisions ?? {},
@@ -124,6 +137,7 @@ export function verifyWeeklyCalendarReceipt(receipt: unknown, codigo: string, we
   if (requireV2 && evidence.protocolVersion !== 2) rejectWeekly('WEEKLY_RECEIPT_UPGRADE_REQUIRED');
   if (evidence.protocolVersion !== undefined && evidence.protocolVersion !== 2) rejectWeekly('WEEKLY_PROTOCOL_UNSUPPORTED');
   if (evidence.contractVersion !== 3 && receipt.length > 64000) throw new Error('CALENDAR_RECEIPT_REQUIRED');
+  verifyCommonWeekContext(evidence);
   authenticatedPresentationVersion(evidence.presentationVersion);
   return evidence;
 }
@@ -189,6 +203,14 @@ export function resolveWeeklySlot(evidence: any, request: Record<string, any>) {
 export async function assertWeeklyCalendar(db: any, codigo: string, week: string, sessions: any[], receipt: unknown,
   options: { requireV2?: boolean; generationToken?: unknown; sessionEvidence?: any[]; wholeWeekReviewed?: boolean } = {}) {
   const evidence = verifyWeeklyCalendarReceipt(receipt, codigo, week, options.requireV2);
+  if (evidence.builderProtocol) {
+    const days = sessions.map(s => calendarKey(s.dia));
+    if (days.length !== 7 || new Set(days).size !== 7 || days.some(d => !calendarDays.includes(d))) rejectWeekly('WEEKLY_SLOT_COVERAGE_INVALID');
+    const expected = evidence.admittedSlots.filter((s: any) => !s.protected && isExecutableCalendarState(s.state)).map((s: any) => s.day);
+    const supplied = (options.sessionEvidence ?? sessions.filter(s => s.sessionReceipt)).map((s: any) => calendarKey(s.dia));
+    if (supplied.length !== expected.length || new Set(supplied).size !== expected.length || supplied.some((d: string) => !expected.includes(d)))
+      rejectWeekly('WEEKLY_SESSION_COVERAGE_INVALID');
+  }
   let contexts: Record<string, any> = {};
   if (evidence.protocolVersion === 2) {
     contexts = (await assertFreshWeeklyAuthority(db, codigo, week, receipt, options.generationToken)).contexts;
@@ -200,7 +222,7 @@ export async function assertWeeklyCalendar(db: any, codigo: string, week: string
       const session = (options.sessionEvidence || sessions).find((s: any) => calendarKey(s.dia) === slot.day);
       if (!session) rejectWeekly('WEEKLY_SESSION_EVIDENCE_REQUIRED');
       verifySessionReceipt(session.sessionReceipt, session, codigo, week, receipt as string);
-      if (evidence.coherenceVersion === 1) {
+      if (evidence.coherenceVersion === 1 && !evidence.builderProtocol) {
         const proof = JSON.parse(Buffer.from(session.sessionReceipt.split('.')[0], 'base64url').toString());
         if (!proof.weekly?.priorSessions) rejectWeekly('WEEKLY_SIBLING_EVIDENCE_REQUIRED');
         for (const [day, digest] of Object.entries(options.wholeWeekReviewed ? {} : proof.weekly.priorSessions)) {

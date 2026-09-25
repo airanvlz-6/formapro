@@ -6,6 +6,7 @@ import { calendarDays, calendarKey } from '../planning/weeklyCalendar';
 import { emitSessionCoachingDiagnostic } from './sessionDoseDiagnostics';
 import { resolvedMovement } from './movementVariants';
 import { currentWeekCoachingContext } from '../planning/currentWeekCoachingContext';
+import { commonContextDigest, slotAuthorization, verifyCommonWeekContext } from '../planning/commonWeekContext';
 import { selectedWeekStrategy } from '../planning/selectedWeekObjective';
 import { samePlanData } from '../planning/planMutationValidators';
 import { availableDaysAtWeek } from './temporaryTrainingAccess';
@@ -74,7 +75,9 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
       return { ok: false as const, code: 'TRANSFER_REQUIRES_WEEKLY_AUTHORITY' };
     if ((request.coachingGuidance || request.intent?.kind === 'open_coach') && !request.weekly)
       return { ok: false as const, code: 'OPEN_INTENT_REQUIRES_WEEKLY_AUTHORITY' };
-    let weekly: { calendarReceipt: string; optionId: string; priorSessions?: Record<string, string> } | undefined;
+    let weekly: { calendarReceipt: string; optionId: string; priorSessions?: Record<string, string>;
+      authorization?: ReturnType<typeof slotAuthorization> } | undefined;
+    let commonWeekContext: any, commonEvidence: any, commonSlot: any;
     let weeklyContext: any;
     let confirmedAssignment: SessionEnvironmentInput['confirmedAssignment'];
     let strategicWeek: any = null, neighbours: any[] = [];
@@ -89,7 +92,9 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
       weekly = { calendarReceipt: proof.receipt as string, optionId: slot.optionId };
       weeklyContext = fresh.contexts[slot.discipline];
       strategicWeek = fresh.evidence.strategy || null;
-      if (fresh.evidence.coherenceVersion === 1) {
+      commonWeekContext = verifyCommonWeekContext(fresh.evidence);
+      if (commonWeekContext) { commonEvidence = fresh.evidence; commonSlot = slot; }
+      if (fresh.evidence.coherenceVersion === 1 && !commonWeekContext) {
         const previous = request.acceptedCurrentWeek;
         if (!Array.isArray(previous) || previous.length > 6) throw new Error('WEEKLY_SIBLING_EVIDENCE_REQUIRED');
         const slots = fresh.evidence.admittedSlots;
@@ -169,7 +174,10 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
     const builderProfile = { ...profile, perfil: { ...profile.perfil } };
     delete builderProfile.perfil.runningHabitualDeclarations;
     delete builderProfile.perfil.runningHabitualConfirmation;
-    const coachingContext = { serverProfile: builderProfile, sessionHistory: canonical.history,
+    const authorization = commonWeekContext ? slotAuthorization(commonEvidence, commonSlot, prepared.contract) : undefined;
+    const coachingContext = commonWeekContext ? { commonWeekContext,
+      slotAuthorization: authorization,
+      semantics: 'Build only your authorized day. All initial Builders share this immutable weekly guidance. No new sibling proposals exist yet. Prescriptions are not executions.' } : { serverProfile: builderProfile, sessionHistory: canonical.history,
         structuredRunningExecutions: canonical.runningDoseBaseline.structuredExecutions,
         habitualDeclarations: canonical.runningDoseBaseline.habitualDeclarations,
         physiology: canonical.physiology, readiness: canonical.readiness,
@@ -177,6 +185,11 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
     const builderContext = JSON.stringify({...coachingContext,requestContext:context});
     const result = await generateContractSession(prepared.contract, recent, complete, builderContext, planningRunId, 'human_v3');
     if (!result.ok) return result;
+    if (weekly && authorization) {
+      if (commonContextDigest(authorization) !== commonContextDigest(slotAuthorization(commonEvidence, commonSlot, result.contract)))
+        throw new Error('SESSION_FACTUAL_AUTHORITY_CHANGED');
+      weekly.authorization = authorization;
+    }
     const payload = Buffer.from(JSON.stringify({ userCodigo, expiresAt: Date.now() + 30 * 60_000,
       contract: result.contract, proposal: result.proposal, ...(result.contract.contractVersion === 5 ? {contextDigest:weeklyDigest({builderContext,providerContext}),coachingContext,revision:0} : {}), presentationVersion: 'human_v3', ...(weekly ? { weekly } : {}) })).toString('base64url');
     const sessionReceipt = `${payload}.${signature(payload)}`;
@@ -209,6 +222,10 @@ export function verifySessionReceipt(receipt: unknown, session: Record<string, a
     const signedSlot = resolveWeeklySlot(weekly, { day: c.targetDay, optionId: evidence.weekly.optionId, targetWeekStart: c.targetWeekStart,
       discipline: c.discipline, ...(c.contractVersion === 5 ? {coachingGuidance:c.coachingGuidance} : {stimulus:c.stimulusId,intent:c.intent,
       state:calendarState({tipo:c.discipline,stimulusId:c.stimulusId})}) });
+    if (weekly.builderProtocol && (c.contractVersion !== 5 || evidence.weekly.priorSessions !== undefined
+      || commonContextDigest(evidence.coachingContext?.commonWeekContext ?? null) !== weekly.commonWeekContextDigest
+      || commonContextDigest(evidence.weekly.authorization ?? null) !== commonContextDigest(slotAuthorization(weekly, signedSlot, c))))
+      throw new Error('WEEKLY_SESSION_CHAIN_MISMATCH');
     if (c.contractVersion === 5 && (weekly.contractVersion !== 3 || !c.finalDecision || !samePlanData(c.coachingGuidance,signedSlot.coachingGuidance)
       || typeof evidence.contextDigest !== 'string' || !Number.isSafeInteger(evidence.revision))) throw new Error('WEEKLY_SESSION_CHAIN_MISMATCH');
     if (![2, 3, 4, 5].includes(c.contractVersion) || (c.contractVersion === 4 && weekly.contractVersion !== 2) || weeklyDigest(c.prescriptionScope) !== weeklyDigest(weekly.prescriptionScope))

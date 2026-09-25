@@ -21,7 +21,7 @@ export async function enforceWholeWeek(codigo:string,week:string,rows:any[],sour
     const source=sourceSessions.find(s=>calendarKey(s.dia)===day);
     let contract:any;
     if(source&&!slot?.protected)try{contract=verifiedRepairContract(source,codigo,week,calendarReceipt);}catch{/* No authority, no target. */}
-    return {id:`${day}:${index}`,index,role:contract?.intent?.role||null,protected:!!slot?.protected,authorized:!!contract,
+    return {id:`${day}:${index}`,index,role:contract?.finalDecision?.role||contract?.intent?.role||null,protected:!!slot?.protected,authorized:!!contract,
       intent:contract?.intent||{kind:'unknown'},discipline:contract?.discipline||''};
   });
   for(const stage of ['local','targeted'] as const){
@@ -38,7 +38,7 @@ export async function enforceWholeWeek(codigo:string,week:string,rows:any[],sour
       repairCount++;if(stage==='local')orchestration.localRepairCount++;else orchestration.targetedSessionCount++;
       try{
         const replacement=await repairSessionWithinReceipt(finalSources[sourceIndex],codigo,week,calendarReceipt,group.diagnostics,
-          finalRows.map(s=>({day:s.dia,intent:s.structuredPrescription?.objective?.intent||null,role:s.structuredPrescription?.sessionRole||null,
+          finalRows.map(s=>({day:s.dia,finalDecision:s.structuredPrescription?.finalDecision||null,intent:s.structuredPrescription?.objective?.intent||null,role:s.structuredPrescription?.sessionRole||null,
             proposal:s.structuredPrescription?.proposal||null})),complete,stage);
         const {sessionReceipt:_receipt,...content}=replacement;
         finalRows[target.index]=content;finalSources[sourceIndex]=replacement;
@@ -57,10 +57,10 @@ export async function enforceWholeWeek(codigo:string,week:string,rows:any[],sour
       const eligible = candidates.filter(c => c.authorized && !c.protected).map(c => calendarKey(finalRows[c.index].dia));
       const contracts = finalSources.filter(s => eligible.includes(calendarKey(s.dia))).map(s => {
         const c = verifiedRepairContract(s, codigo, week, calendarReceipt);
-        return { day: calendarKey(s.dia), intent: c.intent, restrictions: c.restrictionsSnapshot,
+        return { day: calendarKey(s.dia), intent: c.intent, coachingGuidance:c.coachingGuidance, finalDecision:c.finalDecision, doseContext:c.doseContext, restrictions: c.restrictionsSnapshot,
           availableDays: c.availableDays, historicalExposure: c.exposureContext ?? null };
       });
-      const raw = await complete(`WHOLE_WEEK_COACH_RECONSIDERATION\nWarnings are advisory. You may KEEP this week consciously, including repeated movements, or REVISE up to ${MAX_WEEK_REPAIR_TARGETS} eligible sessions inside their unchanged signed contracts. Weekly intents remain fixed. Return only JSON {"decision":"KEEP|REVISE","rationale":"brief reason","days":[]}. KEEP requires empty days. There will be no second reconsideration.\nCONTEXT:\n${JSON.stringify({
+      const raw = await complete(`WHOLE_WEEK_COACH_RECONSIDERATION\nWarnings are advisory. You may KEEP this week consciously, including repeated movements, or REVISE up to ${MAX_WEEK_REPAIR_TARGETS} eligible sessions inside their unchanged signed contracts. ${authority.evidence.contractVersion === 3 ? 'The last admitted session decision is current. Weekly guidance is original provenance. You may revise sporting decisions with reasons, within unchanged factual authorization.' : 'Weekly intents remain fixed.'} Return only JSON {"decision":"KEEP|REVISE","rationale":"brief reason","days":[]}. KEEP requires empty days. There will be no second reconsideration.\nCONTEXT:\n${JSON.stringify({
         originalDecision: authority.evidence.coachingDecisions ?? null, objective: authority.evidence.strategy,
         week: currentWeekCoachingContext(week, finalRows, authority.evidence.admittedSlots), warnings, eligibleDays: eligible, contracts })}`);
       const decision = JSON.parse(raw);
@@ -91,7 +91,7 @@ export async function enforceWholeWeek(codigo:string,week:string,rows:any[],sour
       result = validate();
     }
     try { if (process.env.FORGE_WEEKLY_COACHING_DIAGNOSTICS === '1') console.info('WHOLE_WEEK_COACH_FEEDBACK', {
-      planningRunId: authority.evidence.planning?.planningRunId ?? null, weekStart: week, warnings: warnings.map(d => d.code), ...review }); }
+      planningRunId: authority.evidence.planning?.planningRunId ?? null, weekStart: week, warnings: warnings.map(d => d.code), ...(authority.evidence.contractVersion === 3 ? {count:review.count,decision:review.decision,revisedDays:review.revisedDays,failure:review.failure} : review) }); }
     catch { /* Diagnostics never change admission. */ }
   }
   return {ok:true as const,sessions:finalRows,sessionEvidence:finalSources,result,initial,repairCount,orchestration};

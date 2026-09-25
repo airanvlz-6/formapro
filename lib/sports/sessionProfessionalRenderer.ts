@@ -56,9 +56,9 @@ function formatTitle(p: StructuredSessionProposal): string {
 export function renderProfessionalSession(c: AllowedTrainingContract, p: StructuredSessionProposal) {
   const dc = c.doseContext!, intent = c.intent || { kind: 'stimulus_only' as const }, strategic = intent.kind === 'adaptation' ? intent : null;
   const weekObjective = dc.weekStrategy ? renderWeekObjective(dc.weekStrategy) : null;
-  const objective = intent.kind === 'open_coach' ? `Trabajo ${roles[intent.role]} de ${label(intent.adaptationId)} con patrón ${label(intent.pattern)}.` : strategic ? `${label(strategic.adaptationId)} como trabajo ${roles[strategic.role]} para ${goals[strategic.goalId]}.`
+  const objective = c.contractVersion === 5 ? `Trabajar ${c.finalDecision!.stimulus}.` : intent.kind === 'open_coach' ? `Trabajo ${roles[intent.role]} de ${label(intent.adaptationId)} con patrón ${label(intent.pattern)}.` : strategic ? `${label(strategic.adaptationId)} como trabajo ${roles[strategic.role]} para ${goals[strategic.goalId]}.`
     : `Trabajar ${label(c.stimulusId)}${intent.kind === 'main_pattern' ? ` con patrón ${label(intent.pattern)}` : ''}. Objetivo deportivo sin resolver en el intent disponible.`;
-  const why = intent.kind === 'open_coach' ? `Trabajo ${roles[intent.role]} de ${label(intent.adaptationId)}, según la intención elegida para este día.` : strategic ? `Esta sesión aporta ${label(strategic.adaptationId)} al objetivo de ${goals[strategic.goalId]}, en el bloque ${phases[strategic.blockPhase]}${strategic.blockWeek ? `, semana ${strategic.blockWeek}` : ''}.`
+  const why = c.contractVersion === 5 ? (c.finalDecision!.reason ?? `Sesión de ${c.finalDecision!.stimulus}.`) : intent.kind === 'open_coach' ? `Trabajo ${roles[intent.role]} de ${label(intent.adaptationId)}, según la intención elegida para este día.` : strategic ? `Esta sesión aporta ${label(strategic.adaptationId)} al objetivo de ${goals[strategic.goalId]}, en el bloque ${phases[strategic.blockPhase]}${strategic.blockWeek ? `, semana ${strategic.blockWeek}` : ''}.`
     + (weekObjective ? ` Objetivo semanal: ${weekObjective}` : '')
     + (dc.weakness ? ` Aborda la debilidad registrada: ${dc.weakness.name || dc.weakness.id}.` : '')
     + (dc.neighbours.length ? ` Contexto del calendario: ${dc.neighbours.map(n => `${n.day}: ${n.adaptationId ? label(n.adaptationId) : label(n.state.toLowerCase())}`).join('; ')}.` : '')
@@ -72,11 +72,12 @@ export function renderProfessionalSession(c: AllowedTrainingContract, p: Structu
     ...(openExecution(c) ? { executionPolicy: c.executionPolicy, analytics: entries.map(m => ({ movementId: m.movementId, sideSemantics: m.prescription.perSide === undefined ? 'UNKNOWN' : m.prescription.perSide ? 'PER_SIDE' : 'TOTAL' })) } : {}),
     ...(entries.some(m => m.variant) ? { movementResolution: { version: 1,
       descriptors: entries.map(m => ({ localMovementId: m.movementId, ...structuredClone(resolvedMovement(m)!) })) } } : {}),
-    objective: { intent: structuredClone(intent), weekObjective, neighbours: dc.neighbours }, sessionRole: c.stimulusId === 'recuperacion_activa' ? 'RECOVERY' : intent.kind === 'open_coach' ? intent.role : strategic?.role || null,
+    ...(c.contractVersion === 5 ? {finalDecision:structuredClone(c.finalDecision),coachingGuidance:structuredClone(c.coachingGuidance)} : {}),
+    objective: { intent: structuredClone(intent), weekObjective: c.contractVersion === 5 ? null : weekObjective, neighbours: dc.neighbours }, sessionRole: c.contractVersion === 5 ? c.finalDecision?.role ?? null : c.stimulusId === 'recuperacion_activa' ? 'RECOVERY' : intent.kind === 'open_coach' ? intent.role : strategic?.role || null,
     weakness: dc.weakness, references: dc.references.filter(r => used.has(r.id)),
     ...(dc.sufficiency ? { dataSufficiency: prescriptionGenerationOptions(dc.sufficiency, dc.references,
       [...new Set(p.blocks.flatMap(b => b.movements.map(m => m.movementId)))], c.discipline,
-      Object.fromEntries(entries.flatMap(m => m.variant ? [[m.movementId, m.variant]] : [])), c.contractVersion === 4) } : {}),
+      Object.fromEntries(entries.flatMap(m => m.variant ? [[m.movementId, m.variant]] : [])), openExecution(c)) } : {}),
     calculatedLoads: p.blocks.flatMap(b => b.movements.flatMap(m => { const load = calculatedLoad(c, m.prescription); return load ? [{ blockType: b.blockType, movementId: m.movementId, ...load }] : []; })),
     duration, timeBudget: dc.timeBudget, ...(dc.timeAuthority ? { timeAuthority: dc.timeAuthority } : {}), contextEvidenceDigest: dc.evidenceDigest,
     ...(c.intensityAuthority ? { intensityAuthority: structuredClone(c.intensityAuthority) } : {}),

@@ -13,7 +13,7 @@ function plannerRejectionDiagnostic(planner: any) {
   let failureReason = 'UNKNOWN_PLANNER_REJECTION';
   try {
     if (planner?.ok) {
-      if (planner.estructura?.weeklyContractVersion !== 2) failureReason = 'WEEKLY_CONTRACT_VERSION_INVALID';
+      if (![2,3].includes(planner.estructura?.weeklyContractVersion)) failureReason = 'WEEKLY_CONTRACT_VERSION_INVALID';
     } else if (planner?.code === 'STRATEGY_PROPOSAL_INVALID') {
       failureReason = 'STRATEGY_PROPOSAL_INVALID';
     } else if (['LONGITUDINAL_TARGET_UNRESOLVED', 'LONGITUDINAL_READ_FAILED',

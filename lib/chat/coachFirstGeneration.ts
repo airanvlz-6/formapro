@@ -73,7 +73,7 @@ export async function generateCoachFirstWeek(db: any, user: string, a: any, oper
     const analyzer = await run('analizar_bloque_semana', common);
     if (!analyzer.ok) return { status: 'partial', code: 'ANALYZER_FAILED', operationId };
     const planner = await run('planificar_semana', { ...common, weeklyContractVersion: 2, empezarHoy: a.includeToday, analisis: analyzer.analisis });
-    if (!planner.ok || planner.estructura?.weeklyContractVersion !== 2) return { status: 'partial', code: 'PLANNER_NOT_ADMITTED', requirements: planner, operationId };
+    if (!planner.ok || ![2,3].includes(planner.estructura?.weeklyContractVersion)) return { status: 'partial', code: 'PLANNER_NOT_ADMITTED', requirements: planner, operationId };
     const structure = planner.estructura, sessions: any[] = [], accepted: any[] = [];
     const old = generation.snapshots[a.week]?.sessions ?? [];
     for (const [index, slot] of structure.sessions.entries()) {

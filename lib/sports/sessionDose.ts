@@ -58,7 +58,7 @@ export function referenceCompatibilityErrors(c: AllowedTrainingContract, entry: 
   if (entry.variant && i.kind === 'percent_1rm') return ['BENCHMARK_RESOLUTION:ONE_RM_MOVEMENT_REQUIRED'];
   if (i.kind === 'percent_1rm') return r.kind === '1rm' && r.movementId === movementId ? [] : ['BENCHMARK_RESOLUTION:ONE_RM_MOVEMENT_REQUIRED'];
   if (openExecution(c) && !resolvedMovement(entry)) return r.kind === 'running' ? [] : ['BENCHMARK_RESOLUTION:REFERENCE_KIND_MISMATCH'];
-  return r.kind === 'running' && (c.contractVersion === 4 ? ['run'] : ['run', 'cyclic']).includes(MOVEMENT_LIBRARY[movementId]?.movement_pattern)
+  return r.kind === 'running' && (openExecution(c) ? ['run'] : ['run', 'cyclic']).includes(MOVEMENT_LIBRARY[movementId]?.movement_pattern)
     ? [] : ['BENCHMARK_RESOLUTION:RUNNING_REFERENCE_MISMATCH'];
 }
 export function calculatedLoad(c: AllowedTrainingContract, d: MovementDose) {

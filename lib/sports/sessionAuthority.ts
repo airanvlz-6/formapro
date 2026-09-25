@@ -1,3 +1,5 @@
+import { admitFinalDecision, FINAL_DECISION_INSTRUCTIONS } from './finalSessionDecision';
+import { revisedGuidance, type WeeklyCoachingGuidance } from '../planning/weeklyCoachingGuidance';
 import { openExecution } from './sessionExecution';
 import { calendarState } from '../planning/weeklyCalendar';
 import { calendarDays, calendarKey } from '../planning/weeklyCalendar';
@@ -39,7 +41,7 @@ function signature(payload: string) {
   if (!secret) throw new Error('SESSION_AUTHORITY_UNAVAILABLE');
   return createHmac('sha256', secret).update(domain + payload).digest('base64url');
 }
-type Request = { targetWeekStart: string; day: string; discipline: string; stimulus: unknown; intent?: PrescriptionIntent; state?: 'TRAIN' | 'RECOVERY';
+type Request = { coachingGuidance?: WeeklyCoachingGuidance; targetWeekStart: string; day: string; discipline: string; stimulus: unknown; intent?: PrescriptionIntent; state?: 'TRAIN' | 'RECOVERY';
   acceptedCurrentWeek?: readonly Record<string, any>[];
   weekly?: { receipt: unknown; generationToken: unknown; optionId: unknown; claims?: Record<string, any> } };
 
@@ -53,22 +55,24 @@ export async function repairSessionWithinReceipt(session: Record<string, any>, c
   verifySessionReceipt(session.sessionReceipt, session, codigo, week, calendarReceipt);
   const evidence = JSON.parse(Buffer.from(session.sessionReceipt.split('.')[0], 'base64url').toString());
   const weekly=verifyWeeklyCalendarReceipt(calendarReceipt,codigo,week,true);
-  const raw = await complete(`${stage==='local'?'Repair the implicated composition locally.':'Targeted regeneration: compose a fresh alternative; the local pass was insufficient.'} Return only proposal JSON inside the UNCHANGED signed contract. No titles or authority changes.\nSTAGE:${stage}\nCONTRACT:\n${JSON.stringify(evidence.contract)}\nWEEK_STRATEGY:\n${JSON.stringify(weekly.strategy||null)}\nREJECTED_PROPOSAL:\n${JSON.stringify(evidence.proposal)}\nWHOLE_WEEK_DIAGNOSTICS:\n${JSON.stringify(diagnostics)}\nSIBLING_PROPOSALS:\n${JSON.stringify(siblings)}`);
+  const raw = await complete(`${evidence.contract.contractVersion === 5 ? FINAL_DECISION_INSTRUCTIONS + '\nLast admitted finalDecision is current; original coachingGuidance remains provenance. Factual contract is unchanged.\n' : ''}${stage==='local'?'Repair the implicated composition locally.':'Targeted regeneration: compose a fresh alternative; the local pass was insufficient.'} Return only proposal JSON inside the ${evidence.contract.contractVersion === 5 ? 'signed factual contract. No factual authority changes.' : 'UNCHANGED signed contract. No titles or authority changes.'}\nSTAGE:${stage}\nCONTRACT:\n${JSON.stringify(evidence.contract)}\nWEEK_STRATEGY:\n${JSON.stringify(weekly.strategy||null)}\nORIGINAL_COACHING_CONTEXT:\n${JSON.stringify(evidence.coachingContext ?? null)}\nREJECTED_PROPOSAL:\n${JSON.stringify(evidence.proposal)}\nWHOLE_WEEK_DIAGNOSTICS:\n${JSON.stringify(diagnostics)}\nSIBLING_PROPOSALS:\n${JSON.stringify(siblings)}`);
   const parsed = parseStructuredSession(raw, openExecution(evidence.contract));
   if (!parsed.ok) throw new Error('WEEK_REPAIR_PROPOSAL_INVALID');
-  const checked = validateSessionAgainstTrainingContract(evidence.contract, parsed.proposal);
+  const contract = admitFinalDecision(evidence.contract,parsed.proposal);
+  const checked = validateSessionAgainstTrainingContract(contract, parsed.proposal);
   if (!checked.ok) throw new Error('WEEK_REPAIR_CONTRACT_INVALID');
-  const rendered = renderContractSession(evidence.contract, checked.proposal, authenticatedPresentationVersion(evidence.presentationVersion));
-  const payload = Buffer.from(JSON.stringify({...evidence,proposal:checked.proposal})).toString('base64url');
+  const rendered = renderContractSession(contract, checked.proposal, authenticatedPresentationVersion(evidence.presentationVersion));
+  const payload = Buffer.from(JSON.stringify({...evidence,contract,proposal:checked.proposal,...(contract.contractVersion === 5 ? {revision:evidence.revision+1,previousDecisionDigest:weeklyDigest(evidence.contract.finalDecision),contextDigest:weeklyDigest({previous:evidence.contextDigest,diagnostics,siblings,stage})} : {})})).toString('base64url');
+  if (contract.contractVersion === 5 && process.env.FORGE_WEEKLY_COACHING_DIAGNOSTICS === '1') { try { console.info('WEEKLY_GUIDANCE_REVISION_ADMITTED',{version:2,day:contract.targetDay,revision:evidence.revision+1,finalDecisionDigest:weeklyDigest(contract.finalDecision)}); } catch { /* Observation only. */ } }
   return {...rendered,sessionReceipt:`${payload}.${signature(payload)}`};
 }
 /** Only this server adapter issues receipts, after both sports and duplication checks. */
 export async function generateTrainingSession(db: any, userCodigo: string, request: Request,
-  complete: (prompt: string) => Promise<string | BuilderCompletion>, context = '', planningRunId?: string) {
+  complete: (prompt: string) => Promise<string | BuilderCompletion>, context = '', planningRunId?: string, providerContext = '') {
   try {
     if (request.intent?.kind === 'adaptation' && request.intent.transfer && !request.weekly)
       return { ok: false as const, code: 'TRANSFER_REQUIRES_WEEKLY_AUTHORITY' };
-    if (request.intent?.kind === 'open_coach' && !request.weekly)
+    if ((request.coachingGuidance || request.intent?.kind === 'open_coach') && !request.weekly)
       return { ok: false as const, code: 'OPEN_INTENT_REQUIRES_WEEKLY_AUTHORITY' };
     let weekly: { calendarReceipt: string; optionId: string; priorSessions?: Record<string, string> } | undefined;
     let weeklyContext: any;
@@ -100,22 +104,22 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
         const protectedRows = (stored.data?.sessions ?? []).filter((s: any) => slots.some((a: any) => a.day === calendarKey(s.dia)
           && a.protectedSessionDigest === weeklyDigest(s)));
         currentWeek = currentWeekCoachingContext(request.targetWeekStart, [...protectedRows, ...authenticated], slots);
-        if (strategicWeek) strategicWeek = selectedWeekStrategy(strategicWeek, slots, fresh.evidence.coachingDecisions);
+        if (strategicWeek && fresh.evidence.contractVersion !== 3) strategicWeek = selectedWeekStrategy(strategicWeek, slots, fresh.evidence.coachingDecisions);
       }
       const ordered = fresh.evidence.admittedSlots, index = ordered.findIndex((s: any) => s.day === slot.day);
       neighbours = [ordered[index - 1], ordered[index + 1]].filter(Boolean).map((s: any) => ({ day: s.day,
         adaptationId: ['adaptation', 'open_coach'].includes(s.intent?.kind) ? s.intent.adaptationId : null, state: s.state }));
       request = { targetWeekStart: fresh.evidence.week, day: slot.day, discipline: slot.discipline,
-        stimulus: slot.stimulusId, intent: slot.intent, state: slot.state };
+        stimulus: slot.coachingGuidance ? '' : slot.stimulusId, ...(slot.coachingGuidance ? {coachingGuidance:slot.coachingGuidance} : {intent:slot.intent}), state: slot.state };
     }
-    if (Object.hasOwn(request, 'state') && (!['TRAIN', 'RECOVERY'].includes(request.state!)
+    if (!request.coachingGuidance && Object.hasOwn(request, 'state') && (!['TRAIN', 'RECOVERY'].includes(request.state!)
       || request.state !== calendarState({ tipo: canonicalDiscipline(request.discipline), stimulusId: request.stimulus })))
       return { ok: false as const, code: 'TRAINING_CONTRACT_INVALID', errors: ['SESSION_STATE_MISMATCH'] };
     const { data: profile, error } = await db.from('usuarios')
       .select(`${PROFILE},perfil,marcas_especificas,ciclo_actual,athlete_development,datos_entrenamiento`).eq('codigo', userCodigo).single();
     if (error || !profile) return { ok: false as const, code: 'CONTRACT_PROFILE_READ_FAILED' };
     const restrictions = await getCanonicalRestrictions(db, userCodigo);
-    const openCanonical = request.intent?.kind === 'open_coach' ? await loadAthletePrescriptionContext(db, userCodigo, {
+    const openCanonical = request.coachingGuidance || request.intent?.kind === 'open_coach' ? await loadAthletePrescriptionContext(db, userCodigo, {
       asOfDate: restrictions.asOfDate, prescriptionDate: prescriptionDate(request.targetWeekStart, request.day),
       runningHabitualInteraction: planningRunId ? {planningRunId,targetWeekStart:request.targetWeekStart} : undefined,
       sessionEnvironment: { date: prescriptionDate(request.targetWeekStart, request.day), assignedDiscipline: request.discipline, confirmedAssignment },
@@ -123,7 +127,7 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
     const openDose = openCanonical ? buildSessionDoseContext(openCanonical, request.intent, strategicWeek, neighbours, true, 'coach') : undefined;
     // Reuse the freshly loaded weekly context; only restrictions are reread at the existing session boundary.
     const base = weeklyContext ? buildAllowedTrainingContract({ ...weeklyContext, targetDay: request.day,
-      stimulus: request.stimulus, intent: request.intent, restrictionsSnapshot: restrictions, ...(openDose ? { doseContext: openDose } : {}) })
+      stimulus: request.stimulus, ...(request.coachingGuidance ? {coachingGuidance:request.coachingGuidance} : {intent:request.intent}), restrictionsSnapshot: restrictions, ...(openDose ? { doseContext: openDose } : {}) })
       : await prepareSessionTrainingContract(db, userCodigo, profile, request, restrictions);
     if (!base.ok) return { ok: false as const, code: 'TRAINING_CONTRACT_INVALID', errors: base.errors };
     const canonical = openCanonical ?? await loadAthletePrescriptionContext(db, userCodigo, { asOfDate: restrictions.asOfDate,
@@ -165,16 +169,18 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
     const builderProfile = { ...profile, perfil: { ...profile.perfil } };
     delete builderProfile.perfil.runningHabitualDeclarations;
     delete builderProfile.perfil.runningHabitualConfirmation;
-    const result = await generateContractSession(prepared.contract, recent, complete,
-      JSON.stringify({ serverProfile: builderProfile, sessionHistory: canonical.history,
+    const coachingContext = { serverProfile: builderProfile, sessionHistory: canonical.history,
         structuredRunningExecutions: canonical.runningDoseBaseline.structuredExecutions,
         habitualDeclarations: canonical.runningDoseBaseline.habitualDeclarations,
         physiology: canonical.physiology, readiness: canonical.readiness,
-        asOfDate: canonical.asOfDate, currentWeek: currentWeek ?? null, requestContext: context }), planningRunId, 'human_v3');
+        asOfDate: canonical.asOfDate, currentWeek: currentWeek ?? null };
+    const builderContext = JSON.stringify({...coachingContext,requestContext:context});
+    const result = await generateContractSession(prepared.contract, recent, complete, builderContext, planningRunId, 'human_v3');
     if (!result.ok) return result;
     const payload = Buffer.from(JSON.stringify({ userCodigo, expiresAt: Date.now() + 30 * 60_000,
-      contract: result.contract, proposal: result.proposal, presentationVersion: 'human_v3', ...(weekly ? { weekly } : {}) })).toString('base64url');
+      contract: result.contract, proposal: result.proposal, ...(result.contract.contractVersion === 5 ? {contextDigest:weeklyDigest({builderContext,providerContext}),coachingContext,revision:0} : {}), presentationVersion: 'human_v3', ...(weekly ? { weekly } : {}) })).toString('base64url');
     const sessionReceipt = `${payload}.${signature(payload)}`;
+    if (result.contract.contractVersion === 5 && process.env.FORGE_WEEKLY_COACHING_DIAGNOSTICS === '1') { try { console.info('WEEKLY_GUIDANCE_SESSION_ADMITTED',{version:2,day:request.day,guidanceDigest:weeklyDigest(result.contract.coachingGuidance),finalDecisionDigest:weeklyDigest(result.contract.finalDecision),revised:revisedGuidance(result.contract.coachingGuidance!,result.contract.finalDecision!)}); } catch { /* Observation only. */ } }
     return { ok: true as const, trainingContract: result.contract, sesion: { ...result.session, sessionReceipt },
       coachingDecision: result.coachingDecision, attempts: result.attempts, diagnostics: result.diagnostics };
   } catch (error: any) { return { ok: false as const, code: error.message?.startsWith('WEEKLY_') || error.message?.startsWith('CALENDAR_')
@@ -184,7 +190,7 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
 const fields = ['dia', 'tipo', 'titulo', 'por_que', 'descripcion', 'debilidad_relacionada'] as const;
 /** Returned pools are never authoritative. Authenticate original A, then revalidate and rerender A. */
 export function verifySessionReceipt(receipt: unknown, session: Record<string, any>, userCodigo: string, weekStart: string, expectedWeeklyReceipt?: string, restoreMissingMetadata = false) {
-  if (typeof receipt !== 'string' || receipt.length > 200_000) throw new Error('SESSION_RECEIPT_REQUIRED');
+  if (typeof receipt !== 'string' || receipt.length > 400_000) throw new Error('SESSION_RECEIPT_REQUIRED');
   const [payload, mac, extra] = receipt.split('.');
   if (!payload || !mac || extra !== undefined) throw new Error('SESSION_RECEIPT_INVALID');
   const expected = Buffer.from(signature(payload));
@@ -195,13 +201,17 @@ export function verifySessionReceipt(receipt: unknown, session: Record<string, a
     || evidence.contract?.targetWeekStart !== weekStart) throw new Error('SESSION_RECEIPT_CONTEXT_MISMATCH');
   if (expectedWeeklyReceipt !== undefined && evidence.weekly?.calendarReceipt !== expectedWeeklyReceipt)
     throw new Error('WEEKLY_SESSION_CHAIN_MISMATCH');
+  if (evidence.contract?.contractVersion !== 5 && receipt.length > 200_000) throw new Error('SESSION_RECEIPT_REQUIRED');
+  if (evidence.contract?.contractVersion === 5 && !evidence.weekly) throw new Error('WEEKLY_SESSION_CHAIN_MISMATCH');
   if (evidence.weekly) {
     const weekly = verifyWeeklyCalendarReceipt(evidence.weekly.calendarReceipt, userCodigo, weekStart, true);
     const c = evidence.contract;
-    resolveWeeklySlot(weekly, { day: c.targetDay, optionId: evidence.weekly.optionId, targetWeekStart: c.targetWeekStart,
-      discipline: c.discipline, stimulus: c.stimulusId, intent: c.intent,
-      state: calendarState({ tipo: c.discipline, stimulusId: c.stimulusId }) });
-    if (![2, 3, 4].includes(c.contractVersion) || (c.contractVersion === 4 && weekly.contractVersion !== 2) || weeklyDigest(c.prescriptionScope) !== weeklyDigest(weekly.prescriptionScope))
+    const signedSlot = resolveWeeklySlot(weekly, { day: c.targetDay, optionId: evidence.weekly.optionId, targetWeekStart: c.targetWeekStart,
+      discipline: c.discipline, ...(c.contractVersion === 5 ? {coachingGuidance:c.coachingGuidance} : {stimulus:c.stimulusId,intent:c.intent,
+      state:calendarState({tipo:c.discipline,stimulusId:c.stimulusId})}) });
+    if (c.contractVersion === 5 && (weekly.contractVersion !== 3 || !c.finalDecision || !samePlanData(c.coachingGuidance,signedSlot.coachingGuidance)
+      || typeof evidence.contextDigest !== 'string' || !Number.isSafeInteger(evidence.revision))) throw new Error('WEEKLY_SESSION_CHAIN_MISMATCH');
+    if (![2, 3, 4, 5].includes(c.contractVersion) || (c.contractVersion === 4 && weekly.contractVersion !== 2) || weeklyDigest(c.prescriptionScope) !== weeklyDigest(weekly.prescriptionScope))
       throw new Error('WEEKLY_SESSION_CHAIN_MISMATCH');
   }
   const rendered = renderContractSession(evidence.contract, evidence.proposal, authenticatedPresentationVersion(evidence.presentationVersion));

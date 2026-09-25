@@ -1,3 +1,5 @@
+import { finalDecisionErrors } from './finalSessionDecision';
+import type { FinalSessionDecision } from '../planning/weeklyCoachingGuidance';
 import { preserveWorkWithoutReference, validateCoachExecution } from './coachExecutionAdmission';
 import { safeViolations } from './builderDiagnostics';
 import { minimalSessionRepresentation, executableProjection } from './minimalSessionRepresentation';
@@ -24,6 +26,7 @@ export type MovementDose = { sets?: number; reps?: number; durationSeconds?: num
   referenceNotice?: string; unresolvedReferenceInstruction?: string;
   doseInstruction?: string; intensity?: DoseIntensity; tempo?: [number, number, number, number]; perSide?: boolean };
 export type StructuredSessionProposal = {
+  finalDecision?: FinalSessionDecision;
   schemaVersion?: 2;
   stimulusId: string;
   structureId: string;
@@ -144,6 +147,8 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
   if (!authority.ok) return { ok: false, violations: authority.errors.map(e => `CONTRACT:${e}`) };
   const p = checked.proposal;
   if (openExecution(contract)) {
+    const decisionErrors = finalDecisionErrors(contract,p);
+    if (decisionErrors.length) return {ok:false,violations:decisionErrors};
     if (!p.stimulusId) p.stimulusId = contract.stimulusId;
     preserveWorkWithoutReference(contract, p);
     const projected = executableProjection(p);

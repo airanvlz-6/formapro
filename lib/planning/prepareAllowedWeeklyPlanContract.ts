@@ -33,7 +33,7 @@ export async function loadWeeklyPlanningContext(db: any, codigo: string, request
   strategyVersion?: 1; strategyProposal?: unknown; planningRunId?: string; diagnosticTemporalDecision?: boolean | null;
   confirmedAvailabilityDigest?: string | null;
   coherenceVersion?: 1;
-  openCoachVersion?: 1;
+  openCoachVersion?: 1 | 2;
   preservationVersion?: 1 | 2;
   /** Server-selected immutable survivors for a bounded chat reassessment; bound into the receipt. */
   preserveDays?: string[];
@@ -238,7 +238,7 @@ export async function planBoundedWeek(db: any, codigo: string, request: Paramete
         && weeklyDigest(s) === weeklyDigest(prepared.fixedSessions[day])) };
     if (option.state === 'REST') return { dia: day, state: 'REST', tipo: 'descanso', titulo_breve: 'Descanso', focus: '' };
     return { dia: day, state: option.state, discipline: option.discipline, tipo: option.discipline,
-      stimulusId: option.stimulusId, intent: option.intent, titulo_breve: option.stimulusId!.replaceAll('_', ' '), focus: option.stimulusId,
+      stimulusId: option.stimulusId, intent: option.intent, ...(option.coachingGuidance ? { coachingGuidance: option.coachingGuidance } : {}), titulo_breve: option.stimulusId?.replaceAll('_', ' ') ?? '', focus: option.stimulusId,
       trabaja_debilidad: option.intent?.kind === 'adaptation' && !!option.intent.weaknessId };
   });
   const contractDigest = weeklyDigest(proposal.contract);
@@ -246,8 +246,8 @@ export async function planBoundedWeek(db: any, codigo: string, request: Paramete
   try { console.info?.('WEEKLY_STRATEGY_DIAGNOSTIC', { planningRunId: request.planningRunId ?? null, weekStart: request.targetWeekStart, contractDigest, ...diagnostic }); }
   catch { /* Observability cannot change the admitted strategy. */ }
   const calendarReceipt = generationToken === undefined ? undefined : await issueWeeklyCalendar(db, codigo, request.targetWeekStart, sessions,
-    { contract: proposal.contract, selections: calendarDays.map(day => proposal.contract.contractVersion === 2
-      ? openSelection(day, proposal.selected[day], proposal.decisions[day]) : { day, optionId: proposal.selected[day].optionId }), request, generationToken, decisions: proposal.decisions });
+    { contract: proposal.contract, selections: calendarDays.map(day => proposal.contract.contractVersion >= 2
+      ? openSelection(day, proposal.selected[day], proposal.decisions[day], proposal.contract.contractVersion) : { day, optionId: proposal.selected[day].optionId }), request, generationToken, decisions: proposal.decisions });
   return { ok: true as const, evidencePolicy:prepared.evidencePolicy, factualRequirements:prepared.factualRequirements, estructura: { weeklyContractVersion: proposal.contract.contractVersion, calendarProtocolVersion: 2, contractDigest, calendarReceipt, longitudinal,
     contextDigest: proposal.contract.contextDigest,
     strategy: { ...(proposal.contract.strategy ? { canonical: proposal.contract.strategy } : {}),

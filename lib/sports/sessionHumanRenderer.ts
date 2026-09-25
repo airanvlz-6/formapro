@@ -5,6 +5,7 @@ import { humanCoachingProjection } from './humanCoachingProjection';
 
 export function renderHumanSession(c: AllowedTrainingContract, p: StructuredSessionProposal, version: 'human_v2' | 'human_v3' = 'human_v2') {
   const legacy = renderProfessionalSession(c, p), human = humanCoachingProjection(c, p, version === 'human_v3');
+  if (c.contractVersion === 5) { human.title = `${c.finalDecision!.stimulus} · ${p.structureId.replaceAll('_',' ')}`; human.why = c.finalDecision!.reason ?? `Sesión de ${c.finalDecision!.stimulus}.`; human.sessionObjective = `Trabajar ${c.finalDecision!.stimulus}.`; }
   // At most six constant entity categories; arbitrary IDs/text are never logged.
   for (const entityType of human.fallbacks) {
     try { console.info?.('HUMAN_PRESENTATION_FALLBACK', { presentationVersion: version, entityType, fallbackType: 'neutral_label' }); }

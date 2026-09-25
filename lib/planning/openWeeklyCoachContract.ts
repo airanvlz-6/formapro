@@ -1,3 +1,4 @@
+import { validCoachingDescription } from './weeklyCoachingGuidance';
 import { createHash } from 'node:crypto';
 import type { AllowedWeeklyPlanContract, WeeklyContractInput, WeeklyOption, WeeklyCoachingDecision } from './allowedWeeklyPlanContract';
 import { calendarDays, isExecutableCalendarState } from './weeklyCalendar';
@@ -16,7 +17,7 @@ export function buildOpenWeeklyContract(input: WeeklyContractInput) {
     || input.prescriptionScope.managedDisciplines.some(d => !Array.isArray(input.allowed[d]) || !input.contexts[d]))
     return { ok: false as const, code: 'WEEKLY_CONTEXT_INVALID', errors: ['OPEN_WEEKLY_FACTS_INVALID'] };
   const contract: AllowedWeeklyPlanContract = {
-    contractVersion: 2, policyVersion: 'open-coach-v1', targetWeekStart: input.targetWeekStart,
+    contractVersion: input.openCoachVersion === 2 ? 3 : 2, policyVersion: input.openCoachVersion === 2 ? 'weekly-guidance-v2' : 'open-coach-v1', targetWeekStart: input.targetWeekStart,
     contextDigest: digest(input), prescriptionScope: structuredClone(input.prescriptionScope),
     // Seven calendar slots are representation, not a physiological frequency prescription.
     frequencyPolicy: { maxExecutableDays: 7, minExecutableDays: 0, requireGenuineRest: false },
@@ -36,7 +37,7 @@ const failure = (error: string) => ({ ok: false as const, code: 'WEEKLY_SELECTIO
 export function validateOpenWeeklySelection(contract: AllowedWeeklyPlanContract, value: unknown) {
   const p = value as any;
   if (!p || typeof p !== 'object' || Object.keys(p).sort().join(',') !== 'contextDigest,contractVersion,selections'
-    || p.contractVersion !== 2 || p.contextDigest !== contract.contextDigest || !Array.isArray(p.selections) || p.selections.length !== 7
+    || p.contractVersion !== contract.contractVersion || p.contextDigest !== contract.contextDigest || !Array.isArray(p.selections) || p.selections.length !== 7
     || !contract.openFacts) return failure('OPEN_WEEKLY_SCHEMA_INVALID');
   const selected: Record<string, WeeklyOption> = {}, decisions: Record<string, WeeklyCoachingDecision> = {};
   for (const s of p.selections) {
@@ -45,6 +46,18 @@ export function validateOpenWeeklySelection(contract: AllowedWeeklyPlanContract,
     if (fixed) {
       if (Object.keys(s).sort().join(',') !== 'day,optionId' || s.optionId !== fixed.optionId) return failure('OPEN_WEEKLY_FIXED_CHANGED');
       selected[s.day] = structuredClone(fixed); continue;
+    }
+    if (contract.contractVersion === 3) {
+      if (!['TRAIN','RECOVERY','REST'].includes(s.state)) return failure('OPEN_WEEKLY_SLOT_INVALID');
+      if (s.state === 'REST') {
+        if (Object.keys(s).some(k => !['day','state','guidance'].includes(k)) || s.guidance !== undefined && !validCoachingDescription(s.guidance,'weekly_guidance')) return failure('WEEKLY_GUIDANCE_INVALID');
+        selected[s.day] = {optionId:`${s.day}:rest`,state:'REST'}; continue;
+      }
+      if (Object.keys(s).some(k => !['day','state','discipline','guidance'].includes(k)) || !validCoachingDescription(s.guidance,'weekly_guidance')) return failure('WEEKLY_GUIDANCE_INVALID');
+      if (!contract.prescriptionScope.managedDisciplines.includes(s.discipline) || contract.prescriptionScope.externalDisciplines.includes(s.discipline)) return failure('DISCIPLINE_OUTSIDE_MANAGED_SCOPE');
+      if (!contract.openFacts.allowed[s.discipline]?.includes(s.day)) return failure('DAY_NOT_AVAILABLE');
+      selected[s.day] = {optionId:`${s.day}:coach:${digest({day:s.day,state:s.state,discipline:s.discipline,guidance:s.guidance})}`,state:s.state,discipline:s.discipline,coachingGuidance:structuredClone(s.guidance)};
+      continue;
     }
     const keys = Object.keys(s).sort().join(',');
     if (keys !== (s.state === 'REST' ? 'day,decision,state' : 'day,decision,intent,state')
@@ -71,7 +84,9 @@ export function validateOpenWeeklySelection(contract: AllowedWeeklyPlanContract,
   return { ok: true as const, selected, decisions, warnings: [] as {code:string;reference:string}[], ...counts };
 }
 /** Receipt issuance replays the same structured decisions, not an invented option whitelist. */
-export function openSelection(day: string, option: WeeklyOption, decision?: WeeklyCoachingDecision) {
+export function openSelection(day: string, option: WeeklyOption, decision?: WeeklyCoachingDecision, version = 2) {
+  if (version === 3 && !option.protected && option.state === 'REST') return {day,state:'REST'};
+  if (option.coachingGuidance) return {day,state:option.state,discipline:option.discipline,guidance:option.coachingGuidance};
   return option.protected ? { day, optionId: option.optionId } : { day, state: option.state, decision,
     ...(option.intent ? { intent: option.intent } : {}) };
 }
@@ -91,6 +106,10 @@ export function emitOpenWeeklyValidation(proposal: unknown, errors: string[], pl
   }
 }
 export function openWeeklyPrompt(contract: AllowedWeeklyPlanContract, context: unknown) {
+  if (contract.contractVersion === 3) return `WEEKLY_GUIDANCE_V2: Eres el Coach. Decide el calendario con el contexto completo. Guidance es recomendación deportiva para Builder, que puede revisarla. Nunca inventes hechos. Respeta scope, disponibilidad, días protected y frequencyPolicy. No hay cuotas deportivas ni catálogo obligatorio.
+Devuelve {contractVersion:3,contextDigest,selections:[siete días únicos]}. Protected: {day,optionId} exactos. REST: {day,state:"REST"}. Ejecutable: {day,state:"TRAIN"|"RECOVERY",discipline,guidance:{kind:"weekly_guidance",version:2,adaptation?,stimulus?,patterns?:string[],method?,role?,reason?}}. Todos los campos deportivos son descriptivos opcionales, strings legibles hasta 400 caracteres, sin normalizar a catálogo. Patterns admite varios strings. No incluyas dosis ejecutable en guidance. TRAIN/RECOVERY expresa recomendación de calendario; solo habilita la sesión de esa disciplina y fecha. No declara hechos ni obliga a Builder a copiar detalles deportivos.
+COACHING_CONTEXT:\n${JSON.stringify(context)}
+WEEKLY_CONTRACT:\n${JSON.stringify(contract)}`;
   return `Eres el Coach responsable de la semana. Propón decisiones deportivas estructuradas a partir de hechos, objetivo, evento, fase, historia, restricciones, equipo y capacidades. UNKNOWN no es normal ni permiso.
 No existe una lista exhaustiva de opciones deportivas. Los métodos conocidos son ejemplos; puedes proponer method.kind=coach_defined con label descriptivo, adaptationId y stimulusId identificadores semánticos, pattern resoluble y discipline del scope permitido. Los labels no establecen biomecánica, seguridad, equipo ni referencias. Session resolverá movimientos y validará sus requisitos reales.
 Decide TRAIN, REST, distribución, método, desarrollo/mantenimiento y patrón. No cuotas ni obligación de variar. Considera interferencia, continuidad y respuesta histórica sin inventar datos. No conviertas prescripción previa en ejecución.

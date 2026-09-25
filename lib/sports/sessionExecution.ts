@@ -3,7 +3,7 @@ import type { MovementDose } from './structuredSession';
 
 export const EXECUTION_POLICY = 'coach-executable-v1' as const;
 export const openExecution = (c: Pick<AllowedTrainingContract, 'contractVersion' | 'executionPolicy'>) =>
-  c.contractVersion === 4 && c.executionPolicy === EXECUTION_POLICY;
+  [4,5].includes(c.contractVersion) && c.executionPolicy === EXECUTION_POLICY;
 type Instruction = { fields: Partial<MovementDose>; qualitative: boolean;
   reference?: { kind: 'percent_1rm' | 'bpm' | 'seconds_per_km'; value: number } };
 

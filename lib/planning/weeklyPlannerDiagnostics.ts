@@ -2,7 +2,7 @@ export type PlannerMetadata = {
   stopReason: string | null; outputTokens: number | null;
   contentBlockCount: number | null; contentBlockTypes: string[];
 };
-export type PlannerCompletion = string | { text: string; metadata: PlannerMetadata };
+export type PlannerCompletion = string | { text: string; metadata: PlannerMetadata; weeklySelection?: unknown };
 
 const stopReasons = ['end_turn', 'max_tokens', 'stop_sequence', 'tool_use', 'pause_turn', 'refusal', 'model_context_window_exceeded'];
 const blockTypes = ['text', 'thinking', 'redacted_thinking', 'tool_use', 'server_tool_use', 'tool_result', 'web_search_tool_result', 'web_fetch_tool_result'];

@@ -49,13 +49,13 @@ export function wholeWeekInput(week: string, rows: readonly any[], evidence: any
     const load = ['TRAIN','RECOVERY'].includes(state) ? plannedPrescriptionLoad(row,date,`${day}:${index}`) : null;
     return { coachExecution: stored?.executionPolicy === 'coach-executable-v1', id:`${day}:${index}`,date,discipline:row.tipo || null,state,protected:!!slot.protected,structured,
       ...(adaptationDoseSatisfied !== undefined ? { adaptationDoseSatisfied } : {}),
-      adaptationId:['adaptation', 'open_coach'].includes(intent?.kind) ? intent.adaptationId : null,methodId:method?.id || (intent?.method?.kind === 'known' ? intent.method.id : null),weaknessId:intent?.weaknessId || null,role,
+      adaptationId:stored?.finalDecision?.adaptation ?? (['adaptation', 'open_coach'].includes(intent?.kind) ? intent.adaptationId : null),methodId:method?.id || (intent?.method?.kind === 'known' ? intent.method.id : null),weaknessId:intent?.weaknessId || null,role,
       structure:proposal?.structureId || null,stimulus:proposal?.stimulusId || null,movements,patterns,
       dose:structured ? proposal.blocks.map((b: any)=>({blockType:b.blockType,formatDose:b.formatDose || null,movements:b.movements.map((m: any) =>
         m.variant ? { movementId: resolvedMovement(m)?.identity ?? m.movementId, prescription: m.prescription } : m)})) : null,intensity,
       impact:metadata.some(m => m?.impact === 'alto') ? 'high' : metadata.length && metadata.every(m => m && m.impact) ? 'not_high' : 'unknown',
       demanding:[...new Set(demanding)],
-      contributionValid:intent?.kind === 'open_coach' ? intent.discipline === row.tipo && intent.stimulusId === proposal?.stimulusId && patterns.includes(intent.pattern) : !!(method && adaptation && intent.role === adaptation.role && method.stimulusId === proposal?.stimulusId
+      contributionValid:stored?.finalDecision?.kind === 'session_decision' ? stored.finalDecision.stimulus === proposal?.stimulusId && !!stored.finalDecision.patterns?.some((p:string)=>patterns.includes(p as any)) : intent?.kind === 'open_coach' ? intent.discipline === row.tipo && intent.stimulusId === proposal?.stimulusId && patterns.includes(intent.pattern) : !!(method && adaptation && intent.role === adaptation.role && method.stimulusId === proposal?.stimulusId
         && method.discipline === row.tipo && strategy.methods.includes(method.id) && intent.goalId === strategy.goal.id
         && patterns.includes(intent.pattern) && (strategy.weeklyDecisionAuthority === 'coach' || !adaptation.requiredPattern || patterns.includes(adaptation.requiredPattern))),
       recoveryContradiction:(state === 'RECOVERY' || role === 'RECOVERY') && (demanding.length > 0 || !['aerobic','skill'].includes(structure?.stimulus_type)),load };

@@ -1,3 +1,4 @@
+import type { WeeklyCoachingGuidance } from './weeklyCoachingGuidance';
 import type { DoseCapabilityProfile } from '../sports/doseCapabilityProfile';
 import { buildOpenWeeklyContract, validateOpenWeeklySelection, openWeeklyPrompt, emitOpenWeeklyValidation, type OpenWeeklyFacts } from './openWeeklyCoachContract';
 import type { WeeklyCoachingContext } from './weeklyCoachingContext';
@@ -22,12 +23,12 @@ export type WeeklyOption = { optionId: string; state: 'TRAIN' | 'RECOVERY' | 'RE
   protectionReason?: import('./weeklyCalendar').ProtectionReason;
   /** Server/domain projection: identical fixed prescriptions have no signed repetition authority. */
   fixedPrescriptionKey?: string;
-  discipline?: string; stimulusId?: string; intent?: PrescriptionIntent; protected?: true };
+  discipline?: string; stimulusId?: string; intent?: PrescriptionIntent; coachingGuidance?: WeeklyCoachingGuidance; protected?: true };
 /** Explanatory weekly priority, never a session intent, permission or receipt input. */
 export type WeeklyCoachingDecision = { role: 'PRIMARY' | 'SUPPORTING' | 'MAINTENANCE' | 'OPTIONAL' | 'RECOVERY'; reason: string };
 export type AllowedWeeklyPlanContract = {
   runningEventPreparation?: RunningEventPreparationDecisionV1;
-  contractVersion: 1 | 2; policyVersion: 'executable-ceiling-rest-v1' | 'open-coach-v1'; targetWeekStart: string;
+  contractVersion: 1 | 2 | 3; policyVersion: 'executable-ceiling-rest-v1' | 'open-coach-v1' | 'weekly-guidance-v2'; targetWeekStart: string;
   openFacts?: OpenWeeklyFacts;
   prescriptionScope: PrescriptionScope; contextDigest: string;
   frequencyPolicy: { maxExecutableDays: number; minExecutableDays: 0 | 1; requireGenuineRest: boolean };
@@ -36,7 +37,7 @@ export type AllowedWeeklyPlanContract = {
   regeneration?: RegenerationPolicy;
 };
 export type WeeklyContractInput = {
-  openCoachVersion?: 1;
+  openCoachVersion?: 1 | 2;
   runningEventPreparation?: RunningEventPreparationDecisionV1;
   /** Server-projected date/assignment evidence; absent only for legacy pure callers. */
   daySufficiency?: Record<string, Record<string, PrescriptionSignals>>;
@@ -109,7 +110,7 @@ function bindStrategicCoverage(contract: AllowedWeeklyPlanContract) {
 
 /** Pure option enumeration. Generic catalog stimuli are code-owned objectives, not text promises. */
 export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput, diagnosticContext?: WeeklyDiagnosticContext) {
-  if (input.openCoachVersion === 1) return buildOpenWeeklyContract(input);
+  if (input.openCoachVersion) return buildOpenWeeklyContract(input);
   const rejected: ReturnType<typeof projectRejectedWeeklyIntent>[] = [];
   const doseUnavailable: { methodId: string; adaptationId: string; reason: string; blockers: string[] }[] = [];
   try {
@@ -245,7 +246,7 @@ export function buildAllowedWeeklyPlanContract(input: WeeklyContractInput, diagn
 /** Exact IDs authorize sessions. Optional explanation is returned separately for diagnostics only.
  * Receipt replay intentionally accepts the original ID-only envelope. */
 export function validateWeeklySelection(contract: AllowedWeeklyPlanContract, proposal: unknown) {
-  if (contract.contractVersion === 2) return validateOpenWeeklySelection(contract, proposal);
+  if (contract.contractVersion >= 2) return validateOpenWeeklySelection(contract, proposal);
   const p = proposal as any;
   if (!p || typeof p !== 'object' || Array.isArray(p) || Object.keys(p).some(k => !['contractVersion', 'contextDigest', 'selections'].includes(k))
     || !['contractVersion', 'contextDigest', 'selections'].every(k => Object.hasOwn(p, k))
@@ -300,7 +301,7 @@ export function validateWeeklySelection(contract: AllowedWeeklyPlanContract, pro
 }
 
 export function weeklyPlannerPrompt(contract: AllowedWeeklyPlanContract, coachingContext?: WeeklyCoachingContext) {
-  if (contract.contractVersion === 2) return openWeeklyPrompt(contract, coachingContext);
+  if (contract.contractVersion >= 2) return openWeeklyPrompt(contract, coachingContext);
   return `Eres el entrenador responsable de diseñar la semana del atleta. Diseña la distribución semanal más coherente conectando pasado, estado actual, objetivo y conocimiento deportivo disponible.
 Integra evento, fase/bloque, historial, sesiones realizadas, modificaciones y respuesta, exposición, carga disponible, readiness cuando exista, restricciones, actividad externa, disponibilidad, debilidades y continuidad con semanas anteriores. No rellenes días simplemente porque sean válidos.
 Decide qué adaptación y método priorizar, qué día colocarlos y cuándo elegir TRAIN o REST entre los candidatos realmente factibles. Missing no significa recovered; unknown no significa zero ni normal. No inventes síntomas, marcas, referencias, sueño ni recuperación ausentes.
@@ -328,14 +329,14 @@ export async function composeBoundedWeek(contract: AllowedWeeklyPlanContract, co
   const immutable = structuredClone(contract);
   const freeze = (v: any) => { if (v && typeof v === 'object') { Object.freeze(v); Object.values(v).forEach(freeze); } };
   freeze(immutable);
-  if (immutable.contractVersion === 2 && immutable.openFacts?.weeklyAvailability?.resolution === 'EXPLICIT_ZERO_TRAINING'
+  if (immutable.contractVersion >= 2 && immutable.openFacts?.weeklyAvailability?.resolution === 'EXPLICIT_ZERO_TRAINING'
     && Object.values(immutable.openFacts.allowed).every(days => days.length === 0)) {
     // This is the user's factual no-training decision, not an invented sports
     // prescription. It travels through the same selection, receipt and save gates.
-    const selected = validateWeeklySelection(immutable, { contractVersion: 2, contextDigest: immutable.contextDigest,
+    const selected = validateWeeklySelection(immutable, { contractVersion: immutable.contractVersion, contextDigest: immutable.contextDigest,
       selections: calendarDays.map(day => {
         const fixed = immutable.dayOptions[day].find(o => o.protected);
-        return fixed ? { day, optionId: fixed.optionId } : { day, state: 'REST', decision: { role: 'RECOVERY', reason: 'Sin entrenamiento por disponibilidad semanal explícita.' } };
+        return fixed ? { day, optionId: fixed.optionId } : immutable.contractVersion === 3 ? {day,state:'REST'} : { day, state: 'REST', decision: { role: 'RECOVERY', reason: 'Sin entrenamiento por disponibilidad semanal explícita.' } };
       }) });
     if (!selected.ok) return selected;
     return { ok: true as const, contract: immutable, selected: selected.selected, decisions: selected.decisions, warnings: selected.warnings, attempts: 0 };
@@ -344,6 +345,7 @@ export async function composeBoundedWeek(contract: AllowedWeeklyPlanContract, co
   let errors: string[] = [];
   for (let attempt = 1; attempt <= 2; attempt++) {
     let raw: string;
+    let structuredSelection: unknown;
     let metadata: PlannerMetadata | undefined;
     let normalizedMarkdownFence = false;
     const report = (text: string, parsed: boolean, codes: string[], reason: Parameters<typeof emitWeeklyPlannerDiagnostic>[5]) =>
@@ -351,7 +353,8 @@ export async function composeBoundedWeek(contract: AllowedWeeklyPlanContract, co
     try {
       const completed = await complete(prompt + (attempt === 2 ? `\nPropuesta rechazada: ${JSON.stringify(errors)}. Selecciona otra vez dentro del MISMO contrato.`
         + (errors.includes('WEEKLY_JSON_INVALID') ? '\nLa respuesta anterior fue rechazada en la lectura del JSON RAW. Devuelve el objeto directamente, sin fences Markdown ni prosa. El primer carácter DEBE ser { y el último DEBE ser }. No añadas explicaciones ni comentarios.' : '') : ''));
-      raw = typeof completed === 'string' ? completed : completed.text;
+      if (immutable.contractVersion === 3 && typeof completed !== 'string') structuredSelection = completed.weeklySelection;
+      raw = structuredSelection === undefined ? typeof completed === 'string' ? completed : completed.text : JSON.stringify(structuredSelection);
       metadata = typeof completed === 'string' ? undefined : completed.metadata;
     }
     catch { report('', false, ['LLM_REQUEST_FAILED'], 'LLM_REQUEST_FAILED'); return failure('WEEKLY_PLANNER_FAILED', ['LLM_REQUEST_FAILED']); }
@@ -360,13 +363,14 @@ export async function composeBoundedWeek(contract: AllowedWeeklyPlanContract, co
       if (raw.length > 32000) throw new Error();
       const normalized = normalizeWeeklyPlannerTransport(raw);
       normalizedMarkdownFence = normalized.normalizedFence;
-      parsed = JSON.parse(normalized.text);
+      parsed = structuredSelection === undefined ? JSON.parse(normalized.text) : structuredSelection;
     }
     catch { errors = ['WEEKLY_JSON_INVALID']; report(raw, false, errors, raw.length > 32000 ? 'RAW_TOO_LONG' : 'JSON_PARSE_FAILED'); continue; }
     const result = validateWeeklySelection(immutable, parsed);
+    if (immutable.contractVersion === 3 && process.env.FORGE_WEEKLY_COACHING_DIAGNOSTICS === '1') { try { console.info('WEEKLY_GUIDANCE_ADMISSION',{version:2,planningRunId:planningRunId ?? null,status:result.ok?'PASS':'FAIL',guidance:result.ok?calendarDays.filter(day=>result.selected[day].coachingGuidance).map(day=>({day,digest:createHash('sha256').update(JSON.stringify(result.selected[day].coachingGuidance)).digest('hex')})):[]}); } catch {} }
     if (immutable.contractVersion === 2) emitOpenWeeklyValidation(parsed, result.ok ? [] : 'errors' in result ? result.errors : [result.code], planningRunId);
     if (result.ok) {
-      if (immutable.strategy?.weeklyDecisionAuthority === 'coach'
+      if (immutable.contractVersion !== 3 && immutable.strategy?.weeklyDecisionAuthority === 'coach'
         && calendarDays.some(day => !result.selected[day].protected && !result.decisions[day])) {
         errors = ['WEEKLY_DECISION_REQUIRED'];
         report(raw, true, errors, null);

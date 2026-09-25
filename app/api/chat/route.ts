@@ -1,3 +1,4 @@
+import { WEEKLY_GUIDANCE_TOOL, readWeeklyGuidanceOutput } from '@/lib/planning/weeklyGuidanceOutput';
 import { conversationSession } from '@/lib/chat/conversationSession';
 import { authorizeChatRequest } from '@/lib/auth/chatIdentity';
 import { identityDependencies } from '@/lib/auth/supabaseServer';
@@ -2317,19 +2318,22 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
       const result = await planBoundedWeek(supabase, codigo, {
         targetWeekStart: datos.targetWeekStart, today,
         empezarHoy: includeToday, snapshot: generation.snapshots[datos.targetWeekStart],
-        strategyVersion: 1, strategyProposal: datos.analisis?.strategyProposal, coherenceVersion: 1, openCoachVersion: 1, planningRunId: generation.planningRunId,
+        strategyVersion: 1, strategyProposal: datos.analisis?.strategyProposal, coherenceVersion: 1, openCoachVersion: coachFirstPlanning ? 2 : 1, planningRunId: generation.planningRunId,
         confirmedAvailabilityDigest: datos.confirmedAvailabilityDigest,
       }, async (prompt: string) => {
         const longitudinalDecision = prompt.startsWith(LONGITUDINAL_DECISION_MARKER);
+        const weeklyGuidance = prompt.startsWith('WEEKLY_GUIDANCE_V2:');
+        const outputTool = longitudinalDecision ? LONGITUDINAL_DECISION_TOOL : weeklyGuidance ? WEEKLY_GUIDANCE_TOOL : null;
         const response = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
           body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1800, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning, longitudinalDecision ? 'Longitudinal' : 'Weekly') : '') }],
-            ...(longitudinalDecision ? { tools: [LONGITUDINAL_DECISION_TOOL],
-              tool_choice: { type: 'tool', name: LONGITUDINAL_DECISION_TOOL.name, disable_parallel_tool_use: true } } : {}) }),
+            ...(outputTool ? { tools: [outputTool],
+              tool_choice: { type: 'tool', name: outputTool.name, disable_parallel_tool_use: true } } : {}) }),
         });
         if (!response.ok) throw new Error("LLM_REQUEST_FAILED");
         const output = await response.json();
         if (longitudinalDecision) return readLongitudinalDecisionOutput(output);
+        if (weeklyGuidance) return readWeeklyGuidanceOutput(output);
         return { text: output.content?.map((b: any) => b.text || "").join("") || "", metadata: plannerProviderMetadata(output) };
       }, datos.generationToken);
       if (!result.ok) return NextResponse.json({ ...result, retryable: false });
@@ -2387,7 +2391,7 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
             metadata: { stopReason: output.stop_reason, outputTokens: output.usage?.output_tokens,
               contentBlockCount: output.content?.length, contentBlockTypes: output.content?.map((b: any) => b.type) } };
         }, JSON.stringify({ intent: datos.titulo_breve ?? datos.tituloBreve, analysis: datos.analisis,
-          previousDay: datos.diaAnterior, nextDay: datos.diaSiguiente }), generation.planningRunId);
+          previousDay: datos.diaAnterior, nextDay: datos.diaSiguiente }), generation.planningRunId, coachFirstPlanningText(coachFirstPlanning, 'Builder'));
       return NextResponse.json(generated);
     } catch (error: any) {
       return NextResponse.json({ ok: false, code: "TRAINING_CONTRACT_INVALID", errors: [error.message], retryable: false });
@@ -4732,7 +4736,7 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
       week_number: plan.week_number,
       total_weeks_block: plan.total_weeks_block || null,
       block_name: plan.block_name,
-      week_objective: admittedWeekObjective(datos.calendarReceipt, codigo, plan.week_start, plan.week_objective || null),
+      week_objective: admittedWeekObjective(datos.calendarReceipt, codigo, plan.week_start, plan.week_objective || null, plan.sessions),
       status: plan.status || "active",
       confidence: plan.confidence || 100,
       sessions: plan.sessions,

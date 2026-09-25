@@ -15,7 +15,7 @@ export function currentWeekCoachingContext(week: string, rows: readonly any[], s
         pattern: resolved?.descriptor.movement_pattern ?? null, block: b.blockType, dose: m.prescription, doseProvenance: 'PRESCRIBED_NOT_MEASURED' };
     }));
     return { day, date, order, provenance: row.completada === true ? 'HISTORICAL_COMPLETED' : 'PLANNED_CURRENT_WEEK',
-      modality: row.tipo, intent: stored?.objective?.intent ?? slots.find(s => s.day === day)?.intent ?? null,
+      modality: row.tipo, ...(stored?.finalDecision ? {finalDecision:stored.finalDecision} : {}), intent: stored?.objective?.intent ?? slots.find(s => s.day === day)?.intent ?? null,
       structure: proposal?.structureId ?? null, movements, proposal: proposal ?? null };
   }).sort((a, b) => a.order - b.order);
   const planned = rows.filter(row => row.completada !== true);
@@ -28,6 +28,6 @@ export function currentWeekCoachingContext(week: string, rows: readonly any[], s
     }] : []);
   }));
   return { version: 1, weekStart: week, semantics: 'ADVISORY_NOT_EXECUTED',
-    weeklyIntents: slots.map(s => ({ day: s.day, state: s.state, discipline: s.discipline ?? null, intent: s.intent ?? null })),
+    weeklyIntents: slots.map(s => ({ day: s.day, state: s.state, discipline: s.discipline ?? null, intent: s.intent ?? null, ...(s.coachingGuidance ? {coachingGuidance:s.coachingGuidance,provenance:"WEEKLY_RECOMMENDATION"} : {}) })),
     sessions, plannedExposure: { provenance: 'PLANNED_CURRENT_WEEK', ...exposure } };
 }

@@ -68,7 +68,7 @@ export async function loadWeeklyCalendarContext(db: any, codigo: string, targetW
 }
 export async function issueWeeklyCalendar(db: any, codigo: string, week: string, sessions: any[], admission?: Admission) {
   const c = await loadWeeklyCalendarContext(db, codigo, week);
-  const openCoach = admission?.contract.contractVersion === 2;
+  const openCoach = [2,3].includes(admission?.contract.contractVersion ?? 0);
   const result = validateWeeklyCalendar(sessions, openCoach ? 7 : c.max, c.allowed, undefined, openCoach);
   if (!result.ok || !result.slots) throw Object.assign(new Error(result.errors.join(',')), { availabilityViolations: result.availabilityViolations });
   const calendarSlots = result.slots;
@@ -82,7 +82,7 @@ export async function issueWeeklyCalendar(db: any, codigo: string, week: string,
       const option = selected.selected[day];
       const date = new Date(week + 'T12:00:00Z'); date.setUTCDate(date.getUTCDate() + index);
       const slot = calendarSlots.find(s => s.day === day);
-      if (!slot || slot.state !== option.state || (isExecutableCalendarState(option.state) && slot.type !== option.discipline))
+      if (!slot || (slot.state !== option.state && !(contract.contractVersion === 3 && isExecutableCalendarState(slot.state) && isExecutableCalendarState(option.state))) || (isExecutableCalendarState(option.state) && slot.type !== option.discipline))
         rejectWeekly('WEEKLY_SLOT_MISMATCH');
       const original = request.snapshot?.sessions.find(s => calendarKey(s.dia) === day);
       return { day, targetDate: date.toISOString().slice(0, 10), ...option,
@@ -114,7 +114,7 @@ export async function issueWeeklyCalendar(db: any, codigo: string, week: string,
 
 /** The only calendar HMAC verifier, shared by Builder, session evidence and save. */
 export function verifyWeeklyCalendarReceipt(receipt: unknown, codigo: string, week: string, requireV2 = false) {
-  if (typeof receipt !== 'string' || receipt.length > 64000) throw new Error('CALENDAR_RECEIPT_REQUIRED');
+  if (typeof receipt !== 'string' || receipt.length > 128000) throw new Error('CALENDAR_RECEIPT_REQUIRED');
   const [payload, signature, extra] = receipt.split('.');
   if (!payload || !signature || extra !== undefined) throw new Error('CALENDAR_RECEIPT_INVALID');
   const expected = Buffer.from(mac(payload)), actual = Buffer.from(signature);
@@ -123,13 +123,15 @@ export function verifyWeeklyCalendarReceipt(receipt: unknown, codigo: string, we
   if (evidence.codigo !== codigo || evidence.week !== week || !Number.isFinite(evidence.expires) || Date.now() > evidence.expires) throw new Error('CALENDAR_RECEIPT_EXPIRED');
   if (requireV2 && evidence.protocolVersion !== 2) rejectWeekly('WEEKLY_RECEIPT_UPGRADE_REQUIRED');
   if (evidence.protocolVersion !== undefined && evidence.protocolVersion !== 2) rejectWeekly('WEEKLY_PROTOCOL_UNSUPPORTED');
+  if (evidence.contractVersion !== 3 && receipt.length > 64000) throw new Error('CALENDAR_RECEIPT_REQUIRED');
   authenticatedPresentationVersion(evidence.presentationVersion);
   return evidence;
 }
 
 /** Save derives text from signed canonical strategy; legacy receipts retain their historical field. */
-export function admittedWeekObjective(receipt: unknown, codigo: string, week: string, legacy: string | null) {
+export function admittedWeekObjective(receipt: unknown, codigo: string, week: string, legacy: string | null, finalSessions: readonly any[] = []) {
   const evidence = verifyWeeklyCalendarReceipt(receipt, codigo, week, true);
+  if (evidence.contractVersion === 3) return finalSessions.filter(s => s.structuredPrescription?.finalDecision?.kind === 'session_decision').map(s => s.structuredPrescription.finalDecision.stimulus).filter((s,i,a)=>a.indexOf(s)===i).join(' · ') || null;
   if (evidence.coherenceVersion === 1 && evidence.strategy)
     return selectedWeekObjective(evidence.strategy, evidence.admittedSlots, evidence.coachingDecisions);
   return evidence.strategy ? authenticatedPresentationVersion(evidence.presentationVersion) === 'human_v2'
@@ -169,10 +171,15 @@ export function resolveWeeklySlot(evidence: any, request: Record<string, any>) {
   const slot = evidence.admittedSlots.find((s: any) => s.day === request.day);
   if (!slot || request.optionId !== slot.optionId) rejectWeekly('WEEKLY_SLOT_MISMATCH');
   if (!isExecutableCalendarState(slot.state) || slot.protected) rejectWeekly('WEEKLY_SLOT_NOT_EXECUTABLE');
-  const expected = { targetWeekStart: evidence.week, targetDate: slot.targetDate, contractDigest: evidence.contractDigest,
+  const expected: Record<string,unknown> = { targetWeekStart: evidence.week, targetDate: slot.targetDate, contractDigest: evidence.contractDigest,
     contextDigest: evidence.contextDigest, discipline: slot.discipline, stimulus: slot.stimulusId, intent: slot.intent, state: slot.state,
     tipo: slot.discipline, stimulusId: slot.stimulusId,
     titulo_breve: slot.stimulusId?.replaceAll('_', ' '), tituloBreve: slot.stimulusId?.replaceAll('_', ' '), focus: slot.stimulusId };
+  if (evidence.contractVersion === 3) {
+    for (const key of ['stimulus','intent','state','stimulusId','titulo_breve','tituloBreve','focus']) delete expected[key];
+    expected.coachingGuidance = slot.coachingGuidance;
+    if (request.state !== undefined && !isExecutableCalendarState(request.state)) rejectWeekly('WEEKLY_SLOT_MISMATCH');
+  }
   for (const [field, value] of Object.entries(expected)) {
     if (Object.hasOwn(request, field) && !samePlanData(request[field], value)) rejectWeekly('WEEKLY_SLOT_MISMATCH');
   }
@@ -205,9 +212,16 @@ export async function assertWeeklyCalendar(db: any, codigo: string, week: string
     }
   }
   const c = await loadWeeklyCalendarContext(db, codigo, week);
-  const openCoach = evidence.contractVersion === 2;
-  const result = validateWeeklyCalendar(sessions, openCoach ? 7 : c.max, c.allowed, evidence.slots, openCoach);
+  const openCoach = [2,3].includes(evidence.contractVersion);
+  const calendarSlots = evidence.contractVersion === 3 ? evidence.slots.map((slot:any) => {
+    const authorization = evidence.admittedSlots.find((s:any)=>s.day===slot.day);
+    const final = sessions.find(s=>calendarKey(s.dia)===slot.day);
+    return authorization && !authorization.protected && isExecutableCalendarState(authorization.state) && final && isExecutableCalendarState(calendarState(final))
+      ? {...slot,state:calendarState(final)} : slot;
+  }) : evidence.slots;
+  const result = validateWeeklyCalendar(sessions, openCoach ? 7 : c.max, c.allowed, calendarSlots, openCoach);
   if (!result.ok) throw new Error(result.errors.join(','));
+  if (evidence.contractVersion === 3 && process.env.FORGE_WEEKLY_COACHING_DIAGNOSTICS === '1') { try { console.info('WEEKLY_GUIDANCE_SAVE', {version:2,status:'PASS',decisions:sessions.filter(s=>s.structuredPrescription?.finalDecision).map(s=>({day:calendarKey(s.dia),digest:weeklyDigest(s.structuredPrescription.finalDecision)}))}); } catch { /* Observation only. */ } }
   return { evidence, contexts };
 }
 

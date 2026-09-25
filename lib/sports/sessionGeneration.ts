@@ -1,3 +1,4 @@
+import { admitFinalDecision, FINAL_DECISION_INSTRUCTIONS } from './finalSessionDecision';
 import { executableProjection } from './minimalSessionRepresentation';
 import type { SessionShapeDiagnostic } from './sessionShapeDiagnostics';
 import { openExecution, EXECUTABLE_DOSE_INSTRUCTIONS } from './sessionExecution';
@@ -26,7 +27,7 @@ const movementDiagnosticCodes = (errors: readonly string[]) => errors.map(error 
 /** One private immutable snapshot for prompt, both attempts, validation and rendering. */
 export async function generateContractSession(contract: AllowedTrainingContract, history: SesionParaComparar[],
   complete: (prompt: string) => Promise<string | BuilderCompletion>, context = '', planningRunId?: string, presentationVersion: PresentationVersion = 'legacy') {
-  const authority = freeze(structuredClone(contract));
+  let authority = freeze(structuredClone(contract));
   const coach = authority.doseContext?.sessionDecisionAuthority === 'coach';
   const preflight = validateAllowedTrainingContract(authority);
   if (!preflight.ok) return { ok: false as const, code: 'TRAINING_CONTRACT_INVALID', violations: preflight.errors };
@@ -107,6 +108,7 @@ En coach-executable-v1, UNKNOWN de equipo, skill o capability es una falta de co
 Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gramática representable, blocks y explanation breve. Mantén el schema de dosis descrito abajo.\n` : '';
   let prompt = `${openInstructions}${coach ? instructions.replace('La explicación y el objetivo se derivan por código, no los escribas.', 'El objetivo se deriva del intent.') + decisionInstruction : instructions}${timeInstruction}${representationInstruction}${intensityInstruction}${methodInstruction}${coach ? '' : doseInstruction + compositionInstruction}${variantInstruction}\nCONTRACT:\n${JSON.stringify(authority)}${intentInstruction}\nContexto no autoritativo:\n${context}\nOpciones ejecutables por alcance (preparationOnly nunca amplía main):\n${JSON.stringify(builderOptions)}\nHistorial para evitar duplicación:\n${JSON.stringify(recent)}`;
   if (openExecution(authority)) prompt = `${EXECUTABLE_DOSE_INSTRUCTIONS}\nCONTRACT:\n${JSON.stringify(authority)}\nContexto no autoritativo:\n${context}\nHistorial:\n${JSON.stringify(recent)}`;
+  if (authority.contractVersion === 5) prompt = prompt.replace('The weekly intent tells you WHAT adaptation/stimulus this session should serve. YOU are responsible for deciding HOW to train it.', FINAL_DECISION_INSTRUCTIONS);
   if (authority.contractVersion === 4) prompt = prompt.replace('Los canónicos de allowedMovementIds tienen material y nivel resueltos; cada variante requiere validación propia.', 'Cada propuesta requiere validación propia de material y nivel.')
     .replace('allowedMovementIds son candidatos canónicos confiables, preferibles cuando encajan, no todos los ejercicios posibles.', 'allowedMovementIds son ejemplos canónicos, no todos los ejercicios posibles ni permisos sobre el atleta.');
   if (authority.generatedMovementAuthority) emitSessionCoachingDiagnostic('SESSION_MOVEMENT_COACH_INPUT', {
@@ -162,7 +164,15 @@ Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gram�
     const coachingDecision = coach ? { reason: typeof parsed.proposal.explanation === 'string' ? parsed.proposal.explanation : undefined, structureId: parsed.proposal.structureId,
       blocks: structuredClone(parsed.proposal.blocks) } : undefined;
     if (coachingDecision) emitSessionCoachingDiagnostic('SESSION_COACH_DECISION', { structureId: coachingDecision.structureId, blocks: executableProjection(parsed.proposal).projection.blocks });
-    const validation = validateSessionAgainstTrainingContract(authority, parsed.proposal, (estimate, errors) =>
+    let proposalAuthority;
+    try { proposalAuthority = freeze(admitFinalDecision(authority, parsed.proposal)); }
+    catch (e: any) {
+      previousErrors = [e.message];
+      trace.emit(attempt + 1, 'checkSessionShape', 'SESSION_CONTRACT_INVALID', previousErrors, !attempt, attempt ? 'attempt_limit' : 'contract_rule_retry');
+      if (!attempt) continue;
+      return { ok: false as const, code: 'SESSION_CONTRACT_INVALID', violations: previousErrors, diagnostics: trace.summary() };
+    }
+    const validation = validateSessionAgainstTrainingContract(proposalAuthority, parsed.proposal, (estimate, errors) =>
       emitSessionDoseAuthority(authority, { ...estimate, expectedSeconds: estimate.expectedSeconds ?? null }, errors, trace.summary().planningRunId ?? undefined),
       (signal, state, block, movement) => { missingDetails.push(sufficiencyFailure(signal, state, block, movement)); }, assessment => {
         try { console.info?.('SESSION_INTENT_ASSESSMENT', { planningRunId: trace.summary().planningRunId, day: authority.targetDay, attempt: attempt + 1, ...assessment }); } catch { /* Observation only. */ }
@@ -178,12 +188,13 @@ Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gram�
       if (retry) continue;
       return { ok: false as const, code: 'SESSION_CONTRACT_INVALID', violations: validation.violations, diagnostics: trace.summary() };
     }
+    authority = proposalAuthority;
     // Commentary is not part of the executable proposal or its receipt.
     if (coach) delete validation.proposal.explanation;
     const session = renderContractSession(authority, validation.proposal, presentationVersion);
     const repeated = detectarSesionDuplicada(session, recent).esDuplicado;
-    const duplicate = authority.contractVersion !== 4 && repeated;
-    if (authority.contractVersion === 4 && repeated) emitSessionCoachingDiagnostic('SESSION_AUTHORITY_RESOLUTION', { day: authority.targetDay, advisory: 'SESSION_REPETITION', repeated: true });
+    const duplicate = !openExecution(authority) && repeated;
+    if (openExecution(authority) && repeated) emitSessionCoachingDiagnostic('SESSION_AUTHORITY_RESOLUTION', { day: authority.targetDay, advisory: 'SESSION_REPETITION', repeated: true });
     if (coach) {
       emitSessionCoachingDiagnostic('SESSION_AUTHORITY_RESOLUTION', { rejections: duplicate ? ['SESSION_DUPLICATE'] : [],
         expressions: validation.proposal.blocks.flatMap(b => b.movements.map(m => ({ movementId: m.movementId,

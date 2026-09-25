@@ -1,3 +1,4 @@
+import { validCoachingDescription } from '../planning/weeklyCoachingGuidance';
 import { resolvePrescriptionIntent, intentMatchingMovementIds, type PrescriptionIntent } from './prescriptionIntent';
 import type { ContractInput } from './allowedTrainingContract';
 import { MOVEMENT_LIBRARY, STIMULUS_LIBRARY, rankearCandidatos } from './movementLibrary';
@@ -20,6 +21,7 @@ export function resolveTrainingStimulus(discipline: string, value: unknown): Sti
 }
 /** Open intents carry resolved sporting semantics. Catalog tags are examples, not permissions. */
 export function resolveIntentStimulus(input: ContractInput): StimulusResolution {
+  if (input.coachingGuidance) return validCoachingDescription(input.coachingGuidance,'weekly_guidance') && typeof input.stimulus === 'string' ? {status:'resolved',stimulusId:input.stimulus} : {status:'unresolved',reason:'WEEKLY_GUIDANCE_INVALID'};
   if (input.intent?.kind !== 'open_coach') return resolveTrainingStimulus(input.discipline, input.stimulus);
   const resolved = resolvePrescriptionIntent(input.intent);
   return resolved.ok && input.intent.discipline === input.discipline && input.intent.stimulusId === input.stimulus
@@ -42,7 +44,7 @@ export function feasibilityInputErrors(input: ContractInput): string[] {
   const r = input.restrictionsSnapshot;
   if (!r || !dateValid(r.asOfDate) || !Array.isArray(r.areas) || !Array.isArray(r.restrictions) || !Array.isArray(r.reassessments)) return [...errors, 'RESTRICTIONS_INVALID'];
   // Flags are evaluated per candidate; unresolved free-text-only restrictions still reject.
-  if (input.intent?.kind !== 'open_coach' || 'contractVersion' in input && (input as ContractInput & { executionPolicy?: string }).executionPolicy !== 'coach-executable-v1') {
+  if (!input.coachingGuidance && input.intent?.kind !== 'open_coach' || 'contractVersion' in input && (input as ContractInput & { executionPolicy?: string }).executionPolicy !== 'coach-executable-v1') {
   for (const n of [...r.restrictions, ...r.reassessments]) {
     if (!activeRestrictionFlags([n]).length && !Object.hasOwn(MOVEMENT_LIBRARY, normalizeTrainingKey(n.movement))) errors.push('RESTRICTION_UNRESOLVED');
   }
@@ -102,7 +104,7 @@ export function evaluateTrainingFeasibility(input: ContractInput, sufficiency?: 
     const admittedIntent = resolvePrescriptionIntent(Object.hasOwn(input, 'intent') ? input.intent : { kind: 'stimulus_only' });
     if (!admittedIntent.ok) return { resolved: false, feasible: false, errors: admittedIntent.errors };
     const intent = admittedIntent.intent;
-    if (intent.kind === 'open_coach') {
+    if (input.coachingGuidance || intent.kind === 'open_coach') {
       // Do not prove sporting impossibility from an empty example pool. Actual design is
       // checked against restrictions, equipment, skill, references and time after proposal.
       const ids = Object.keys(MOVEMENT_LIBRARY).sort();

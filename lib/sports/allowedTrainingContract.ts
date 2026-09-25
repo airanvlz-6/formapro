@@ -1,3 +1,4 @@
+import { validCoachingDescription, type WeeklyCoachingGuidance, type FinalSessionDecision } from '../planning/weeklyCoachingGuidance';
 import type { PrescriptionIntent } from './prescriptionIntent';
 import { runningEventMethodAllowed, type RunningEventPreparationDecisionV1 } from './runningEventPreparation';
 import type { CanonicalRestrictions } from '../athlete/getCanonicalRestrictions';
@@ -24,6 +25,8 @@ export type ExternalLoadContext = {
   records: { fecha: string; disciplina: string; duracion?: number | null; intensidad_percibida?: number | null; fatiga_post?: number | null }[];
 };
 export type ContractInput = {
+  coachingGuidance?: WeeklyCoachingGuidance;
+  finalDecision?: FinalSessionDecision;
   runningEventPreparation?: RunningEventPreparationDecisionV1;
   prescriptionScope: PrescriptionScope;
   targetWeekStart: string;
@@ -44,7 +47,7 @@ export type AllowedTrainingContract = Omit<ContractInput, 'stimulus'> & {
   generatedMovementAuthority?: GeneratedMovementAuthority;
   intensityAuthority?: MethodIntensityAuthority;
   runningMethodDose?: AuthorizedRunningMethodDose;
-  contractVersion: 1 | 2 | 3 | 4;
+  contractVersion: 1 | 2 | 3 | 4 | 5;
   stimulusId: string;
   allowedMovementIds: string[];
   allowedStructureIds: string[];
@@ -62,8 +65,8 @@ function buildContract(input: ContractInput): ContractResult {
   const pool = evaluateTrainingFeasibility(input);
   if (!pool.resolved || !pool.feasible) return { ok: false, errors: pool.errors };
   const { stimulus: _intent, ...context } = input;
-  const contract: AllowedTrainingContract = structuredClone({ ...context, contractVersion: input.intent?.kind === 'open_coach' ? 4 : input.doseContext ? 3 : Object.hasOwn(input, 'intent') ? 2 : 1, stimulusId: pool.stimulusId,
-    ...(input.intent?.kind === 'open_coach' ? { executionPolicy: EXECUTION_POLICY } : {}),
+  const contract: AllowedTrainingContract = structuredClone({ ...context, contractVersion: input.coachingGuidance ? 5 : input.intent?.kind === 'open_coach' ? 4 : input.doseContext ? 3 : Object.hasOwn(input, 'intent') ? 2 : 1, stimulusId: pool.stimulusId,
+    ...(input.coachingGuidance || input.intent?.kind === 'open_coach' ? { executionPolicy: EXECUTION_POLICY } : {}),
     allowedMovementIds: pool.allowedMovementIds, allowedStructureIds: pool.allowedStructureIds,
     rankedCandidates: pool.rankedCandidates,
     restrictionFiltering: pool.restrictionFiltering,
@@ -76,7 +79,7 @@ export function validateAllowedTrainingContract(contract: AllowedTrainingContrac
   try {
     const input: ContractInput = { ...contract, stimulus: contract.stimulusId };
     const errors = feasibilityInputErrors(input);
-    if (contract.executionPolicy !== undefined && (contract.executionPolicy !== EXECUTION_POLICY || contract.contractVersion !== 4)) errors.push('EXECUTION_POLICY_INVALID');
+    if (contract.executionPolicy !== undefined && (contract.executionPolicy !== EXECUTION_POLICY || ![4,5].includes(contract.contractVersion))) errors.push('EXECUTION_POLICY_INVALID');
     if (contract.generatedMovementAuthority !== undefined && (contract.contractVersion < 3
       || contract.doseContext?.sessionDecisionAuthority !== 'coach' || !contract.doseContext.sufficiency
       || JSON.stringify(contract.generatedMovementAuthority) !== JSON.stringify(GENERATED_MOVEMENT_AUTHORITY)))
@@ -89,13 +92,14 @@ export function validateAllowedTrainingContract(contract: AllowedTrainingContrac
     }
     if (!validMethodIntensity(contract)) errors.push('METHOD_INTENSITY_AUTHORITY_INVALID');
     if (!validRunningMethodDose(contract)) errors.push('RUNNING_METHOD_DOSE_AUTHORITY_INVALID');
-    if (![1, 2, 3, 4].includes(contract.contractVersion)) errors.push('CONTRACT_VERSION_INVALID');
+    if (![1, 2, 3, 4, 5].includes(contract.contractVersion)) errors.push('CONTRACT_VERSION_INVALID');
     if (contract.contractVersion === 4 && contract.intent?.kind !== 'open_coach'
       || contract.contractVersion !== 4 && contract.intent?.kind === 'open_coach') errors.push('OPEN_DESIGN_VERSION_MISMATCH');
-    if (contract.contractVersion === 4 && (!contract.doseContext?.sufficiency || contract.doseContext.sessionDecisionAuthority !== 'coach')) errors.push('OPEN_DESIGN_FACTS_REQUIRED');
-    if ([3, 4].includes(contract.contractVersion) ? !validateDoseContext(contract.doseContext!) : Object.hasOwn(contract, 'doseContext')) errors.push('DOSE_CONTEXT_VERSION_INVALID');
+    if ([4,5].includes(contract.contractVersion) && (!contract.doseContext?.sufficiency || contract.doseContext.sessionDecisionAuthority !== 'coach')) errors.push('OPEN_DESIGN_FACTS_REQUIRED');
+    if ([3, 4, 5].includes(contract.contractVersion) ? !validateDoseContext(contract.doseContext!) : Object.hasOwn(contract, 'doseContext')) errors.push('DOSE_CONTEXT_VERSION_INVALID');
     if (contract.doseContext?.timeAuthority && !sameSessionTimeDoseAuthority(contract.doseContext.timeAuthority,
       timeAuthorityForIntent(contract.doseContext.timeBudget, contract.intent))) errors.push('SESSION_DOSE_AUTHORITY_MISMATCH');
+    if (contract.contractVersion === 5 ? !validCoachingDescription(contract.coachingGuidance,'weekly_guidance') || Object.hasOwn(contract,'intent') || contract.finalDecision !== undefined && (!validCoachingDescription(contract.finalDecision,'session_decision') || contract.finalDecision.stimulus !== contract.stimulusId) : contract.coachingGuidance !== undefined || contract.finalDecision !== undefined) errors.push('GUIDANCE_VERSION_INVALID');
     if (contract.contractVersion === 1 && Object.hasOwn(contract, 'intent')) errors.push('INTENT_VERSION_MISMATCH');
     if (contract.contractVersion === 2 && !Object.hasOwn(contract, 'intent')) errors.push('INTENT_REQUIRED');
     const stimulus = resolveIntentStimulus(input);

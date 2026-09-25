@@ -5,6 +5,7 @@ import { updateStructuredChatAvailability } from '../sports/chatAvailability';
 import { recordReportedEvent } from './coachFirstStore';
 import type { CoachFirstCall, CoachFirstInput } from './coachFirstLoop';
 import { GENERATION_ARGUMENT_REASONS, type GenerationArgumentReason } from './coachFirstGeneration';
+import { decodeTurnPlanningIntent } from '../planning/turnPlanningIntent';
 
 export type CoachFirstPolicy = 'normal' | 'read_only';
 /** Inspect the existing Planner envelope only; diagnostics never change its public result. */
@@ -174,15 +175,18 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
             message: 'La resolución requiere el flujo explícito de restricción y reevaluación; el chat no da el alta.' }; break;
         case 'generate_week': {
           authority = 'weekly_generation_authorities';
-          if (!a || Object.keys(a).some(key => !['availabilityReadId', 'includeToday', 'snapshotDigest'].includes(key))
+          if (!a || Object.keys(a).some(key => !['availabilityReadId', 'includeToday', 'snapshotDigest', 'turnIntent'].includes(key))
             || typeof a.availabilityReadId !== 'string' || typeof a.includeToday !== 'boolean' || typeof a.snapshotDigest !== 'string') {
             result = { status: 'rejected', code: 'GENERATION_READ_ARGUMENT_INVALID' }; break;
           }
+          const interpreted = decodeTurnPlanningIntent(a.turnIntent);
+          if (!interpreted.ok) { result = { status: 'rejected', code: 'TURN_PLANNING_INTENT_INVALID' }; break; }
           const selected = availabilityReads.get(a.availabilityReadId);
           if (!selected) { result = { status: 'rejected', code: 'GENERATION_AVAILABILITY_READ_REQUIRED' }; break; }
           if (a.snapshotDigest !== selected.snapshotDigest) { result = { status: 'rejected', code: 'GENERATION_READ_DIGEST_MISMATCH' }; break; }
           if (!planningWeeks.has(selected.week)) { result = { status: 'rejected', code: 'GENERATION_PLANNING_READ_REQUIRED' }; break; }
-          result = await generate({ week: selected.week, includeToday: a.includeToday, snapshotDigest: a.snapshotDigest },
+          result = await generate({ week: selected.week, includeToday: a.includeToday, snapshotDigest: a.snapshotDigest,
+            ...(interpreted.intent ? { turnIntent: interpreted.intent } : {}) },
             operationId, reason => { argumentReason = reason; }); break;
         }
         default: result = { status: 'rejected', code: 'TOOL_NOT_SUPPORTED' };

@@ -5,19 +5,22 @@ import { calendarDays, calendarKey } from '../planning/weeklyCalendar';
 import { resolveCompletionDate } from '../planning/recordCompletion';
 import { readCoachProfile, reportedEventProjection } from './coachFirstStore';
 import { samePlanData } from '../planning/planMutationValidators';
+import { decodeTurnPlanningIntent, bindTurnPlanningIntent, emitTurnPlanningDiagnostic, turnPlanningText,
+  type TurnPlanningProjection, type TurnPlanningLayer } from '../planning/turnPlanningIntent';
 
 export const GENERATION_ARGUMENT_REASONS = ['ARGUMENTS_FALSY', 'UNKNOWN_ARGUMENT_KEY', 'WEEK_RESOLUTION_MISMATCH',
   'INCLUDE_TODAY_NOT_BOOLEAN', 'SNAPSHOT_DIGEST_NOT_STRING'] as const;
 export type GenerationArgumentReason = typeof GENERATION_ARGUMENT_REASONS[number];
 
 export type CoachFirstPlanning = { user: string; operationId: string; reportedEvents: ReturnType<typeof reportedEventProjection>;
+  readonly turnIntent?: TurnPlanningProjection;
   availabilityDigest: string; availability: unknown; week: string; includeToday: boolean;
   assertFresh: () => Promise<void>; confirmSaved: (planId: string, revision: number, sessions: unknown) => Promise<boolean> };
-export const coachFirstPlanningText = (c?: CoachFirstPlanning) => c ?
+export const coachFirstPlanningText = (c?: CoachFirstPlanning, layer: TurnPlanningLayer = 'Planning') => c ?
   '\nCOACH_FIRST_REPORTED_EVENTS (reported, not verified; no automatic taper; same snapshot throughout generation):\n'
   + JSON.stringify({ operationId: c.operationId, targetWeek: c.week, includeToday: c.includeToday,
     availability: c.availability, availabilityDigest: c.availabilityDigest, digest: c.reportedEvents.digest,
-    records: c.reportedEvents.records.map(({ provenance, ...event }: any) => event) }) : '';
+    records: c.reportedEvents.records.map(({ provenance, ...event }: any) => event) }) + turnPlanningText(c.turnIntent, layer) : '';
 
 /** Coordinates the existing Analyzer/Weekly/Builder/save handlers in process. No HTTP replay. */
 export async function generateCoachFirstWeek(db: any, user: string, a: any, operationId: string, today: string,
@@ -25,7 +28,7 @@ export async function generateCoachFirstWeek(db: any, user: string, a: any, oper
   onArgumentRejection?: (reason: GenerationArgumentReason) => void) {
   // Preserve the original predicates and short-circuit order, including absent week semantics.
   const argumentReason: GenerationArgumentReason | undefined = !a ? 'ARGUMENTS_FALSY'
-    : Object.keys(a).some(k => !['week','includeToday','snapshotDigest'].includes(k)) ? 'UNKNOWN_ARGUMENT_KEY'
+    : Object.keys(a).some(k => !['week','includeToday','snapshotDigest','turnIntent'].includes(k)) ? 'UNKNOWN_ARGUMENT_KEY'
     : resolveCompletionDate(a.week)?.weekStart !== a.week ? 'WEEK_RESOLUTION_MISMATCH'
     : typeof a.includeToday !== 'boolean' ? 'INCLUDE_TODAY_NOT_BOOLEAN'
     : typeof a.snapshotDigest !== 'string' ? 'SNAPSHOT_DIGEST_NOT_STRING' : undefined;
@@ -33,10 +36,18 @@ export async function generateCoachFirstWeek(db: any, user: string, a: any, oper
     try { onArgumentRejection?.(argumentReason); } catch { /* Diagnostics cannot change validation. */ }
     return { status: 'rejected', code: 'GENERATION_ARGUMENT_INVALID' };
   }
+  const interpreted = decodeTurnPlanningIntent(a.turnIntent);
+  if (!interpreted.ok) return { status: 'rejected', code: 'TURN_PLANNING_INTENT_INVALID' };
+  const turnIntent = interpreted.intent ? bindTurnPlanningIntent(interpreted.intent, operationId, a.week) : undefined;
+  if (turnIntent) {
+    emitTurnPlanningDiagnostic(turnIntent, 'generate_week.received');
+    emitTurnPlanningDiagnostic(turnIntent, 'generate_week.validated');
+  }
   const availability = await readAvailabilityConfirmation(db, user, a.week);
   if (!availability.ok || availability.snapshotDigest !== a.snapshotDigest) return { status: 'conflict', code: 'GENERATION_AVAILABILITY_CHANGED' };
   const events = reportedEventProjection(await readCoachProfile(db, user));
   const context: CoachFirstPlanning = { user, operationId, reportedEvents: events, availabilityDigest: a.snapshotDigest,
+    ...(turnIntent ? { turnIntent } : {}),
     availability: availability.availability, week: a.week, includeToday: a.includeToday,
     confirmSaved: async (id, revision, sessions) => {
       try {

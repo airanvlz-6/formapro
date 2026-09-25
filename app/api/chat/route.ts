@@ -2260,7 +2260,7 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
       const analyzerRes = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 500, messages: [{ role: "user", content: analyzerPrompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning) : '') }] }),
+        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 500, messages: [{ role: "user", content: analyzerPrompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning, 'Analyzer') : '') }] }),
       });
       const analyzerData = await analyzerRes.json();
       const analyzerTexto = analyzerData.content?.map((b: any) => b.text || "").join("") || "{}";
@@ -2323,7 +2323,7 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
         const longitudinalDecision = prompt.startsWith(LONGITUDINAL_DECISION_MARKER);
         const response = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-          body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1800, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning) : '') }],
+          body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1800, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning, longitudinalDecision ? 'Longitudinal' : 'Weekly') : '') }],
             ...(longitudinalDecision ? { tools: [LONGITUDINAL_DECISION_TOOL],
               tool_choice: { type: 'tool', name: LONGITUDINAL_DECISION_TOOL.name, disable_parallel_tool_use: true } } : {}) }),
         });
@@ -2352,7 +2352,7 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
         async (prompt: string) => {
           const response = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 2400, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning) : '') }] }),
+            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 2400, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning, 'Builder') : '') }] }),
           });
           if (!response.ok) throw new Error("LLM_REQUEST_FAILED");
           const output = await response.json();
@@ -2379,7 +2379,7 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
         async (prompt: string) => {
           const response = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 2400, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning) : '') }] }),
+            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 2400, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning, 'Builder') : '') }] }),
           });
           if (!response.ok) throw new Error("LLM_REQUEST_FAILED");
           const output = await response.json();
@@ -3444,7 +3444,7 @@ IMPORTANTE sobre "dia": si el coach esta claramente adaptando la sesion de HOY (
         async (prompt: string) => {
           const response = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 2400, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning) : '') }] }),
+            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 2400, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning, 'Builder') : '') }] }),
           });
           if (!response.ok) throw new Error("LLM_REQUEST_FAILED");
           const output = await response.json();
@@ -4699,7 +4699,7 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
         async (prompt: string) => {
           const response = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 2400, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning) : '') }] }),
+            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 2400, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning, 'Repair') : '') }] }),
           });
           if (!response.ok) throw new Error("LLM_REQUEST_FAILED");
           const output = await response.json();

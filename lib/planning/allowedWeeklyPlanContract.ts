@@ -10,7 +10,7 @@ import { emitRemainingDiagnostic } from './weeklyRemainingDiagnostic';
 import { resolveAuthorizedMethodCandidates, type CanonicalTransferPermissions } from './authorizedMethodCandidates';
 import { createHash } from 'node:crypto';
 import { normalizeWeeklyPlannerTransport } from './weeklyPlannerTransport';
-import { emitWeeklyPlannerDiagnostic, type PlannerCompletion, type PlannerMetadata } from './weeklyPlannerDiagnostics';
+import { emitWeeklyPlannerDiagnostic, WeeklyProviderResponseError, WeeklyTransportError, weeklyInternalFailure, type WeeklyProcessingStage, type PlannerCompletion, type PlannerMetadata } from './weeklyPlannerDiagnostics';
 import type { ContractInput } from '../sports/allowedTrainingContract';
 import type { PrescriptionScope } from '../sports/prescriptionScope';
 import type { PrescriptionIntent } from '../sports/prescriptionIntent';
@@ -349,25 +349,46 @@ export async function composeBoundedWeek(contract: AllowedWeeklyPlanContract, co
     let structuredSelection: unknown;
     let metadata: PlannerMetadata | undefined;
     let normalizedMarkdownFence = false;
+    let stage: WeeklyProcessingStage = 'completion_processing';
     const report = (text: string, parsed: boolean, codes: string[], reason: Parameters<typeof emitWeeklyPlannerDiagnostic>[5]) =>
       emitWeeklyPlannerDiagnostic(attempt as 1 | 2, text, metadata, parsed, codes, reason, normalizedMarkdownFence);
     try {
+    try {
       const completed = await complete(prompt + (attempt === 2 ? `\nPropuesta rechazada: ${JSON.stringify(errors)}. Selecciona otra vez dentro del MISMO contrato.`
         + (errors.includes('WEEKLY_JSON_INVALID') ? '\nLa respuesta anterior fue rechazada en la lectura del JSON RAW. Devuelve el objeto directamente, sin fences Markdown ni prosa. El primer carácter DEBE ser { y el último DEBE ser }. No añadas explicaciones ni comentarios.' : '') : ''), immutable);
+      stage = 'completion_projection';
       if (immutable.contractVersion === 3 && typeof completed !== 'string') structuredSelection = completed.weeklySelection;
       raw = structuredSelection === undefined ? typeof completed === 'string' ? completed : completed.text : JSON.stringify(structuredSelection);
       metadata = typeof completed === 'string' ? undefined : completed.metadata;
     }
-    catch { report('', false, ['LLM_REQUEST_FAILED'], 'LLM_REQUEST_FAILED'); return failure('WEEKLY_PLANNER_FAILED', ['LLM_REQUEST_FAILED']); }
+    catch (error) {
+      if (error instanceof WeeklyProviderResponseError) {
+        emitWeeklyPlannerDiagnostic(attempt as 1 | 2, '', error.metadata, false,
+          ['WEEKLY_PROVIDER_RESPONSE_INVALID'], 'WEEKLY_PROVIDER_RESPONSE_INVALID', false, error);
+        return { ...failure('WEEKLY_PLANNER_FAILED', ['WEEKLY_PROVIDER_RESPONSE_INVALID']),
+          stage: error.responseReason === 'BODY_JSON_INVALID' ? 'provider_body' : 'tool_output',
+          category: error.responseReason.startsWith('TOOL_USE') ? 'provider_tool' : 'provider_response' };
+      }
+      if (!(error instanceof WeeklyTransportError)) return weeklyInternalFailure(error, stage);
+      report('', false, ['LLM_REQUEST_FAILED'], 'LLM_REQUEST_FAILED'); return failure('WEEKLY_PLANNER_FAILED', ['LLM_REQUEST_FAILED']);
+    }
     let parsed: unknown;
+    stage = 'normalization';
+    if (typeof raw !== 'string') throw new TypeError('WEEKLY_COMPLETION_TEXT_INVALID');
+    if (raw.length > 32000) { errors = ['WEEKLY_JSON_INVALID']; report(raw, false, errors, 'RAW_TOO_LONG'); continue; }
+    const normalized = normalizeWeeklyPlannerTransport(raw);
+    normalizedMarkdownFence = normalized.normalizedFence;
+    stage = 'json_parse';
     try {
-      if (raw.length > 32000) throw new Error();
-      const normalized = normalizeWeeklyPlannerTransport(raw);
-      normalizedMarkdownFence = normalized.normalizedFence;
       parsed = structuredSelection === undefined ? JSON.parse(normalized.text) : structuredSelection;
     }
-    catch { errors = ['WEEKLY_JSON_INVALID']; report(raw, false, errors, raw.length > 32000 ? 'RAW_TOO_LONG' : 'JSON_PARSE_FAILED'); continue; }
+    catch (error) {
+      if ((error as any)?.name !== 'SyntaxError') throw error;
+      errors = ['WEEKLY_JSON_INVALID']; report(raw, false, errors, 'JSON_PARSE_FAILED'); continue;
+    }
+    stage = 'selection_validation';
     const result = validateWeeklySelection(immutable, parsed);
+    stage = 'admission_processing';
     if (immutable.contractVersion === 3 && process.env.FORGE_WEEKLY_COACHING_DIAGNOSTICS === '1') { try { console.info('WEEKLY_GUIDANCE_ADMISSION',{version:2,planningRunId:planningRunId ?? null,status:result.ok?'PASS':'FAIL',guidance:result.ok?calendarDays.filter(day=>result.selected[day].coachingGuidance).map(day=>({day,digest:createHash('sha256').update(JSON.stringify(result.selected[day].coachingGuidance)).digest('hex')})):[]}); } catch {} }
     if (immutable.contractVersion === 2) emitOpenWeeklyValidation(parsed, result.ok ? [] : 'errors' in result ? result.errors : [result.code], planningRunId);
     if (result.ok) {
@@ -383,6 +404,7 @@ export async function composeBoundedWeek(contract: AllowedWeeklyPlanContract, co
     }
     errors = 'errors' in result ? result.errors : [result.code];
     report(raw, true, errors, null);
+    } catch (error) { return weeklyInternalFailure(error, stage); }
   }
   if (errors.includes('NO_NEW_EXECUTABLE_PRESCRIPTION')) return noWeeklyPrescription('NO_NEW_EXECUTABLE_SELECTION');
   return failure('WEEKLY_PLANNER_REJECTED', errors);

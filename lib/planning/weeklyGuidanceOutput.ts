@@ -1,4 +1,4 @@
-import { plannerProviderMetadata } from './weeklyPlannerDiagnostics';
+import { plannerProviderMetadata, WeeklyProviderResponseError } from './weeklyPlannerDiagnostics';
 import type { AllowedWeeklyPlanContract } from './allowedWeeklyPlanContract';
 const text = {type:'string',minLength:1,maxLength:400};
 export const WEEKLY_GUIDANCE_TOOL = {
@@ -32,8 +32,11 @@ export function weeklyGuidanceTool(contract: AllowedWeeklyPlanContract) {
 }
 /** The provider's object is validated by the same weekly authority; prose is never parsed. */
 export function readWeeklyGuidanceOutput(output:any) {
-  const calls = output?.content?.filter((b:any)=>b?.type==='tool_use');
-  if (output?.stop_reason !== 'tool_use' || !Array.isArray(calls) || calls.length!==1 || calls[0].name!==WEEKLY_GUIDANCE_TOOL.name
-    || typeof calls[0].id!=='string' || !calls[0].id) throw new Error('WEEKLY_GUIDANCE_OUTPUT_INVALID');
+  if (!Array.isArray(output?.content) || !output.content.length) throw new WeeklyProviderResponseError('CONTENT_INVALID', output);
+  const calls = output.content.filter((b:any)=>b?.type==='tool_use');
+  if (!calls.length) throw new WeeklyProviderResponseError('TOOL_USE_MISSING', output);
+  if (output.stop_reason !== 'tool_use') throw new WeeklyProviderResponseError('STOP_REASON_INVALID', output);
+  if (calls.length!==1 || calls[0].name!==WEEKLY_GUIDANCE_TOOL.name || typeof calls[0].id!=='string' || !calls[0].id)
+    throw new WeeklyProviderResponseError('TOOL_USE_INVALID', output);
   return {text:'',metadata:plannerProviderMetadata(output),weeklySelection:calls[0].input};
 }

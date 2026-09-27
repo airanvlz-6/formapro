@@ -18,6 +18,10 @@ function plannerRejectionDiagnostic(planner: any) {
   try {
     if (planner?.ok) {
       if (![2,3].includes(planner.estructura?.weeklyContractVersion)) failureReason = 'WEEKLY_CONTRACT_VERSION_INVALID';
+    } else if (planner?.code === 'WEEKLY_PLANNER_FAILED' && planner.errors?.includes('WEEKLY_INTERNAL_PROCESSING_ERROR')) {
+      failureReason = 'WEEKLY_INTERNAL_PROCESSING_ERROR';
+    } else if (planner?.code === 'WEEKLY_PLANNER_FAILED' && planner.errors?.includes('WEEKLY_PROVIDER_RESPONSE_INVALID')) {
+      failureReason = 'WEEKLY_PROVIDER_RESPONSE_INVALID';
     } else if (planner?.code === 'WEEKLY_PLANNER_FAILED' && planner.errors?.includes('LLM_REQUEST_FAILED')) {
       failureReason = 'LLM_REQUEST_FAILED';
     } else if (planner?.code === 'STRATEGY_PROPOSAL_INVALID') {

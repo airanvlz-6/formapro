@@ -1,3 +1,4 @@
+import { plannerProviderMetadata, WeeklyProviderResponseError, WeeklyTransportError } from './weeklyPlannerDiagnostics';
 export const WEEKLY_PROVIDER_TIMEOUT_MS = 45000;
 const transientStatuses = [408, 429, 500, 502, 503, 504, 529];
 /** Retry only the read-only provider request, never planning admission or database operations. */
@@ -16,7 +17,8 @@ export async function requestWeeklyProvider(init: RequestInit, stage: 'weekly' |
       const output = await response.json();
       try { (dependencies?.observe ?? (value => console.info('WEEKLY_PROVIDER_REQUEST', value)))({
         stage, attempt, timeoutMs: WEEKLY_PROVIDER_TIMEOUT_MS, durationMs: Date.now() - started,
-        status, reason: 'SUCCESS', retry: false, final: true,
+        status, reason: 'TRANSPORT_SUCCESS', retry: false, final: true,
+        responseReceived: true, bodyParseable: true, ...plannerProviderMetadata(output),
       }); } catch { /* Observation only. */ }
       return output;
     } catch (error) {
@@ -32,9 +34,13 @@ export async function requestWeeklyProvider(init: RequestInit, stage: 'weekly' |
         stage, attempt, timeoutMs: WEEKLY_PROVIDER_TIMEOUT_MS, durationMs: Date.now() - started,
         status, reason, retry, final: !retry,
       }); } catch { /* Observation never changes the outcome. */ }
-      if (!retry) throw new Error('LLM_REQUEST_FAILED');
+      if (!retry) {
+        if (reason === 'INVALID_JSON' && status !== null && status >= 200 && status < 300)
+          throw new WeeklyProviderResponseError('BODY_JSON_INVALID');
+        throw new WeeklyTransportError();
+      }
       await wait(500);
     }
   }
-  throw new Error('LLM_REQUEST_FAILED');
+  throw new WeeklyTransportError();
 }

@@ -7,6 +7,7 @@ import type { CoachFirstCall, CoachFirstInput } from './coachFirstLoop';
 import { GENERATION_ARGUMENT_REASONS, type GenerationArgumentReason } from './coachFirstGeneration';
 import { decodeTurnPlanningIntent } from '../planning/turnPlanningIntent';
 import { mutateDevelopmentArea } from '../athlete/developmentAreaStore';
+import { executionEvidenceFailure } from './executionEvidence';
 
 export type CoachFirstPolicy = 'normal' | 'read_only';
 /** Inspect the existing Planner envelope only; diagnostics never change its public result. */
@@ -121,6 +122,7 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
     let argumentReason: GenerationArgumentReason | undefined;
     let readStage: CoachReadStage = 'canonical_read';
     let failure: ReturnType<typeof readFailureDiagnostic> | undefined;
+    let evidenceFailure: ReturnType<typeof executionEvidenceFailure> = null;
     try {
       if (mode === 'read_only' && call.name !== 'read_context') {
         result = { status: 'rejected', reason: 'read_only_policy', code: 'COACH_FIRST_READ_ONLY', operationId };
@@ -159,12 +161,12 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
           result = await recordReportedEvent(db, user, a, { operationId, messageId: input.messageId, message: input.message, timestamp: input.timestamp }); break;
         case 'update_session': case 'record_execution': {
           const execution = call.name === 'record_execution';
+          if (execution) authority = 'record_execution/evidence_validation';
           const allowed = execution ? ['date','description','discipline','durationMinutes','rpe','sessionId','expectedRevision','associationConfirmed','externalConfirmed','quote','responseQuotes']
             : ['date','sessionId','expectedRevision','reason','state','discipline','intent','proposal','maximumSeconds'];
           if (Object.keys(a).some(k => !allowed.includes(k))) throw new Error('TOOL_ARGUMENT_INVALID');
-          if (execution && (typeof a.quote !== 'string' || !a.quote.trim() || a.quote.length > 1600 || !input.message.includes(a.quote)
-            || a.responseQuotes !== undefined && (!Array.isArray(a.responseQuotes) || a.responseQuotes.length > 8
-              || a.responseQuotes.some((q: unknown) => typeof q !== 'string' || !q.trim() || q.length > 1600 || !input.message.includes(q))))) {
+          if (execution) evidenceFailure = executionEvidenceFailure(input.message, a.quote, a.responseQuotes);
+          if (evidenceFailure) {
             result = { status: 'rejected', code: 'EXECUTION_EVIDENCE_INVALID' }; break;
           }
           if (execution && (!sessionReads.has(a.date) || a.sessionId !== undefined && !sessionReads.get(a.date)!.some(s => s.sessionId === a.sessionId && s.expectedRevision === a.expectedRevision))) {
@@ -223,6 +225,8 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
     finally { observe({ route: 'coach_first', policy: mode, tool: authority || result?.reason === 'read_only_policy' ? call.name : 'unsupported', authority, status: result?.status ?? 'rejected', operationId,
       ...(result?.reason === 'read_only_policy' ? { reason: 'read_only_policy' } : {}),
       ...failure,
+      ...(call.name === 'record_execution' && result?.code === 'EXECUTION_EVIDENCE_INVALID'
+        ? { code: 'EXECUTION_EVIDENCE_INVALID', evidenceFailureReason: evidenceFailure } : {}),
       ...(call.name === 'generate_week' && authority === 'weekly_generation_authorities'
         && result?.status === 'partial' && result.code === 'PLANNER_NOT_ADMITTED'
         ? plannerRejectionDiagnostic(result.requirements) : {}),

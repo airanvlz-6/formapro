@@ -5,10 +5,12 @@
  */
 export const COACH_FIRST_OUTPUT_TOOL = {
   name: 'submit_coach_turn',
-  description: 'Submit the Coach answer and requested Forge calls for this round. This envelope itself performs no action. Use calls=[] with a string answer for a direct response. Use answer=null when requesting context without a user-facing answer yet.',
+  description: 'Classify mutationIntents semantically on every round, then submit requested Forge calls. This envelope itself performs no action. calls=[] can finish only when declared mutations have verified receipts, or no mutation is needed. Use clarification for essential ambiguity and answer=null when reading context.',
   input_schema: {
-    type: 'object', additionalProperties: false, required: ['answer', 'calls'],
+    type: 'object', additionalProperties: false, required: ['answer', 'calls', 'mutationIntents', 'clarification'],
     properties: {
+      mutationIntents: { type: 'array', maxItems: 3, uniqueItems: true, items: { type: 'string', enum: ['record_execution', 'propose_development_area', 'respond_development_proposal'] }, description: 'Mandatory semantic classification. Reported training requires record_execution; a longitudinal proposal or candidate response requires its development action. [] only when none applies. Retain pending intents across rounds.' },
+      clarification: { anyOf: [{ type: 'string', minLength: 1, maxLength: 800 }, { type: 'null' }], description: 'Only a necessary question to resolve ambiguous association or missing information. Never a state claim. Normally null.' },
       answer: { anyOf: [{ type: 'string', maxLength: 16000 }, { type: 'null' }] },
       calls: { type: 'array', maxItems: 8, items: {
         type: 'object', additionalProperties: false, required: ['name', 'arguments'],

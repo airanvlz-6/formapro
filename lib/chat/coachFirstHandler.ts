@@ -90,7 +90,8 @@ export async function handleCoachFirst(request: Request,
       if (call.name !== 'read_context') receipts.push({ tool: call.name, status: r.status,
         operationId: r.operationId ?? null, code: r.code ?? null,
         reportedEventsDigest: r.reportedEventsDigest ?? null, revision: r.revision ?? null });
-      if (call.name !== 'read_context' && r.receipt?.verified) Object.assign(receipts[receipts.length - 1], { developmentReceipt: r.receipt });
+      if (call.name !== 'read_context' && r.receipt?.verified) Object.assign(receipts[receipts.length - 1],
+        call.name === 'record_execution' ? { executionReceipt: r.receipt } : { developmentReceipt: r.receipt });
       return r;
     };
     stage = 'coach_loop';

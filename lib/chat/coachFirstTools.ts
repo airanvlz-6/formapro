@@ -112,7 +112,8 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
   const reads = coachFirstReads(db, user, today);
   const availabilityReads = new Map<string, { week: string; snapshotDigest: string }>();
   const planningWeeks = new Set<string>();
-  const invalidateReads = () => { reads.invalidate(); availabilityReads.clear(); planningWeeks.clear(); };
+  const sessionReads = new Map<string, any[]>();
+  const invalidateReads = () => { reads.invalidate(); availabilityReads.clear(); planningWeeks.clear(); sessionReads.clear(); };
   const attempted = new Set<string>();
   return async (call: CoachFirstCall, ordinal: number) => {
     const a: any = call.arguments, operationId = `${turnId}:${ordinal}`;
@@ -139,6 +140,7 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
         }
         case 'read_context': {
           authority = 'canonical_read_projection'; result = await reads.read(a, stage => { readStage = stage; });
+          if (result.status === 'read' && a.resource === 'session') sessionReads.set(result.coverage.date, result.data.sessions);
           if (result.status === 'read' && a.resource === 'availability' && result.data?.ok === true
             && typeof result.data.snapshotDigest === 'string') {
             availabilityReads.set(operationId, { week: result.coverage.week, snapshotDigest: result.data.snapshotDigest });
@@ -157,12 +159,24 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
           result = await recordReportedEvent(db, user, a, { operationId, messageId: input.messageId, message: input.message, timestamp: input.timestamp }); break;
         case 'update_session': case 'record_execution': {
           const execution = call.name === 'record_execution';
-          const allowed = execution ? ['date','description','discipline','durationMinutes','rpe','sessionId','expectedRevision','associationConfirmed']
+          const allowed = execution ? ['date','description','discipline','durationMinutes','rpe','sessionId','expectedRevision','associationConfirmed','externalConfirmed','quote','responseQuotes']
             : ['date','sessionId','expectedRevision','reason','state','discipline','intent','proposal','maximumSeconds'];
           if (Object.keys(a).some(k => !allowed.includes(k))) throw new Error('TOOL_ARGUMENT_INVALID');
+          if (execution && (typeof a.quote !== 'string' || !a.quote.trim() || a.quote.length > 1600 || !input.message.includes(a.quote)
+            || a.responseQuotes !== undefined && (!Array.isArray(a.responseQuotes) || a.responseQuotes.length > 8
+              || a.responseQuotes.some((q: unknown) => typeof q !== 'string' || !q.trim() || q.length > 1600 || !input.message.includes(q))))) {
+            result = { status: 'rejected', code: 'EXECUTION_EVIDENCE_INVALID' }; break;
+          }
+          if (execution && (!sessionReads.has(a.date) || a.sessionId !== undefined && !sessionReads.get(a.date)!.some(s => s.sessionId === a.sessionId && s.expectedRevision === a.expectedRevision))) {
+            result = { status: 'rejected', code: 'EXECUTION_SESSION_READ_REQUIRED' }; break;
+          }
           if (execution && a.sessionId === undefined) {
+            if (a.externalConfirmed !== true) { result = { status: 'rejected', code: 'EXECUTION_EXTERNAL_ASSOCIATION_REQUIRED' }; break; }
             authority = 'recordExternalExecution';
-            result = await recordExternalExecution(db, user, a, { operationId, messageId: input.messageId, message: input.message }, today); break;
+            result = await recordExternalExecution(db, user, a, { operationId, messageId: input.messageId, message: input.message }, today);
+            if (['committed','already_applied'].includes(result.status)) result = { ...result,
+              receipt: { verified: true, kind: 'external_execution', date: a.date, operationId } };
+            break;
           }
           if (execution && a.associationConfirmed !== true) { result = { status: 'rejected', code: 'EXECUTION_ASSOCIATION_REQUIRED' }; break; }
           if (execution && (typeof a.description !== 'string' || !a.description.trim() || a.description.length > 3000
@@ -170,7 +184,7 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
             || a.rpe !== undefined && (!Number.isFinite(a.rpe) || a.rpe < 0 || a.rpe > 10))) throw new Error('EXECUTION_ARGUMENT_INVALID');
           authority = 'chatCoachActions/validatePlanMutation/mutatePlanWithCAS';
           const action = execution ? { kind: 'record_performed', date: a.date, sessionId: a.sessionId,
-            discipline: a.discipline, quote: input.message, responseQuotes: [] } : { ...a, kind: 'adapt_session' };
+            discipline: a.discipline, quote: a.quote, responseQuotes: a.responseQuotes ?? [] } : { ...a, kind: 'adapt_session' };
           const results = await applyChatCoachActions(db, user, input.message, [action], async () => { throw new Error('REVIEW_NOT_ALLOWED'); }, today, '',
             { loadContext: date => loadCoachActionContext(db, user, date), expectedRevision: a.expectedRevision, maximumSeconds: a.maximumSeconds,
               ...(execution ? { reportedExecution: { operationId, messageId: input.messageId, description: a.description,

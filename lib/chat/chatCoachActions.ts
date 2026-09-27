@@ -30,7 +30,7 @@ export type ChatActionContext = Pick<Awaited<ReturnType<typeof loadChatGrounding
 type Context = ChatActionContext;
 export type ChatActionExecutionOptions = { loadContext: (date: string) => Promise<ChatActionContext>; expectedRevision: number; maximumSeconds?: number;
   reportedExecution?: { operationId: string; messageId: string; description: string; durationMinutes?: number; rpe?: number } };
-type ActionResult = { kind: string; date: string; status: string; session?: Record<string, any>; code?: string };
+type ActionResult = { kind: string; date: string; status: string; session?: Record<string, any>; code?: string; receipt?: Record<string, unknown> };
 const fail = (code: string): never => { throw new Error(code); };
 const boundedText = (x: unknown, limit = 1600): x is string => typeof x === 'string' && !!x.trim() && x.length <= limit;
 const prescription = (s: any) => Object.fromEntries(['dia','tipo','titulo','descripcion','por_que','debilidad_relacionada','stimulusId','intent','structuredPrescription']
@@ -134,7 +134,9 @@ export async function applyChatCoachActions(db: any, user: string, message: stri
         if (a.kind === 'record_performed' && (!boundedText(a.discipline, 80) || !Array.isArray(a.responseQuotes)
           || a.responseQuotes.length > 8 || a.responseQuotes.some((q: unknown) => !boundedText(q) || !message.includes(q as string)))) fail('CHAT_ACTION_EVIDENCE_INVALID');
         const id = createHash('sha256').update(JSON.stringify({ user, date: a.date, kind: a.kind, quote: a.quote })).digest('hex');
-        if (prior.some((e: any) => e.id === id)) { results.push({ kind: a.kind, date: a.date, status: 'already_applied' }); continue; }
+        if (prior.some((e: any) => e.id === id)) { results.push({ kind: a.kind, date: a.date, status: 'already_applied',
+          ...(execution && a.kind === 'record_performed' && target.completada ? { receipt: {
+            verified: true, kind: 'forge_execution', sessionId: target.session_id, date: a.date, revision: plan.revision } } : {}) }); continue; }
         if (a.kind === 'record_performed' && target.completada) fail('CHAT_ACTION_EXECUTION_ALREADY_RECORDED');
         replacement = { ...target, ...(a.kind === 'record_performed' ? { completada: true, titulo_real: a.quote, descripcion_real: [a.quote, ...a.responseQuotes].join('\n') } : {}),
           chatExecutionEvidence: [...prior, { id, kind: a.kind === 'record_performed' ? 'PERFORMED' : 'RESPONSE', source: 'athlete_report',
@@ -173,7 +175,9 @@ export async function applyChatCoachActions(db: any, user: string, message: stri
           results.push({ kind: a.kind, date: a.date, status: 'unknown', code: 'CHAT_ACTION_READBACK_UNCONFIRMED' }); break;
         }
       }
-      results.push({ kind: a.kind, date: a.date, status: saved.status, ...(visible ? { session: visible } : {}) });
+      results.push({ kind: a.kind, date: a.date, status: saved.status, ...(visible ? { session: visible } : {}),
+        ...(execution && saved.status === 'committed' && a.kind === 'record_performed' ? { receipt: {
+          verified: true, kind: 'forge_execution', sessionId: target.session_id, date: a.date, revision: saved.revision } } : {}) });
       if (!persisted) break; // No replay after conflict or ambiguous transport.
     } catch (error) {
       // A factual rejection cannot expose a contradictory executable alternative.

@@ -8,6 +8,8 @@ import { GENERATION_ARGUMENT_REASONS, type GenerationArgumentReason } from './co
 import { decodeTurnPlanningIntent } from '../planning/turnPlanningIntent';
 import { mutateDevelopmentArea } from '../athlete/developmentAreaStore';
 import { executionEvidenceFailure } from './executionEvidence';
+import { resolveGenerationTarget, generationWeeks } from './generationTarget';
+import { samePlanData } from '../planning/planMutationValidators';
 
 export type CoachFirstPolicy = 'normal' | 'read_only';
 /** Inspect the existing Planner envelope only; diagnostics never change its public result. */
@@ -16,6 +18,8 @@ function plannerRejectionDiagnostic(planner: any) {
   try {
     if (planner?.ok) {
       if (![2,3].includes(planner.estructura?.weeklyContractVersion)) failureReason = 'WEEKLY_CONTRACT_VERSION_INVALID';
+    } else if (planner?.code === 'WEEKLY_PLANNER_FAILED' && planner.errors?.includes('LLM_REQUEST_FAILED')) {
+      failureReason = 'LLM_REQUEST_FAILED';
     } else if (planner?.code === 'STRATEGY_PROPOSAL_INVALID') {
       failureReason = 'STRATEGY_PROPOSAL_INVALID';
     } else if (['LONGITUDINAL_TARGET_UNRESOLVED', 'LONGITUDINAL_READ_FAILED',
@@ -111,9 +115,10 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
   const mode = resolveCoachFirstPolicy(policy);
   const today = new Date(input.timestamp).toLocaleDateString('en-CA', { timeZone: input.timezone });
   const reads = coachFirstReads(db, user, today);
-  const availabilityReads = new Map<string, { week: string; snapshotDigest: string }>();
+  const availabilityReads = new Map<string, { week: string; snapshotDigest: string; prepared?: boolean }>();
   const planningWeeks = new Set<string>();
   const sessionReads = new Map<string, any[]>();
+  let preparedTarget: string | undefined;
   const invalidateReads = () => { reads.invalidate(); availabilityReads.clear(); planningWeeks.clear(); sessionReads.clear(); };
   const attempted = new Set<string>();
   return async (call: CoachFirstCall, ordinal: number) => {
@@ -134,6 +139,24 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
         attempted.add(key);
       }
       switch (call.name) {
+        case 'prepare_generation': {
+          authority = 'canonical_generation_target';
+          if (Object.keys(a).some(k => k !== 'period')) { result = { status: 'rejected', code: 'GENERATION_TARGET_INVALID' }; break; }
+          let week: string;
+          try { week = await resolveGenerationTarget(db, user, today, a.period); }
+          catch (e) { result = { status: 'rejected', code: e instanceof Error && ['GENERATION_TARGET_INVALID','GENERATION_PENDING_ALREADY_ATTEMPTED','GENERATION_PENDING_EXPIRED','GENERATION_PENDING_MISSING'].includes(e.message) ? e.message : 'GENERATION_TARGET_UNAVAILABLE' }; break; }
+          const availability = await reads.read({ resource: 'availability', week });
+          const planning = await reads.read({ resource: 'planning', week });
+          if (availability.data?.ok !== true) { result = { status: 'rejected', code: 'GENERATION_AVAILABILITY_READ_REQUIRED' }; break; }
+          availabilityReads.set(operationId, { week, snapshotDigest: availability.data.snapshotDigest, prepared: true });
+          preparedTarget = week;
+          planningWeeks.add(week);
+          result = { status: 'prepared', generationTarget: { weekStart: week }, targetWeekStart: week,
+            availabilityReadId: operationId, snapshotDigest: availability.data.snapshotDigest,
+            availability: availability.data, planning: planning.data,
+            includeToday: week !== generationWeeks(today).current };
+          break;
+        }
         case 'propose_development_area': case 'respond_development_proposal': {
           authority = 'athlete_development_cas';
           result = await mutateDevelopmentArea(db, user, call.name === 'propose_development_area' ? 'propose' : 'respond', a,
@@ -199,22 +222,37 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
         case 'generate_week': {
           authority = 'weekly_generation_authorities';
           if (!a || Object.keys(a).some(key => !['availabilityReadId', 'includeToday', 'snapshotDigest', 'turnIntent'].includes(key))
-            || typeof a.availabilityReadId !== 'string' || typeof a.includeToday !== 'boolean' || typeof a.snapshotDigest !== 'string') {
+            || typeof a.availabilityReadId !== 'string' || a.includeToday !== undefined && typeof a.includeToday !== 'boolean' || typeof a.snapshotDigest !== 'string') {
             result = { status: 'rejected', code: 'GENERATION_READ_ARGUMENT_INVALID' }; break;
           }
           const interpreted = decodeTurnPlanningIntent(a.turnIntent);
           if (!interpreted.ok) { result = { status: 'rejected', code: 'TURN_PLANNING_INTENT_INVALID' }; break; }
           const selected = availabilityReads.get(a.availabilityReadId);
           if (!selected) { result = { status: 'rejected', code: 'GENERATION_AVAILABILITY_READ_REQUIRED' }; break; }
+          if (preparedTarget && selected.week !== preparedTarget) { result = { status: 'rejected', code: 'GENERATION_TARGET_MISMATCH' }; break; }
+          if (a.includeToday === undefined && !selected.prepared) { result = { status: 'rejected', code: 'GENERATION_READ_ARGUMENT_INVALID' }; break; }
           if (a.snapshotDigest !== selected.snapshotDigest) { result = { status: 'rejected', code: 'GENERATION_READ_DIGEST_MISMATCH' }; break; }
           if (!planningWeeks.has(selected.week)) { result = { status: 'rejected', code: 'GENERATION_PLANNING_READ_REQUIRED' }; break; }
-          result = await generate({ week: selected.week, includeToday: a.includeToday, snapshotDigest: a.snapshotDigest,
+          result = await generate({ week: selected.week, includeToday: a.includeToday ?? selected.week !== generationWeeks(today).current, snapshotDigest: a.snapshotDigest,
             ...(interpreted.intent ? { turnIntent: interpreted.intent } : {}) },
-            operationId, reason => { argumentReason = reason; }); break;
+            operationId, reason => { argumentReason = reason; });
+          if (selected.prepared && result.status === 'committed') {
+            const receipt = result.persistenceReceipt;
+            if (!receipt?.planId || receipt.weekStart !== selected.week || !Number.isSafeInteger(receipt.revision) || !Array.isArray(result.sessions)) {
+              result = { status: 'unknown', code: 'GENERATION_READBACK_UNCONFIRMED' }; break;
+            }
+            const back = await db.from('weekly_plan').select('revision,sessions,week_objective,block_name').eq('user_codigo', user).eq('id', receipt.planId).single();
+            if (back.error || back.data?.revision !== receipt.revision || !samePlanData(back.data.sessions, result.sessions)) {
+              result = { status: 'unknown', code: 'GENERATION_READBACK_UNCONFIRMED' }; break;
+            }
+            result = { ...result, receipt: { verified: true, kind: 'weekly_plan', ...receipt },
+              savedPlan: { weekStart: selected.week, objective: back.data.week_objective, block: back.data.block_name, sessions: back.data.sessions } };
+          }
+          break;
         }
         default: result = { status: 'rejected', code: 'TOOL_NOT_SUPPORTED' };
       }
-      if (call.name !== 'read_context') invalidateReads();
+      if (call.name !== 'read_context' && call.name !== 'prepare_generation') invalidateReads();
       result = { ...result, operationId };
       return result;
     } catch (error) {

@@ -1,4 +1,5 @@
 import { saveLegacyDevelopment } from '@/lib/athlete/developmentAreaStore';
+import { requestWeeklyProvider } from '@/lib/planning/weeklyProviderRequest';
 import { weeklyGuidanceTool, readWeeklyGuidanceOutput } from '@/lib/planning/weeklyGuidanceOutput';
 import { conversationSession } from '@/lib/chat/conversationSession';
 import { authorizeChatRequest } from '@/lib/auth/chatIdentity';
@@ -2328,14 +2329,12 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
         const weeklyGuidance = prompt.startsWith('WEEKLY_GUIDANCE_V2:');
         if (weeklyGuidance && !weeklyContract) throw new Error('WEEKLY_CONTEXT_INVALID');
         const outputTool = longitudinalDecision ? LONGITUDINAL_DECISION_TOOL : weeklyGuidance ? weeklyGuidanceTool(weeklyContract!) : null;
-        const response = await fetch("https://api.anthropic.com/v1/messages", {
+        const output = await requestWeeklyProvider({
           method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
           body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1800, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning, longitudinalDecision ? 'Longitudinal' : 'Weekly') : '') }],
             ...(outputTool ? { tools: [outputTool],
               tool_choice: { type: 'tool', name: outputTool.name, disable_parallel_tool_use: true } } : {}) }),
-        });
-        if (!response.ok) throw new Error("LLM_REQUEST_FAILED");
-        const output = await response.json();
+        }, longitudinalDecision ? 'longitudinal' : 'weekly', { fetch });
         if (longitudinalDecision) return readLongitudinalDecisionOutput(output);
         if (weeklyGuidance) return readWeeklyGuidanceOutput(output);
         return { text: output.content?.map((b: any) => b.text || "").join("") || "", metadata: plannerProviderMetadata(output) };

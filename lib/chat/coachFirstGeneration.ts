@@ -73,7 +73,8 @@ export async function generateCoachFirstWeek(db: any, user: string, a: any, oper
     const analyzer = await run('analizar_bloque_semana', common);
     if (!analyzer.ok) return { status: 'partial', code: 'ANALYZER_FAILED', operationId };
     const planner = await run('planificar_semana', { ...common, weeklyContractVersion: 2, empezarHoy: a.includeToday, analisis: analyzer.analisis });
-    if (!planner.ok || ![2,3].includes(planner.estructura?.weeklyContractVersion)) return { status: 'partial', code: 'PLANNER_NOT_ADMITTED', requirements: planner, operationId };
+    if (!planner.ok || ![2,3].includes(planner.estructura?.weeklyContractVersion)) return { status: 'partial', code: 'PLANNER_NOT_ADMITTED', requirements: planner, operationId,
+      ...(planner.code === 'WEEKLY_PLANNER_FAILED' && planner.errors?.includes('LLM_REQUEST_FAILED') ? { failureReason: 'LLM_REQUEST_FAILED' } : {}) };
     const structure = planner.estructura;
     const old = generation.snapshots[a.week]?.sessions ?? [];
     const slots = structure.sessions as any[];

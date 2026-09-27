@@ -6,6 +6,7 @@ import { recordReportedEvent } from './coachFirstStore';
 import type { CoachFirstCall, CoachFirstInput } from './coachFirstLoop';
 import { GENERATION_ARGUMENT_REASONS, type GenerationArgumentReason } from './coachFirstGeneration';
 import { decodeTurnPlanningIntent } from '../planning/turnPlanningIntent';
+import { mutateDevelopmentArea } from '../athlete/developmentAreaStore';
 
 export type CoachFirstPolicy = 'normal' | 'read_only';
 /** Inspect the existing Planner envelope only; diagnostics never change its public result. */
@@ -130,6 +131,12 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
         attempted.add(key);
       }
       switch (call.name) {
+        case 'propose_development_area': case 'respond_development_proposal': {
+          authority = 'athlete_development_cas';
+          result = await mutateDevelopmentArea(db, user, call.name === 'propose_development_area' ? 'propose' : 'respond', a,
+            { turnId, messageId: input.messageId, message: input.message, timestamp: input.timestamp, operationId });
+          break;
+        }
         case 'read_context': {
           authority = 'canonical_read_projection'; result = await reads.read(a, stage => { readStage = stage; });
           if (result.status === 'read' && a.resource === 'availability' && result.data?.ok === true

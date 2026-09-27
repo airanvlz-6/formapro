@@ -269,6 +269,18 @@ function MiAtletaContent({ codigo }: { codigo: string }) {
           <div style={{ background: C.card, border: `1px solid #FF6B0060`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
             <p style={{ color: C.ink, fontSize: 14, fontWeight: 700, marginBottom: 12 }}>🎯 Áreas de desarrollo</p>
             {datos.athlete_development.map((d:any,i:number)=>{
+              if (d.schemaVersion === 2) return (
+                <div key={d.areaId} style={{ background: C.bg, borderRadius: 12, padding: "14px 16px", marginBottom: 12 }}>
+                  <p style={{ color: C.ink, fontWeight: 700 }}>{d.title}</p>
+                  <p style={{ color: C.accent, fontSize: 12 }}>{d.status === "active" && d.confirmation?.status === "accepted" ? "Confirmada · Activa" : d.status === "rejected" ? "Propuesta rechazada" : "Propuesta pendiente de tu aceptación"}</p>
+                  <p style={{ color: C.ink, fontSize: 13 }}>{d.objective}</p>
+                  <p style={{ color: C.muted, fontSize: 13 }}>{d.strategy?.approach}</p>
+                  {d.strategy?.suggestedMethods?.map((m:string,j:number) => <p key={j} style={{ color: C.muted, fontSize: 12 }}>Método sugerido: {m}</p>)}
+                  {d.strategy?.adaptations?.map((m:string,j:number) => <p key={j} style={{ color: C.muted, fontSize: 12 }}>{m}</p>)}
+                  {d.evidenceRefs?.map((e:any,j:number) => <p key={j} style={{ color: C.muted, fontSize: 12 }}>Reporte del atleta: «{e.quoteOrFieldRef}»</p>)}
+                  {d.status === "candidate" && <p style={{ color: C.muted, fontSize: 12 }}>Puedes aceptar o rechazar esta propuesta conversando con el Coach.</p>}
+                </div>
+              );
               const coloresEstado: Record<string,string> = {activa:"#FF6B00",en_intervencion:"#FF8C42",en_progreso:"#FFD700",validando:"#64B5F6",resuelta:"#4CAF50"};
               const labelsEstado: Record<string,string> = {activa:"Activa",en_intervencion:"En intervención",en_progreso:"En progreso",validando:"Validando",resuelta:"Resuelta"};
               const colorEstado = coloresEstado[d.estado] || "#FF6B00";

@@ -10,6 +10,7 @@ import { projectChatPlanSession } from './longitudinalContext';
 import { readCoachProfile, reportedEventProjection } from './coachFirstStore';
 import type { ChatActionContext } from './chatCoachActions';
 import { loadTrainingLoad } from '../trainingLoad/loadTrainingLoad';
+import { readDevelopmentAreas } from '../athlete/developmentAreaStore';
 
 /** Action-local authority context: no longitudinal/history/recovery loader. */
 export async function loadCoachActionContext(db: any, user: string, date: string): Promise<ChatActionContext> {
@@ -52,6 +53,7 @@ export function coachFirstReads(db: any, user: string, today: string) {
     let data: any;
     onStage?.('canonical_read');
     switch (a.resource) {
+      case 'development': data = await readDevelopmentAreas(db, user); break;
       case 'session': {
         const c = await loadCoachActionContext(db, user, date);
         const rows = c.plans.flatMap((p: any) => p.sessions.filter((s: any) => a.sessionId ? s.session_id === a.sessionId :

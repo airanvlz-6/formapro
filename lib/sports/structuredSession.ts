@@ -1,4 +1,5 @@
 import { finalDecisionErrors } from './finalSessionDecision';
+import { validateDevelopmentIntent, developmentPlanningSnapshot, type DevelopmentIntent } from '../athlete/developmentAreas';
 import type { FinalSessionDecision } from '../planning/weeklyCoachingGuidance';
 import { preserveWorkWithoutReference, validateCoachExecution } from './coachExecutionAdmission';
 import { safeViolations } from './builderDiagnostics';
@@ -26,6 +27,7 @@ export type MovementDose = { sets?: number; reps?: number; durationSeconds?: num
   referenceNotice?: string; unresolvedReferenceInstruction?: string;
   doseInstruction?: string; intensity?: DoseIntensity; tempo?: [number, number, number, number]; perSide?: boolean };
 export type StructuredSessionProposal = {
+  developmentIntent?: DevelopmentIntent[];
   finalDecision?: FinalSessionDecision;
   schemaVersion?: 2;
   stimulusId: string;
@@ -65,7 +67,7 @@ export function inspectSessionRepresentation(value: unknown, execution = false, 
   }
   const violations: string[] = [];
   const modern = object(value) && value.schemaVersion === 2;
-  if (!object(value) || !keys(value, ['stimulusId', 'structureId', 'blocks', 'explanation', ...(modern ? ['schemaVersion'] : [])])
+  if (!object(value) || !keys(value, ['stimulusId', 'structureId', 'blocks', 'explanation', 'developmentIntent', ...(modern ? ['schemaVersion'] : [])])
     || !['stimulusId', 'structureId', 'blocks'].every(k => Object.hasOwn(value, k))
     || typeof value.stimulusId !== 'string' || !value.stimulusId || typeof value.structureId !== 'string' || !value.structureId
     || (value.explanation !== undefined && (typeof value.explanation !== 'string' || value.explanation.length > (modern ? 400 : 2000)))
@@ -146,6 +148,8 @@ export function validateSessionAgainstTrainingContract(contract: AllowedTraining
   const authority = validateAllowedTrainingContract(contract);
   if (!authority.ok) return { ok: false, violations: authority.errors.map(e => `CONTRACT:${e}`) };
   const p = checked.proposal;
+  try { validateDevelopmentIntent(p.developmentIntent, contract.developmentAreas ?? developmentPlanningSnapshot([])); }
+  catch { return { ok: false, violations: ['DEVELOPMENT_INTENT_INVALID'] }; }
   if (openExecution(contract)) {
     const decisionErrors = finalDecisionErrors(contract,p);
     if (decisionErrors.length) return {ok:false,violations:decisionErrors};

@@ -1,4 +1,5 @@
 import { admitFinalDecision, FINAL_DECISION_INSTRUCTIONS } from './finalSessionDecision';
+import { DEVELOPMENT_INTENT_INSTRUCTION } from '../athlete/developmentAreas';
 import { revisedGuidance, type WeeklyCoachingGuidance } from '../planning/weeklyCoachingGuidance';
 import { openExecution } from './sessionExecution';
 import { calendarState } from '../planning/weeklyCalendar';
@@ -56,7 +57,7 @@ export async function repairSessionWithinReceipt(session: Record<string, any>, c
   verifySessionReceipt(session.sessionReceipt, session, codigo, week, calendarReceipt);
   const evidence = JSON.parse(Buffer.from(session.sessionReceipt.split('.')[0], 'base64url').toString());
   const weekly=verifyWeeklyCalendarReceipt(calendarReceipt,codigo,week,true);
-  const raw = await complete(`${evidence.contract.contractVersion === 5 ? FINAL_DECISION_INSTRUCTIONS + '\nLast admitted finalDecision is current; original coachingGuidance remains provenance. Factual contract is unchanged.\n' : ''}${stage==='local'?'Repair the implicated composition locally.':'Targeted regeneration: compose a fresh alternative; the local pass was insufficient.'} Return only proposal JSON inside the ${evidence.contract.contractVersion === 5 ? 'signed factual contract. No factual authority changes.' : 'UNCHANGED signed contract. No titles or authority changes.'}\nSTAGE:${stage}\nCONTRACT:\n${JSON.stringify(evidence.contract)}\nWEEK_STRATEGY:\n${JSON.stringify(weekly.strategy||null)}\nORIGINAL_COACHING_CONTEXT:\n${JSON.stringify(evidence.coachingContext ?? null)}\nREJECTED_PROPOSAL:\n${JSON.stringify(evidence.proposal)}\nWHOLE_WEEK_DIAGNOSTICS:\n${JSON.stringify(diagnostics)}\nSIBLING_PROPOSALS:\n${JSON.stringify(siblings)}`);
+  const raw = await complete(`${DEVELOPMENT_INTENT_INSTRUCTION}\n${evidence.contract.contractVersion === 5 ? FINAL_DECISION_INSTRUCTIONS + '\nLast admitted finalDecision is current; original coachingGuidance remains provenance. Factual contract is unchanged.\n' : ''}${stage==='local'?'Repair the implicated composition locally.':'Targeted regeneration: compose a fresh alternative; the local pass was insufficient.'} Return only proposal JSON inside the ${evidence.contract.contractVersion === 5 ? 'signed factual contract. No factual authority changes.' : 'UNCHANGED signed contract. No titles or authority changes.'}\nSTAGE:${stage}\nCONTRACT:\n${JSON.stringify(evidence.contract)}\nWEEK_STRATEGY:\n${JSON.stringify(weekly.strategy||null)}\nORIGINAL_COACHING_CONTEXT:\n${JSON.stringify(evidence.coachingContext ?? null)}\nREJECTED_PROPOSAL:\n${JSON.stringify(evidence.proposal)}\nWHOLE_WEEK_DIAGNOSTICS:\n${JSON.stringify(diagnostics)}\nSIBLING_PROPOSALS:\n${JSON.stringify(siblings)}`);
   const parsed = parseStructuredSession(raw, openExecution(evidence.contract));
   if (!parsed.ok) throw new Error('WEEK_REPAIR_PROPOSAL_INVALID');
   const contract = admitFinalDecision(evidence.contract,parsed.proposal);
@@ -174,6 +175,7 @@ export async function generateTrainingSession(db: any, userCodigo: string, reque
     const builderProfile = { ...profile, perfil: { ...profile.perfil } };
     delete builderProfile.perfil.runningHabitualDeclarations;
     delete builderProfile.perfil.runningHabitualConfirmation;
+    prepared.contract.developmentAreas = commonWeekContext?.canonicalFacts.developmentAreas ?? canonical.developmentAreas;
     const authorization = commonWeekContext ? slotAuthorization(commonEvidence, commonSlot, prepared.contract) : undefined;
     const coachingContext = commonWeekContext ? { commonWeekContext,
       slotAuthorization: authorization,
@@ -223,6 +225,7 @@ export function verifySessionReceipt(receipt: unknown, session: Record<string, a
       discipline: c.discipline, ...(c.contractVersion === 5 ? {coachingGuidance:c.coachingGuidance} : {stimulus:c.stimulusId,intent:c.intent,
       state:calendarState({tipo:c.discipline,stimulusId:c.stimulusId})}) });
     if (weekly.builderProtocol && (c.contractVersion !== 5 || evidence.weekly.priorSessions !== undefined
+      || !samePlanData(c.developmentAreas, evidence.coachingContext?.commonWeekContext?.canonicalFacts.developmentAreas)
       || commonContextDigest(evidence.coachingContext?.commonWeekContext ?? null) !== weekly.commonWeekContextDigest
       || commonContextDigest(evidence.weekly.authorization ?? null) !== commonContextDigest(slotAuthorization(weekly, signedSlot, c))))
       throw new Error('WEEKLY_SESSION_CHAIN_MISMATCH');

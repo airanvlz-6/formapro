@@ -7,6 +7,7 @@ import { intentMatchingMovementIds } from '../sports/prescriptionIntent';
 import { RUNNING_INTENSITY_POLICIES } from '../sports/runningIntensityPolicies';
 import { resolveRunningReferences } from '../sports/runningReferenceAuthority';
 import type { PrescriptionSignals } from '../athlete/prescriptionSignals';
+import { developmentPlanningSnapshot } from '../athlete/developmentAreas';
 
 const text = (v: unknown) => typeof v === 'string' ? v.slice(0, 400) : null;
 const object = (v: unknown): Record<string, any> => v && typeof v === 'object' && !Array.isArray(v) ? v : {};
@@ -130,7 +131,9 @@ export function buildWeeklyCoachingContext(input: WeeklyContractInput, contract:
     },
     future: { canonicalContextInContract: ['strategy.goal', 'strategy.block', 'strategy.adaptations', 'strategy.coverage', 'strategy.deferred', 'strategy.eventAuthority', 'runningEventPreparation'],
       cycleObjective: athlete?.cycle.objective ? pick(athlete.cycle.objective, ['value', 'source', 'observedAt', 'updatedAt']) : null, evidencePolicy,
-      weaknesses: bounded(athlete?.development.filter(d => d.value.estado === 'activa').map(d => ({ source: d.source,
+      developmentAreas: athlete?.developmentAreas ?? developmentPlanningSnapshot([]),
+      weaknesses: bounded(athlete?.development.filter(d => d.value.estado === 'activa').map(d => ({ source: d.source, authority: 'legacy_unverified',
+        planAccion: d.value.planAccion, evidencias: d.value.evidencias, discipline: d.value.discipline,
         ...pick(d.value, ['id', 'nombre', 'diagnostico', 'estado', 'prioridad', 'confianza', 'progreso', 'ultimaRevision', 'pattern']) })) ?? [], 6),
       protectedPrescriptions: bounded(week.filter(p => p.date > asOfDate && !!input.fixed[p.day]), 7),
       availability: input.allowed, ...(input.weeklyAvailability ? { weeklyAvailability: input.weeklyAvailability } : {}),

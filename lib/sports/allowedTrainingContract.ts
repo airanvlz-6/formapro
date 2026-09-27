@@ -15,6 +15,7 @@ import { validMethodIntensity, type MethodIntensityAuthority } from './methodInt
 import { validRunningMethodDose, type AuthorizedRunningMethodDose } from './runningMethodDoseAuthority';
 import { GENERATED_MOVEMENT_AUTHORITY, type GeneratedMovementAuthority } from './movementVariants';
 import { EXECUTION_POLICY } from './sessionExecution';
+import type { DevelopmentSnapshot } from '../athlete/developmentAreas';
 
 export { STRUCTURES_BY_STIMULUS } from './workoutStructureLibrary';
 export { resolveTrainingStimulus, type StimulusResolution } from './trainingFeasibility';
@@ -43,6 +44,7 @@ export type ContractInput = {
   source: 'weekly_session_builder';
 };
 export type AllowedTrainingContract = Omit<ContractInput, 'stimulus'> & {
+  developmentAreas?: DevelopmentSnapshot;
   executionPolicy?: typeof EXECUTION_POLICY;
   generatedMovementAuthority?: GeneratedMovementAuthority;
   intensityAuthority?: MethodIntensityAuthority;

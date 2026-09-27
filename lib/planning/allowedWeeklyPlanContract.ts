@@ -1,3 +1,4 @@
+import { DEVELOPMENT_PLANNING_INSTRUCTION } from '../athlete/developmentAreas';
 import type { WeeklyCoachingGuidance } from './weeklyCoachingGuidance';
 import type { DoseCapabilityProfile } from '../sports/doseCapabilityProfile';
 import { buildOpenWeeklyContract, validateOpenWeeklySelection, openWeeklyPrompt, emitOpenWeeklyValidation, type OpenWeeklyFacts } from './openWeeklyCoachContract';
@@ -321,7 +322,7 @@ EJEMPLO_JSON:
 ${JSON.stringify({ contractVersion: 1, contextDigest: 'REEMPLAZAR_DIGEST', selections: calendarDays.map(day => ({ day, optionId: 'REEMPLAZAR_OPTION_ID', decision: { role: 'RECOVERY', reason: 'REEMPLAZAR_JUSTIFICACION_BREVE_SEGUN_CONTEXTO_Y_OPCION' } })) })}
 FIN_EJEMPLO_JSON
 No añadas stimulusId, methodId, movementId, intent, título ni focus: el servidor resuelve los IDs de la opción elegida. Solo decision contiene la explicación breve.
-COACHING_CONTEXT:\n${JSON.stringify(coachingContext ?? { status: 'unknown', reason: 'not_prepared' })}
+${DEVELOPMENT_PLANNING_INSTRUCTION}\nCOACHING_CONTEXT:\n${JSON.stringify(coachingContext ?? { status: 'unknown', reason: 'not_prepared' })}
 WEEKLY_CONTRACT:\n${JSON.stringify(contract)}`;
 }
 

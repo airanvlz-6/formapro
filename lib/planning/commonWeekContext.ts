@@ -29,7 +29,8 @@ export function buildCommonWeekContext(input: {
       prescription: c.past.prescriptionHistory.items.find(p => p.date === s.targetDate)?.prescription ??
         c.future.protectedPrescriptions.items.find(p => p.date === s.targetDate)?.prescription ?? null })),
     canonicalFacts: { readiness: c.current.readiness, physiology: c.current.physiology, timeBudget: c.current.timeBudget,
-      external: c.current.external, cycleObjective: c.future.cycleObjective, weaknesses: c.future.weaknesses },
+      external: c.current.external, cycleObjective: c.future.cycleObjective, weaknesses: c.future.weaknesses,
+      developmentAreas: c.future.developmentAreas },
     restrictions: c.current.restrictions, availability: c.future.availability,
     resources: { signals: c.current.signals, daySignals: c.future.daySignals }, references: c.current.references,
     executionHistory: { cutoff: input.asOfDate, semantics: 'CONFIRMED_BEFORE_FAN_OUT',

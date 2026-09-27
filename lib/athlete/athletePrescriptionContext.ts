@@ -1,4 +1,5 @@
 import { MOVEMENT_LIBRARY, type PatronMovimiento } from '../sports/movementLibrary';
+import { developmentPlanningSnapshot, isDevelopmentV2 } from './developmentAreas';
 import { projectPrescriptionSignals } from './prescriptionSignals';
 import type { SessionEnvironmentInput } from '../sports/sessionTrainingEnvironment';
 
@@ -214,7 +215,7 @@ export function projectAthletePrescriptionProfile(user: Row, asOfDate?: string, 
         : explicitPattern && patternValues.has(explicitPattern as PatronMovimiento) ? explicitPattern as PatronMovimiento
           : !explicitPattern && indicatorPattern && patternValues.has(indicatorPattern as PatronMovimiento) ? indicatorPattern as PatronMovimiento : null,
     }, `usuarios.athlete_development.${i}`, raw, d.ultima_revision);
-  }) : [];
+  }).filter(d => !isDevelopmentV2(d.raw)) : [];
   const cycle = record(user.ciclo_actual);
   const field = (name: string) => {
     const raw = cycle[name] ?? null;
@@ -235,6 +236,7 @@ export function projectAthletePrescriptionProfile(user: Row, asOfDate?: string, 
       detail: profile.objetivo_detalle == null ? [] : [evidence(profile.objetivo_detalle, 'usuarios.perfil.objetivo_detalle', profile.objetivo_detalle, record(profile.objetivo_detalle).updated_at)] },
     sessionTimeBudget: resolveEvidence(times), strength: { references: strength, byMovement: strengthByMovement },
     running: { references: running, byMetric: runningByMetric }, development,
+    developmentAreas: developmentPlanningSnapshot(user.athlete_development),
     declaredLimitations: evidence(profile.lesiones ?? null, 'usuarios.perfil.lesiones', profile.lesiones ?? null),
     cycle: { block: field('bloque'), week: field('semana'), totalWeeks: field('totalSemanas'), objective: field('objetivo') },
     legacyDevelopment: { weaknesses: evidence(user.debilidades ?? null, 'usuarios.debilidades', user.debilidades ?? null),

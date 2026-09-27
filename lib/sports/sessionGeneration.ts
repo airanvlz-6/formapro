@@ -1,4 +1,5 @@
 import { admitFinalDecision, FINAL_DECISION_INSTRUCTIONS } from './finalSessionDecision';
+import { DEVELOPMENT_INTENT_INSTRUCTION } from '../athlete/developmentAreas';
 import { executableProjection } from './minimalSessionRepresentation';
 import type { SessionShapeDiagnostic } from './sessionShapeDiagnostics';
 import { openExecution, EXECUTABLE_DOSE_INSTRUCTIONS } from './sessionExecution';
@@ -125,6 +126,7 @@ Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gramÃ
       executions: authority.runningMethodDose.evidence.structuredMethodExecution?.records.map(({ executionId: _id, ...r }) => r),
     } : null });
   let previousErrors: string[] = [];
+  if (authority.developmentAreas) prompt += '\n' + DEVELOPMENT_INTENT_INSTRUCTION;
   let shapeDetails: SessionShapeDiagnostic[] = [];
   let missingDetails: SufficiencyFailure[] = [];
   for (let attempt = 0; attempt < 2; attempt++) {

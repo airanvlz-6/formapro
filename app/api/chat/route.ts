@@ -1,3 +1,4 @@
+import { saveLegacyDevelopment } from '@/lib/athlete/developmentAreaStore';
 import { weeklyGuidanceTool, readWeeklyGuidanceOutput } from '@/lib/planning/weeklyGuidanceOutput';
 import { conversationSession } from '@/lib/chat/conversationSession';
 import { authorizeChatRequest } from '@/lib/auth/chatIdentity';
@@ -2151,7 +2152,8 @@ const { data: exposicionesParaSeguimiento } = await supabase.from("weakness_expo
     // Persistir el recalculo solo si algo cambio realmente (evita escrituras innecesarias)
     const huboRecalculo = JSON.stringify(desarrolloConSeguimientoRecalculado) !== JSON.stringify(usuarioAnalyzer?.athlete_development || []);
     if (huboRecalculo && (typeof coachFirstPlanning === 'undefined' || !coachFirstPlanning)) {
-      await supabase.from("usuarios").update({ athlete_development: desarrolloConSeguimientoRecalculado }).eq("codigo", codigo);
+      const developmentSaved = await saveLegacyDevelopment(supabase, codigo, usuarioAnalyzer?.athlete_development, desarrolloConSeguimientoRecalculado);
+    if (!developmentSaved.ok) return NextResponse.json(developmentSaved);
       console.log(`🔄 WEAKNESS FOLLOW-UP: recalculado estado de debilidades por antiguedad para ${codigo}`);
     }
     const debilidadesActivas = desarrolloConSeguimientoRecalculado.filter((d: any) => d.estado === "activa");
@@ -5079,7 +5081,8 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
       }
       return d;
     });
-    await supabase.from("usuarios").update({ athlete_development: desarrolloRecalculado }).eq("codigo", codigo);
+    const developmentSaved = await saveLegacyDevelopment(supabase, codigo, usuarioRecalculo?.athlete_development, desarrolloRecalculado);
+    if (!developmentSaved.ok) return NextResponse.json(developmentSaved);
     const cambios = desarrolloRecalculado.filter((d: any, i: number) => d.estado !== (usuarioRecalculo?.athlete_development || [])[i]?.estado);
     return NextResponse.json({ ok: true, totalDebilidades: desarrolloRecalculado.length, marcadasSinSeguimiento: cambios.map((c: any) => c.nombre_visible) });
   }
@@ -5109,7 +5112,8 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
       confirmacion_atleta: estadoConfirmado,
       fecha_confirmacion_atleta: new Date().toISOString().split('T')[0],
     };
-    await supabase.from("usuarios").update({ athlete_development: devActualizadoConfirmacion }).eq("codigo", codigo);
+    const developmentSaved = await saveLegacyDevelopment(supabase, codigo, usuarioConfirmacion?.athlete_development, devActualizadoConfirmacion);
+    if (!developmentSaved.ok) return NextResponse.json(developmentSaved);
     console.log(`✅ ATHLETE CONFIRMATION: "${nombreVisible}" confirmado como "${estadoConfirmado}" por el atleta`);
     return NextResponse.json({ ok: true, nuevoEstado, progresoNuevo });
   }
@@ -5220,6 +5224,7 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
     const yaExiste = resultadoDedup.esDuplicadoSemantico ? resultadoDedup.indiceExistente : -1;
 
     const nuevaEntrada = {
+      authority: "legacy_unverified",
       area, indicador,
       nombre_visible: nombre_visible || indicador,
       diagnostico: diagnostico || "",
@@ -5241,7 +5246,8 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
     } else {
       devActualizado = [...devActual, nuevaEntrada];
     }
-    await supabase.from("usuarios").update({ athlete_development: devActualizado }).eq("codigo", codigo);
+    const developmentSaved = await saveLegacyDevelopment(supabase, codigo, usuarioActual?.athlete_development, devActualizado);
+    if (!developmentSaved.ok) return NextResponse.json(developmentSaved);
     return NextResponse.json({ ok: true, fusionado: yaExiste >= 0, motivoFusion: resultadoDedup.motivo });
   }
 
@@ -5263,7 +5269,8 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
       ultima_revision: new Date().toISOString().split('T')[0],
       evidencias: nueva_evidencia ? [...devActualizado[idx].evidencias, nueva_evidencia] : devActualizado[idx].evidencias
     };
-    await supabase.from("usuarios").update({ athlete_development: devActualizado }).eq("codigo", codigo);
+    const developmentSaved = await saveLegacyDevelopment(supabase, codigo, usuarioActual?.athlete_development, devActualizado);
+    if (!developmentSaved.ok) return NextResponse.json(developmentSaved);
 
     // FORGE TIMELINE NARRATIVA — si pasó a resuelta, generar evento en Historia + notificacion narrativa
     // que conecta explicitamente el momento de deteccion con el de resolucion.

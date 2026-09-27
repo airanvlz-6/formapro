@@ -1,3 +1,4 @@
+import { DEVELOPMENT_PLANNING_INSTRUCTION } from '../athlete/developmentAreas';
 import { validCoachingDescription } from './weeklyCoachingGuidance';
 import { createHash } from 'node:crypto';
 import type { AllowedWeeklyPlanContract, WeeklyContractInput, WeeklyOption, WeeklyCoachingDecision } from './allowedWeeklyPlanContract';
@@ -108,7 +109,7 @@ export function emitOpenWeeklyValidation(proposal: unknown, errors: string[], pl
 export function openWeeklyPrompt(contract: AllowedWeeklyPlanContract, context: unknown) {
   if (contract.contractVersion === 3) return `WEEKLY_GUIDANCE_V2: Eres el Coach. Decide el calendario con el contexto completo. Guidance es recomendación deportiva para Builder, que puede revisarla. Nunca inventes hechos. Respeta scope, disponibilidad, días protected y frequencyPolicy. No hay cuotas deportivas ni catálogo obligatorio.
 Devuelve {contractVersion:3,contextDigest,selections:[siete días únicos]}. Protected: {day,optionId} exactos. REST: {day,state:"REST"}. Ejecutable: {day,state:"TRAIN"|"RECOVERY",discipline,guidance:{kind:"weekly_guidance",version:2,adaptation?,stimulus?,patterns?:string[],method?,role?,reason?}}. Todos los campos deportivos son descriptivos opcionales, strings legibles hasta 400 caracteres, sin normalizar a catálogo. Patterns admite varios strings. No incluyas dosis ejecutable en guidance. TRAIN/RECOVERY expresa recomendación de calendario; solo habilita la sesión de esa disciplina y fecha. No declara hechos ni obliga a Builder a copiar detalles deportivos.
-COACHING_CONTEXT:\n${JSON.stringify(context)}
+${DEVELOPMENT_PLANNING_INSTRUCTION}\nCOACHING_CONTEXT:\n${JSON.stringify(context)}
 WEEKLY_CONTRACT:\n${JSON.stringify(contract)}`;
   return `Eres el Coach responsable de la semana. Propón decisiones deportivas estructuradas a partir de hechos, objetivo, evento, fase, historia, restricciones, equipo y capacidades. UNKNOWN no es normal ni permiso.
 No existe una lista exhaustiva de opciones deportivas. Los métodos conocidos son ejemplos; puedes proponer method.kind=coach_defined con label descriptivo, adaptationId y stimulusId identificadores semánticos, pattern resoluble y discipline del scope permitido. Los labels no establecen biomecánica, seguridad, equipo ni referencias. Session resolverá movimientos y validará sus requisitos reales.
@@ -117,6 +118,6 @@ Para días protected copia exactamente {day,optionId}. Otros días: {day,state,d
 Pattern es uno de squat,hinge,horizontal_push,vertical_push,horizontal_pull,vertical_pull,olympic_lift,carry,run,jump,core_antirotacion,core_flexion,core_antiextension,locomotion,lunge,rotational,cyclic,inverted_locomotion. Role: PRIMARY,SUPPORTING,MAINTENANCE,OPTIONAL; decision admite también RECOVERY. reason breve, máximo 400 caracteres, sin razonamiento interno. RECOVERY usa stimulusId recuperacion_activa y cuenta como ejecutable.
 Respeta disponibilidad, scope, fixed y frequencyPolicy. openFacts.allowed es la disponibilidad efectiva de ESTA semana: una disciplina habitual puede tener cero días. No rellenes días por perfil, ciclo o adaptación preferida ni cambies la disciplina asignada por el usuario. En días disponibles puedes decidir TRAIN/REST y el contenido. No necesitas un método previo para proponer. Devuelve JSON RAW {contractVersion:2,contextDigest,selections:[siete días únicos]}. No envíes hechos autodeclarados ni campos adicionales.
 KNOWLEDGE_EXAMPLES:\n${JSON.stringify(TRANSFER_METHODS)}
-COACHING_CONTEXT:\n${JSON.stringify(context)}
+${DEVELOPMENT_PLANNING_INSTRUCTION}\nCOACHING_CONTEXT:\n${JSON.stringify(context)}
 WEEKLY_CONTRACT:\n${JSON.stringify(contract)}`;
 }

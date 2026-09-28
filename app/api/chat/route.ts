@@ -1,6 +1,6 @@
 import { saveLegacyDevelopment } from '@/lib/athlete/developmentAreaStore';
 import { requestWeeklyProvider } from '@/lib/planning/weeklyProviderRequest';
-import { weeklyGuidanceTool, readWeeklyGuidanceOutput } from '@/lib/planning/weeklyGuidanceOutput';
+import { weeklyGuidanceTool, readWeeklyGuidanceOutput, WEEKLY_GUIDANCE_MAX_TOKENS } from '@/lib/planning/weeklyGuidanceOutput';
 import { conversationSession } from '@/lib/chat/conversationSession';
 import { authorizeChatRequest } from '@/lib/auth/chatIdentity';
 import { identityDependencies } from '@/lib/auth/supabaseServer';
@@ -2331,7 +2331,7 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
         const outputTool = longitudinalDecision ? LONGITUDINAL_DECISION_TOOL : weeklyGuidance ? weeklyGuidanceTool(weeklyContract!) : null;
         const output = await requestWeeklyProvider({
           method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-          body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 1800, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning, longitudinalDecision ? 'Longitudinal' : 'Weekly') : '') }],
+          body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: weeklyGuidance ? WEEKLY_GUIDANCE_MAX_TOKENS : 1800, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning, longitudinalDecision ? 'Longitudinal' : 'Weekly') : '') }],
             ...(outputTool ? { tools: [outputTool],
               tool_choice: { type: 'tool', name: outputTool.name, disable_parallel_tool_use: true } } : {}) }),
         }, longitudinalDecision ? 'longitudinal' : 'weekly', { fetch });

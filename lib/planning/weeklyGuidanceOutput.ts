@@ -1,6 +1,10 @@
 import { plannerProviderMetadata, WeeklyProviderResponseError } from './weeklyPlannerDiagnostics';
 import type { AllowedWeeklyPlanContract } from './allowedWeeklyPlanContract';
 const text = {type:'string',minLength:1,maxLength:400};
+// Seven fully populated guidance days: 7,510 characters / 2,092 tokens measured
+// with Sonnet 4.5 count_tokens (synthetic fixture, expanded JSON). ~2k margin
+// covers wording, serialization and tool framing; not the schema's theoretical maximum.
+export const WEEKLY_GUIDANCE_MAX_TOKENS = 4096;
 export const WEEKLY_GUIDANCE_TOOL = {
   name:'submit_weekly_guidance', description:'Propose a calendar and optional coaching guidance. Forge verifies facts and authorization.',
   input_schema:{type:'object',additionalProperties:false,required:['contractVersion','contextDigest','selections'],properties:{

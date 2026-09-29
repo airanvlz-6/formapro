@@ -3,7 +3,7 @@ import AuthenticatedSurface from '../auth/AuthenticatedSurface';
 import { authenticatedFetch } from '@/lib/auth/authenticatedFetch';
 import { useState, useEffect } from "react";
 import { legacySessionView } from '@/lib/sports/sessionPresentation';
-import { planBlockLabel } from '@/lib/sports/planPresentation';
+import { planBlockLabel, planSessionState } from '@/lib/sports/planPresentation';
 
 const DIAS = ["lunes","martes","miércoles","jueves","viernes","sábado","domingo"];
 const TIPO_CONFIG: Record<string, {emoji:string;color:string}> = {
@@ -11,6 +11,7 @@ const TIPO_CONFIG: Record<string, {emoji:string;color:string}> = {
   box: { emoji:"🏋️", color:"#FF6B00" },
   crossfit: { emoji:"🏋️", color:"#FF6B00" },
   descanso: { emoji:"😴", color:"#9A9590" },
+  unavailable: { emoji:"—", color:"#9A9590" },
   hyrox: { emoji:"🔥", color:"#FF6B00" },
   trail: { emoji:"🏔️", color:"#4CAF50" },
   fuerza: { emoji:"💪", color:"#FF6B00" },
@@ -85,8 +86,9 @@ function PlanContent({ codigo }: { codigo: string }) {
   if (!autenticado) return <main style={{ padding: 32 }} role="status">{error || 'Cargando tus datos…'} <button onClick={() => window.location.reload()}>Reintentar</button></main>;
 
   const sesiones = plan?.sessions || [];
-  const sesionesCompletadas = sesiones.filter((s:any) => s.completada).length;
-  const totalSesiones = sesiones.filter((s:any) => s.tipo !== "descanso").length;
+  const entrenamientos = sesiones.filter((s:any) => planSessionState(s) === 'TRAIN');
+  const sesionesCompletadas = entrenamientos.filter((s:any) => s.completada).length;
+  const totalSesiones = entrenamientos.length;
   const confianza = plan?.confidence || 100;
 
   // Calcular día actual
@@ -209,22 +211,26 @@ function PlanContent({ codigo }: { codigo: string }) {
               const normalizar = (s:string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"");
               const sesion = sesiones.find((s:any) => normalizar(s.dia) === normalizar(dia));
               const esHoy = esSemanaActual && dia === diaHoy;
-              const config = sesion ? getTipoConfig(sesion.tipo, legacySessionView(sesion).titulo) : {emoji:"—",color:C.muted};
+              const estadoCalendario = planSessionState(sesion);
+              const esNoDisponible = estadoCalendario === 'UNAVAILABLE';
+              const config = esNoDisponible ? TIPO_CONFIG.unavailable : estadoCalendario === 'REST' ? TIPO_CONFIG.descanso
+                : sesion ? getTipoConfig(sesion.tipo, legacySessionView(sesion).titulo) : {emoji:"—",color:C.muted};
               // FIX: una sesion MODIFICADA (ej: "Descanso completo con movilidad suave", titulo real que
         // contiene contenido de movilidad + descripcion real) NUNCA debe clasificarse como descanso
         // vacio solo por tener "completo" en el titulo — eso bloqueaba el modal de detalle justo
         // para las sesiones donde mas importa poder ver el motivo/contenido del cambio.
         const esDescansoTotal = !sesion?.modificado && (/descanso completo|descanso total|^descanso$/i.test(`${sesion?.tipo||""} ${sesion ? legacySessionView(sesion).titulo || '' : ''}`.trim()) || !sesion);
-              const esDescanso = esDescansoTotal;
+              const esDescanso = sesion?.weekPrescriptionDecision ? estadoCalendario === 'REST' : esDescansoTotal;
+              const puedeVerDetalle = sesion && !esDescanso && !esNoDisponible;
 
               return (
-                <div onClick={()=>sesion&&!esDescanso&&setSesionDetalle(sesion)}
+                <div onClick={()=>puedeVerDetalle&&setSesionDetalle(sesion)}
                   style={{
                     background: esHoy ? `${C.accent}15` : C.card,
                     border: `1px solid ${esHoy ? C.accent : sesion?.modificado ? "#FFD700" : C.border}`,
                     borderRadius:14,
                     padding:"16px 18px",
-                    cursor: sesion && !esDescanso ? "pointer" : "default",
+                    cursor: puedeVerDetalle ? "pointer" : "default",
                     transition:"all 0.2s"
                   }}>
                   <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -237,14 +243,14 @@ function PlanContent({ codigo }: { codigo: string }) {
                         {esHoy&&<span style={{background:C.accent,color:"#fff",fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:100}}>HOY</span>}
                         {sesion?.modificado&&<span style={{background:"#FFD70020",color:"#FFD700",fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:100}}>⚠️ Modificado</span>}
                       </div>
-                      <span style={{color:esDescanso?C.muted:C.ink,fontSize:15,fontWeight:esDescanso?400:600}}>
-                        {sesion?.titulo || (esDescanso?"Descanso":"Sin sesión")}
+                      <span style={{color:esDescanso||esNoDisponible?C.muted:C.ink,fontSize:15,fontWeight:esDescanso||esNoDisponible?400:600}}>
+                        {esNoDisponible ? "No disponible" : sesion?.titulo || (esDescanso ? "Descanso" : "Sin sesión")}
                       </span>
-                      {sesion?.completada && sesion?.descripcion_real && (
+                      {estadoCalendario === 'TRAIN' && sesion?.completada && sesion?.descripcion_real && (
                         <p style={{color:"#4CAF50",fontSize:11,marginTop:2}}>✅ Completada</p>
                       )}
                     </div>
-                    {sesion&&!esDescanso&&<span style={{color:C.muted,fontSize:18}}>›</span>}
+                    {puedeVerDetalle&&<span style={{color:C.muted,fontSize:18}}>›</span>}
                   </div>
                 </div>
               );

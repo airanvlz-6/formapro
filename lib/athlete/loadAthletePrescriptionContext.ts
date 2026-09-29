@@ -17,6 +17,7 @@ import { admitRunningDoseEvidence } from '../sports/runningDoseEvidenceAuthority
 import { readRunningExecutionViews } from '../execution/runningExecutionStore';
 import { mergeRunningHistory } from '../execution/historicalRunning';
 import { RUNNING_DOSE_WINDOWS } from './runningDoseBaseline';
+import { readPrescriptionInputs } from './readPrescriptionInputs';
 
 export type PreparedPrescriptionReadiness = { userCodigo: string; effectiveDate: string;
   source: 'canonical_readiness_engine'; result: ReadinessResultado };
@@ -40,11 +41,8 @@ export async function loadAthletePrescriptionContext(db: any, userCodigo: string
       throw new Error(`PRESCRIPTION_CONTEXT_READ_FAILED:${table}`);
     return result.data;
   });
-  const [user, plans, modifications, restrictions, recovery, executions] = await Promise.all([
-    rows('usuarios', db.from('usuarios').select('modo_entrada,categoria,especialidad,perfil,objetivo_principal,test_atleta,marcas_especificas,historial_marcas,datos_entrenamiento,athlete_development,ciclo_actual,debilidades,workout_history')
-      .eq('codigo', userCodigo).single(), true),
-    rows('weekly_plan', db.from('weekly_plan').select('week_start,sessions').eq('user_codigo', userCodigo)
-      .lte('week_start', options.asOfDate).order('week_start', { ascending: false }).limit(4)),
+  const [{ user, plans }, modifications, restrictions, recovery, executions] = await Promise.all([
+    readPrescriptionInputs(db, userCodigo, options.asOfDate, trace),
     rows('session_modification_events', db.from('session_modification_events').select('week_start,dia,trigger_type,reason_code,affected_exercise,objective_impact,created_at')
       .eq('user_codigo', userCodigo).lt('created_at', new Date(Date.parse(options.asOfDate) + 86400000).toISOString())
       .order('created_at', { ascending: false }).limit(30)),

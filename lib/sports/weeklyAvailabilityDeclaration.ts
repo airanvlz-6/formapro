@@ -1,4 +1,4 @@
-import { calendarDays, calendarKey } from '../planning/weeklyCalendar';
+import { calendarDays, calendarKey } from '../planning/civilCalendar';
 import { isExistingAvailabilityConfirmation } from './availabilityResponse';
 
 /** Human-language boundary only. Downstream authorities consume this value, never its text. */

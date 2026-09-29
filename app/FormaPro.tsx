@@ -1901,7 +1901,7 @@ const forgeValidator=(texto:string):string=>{
           escritorListoRef.current=false;setPestanaBloqueada(true);
         }
         if (result.results?.some((r: any) => r.status === "committed" && ["update_session","record_execution","generate_week"].includes(r.name)))
-          await cargarPlanSemanal(codigoUsuario).catch(() => {});
+          await cargarPlanSemanal(codigoUsuario, result.targetWeekStart).catch(() => {});
         setImagenesAdjuntas([]); setImagenAdjunta(null); setImagenPreview(null);
       } catch (error) {
         // Arbitrary SDK/parser messages can contain URLs or response content: never log them verbatim.

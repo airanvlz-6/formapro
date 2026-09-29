@@ -1,3 +1,4 @@
+import { requestSessionBuilder } from '../../../lib/sports/sessionBuilderProvider';
 import { saveLegacyDevelopment } from '@/lib/athlete/developmentAreaStore';
 import { requestWeeklyProvider } from '@/lib/planning/weeklyProviderRequest';
 import { weeklyGuidanceTool, readWeeklyGuidanceOutput, WEEKLY_GUIDANCE_MAX_TOKENS } from '@/lib/planning/weeklyGuidanceOutput';
@@ -2383,17 +2384,7 @@ Responde SOLO con este JSON, añadiendo strategyProposal, sin texto adicional ni
           weekly: { receipt: datos.calendarReceipt, generationToken: datos.generationToken, optionId: datos.optionId, claims: datos },
           ...(Object.hasOwn(datos, 'intent') ? { intent: datos.intent } : {}),
           ...(Object.hasOwn(datos, 'state') ? { state: datos.state } : {}) },
-        async (prompt: string) => {
-          const response = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST", headers: { "Content-Type": "application/json", "x-api-key": apiKey!, "anthropic-version": "2023-06-01" },
-            body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 2400, messages: [{ role: "user", content: prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning, 'Builder') : '') }] }),
-          });
-          if (!response.ok) throw new Error("LLM_REQUEST_FAILED");
-          const output = await response.json();
-          return { text: output.content?.map((b: any) => b.text || "").join("") || "", planningRunId: generation.planningRunId,
-            metadata: { stopReason: output.stop_reason, outputTokens: output.usage?.output_tokens,
-              contentBlockCount: output.content?.length, contentBlockTypes: output.content?.map((b: any) => b.type) } };
-        }, JSON.stringify({ intent: datos.titulo_breve ?? datos.tituloBreve, analysis: datos.analisis,
+        async (prompt: string) => requestSessionBuilder(prompt + (typeof coachFirstPlanning !== 'undefined' && coachFirstPlanning ? coachFirstPlanningText(coachFirstPlanning, 'Builder') : ''), apiKey!, generation.planningRunId), JSON.stringify({ intent: datos.titulo_breve ?? datos.tituloBreve, analysis: datos.analisis,
           previousDay: datos.diaAnterior, nextDay: datos.diaSiguiente }), generation.planningRunId, coachFirstPlanningText(coachFirstPlanning, 'Builder'));
       return NextResponse.json(generated);
     } catch (error: any) {

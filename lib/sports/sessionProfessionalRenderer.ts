@@ -4,7 +4,7 @@ import type { AllowedTrainingContract } from './allowedTrainingContract';
 import type { MovementDose, StructuredSessionProposal } from './structuredSession';
 import { calculatedLoad, doseReference, estimateSessionDuration } from './sessionDose';
 import { WORKOUT_STRUCTURE_LIBRARY } from './workoutStructureLibrary';
-import { renderWeekObjective } from '../planning/canonicalWeekStrategy';
+import { renderWeekObjective } from './weekObjectivePresentation';
 import { prescriptionGenerationOptions } from './prescriptionDataSufficiency';
 import { resolvedMovement } from './movementVariants';
 

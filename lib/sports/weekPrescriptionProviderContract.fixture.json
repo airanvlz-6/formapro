@@ -1,0 +1,220 @@
+{
+  "input": {
+    "prescription": {
+      "version": 1,
+      "weekStart": "2026-09-28",
+      "revision": 1,
+      "weekIntentReference": {
+        "weekStart": "2026-09-28",
+        "revision": 2,
+        "blockIntentReference": {
+          "blockId": "block-aerobic-strength",
+          "revision": 1
+        }
+      },
+      "provenance": {
+        "kind": "recorded_decision",
+        "authority": "human_coach",
+        "source": "fixture:coach_review",
+        "decidedAt": "2026-09-27T12:00:00Z",
+        "sourceReference": "review:week-3"
+      },
+      "days": [
+        {
+          "date": "2026-09-28",
+          "state": "REST"
+        },
+        {
+          "date": "2026-09-29",
+          "state": "TRAIN",
+          "discipline": "carrera",
+          "purpose": "Desarrollar el umbral aeróbico mediante intervalos controlados, con volumen compatible con una semana mixta de carrera y CrossFit."
+        },
+        {
+          "date": "2026-09-30",
+          "state": "REST"
+        },
+        {
+          "date": "2026-10-01",
+          "state": "TRAIN",
+          "discipline": "box",
+          "purpose": "Consolidar fuerza y técnica; fixture sin materializar."
+        },
+        {
+          "date": "2026-10-02",
+          "state": "REST"
+        },
+        {
+          "date": "2026-10-03",
+          "state": "TRAIN",
+          "discipline": "carrera",
+          "purpose": "Dar continuidad al desarrollo aeróbico con esfuerzo cómodo."
+        },
+        {
+          "date": "2026-10-04",
+          "state": "REST"
+        }
+      ]
+    },
+    "weekIntent": {
+      "weekStart": "2026-09-28",
+      "revision": 2,
+      "blockIntentReference": {
+        "blockId": "block-aerobic-strength",
+        "revision": 1
+      },
+      "positionInBlock": 3,
+      "purpose": "Desarrollar capacidad aeróbica y tolerancia al umbral esta semana.",
+      "contributionToBlock": "Dar continuidad al trabajo de resistencia conservando una exposición de fuerza.",
+      "provenance": {
+        "kind": "recorded_decision",
+        "authority": "human_coach",
+        "source": "fixture:coach_review",
+        "decidedAt": "2026-09-27T12:00:00Z",
+        "sourceReference": "review:week-3"
+      }
+    },
+    "date": "2026-09-29",
+    "core": {
+      "identity": {
+        "status": "known",
+        "source": "fixture:athlete_identity",
+        "value": "synthetic-athlete-6e"
+      },
+      "disciplines": {
+        "status": "known",
+        "source": "fixture:training_sources",
+        "value": {
+          "scopeStatus": "resolved",
+          "diagnostics": [],
+          "entries": [
+            {
+              "discipline": "carrera",
+              "ownership": "forge",
+              "active": true,
+              "source": "fixture:training_sources"
+            },
+            {
+              "discipline": "box",
+              "ownership": "forge",
+              "active": true,
+              "source": "fixture:training_sources"
+            }
+          ],
+          "profileDisciplines": [
+            "carrera",
+            "box"
+          ],
+          "scope": {
+            "mode": "coach",
+            "prescriptionAllowed": true,
+            "managedDisciplines": [
+              "carrera",
+              "box"
+            ],
+            "externalDisciplines": []
+          }
+        }
+      },
+      "restrictions": {
+        "status": "known",
+        "source": "fixture:restriction_read",
+        "value": {
+          "resolution": "confirmed_none",
+          "asOfDate": "2026-09-27",
+          "state": null,
+          "areas": [],
+          "restrictions": [],
+          "reassessments": [],
+          "active": false
+        }
+      }
+    },
+    "scheduling": {
+      "status": "known",
+      "source": "fixture:explicit_date_availability",
+      "value": {
+        "date": "2026-09-29",
+        "discipline": "carrera",
+        "availability": "available",
+        "protection": "clear"
+      }
+    },
+    "technical": {
+      "externalLoad": {
+        "status": "known",
+        "source": "fixture:external_activity_read",
+        "value": {
+          "source": "server_training_sources_and_records",
+          "policy": "read_only_context",
+          "activities": [],
+          "records": []
+        }
+      },
+      "exposure": {
+        "status": "known",
+        "source": "fixture:legacy_exposure_read",
+        "value": {
+          "source": "legacy_completed_weekly_rows",
+          "report": {
+            "disciplina": "carrera",
+            "exposiciones": [],
+            "estimulosSubexpuestos": [],
+            "estimulosSobreexpuestos": []
+          },
+          "limitations": [
+            "fixture_empty_legacy_report_not_complete_execution_history"
+          ]
+        }
+      },
+      "dose": {
+        "status": "known",
+        "source": "fixture:resource_and_time_facts",
+        "value": {
+          "version": 1,
+          "policy": "structured-dose-v1",
+          "sessionDecisionAuthority": "coach",
+          "references": [],
+          "sufficiency": {
+            "version": 1,
+            "signals": {
+              "capability.canMeasureHeartRate": {
+                "state": "unknown",
+                "source": null
+              },
+              "capability.canMeasurePace": {
+                "state": "unknown",
+                "source": null
+              },
+              "skill.carrera.advanced": {
+                "state": "available",
+                "source": "fixture:trained_regular_runner",
+                "updatedAt": "2026-09-28"
+              },
+              "capability.canMeasureDistance": {
+                "state": "available",
+                "source": "fixture:measured_running_route",
+                "updatedAt": "2026-09-28"
+              }
+            }
+          },
+          "timeBudget": {
+            "maximumSeconds": 3600,
+            "minimumSeconds": null,
+            "status": "resolved",
+            "source": "fixture:declared_60_minutes"
+          },
+          "weakness": null,
+          "weekStrategy": null,
+          "neighbours": [],
+          "evidenceDigest": "fixture:6c-facts",
+          "diagnostics": []
+        }
+      }
+    }
+  },
+  "responses": [
+    "```json\n{\n  \"schemaVersion\": 2,\n  \"stimulusId\": \"Desarrollar el umbral aeróbico mediante intervalos controlados, con volumen compatible con una semana mixta de carrera y CrossFit.\",\n  \"structureId\": \"intervalos_carrera\",\n  \"blocks\": [\n    {\n      \"blockType\": \"warmup\",\n      \"movements\": [\n        {\n          \"movementId\": \"rodaje_z1\",\n          \"prescription\": {\n            \"durationSeconds\": 600,\n            \"doseInstruction\": \"10 min suave, Z1\"\n          }\n        },\n        {\n          \"movementId\": \"drills_tecnica\",\n          \"prescription\": {\n            \"doseInstruction\": \"3 series técnicas: skipping, talones, amplitud\"\n          }\n        },\n        {\n          \"movementId\": \"strides\",\n          \"prescription\": {\n            \"sets\": 3,\n            \"distanceMeters\": 80,\n            \"restSeconds\": 60,\n            \"doseInstruction\": \"3x80m progresivos, recuperación 60s caminando\"\n          }\n        }\n      ]\n    },\n    {\n      \"blockType\": \"main\",\n      \"movements\": [\n        {\n          \"movementId\": \"series_umbral\",\n          \"prescription\": {\n            \"sets\": 5,\n            \"durationSeconds\": 240,\n            \"restSeconds\": 120,\n            \"doseInstruction\": \"5x4min en umbral aeróbico (RPE 6-7), recuperación 2min trote suave\"\n          }\n        }\n      ]\n    },\n    {\n      \"blockType\": \"cooldown\",\n      \"movements\": [\n        {\n          \"movementId\": \"rodaje_z1\",\n          \"prescription\": {\n            \"durationSeconds\": 300,\n            \"doseInstruction\": \"5 min trote muy suave, Z1\"\n          }\n        }\n      ]\n    }\n  ]\n}\n```",
+    "```json\n{\n  \"schemaVersion\": 2,\n  \"stimulusId\": \"Desarrollar el umbral aeróbico mediante intervalos controlados, con volumen compatible con una semana mixta de carrera y CrossFit.\",\n  \"structureId\": \"intervalos_carrera\",\n  \"blocks\": [\n    {\n      \"blockType\": \"warmup\",\n      \"movements\": [\n        {\n          \"movementId\": \"rodaje_z1\",\n          \"prescription\": {\n            \"durationSeconds\": 600\n          }\n        },\n        {\n          \"movementId\": \"drills_tecnica\",\n          \"prescription\": {\n            \"doseInstruction\": \"4 drills x 30m\"\n          }\n        },\n        {\n          \"movementId\": \"strides\",\n          \"prescription\": {\n            \"sets\": 4,\n            \"distanceMeters\": 80,\n            \"restSeconds\": 60\n          }\n        }\n      ]\n    },\n    {\n      \"blockType\": \"main\",\n      \"movements\": [\n        {\n          \"movementId\": \"series_umbral\",\n          \"prescription\": {\n            \"sets\": 5,\n            \"durationSeconds\": 240,\n            \"restSeconds\": 120,\n            \"doseInstruction\": \"RPE 7-8\"\n          }\n        }\n      ]\n    },\n    {\n      \"blockType\": \"cooldown\",\n      \"movements\": [\n        {\n          \"movementId\": \"rodaje_z1\",\n          \"prescription\": {\n            \"durationSeconds\": 300\n          }\n        }\n      ]\n    }\n  ]\n}\n```"
+  ]
+}

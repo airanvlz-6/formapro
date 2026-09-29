@@ -148,6 +148,7 @@ export async function runCoachFirstLoop(input: CoachFirstInput, dependencies: {
         if (++ordinal > 24 || !call || typeof call.name !== 'string' || !call.arguments
           || typeof call.arguments !== 'object' || Array.isArray(call.arguments)) throw new Error('COACH_FIRST_TOOL_INVALID');
         const result = await dependencies.dispatch(call, ordinal);
+        if (result.canonicalOutcome) return { ...result.canonicalOutcome, coachCalls };
         results.push({ name: call.name, ...result });
         mutations.attempted(call.name, result);
         if (call.name === 'prepare_generation' && result.status === 'prepared' && dependencies.advanceGeneration) {

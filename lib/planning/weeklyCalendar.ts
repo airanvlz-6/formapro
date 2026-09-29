@@ -1,8 +1,8 @@
 /** Calendar safety, not a physiological load prescription. Availability is permission. */
-export const calendarDays = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
+import { calendarDays, calendarKey } from './civilCalendar';
+export { calendarDays, calendarKey } from './civilCalendar';
 export type CalendarState = 'TRAIN' | 'RECOVERY' | 'REST' | 'UNAVAILABLE';
 export const isExecutableCalendarState = (state: string) => state === 'TRAIN' || state === 'RECOVERY';
-export const calendarKey = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 export function calendarState(s: Record<string, any>): CalendarState {
   if (s.tipo === 'descanso') return 'REST';
   if (['external_blocked', 'sin_registrar', 'unavailable'].includes(s.tipo)) return 'UNAVAILABLE';

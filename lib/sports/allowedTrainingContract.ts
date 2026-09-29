@@ -8,7 +8,7 @@ import type { ExposureReport } from './exposureEngine';
 import type { PrescriptionScope } from './prescriptionScope';
 import type { RestrictionFlag } from './movementRestrictionPolicy';
 import { evaluateTrainingFeasibility, feasibilityInputErrors, resolveTrainingStimulus, resolveIntentStimulus } from './trainingFeasibility';
-import { validateDoseContext, type SessionDoseContext } from './sessionDoseContext';
+import { validateDoseContext, type SessionDoseContext } from './sessionDoseContract';
 import { timeAuthorityForIntent } from './sessionTimeDosePolicy';
 import { sameSessionTimeDoseAuthority } from './sessionTimeDoseAuthority';
 import { validMethodIntensity, type MethodIntensityAuthority } from './methodIntensityAuthority';

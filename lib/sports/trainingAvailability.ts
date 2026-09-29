@@ -1,5 +1,5 @@
 import { canonicalDiscipline } from './prescriptionScope';
-import { calendarDays, calendarKey } from '../planning/weeklyCalendar';
+import { calendarDays, calendarKey } from '../planning/civilCalendar';
 
 /** Persisted legacy writers used days.join(', '), including a scalar for one day.
  * Embedded JSON, prose, empty tokens and unknown weekdays are not that format.

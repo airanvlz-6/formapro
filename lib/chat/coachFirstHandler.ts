@@ -1,12 +1,12 @@
 import { verifySupabasePrincipal, resolveAuthenticatedAthlete, IdentityError } from '../auth/athleteIdentity';
 import { identityDependencies } from '../auth/supabaseServer';
 import { conversationSession, conversationTurn } from './conversationSession';
-import { COACH_FIRST_INSTRUCTION, runCoachFirstLoop, type CoachFirstInput } from './coachFirstLoop';
-import { coachFirstTools, resolveCoachFirstPolicy } from './coachFirstTools';
-import { generateCoachFirstWeek, type CoachFirstPlanning } from './coachFirstGeneration';
+import { COACH_FIRST_INSTRUCTION, runCoachFirstLoop, type CoachFirstInput, type CoachFirstCall } from './coachFirstLoop';
+import { canonicalWeeklyRequest } from './canonicalWeeklyRequest';
+import type { CoachFirstPlanning } from './coachFirstGeneration';
 import { COACH_FIRST_OUTPUT_TOOL, readCoachFirstOutput, logCoachFirstOutputRejection, type OutputRejectionObserver } from './coachFirstOutput';
 import { createOrchestratorTrace } from '../diagnostics/orchestratorTrace';
-import { generationRequirement, readPendingGenerationRequirement, resumeWeeklyGeneration, advanceWeeklyGeneration } from './generationTarget';
+
 
 const transportCodes = ['ETIMEDOUT','ECONNRESET','ECONNREFUSED','ENOTFOUND','EAI_AGAIN','UND_ERR_CONNECT_TIMEOUT','UND_ERR_HEADERS_TIMEOUT','UND_ERR_BODY_TIMEOUT'];
 function observeTransportFailure(error: unknown) {
@@ -61,14 +61,14 @@ async function observeHttpFailure(response: Response) {
 export async function handleCoachFirst(request: Request,
   planning: (action: string, datos: any, context: CoachFirstPlanning) => Promise<any>) {
   const trace = createOrchestratorTrace(process.env.FORGE_WEEKLY_COACHING_DIAGNOSTICS === '1');
-  const tracedPlanning = trace.wrap(planning);
   const respond = (value: object, status = 200) => Response.json({ ...value, ...trace.response() }, { status, headers: { 'Cache-Control': 'no-store' } });
   let claimed: { db: any; user: string; id: string; sessionId: string; epoch: string; before: any[] } | undefined;
   const receipts: any[] = [];
   let stage = 'initialization';
   let messageId: string | null = null;
   try {
-    const policy = resolveCoachFirstPolicy(process.env.FORGE_COACH_FIRST_POLICY);
+    const policy = process.env.FORGE_COACH_FIRST_POLICY ?? 'normal';
+    if (!['normal', 'read_only'].includes(policy)) throw new Error('COACH_FIRST_POLICY_INVALID');
     const { auth, db } = identityDependencies();
     const principal = await verifySupabasePrincipal(request, auth);
     const athlete = await resolveAuthenticatedAthlete(db, principal);
@@ -103,6 +103,18 @@ export async function handleCoachFirst(request: Request,
     conversation = claim.historial.slice(-10).filter((m: any) => m && ['user','assistant'].includes(m.role) && typeof m.content === 'string')
       .map((m: any) => ({ role: m.role, content: m.content }));
     input.conversation = conversation;
+    const today = new Date(input.timestamp).toLocaleDateString('en-CA', { timeZone: input.timezone });
+    const canonical = policy === 'normal' ? await canonicalWeeklyRequest(db, athlete.legacyCodigo, input.message, today, turn.id, input.timestamp, undefined, () => receipts.push({ tool: 'canonical_week', status: 'attempted', pending: null })) : null;
+    if (canonical) {
+      receipts.push(...canonical.receipts);
+      const finished = await conversationSession(db, athlete.legacyCodigo, supplied.sessionId, 'finish', {
+        id: turn.id, epoch: claimed.epoch, before: claimed.before, message: input.message,
+        answer: canonical.answer, status: canonical.ok ? 'completed' : 'terminal', receipts });
+      const { receipts: journalOnly, ...presented } = canonical;
+      return respond({ ...presented, operationId: turn.id, retryable: false, ...finished,
+        status: canonical.status, ok: canonical.ok && finished.persisted === true, journalStatus: finished.status,
+        answer: finished.persisted ? canonical.answer : 'No puedo confirmar el cierre del turno. Recarga el historial; no he reintentado la operación.' });
+    }
     stage = 'setup';
     const observe = (value: Record<string, unknown>) => console.info('COACH_FIRST_OPERATION', value);
     let outputRound = 0;
@@ -147,42 +159,34 @@ export async function handleCoachFirst(request: Request,
       stage = 'coach_loop';
       return decision;
     };
-    const today = new Date(input.timestamp).toLocaleDateString('en-CA', { timeZone: input.timezone });
-    const dispatchTool = coachFirstTools(db, athlete.legacyCodigo, input, turn.id,
-      (args, operationId, onArgumentRejection) => generateCoachFirstWeek(db, athlete.legacyCodigo, args, operationId, today, tracedPlanning, onArgumentRejection), observe, policy);
-    const dispatch: typeof dispatchTool = async (call, ordinal) => {
+    let dispatchTool: ReturnType<typeof import('./coachFirstTools')['coachFirstTools']> | undefined;
+    let canonicalToolResult: Awaited<ReturnType<typeof canonicalWeeklyRequest>>;
+    const dispatch = async (call: CoachFirstCall, ordinal: number) => {
+      if (['prepare_generation', 'generate_week'].includes(call.name)) {
+        if (policy !== 'normal') return { status: 'rejected', code: 'COACH_FIRST_READ_ONLY' };
+        canonicalToolResult = await canonicalWeeklyRequest(db, athlete.legacyCodigo, input.message, today, turn.id, input.timestamp,
+          call.arguments.period === 'next_week' ? 'next_week' : 'current_week',
+          () => receipts.push({ tool: 'canonical_week', status: 'attempted', pending: null }));
+        if (canonicalToolResult) receipts.push(...canonicalToolResult.receipts);
+        return { status: 'prepared', canContinue: false, canonicalOutcome: canonicalToolResult };
+      }
+      if (!dispatchTool) {
+        const { coachFirstTools } = await import('./coachFirstTools');
+        dispatchTool = coachFirstTools(db, athlete.legacyCodigo, input, turn.id,
+          async () => ({ status: 'rejected', code: 'CANONICAL_WEEK_REQUIRED' }), observe, policy as 'normal' | 'read_only');
+      }
       const r = await dispatchTool(call, ordinal);
       if (call.name !== 'read_context') receipts.push({ tool: call.name, status: r.status,
         operationId: r.operationId ?? null, code: r.code ?? null,
         reportedEventsDigest: r.reportedEventsDigest ?? null, revision: r.revision ?? null });
-      if (call.name === 'prepare_generation') Object.assign(receipts[receipts.length - 1], {
-        generationTarget: r.generationTarget, availabilitySnapshotDigest: r.snapshotDigest,
-        pendingRequirement: generationRequirement(r) });
       if (call.name !== 'read_context' && r.receipt?.verified) Object.assign(receipts[receipts.length - 1],
         call.name === 'record_execution' ? { executionReceipt: r.receipt }
           : call.name === 'generate_week' ? { weeklyReceipt: r.receipt } : { developmentReceipt: r.receipt });
       return r;
     };
     stage = 'coach_loop';
-    const pendingGeneration = policy === 'normal' ? await readPendingGenerationRequirement(db, athlete.legacyCodigo) : null;
-    let result;
-    if (pendingGeneration) {
-      const results: any[] = [];
-      const outcome = await resumeWeeklyGeneration(pendingGeneration, input.message, async call => {
-        const r = await dispatch(call, results.length + 1);
-        results.push({ name: call.name, ...r }); return r;
-      });
-      // An ambiguity or a changed snapshot can retain availability even if fresh preparation is otherwise ready.
-      const { checkpoint, ...presented } = outcome as typeof outcome & { checkpoint?: any };
-      if (checkpoint) {
-        const receipt = [...receipts].reverse().find(r => r.tool === 'prepare_generation');
-        if (receipt) receipt.pendingRequirement = generationRequirement(checkpoint);
-      }
-      result = { ...presented, route: 'coach_first', results, coachCalls: 0 };
-      observe({ route: 'coach_first', coachCalls: 0, tools: results.length,
-        reads: results.filter(r => r.name === 'prepare_generation' && r.status === 'prepared').length * 2 });
-    } else result = await runCoachFirstLoop(input, { complete, dispatch, observe, observeOutputInvalid,
-      advanceGeneration: advanceWeeklyGeneration });
+    const loopResult = await runCoachFirstLoop(input, { complete, dispatch, observe, observeOutputInvalid });
+    const result = canonicalToolResult ?? loopResult;
     stage = 'finish_turn';
     const finished = await conversationSession(db, athlete.legacyCodigo, supplied.sessionId, 'finish', {
       id: turn.id, epoch: claimed.epoch, before: claimed.before, message: input.message,

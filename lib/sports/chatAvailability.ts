@@ -30,7 +30,7 @@ export async function readAvailabilityConfirmation(db: any, codigo: string, targ
     const snapshotDigest = availabilitySnapshotDigest(c, targetWeek);
     const labels: Record<string,string> = { box:'Box', carrera:'Carrera', fuerza:'Fuerza' };
     const notice = c.weeklyOverride.status === 'invalid' ? 'La excepción de esta semana no es válida; uso tu disponibilidad habitual con las restricciones temporales vigentes.\n\n' : '';
-    const question = `${notice}Actualmente tengo tu disponibilidad así:\n\n${Object.entries(availability).map(([d,v]) => `${labels[d] || d}: ${v.length ? v.join(', ') : 'sin días disponibles'}.`).join('\n')}\n\n¿Sigue siendo correcta para esta semana?`;
+    const question = `${notice}Actualmente tengo tu disponibilidad así:\n\n${Object.entries(availability).map(([d,v]) => `${labels[d] || d}: ${v.length ? v.join(', ') : 'sin días disponibles'}.`).join('\n')}\n\n¿Sigue siendo correcta ${targetWeek ? `para la semana del ${targetWeek}` : 'para esta semana'}?`;
     return { ok: true as const, availability, snapshotDigest, question, weeklyOverride: c.weeklyOverride,
       distribucion: typeof c.profile.distribucion_semanal === 'string' ? c.profile.distribucion_semanal : JSON.stringify(c.profile.distribucion_semanal) };
   } catch (error) {
@@ -104,7 +104,11 @@ export async function updateChatAvailability(db: any, codigo: string, input: unk
       if (!current.ok) return { ...current, responseKind: 'UNRESOLVED_AVAILABILITY_RESPONSE' as const };
       if (expectedSnapshot != null && expectedSnapshot !== current.snapshotDigest) return { ...fail('AVAILABILITY_CONFIRMATION_STALE'),
         responseKind: 'UNRESOLVED_AVAILABILITY_RESPONSE' as const, question: current.question, snapshotDigest: current.snapshotDigest };
-      return { ...current, actualizado: false, intent: 'CONFIRM' as const, responseKind: 'CONFIRM_EXISTING_AVAILABILITY' as const };
+      if (targetWeek && structured) {
+        // Materialize the accepted snapshot through the existing weekly CAS and readback.
+        structured = { operation: 'replace', week: targetWeek, snapshotDigest: current.snapshotDigest,
+          availability: current.availability };
+      } else return { ...current, actualizado: false, intent: 'CONFIRM' as const, responseKind: 'CONFIRM_EXISTING_AVAILABILITY' as const };
     }
     const authorizedDays = Object.assign({}, ...[...before.scope.managedDisciplines, ...before.scope.externalDisciplines]
       .map(d => canonicalDays(p.data, t.data, [d]) ?? {})) as Record<string, string[]>;
@@ -120,7 +124,7 @@ export async function updateChatAvailability(db: any, codigo: string, input: unk
       })) as Record<string, string[]>;
       if (!structured && response.intent !== 'FULL_SNAPSHOT') response = resolveWeeklyAvailabilityResponse(input, authorized, prior);
       if (structured && structured.operation !== 'replace' && authorized.some(d => !Object.hasOwn(prior, d))) return fail('AVAILABILITY_EXISTING_REQUIRED');
-      if (structured?.operation === 'replace' && authorized.some(d => !Object.hasOwn(structured.availability!, d))) return fail('AVAILABILITY_SNAPSHOT_INCOMPLETE');
+      if (structured?.operation === 'replace' && authorized.some(d => !Object.hasOwn(structured!.availability!, d))) return fail('AVAILABILITY_SNAPSHOT_INCOMPLETE');
       let declaration = response.declaration;
       if (structured) {
         const availability = { ...prior, ...structured.availability };
@@ -153,13 +157,27 @@ export async function updateChatAvailability(db: any, codigo: string, input: unk
         if (structured.unavailable) entry.availability = 'unavailable'; else delete entry.availability;
         access[structured.date!] = entry; perfil.prescription_access = access;
       }
-      // One JSON write with a compare-and-swap, preserving habitual distribution and sources.
-      let write = db.from('usuarios').update({ perfil }).eq('codigo', codigo);
-      write = p.data.perfil == null ? write.is('perfil', null) : write.eq('perfil', JSON.stringify(p.data.perfil));
-      const saved = await write.select('perfil').single();
-      if (saved.error || !samePlanData(saved.data?.perfil, perfil)) return fail('AVAILABILITY_WRITE_FAILED');
+      if (structured?.operation === 'exception') {
+        // Dated access exceptions retain their existing transport; this RPC owns only weekly declarations.
+        let write = db.from('usuarios').update({ perfil }).eq('codigo', codigo);
+        write = p.data.perfil == null ? write.is('perfil', null) : write.eq('perfil', JSON.stringify(p.data.perfil));
+        const saved = await write.select('perfil').single();
+        if (saved.error || !samePlanData(saved.data?.perfil, perfil)) return fail('AVAILABILITY_WRITE_FAILED');
+      } else {
+        // RPC POST body, never a URL filter: the expected profile includes the durable journal.
+        let saved;
+        try { saved = await db.rpc('forge_weekly_availability_cas', {
+          p_user: codigo, p_week: targetWeek, p_expected_profile: p.data.perfil ?? null, p_declaration: declaration,
+        }); } catch { return fail('AVAILABILITY_WRITE_FAILED'); }
+        if (saved.error) return fail('AVAILABILITY_WRITE_FAILED');
+        if (saved.data?.result === 'CONFLICT') return fail('AVAILABILITY_CONFIRMATION_STALE');
+        if (['NOT_FOUND','NOT_AUTHORIZED'].includes(saved.data?.result)) return fail('AVAILABILITY_READ_FAILED');
+        if (saved.data?.result !== 'SUCCESS') return fail('AVAILABILITY_WRITE_FAILED');
+      }
       const current = await readAvailabilityConfirmation(db, codigo, targetWeek);
       if (!current.ok) return fail('AVAILABILITY_READBACK_FAILED');
+      if (structured?.operation !== 'exception' && (current.weeklyOverride.status !== 'valid'
+        || !samePlanData(current.weeklyOverride.declaration, declaration))) return fail('AVAILABILITY_READBACK_FAILED');
       return { ...current, actualizado: true, responseKind: 'UPDATE_AVAILABILITY' as const, partial: false,
         intent: structured || typeof input === 'string' ? response.intent : 'PATCH' as const,
         rejectedCategories: [], ownershipPending: [], updatedCategories: Object.keys(declaration.availability), declaration };

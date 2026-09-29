@@ -48,3 +48,31 @@ export function sessionShapeDiagnostic(entry: unknown, blockIndex: number, block
   };
 }
 export type SessionShapeDiagnostic = ReturnType<typeof sessionShapeDiagnostic>;
+
+/** Structural-only observation of the minimal representation rejection. Never retry input. */
+export function prescriptionShapeDiagnostic(entry: Record<string, unknown>, received: unknown,
+  blockIndex: number, blockType: unknown, movementIndex: number) {
+  const fieldNames = new Set(['movementId','canonicalMovementId','id','name','variant','prescription','dose',
+    'sets','reps','durationSeconds','distanceMeters','restSeconds','intensity','tempo','perSide','doseInstruction',
+    'referenceNotice','unresolvedReferenceInstruction','kind','value','max','referenceId','role','rest','load','weight','kg',
+    'duration','distance','description','instructions','exercise','exerciseId','repetitions','rounds']);
+  const keys = (v: unknown) => object(v) ? Object.keys(v).slice(0, 32).map(k => fieldNames.has(k) ? k : '[redacted-key]') : [];
+  const summary = (v: unknown) => ({ typeof: typeof v, isNull: v === null, isArray: Array.isArray(v),
+    keys: keys(v), keyCount: object(v) ? Object.keys(v).length : 0,
+    ...(Array.isArray(v) ? { length: v.length, itemTypes: v.slice(0, 8).map(type) } : {}),
+    ...(typeof v === 'string' ? { length: v.length, blank: !v.trim() } : {}) });
+  return {
+    code: 'MOVEMENT_PRESCRIPTION_SHAPE_INVALID', stage: 'minimalSessionRepresentation',
+    blockIndex, blockType: ['warmup','main','cooldown'].includes(String(blockType)) ? blockType : 'other', movementIndex,
+    proposalPath: `blocks[${blockIndex}].movements[${movementIndex}].prescription`,
+    expected: 'non_null_non_array_object',
+    movementId: canonical(entry.movementId) ?? canonical(entry.canonicalMovementId),
+    movementIdentity: { movementId: summary(entry.movementId), canonicalMovementId: summary(entry.canonicalMovementId),
+      name: summary(entry.name), id: summary(entry.id) },
+    parentKeys: keys(entry), parentKeyCount: Object.keys(entry).length,
+    parentFieldTypes: Object.entries(entry).slice(0, 32).map(([key, value]) => ({ key: fieldNames.has(key) ? key : '[redacted-key]', type: type(value) })),
+    originalPrescription: summary(entry.prescription), originalDose: summary(entry.dose), received: summary(received),
+    limits: { keys: 32, arrayItems: 8, unknownKeys: 'redacted', freeTextIdentity: 'type_only' },
+  };
+}
+export type PrescriptionShapeDiagnostic = ReturnType<typeof prescriptionShapeDiagnostic>;

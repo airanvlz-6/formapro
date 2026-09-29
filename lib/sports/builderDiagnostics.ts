@@ -1,4 +1,4 @@
-import type { SessionShapeDiagnostic } from './sessionShapeDiagnostics';
+import type { SessionShapeDiagnostic, PrescriptionShapeDiagnostic } from './sessionShapeDiagnostics';
 import { createHash, randomUUID } from 'node:crypto';
 import { signalIds } from '../athlete/prescriptionSignals';
 import { referenceQuestionFields } from './prescriptionReferenceFields';
@@ -29,8 +29,48 @@ export function safeViolations(values: readonly string[]) {
     return field && /^(sets|reps|durationSeconds|distanceMeters|restSeconds|\d{1,2})$/.test(field) ? `${safeRule}:${field}` : safeRule;
   });
 }
+type DiagnosticShape = 'scalar' | { fields: Record<string, DiagnosticShape> } | { items: DiagnosticShape };
+const decisionShape: DiagnosticShape = { fields: { kind: 'scalar', version: 'scalar', adaptation: 'scalar',
+  stimulus: 'scalar', method: 'scalar', role: 'scalar', reason: 'scalar', patterns: { items: 'scalar' } } };
+const developmentIntentShape: DiagnosticShape = { items: { fields: {
+  areaId: 'scalar', areaRevision: 'scalar', intendedRole: 'scalar', rationale: 'scalar' } } };
+/** Only the explicitly selected fields may expose values; unexpected fields expose name/type only. */
+function diagnosticValue(value: any, shape?: DiagnosticShape): any {
+  const type = value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+  const result: any = { type };
+  if (type === 'array') {
+    result.length = value.length;
+    result.items = value.map((item: unknown) => shape && typeof shape === 'object' && 'items' in shape
+      ? diagnosticValue(item, shape.items) : { type: item === null ? 'null' : Array.isArray(item) ? 'array' : typeof item });
+  } else if (type === 'object') {
+    result.keys = Object.keys(value);
+    const fields = shape && typeof shape === 'object' && 'fields' in shape ? shape.fields : {};
+    result.fields = Object.fromEntries([...new Set([...Object.keys(value), ...Object.keys(fields)])].map(key =>
+      [key, Object.hasOwn(fields, key) ? diagnosticField(value, key, fields[key]) : {
+        present: true, type: value[key] === null ? 'null' : Array.isArray(value[key]) ? 'array' : typeof value[key] }]));
+  } else if (shape === 'scalar' && ['string','number','boolean','null'].includes(type)) result.value = value;
+  return result;
+}
+function diagnosticField(parent: any, key: string, shape: DiagnosticShape): any {
+  return { present: Object.hasOwn(parent, key), ...diagnosticValue(parent[key], shape) };
+}
+function contractRejectionProjection(proposal: any, authority: any) {
+  const developmentAreas = diagnosticField(authority, 'developmentAreas', { fields: {
+    areas: { items: { fields: { areaId: 'scalar', revision: 'scalar' } } } } });
+  developmentAreas.projection = 'identity_revision_only';
+  developmentAreas.emptySnapshotFallback = authority.developmentAreas == null;
+  if (developmentAreas.emptySnapshotFallback) developmentAreas.effectiveAreaCount = 0;
+  return {
+    proposal: { stimulusId: diagnosticField(proposal, 'stimulusId', 'scalar'),
+      finalDecision: diagnosticField(proposal, 'finalDecision', decisionShape),
+      developmentIntent: diagnosticField(proposal, 'developmentIntent', developmentIntentShape) },
+    contract: { contractVersion: diagnosticField(authority, 'contractVersion', 'scalar'),
+      coachingGuidance: diagnosticField(authority, 'coachingGuidance', decisionShape),
+      finalDecision: diagnosticField(authority, 'finalDecision', decisionShape), developmentAreas },
+  };
+}
 export function builderTrace(contract: unknown, runId?: string) {
-  const c = contract as { targetWeekStart: string; targetDay: string };
+  const c = contract as { targetWeekStart: string; targetDay: string; discipline?: string };
   const identity = createHash('sha256').update(JSON.stringify(contract)).digest('hex');
   const events: Record<string, any>[] = [];
   const builderInvocationId = randomUUID();
@@ -79,6 +119,20 @@ export function builderTrace(contract: unknown, runId?: string) {
     shape(attempt: number, detail: SessionShapeDiagnostic) {
       try { console.info?.('SESSION_SHAPE_VIOLATION', { planningRunId, builderInvocationId, contractIdentity: identity,
         weekStart: c.targetWeekStart, day: c.targetDay, attempt, ...detail }); } catch { /* Observation cannot alter admission. */ }
+    },
+    prescriptionShape(attempt: number, detail: PrescriptionShapeDiagnostic) {
+      try { console.info?.('SESSION_PRESCRIPTION_SHAPE_INVALID', { planningRunId, builderInvocationId, contractIdentity: identity,
+        weekStart: c.targetWeekStart, day: c.targetDay, discipline: c.discipline ?? null, attempt, ...detail }); }
+      catch { /* Log-only: no return payload or retry feedback changes. */ }
+    },
+    contractRejection(attempt: number, stage: 'admitFinalDecision' | 'validateSessionAgainstTrainingContract', violation: string,
+      proposal: unknown, authority: unknown) {
+      if (violation !== 'FINAL_SESSION_DECISION_INVALID' && violation !== 'DEVELOPMENT_INTENT_INVALID') return;
+      try {
+        const event = violation === 'FINAL_SESSION_DECISION_INVALID' ? 'SESSION_FINAL_DECISION_INVALID_DETAIL' : 'SESSION_DEVELOPMENT_INTENT_INVALID_DETAIL';
+        console.info?.(event, JSON.stringify({ planningRunId, builderInvocationId, day: c.targetDay, attempt, stage, violation,
+          ...contractRejectionProjection(proposal, authority) }));
+      } catch { /* Projection and logging are observational only. */ }
     },
     summary() { const last = events.at(-1); return { planningRunId, builderInvocationId, contractIdentity: identity,
       attemptCount: last?.attempt || 0, finalStage: last?.stage || 'preflight', finalViolations: last?.violations || [],

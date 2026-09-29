@@ -4,8 +4,59 @@ import { conversationSession, conversationTurn } from './conversationSession';
 import { COACH_FIRST_INSTRUCTION, runCoachFirstLoop, type CoachFirstInput } from './coachFirstLoop';
 import { coachFirstTools, resolveCoachFirstPolicy } from './coachFirstTools';
 import { generateCoachFirstWeek, type CoachFirstPlanning } from './coachFirstGeneration';
-import { COACH_FIRST_OUTPUT_TOOL, readCoachFirstOutput } from './coachFirstOutput';
+import { COACH_FIRST_OUTPUT_TOOL, readCoachFirstOutput, logCoachFirstOutputRejection, type OutputRejectionObserver } from './coachFirstOutput';
 import { createOrchestratorTrace } from '../diagnostics/orchestratorTrace';
+import { generationRequirement, readPendingGenerationRequirement, resumeWeeklyGeneration, advanceWeeklyGeneration } from './generationTarget';
+
+const transportCodes = ['ETIMEDOUT','ECONNRESET','ECONNREFUSED','ENOTFOUND','EAI_AGAIN','UND_ERR_CONNECT_TIMEOUT','UND_ERR_HEADERS_TIMEOUT','UND_ERR_BODY_TIMEOUT'];
+function observeTransportFailure(error: unknown) {
+  try {
+    const e = error as any;
+    const errorName = ['Error','TypeError','AbortError','TimeoutError'].includes(e?.name) ? e.name : 'UnknownError';
+    const errorCode = transportCodes.includes(e?.code) ? e.code : null;
+    const causeCode = transportCodes.includes(e?.cause?.code) ? e.cause.code : null;
+    const classification = errorName === 'TimeoutError' || [errorCode,causeCode].some(c => c && /TIMEOUT|ETIMEDOUT/.test(c))
+      ? 'timeout' : errorName === 'AbortError' ? 'abort' : errorName === 'TypeError' || errorCode || causeCode ? 'network_error' : 'unknown_transport_error';
+    console.info('COACH_FIRST_PROVIDER_FAILURE', { provider: 'anthropic', model: 'claude-sonnet-4-5',
+      stage: 'provider_fetch', errorName, errorCode, causeCode, classification });
+  } catch { /* Observation cannot replace the original exception. */ }
+}
+async function observeHttpFailure(response: Response) {
+  const details: Record<string, unknown> = {};
+  try {
+    const reader = response.body?.getReader();
+    if (reader) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const text = await Promise.race([ (async () => {
+          const decoder = new TextDecoder(); let size = 0, text = '';
+          for (;;) {
+            const chunk = await reader.read();
+            if (chunk.done) return text + decoder.decode();
+            size += chunk.value.byteLength;
+            if (size > 4096) return null;
+            text += decoder.decode(chunk.value, { stream: true });
+          }
+        })(), new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 250); }) ]);
+        if (text !== null) {
+          const error = JSON.parse(text)?.error;
+          const allowed = ['invalid_request_error','authentication_error','permission_error','not_found_error','request_too_large','rate_limit_error','api_error','overloaded_error'];
+          if (allowed.includes(error?.type)) details.providerErrorType = error.type;
+          if (allowed.includes(error?.code)) details.providerErrorCode = error.code;
+          // Exact literals only: provider messages may otherwise echo request content.
+          if (['Overloaded','Internal server error','Invalid API Key'].includes(error?.message)) details.providerErrorMessage = error.message;
+        }
+      } finally {
+        if (timer !== undefined) clearTimeout(timer);
+        void reader.cancel().catch(() => {});
+      }
+    }
+  } catch { /* Invalid, absent, oversized or unreadable bodies disclose no content. */ }
+  try {
+    console.info('COACH_FIRST_PROVIDER_FAILURE', { provider: 'anthropic', model: 'claude-sonnet-4-5',
+      stage: 'provider_http', httpStatus: response.status, classification: 'http_error', ...details });
+  } catch { /* Logging cannot change the existing HTTP failure. */ }
+}
 
 export async function handleCoachFirst(request: Request,
   planning: (action: string, datos: any, context: CoachFirstPlanning) => Promise<any>) {
@@ -54,7 +105,15 @@ export async function handleCoachFirst(request: Request,
     input.conversation = conversation;
     stage = 'setup';
     const observe = (value: Record<string, unknown>) => console.info('COACH_FIRST_OPERATION', value);
+    let outputRound = 0;
+    let providerStatus: number | null = null;
+    let providerOutput: unknown;
+    const observeOutputInvalid: OutputRejectionObserver = (boundary, predicate, decision) =>
+      logCoachFirstOutputRejection({ messageId, operationId: claimed?.id ?? null, round: outputRound,
+        providerStatus, output: providerOutput }, boundary, predicate, decision);
     const complete = async (messages: { role: 'user' | 'assistant'; content: string }[]) => {
+      outputRound++;
+      providerStatus = null; providerOutput = undefined;
       stage = 'provider_prepare';
       const key = process.env.ANTHROPIC_API_KEY;
       if (!key) throw new Error('COACH_PROVIDER_UNAVAILABLE');
@@ -68,17 +127,23 @@ export async function handleCoachFirst(request: Request,
         })) ];
       }
       stage = 'provider_fetch';
-      const response = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST',
+      let response;
+      try { response = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
         signal: AbortSignal.timeout(120000), body: JSON.stringify({ model: 'claude-sonnet-4-5', max_tokens: 6000,
           system: COACH_FIRST_INSTRUCTION, messages: outgoing, tools: [COACH_FIRST_OUTPUT_TOOL],
           tool_choice: { type: 'tool', name: COACH_FIRST_OUTPUT_TOOL.name, disable_parallel_tool_use: true } }) });
+      } catch (error) { observeTransportFailure(error); throw error; }
       stage = 'provider_http';
-      if (!response.ok) throw new Error('COACH_PROVIDER_UNAVAILABLE');
+      if (!response.ok) {
+        await observeHttpFailure(response);
+        throw new Error('COACH_PROVIDER_UNAVAILABLE');
+      }
       stage = 'provider_response_parse';
       const output = await response.json();
       stage = 'provider_structured_output';
-      const decision = readCoachFirstOutput(output);
+      providerStatus = response.status; providerOutput = output;
+      const decision = readCoachFirstOutput(output, observeOutputInvalid);
       stage = 'coach_loop';
       return decision;
     };
@@ -90,14 +155,34 @@ export async function handleCoachFirst(request: Request,
       if (call.name !== 'read_context') receipts.push({ tool: call.name, status: r.status,
         operationId: r.operationId ?? null, code: r.code ?? null,
         reportedEventsDigest: r.reportedEventsDigest ?? null, revision: r.revision ?? null });
-      if (call.name === 'prepare_generation' && r.status === 'prepared') Object.assign(receipts[receipts.length - 1], { generationTarget: r.generationTarget });
+      if (call.name === 'prepare_generation') Object.assign(receipts[receipts.length - 1], {
+        generationTarget: r.generationTarget, availabilitySnapshotDigest: r.snapshotDigest,
+        pendingRequirement: generationRequirement(r) });
       if (call.name !== 'read_context' && r.receipt?.verified) Object.assign(receipts[receipts.length - 1],
         call.name === 'record_execution' ? { executionReceipt: r.receipt }
           : call.name === 'generate_week' ? { weeklyReceipt: r.receipt } : { developmentReceipt: r.receipt });
       return r;
     };
     stage = 'coach_loop';
-    const result = await runCoachFirstLoop(input, { complete, dispatch, observe });
+    const pendingGeneration = policy === 'normal' ? await readPendingGenerationRequirement(db, athlete.legacyCodigo) : null;
+    let result;
+    if (pendingGeneration) {
+      const results: any[] = [];
+      const outcome = await resumeWeeklyGeneration(pendingGeneration, input.message, async call => {
+        const r = await dispatch(call, results.length + 1);
+        results.push({ name: call.name, ...r }); return r;
+      });
+      // An ambiguity or a changed snapshot can retain availability even if fresh preparation is otherwise ready.
+      const { checkpoint, ...presented } = outcome as typeof outcome & { checkpoint?: any };
+      if (checkpoint) {
+        const receipt = [...receipts].reverse().find(r => r.tool === 'prepare_generation');
+        if (receipt) receipt.pendingRequirement = generationRequirement(checkpoint);
+      }
+      result = { ...presented, route: 'coach_first', results, coachCalls: 0 };
+      observe({ route: 'coach_first', coachCalls: 0, tools: results.length,
+        reads: results.filter(r => r.name === 'prepare_generation' && r.status === 'prepared').length * 2 });
+    } else result = await runCoachFirstLoop(input, { complete, dispatch, observe, observeOutputInvalid,
+      advanceGeneration: advanceWeeklyGeneration });
     stage = 'finish_turn';
     const finished = await conversationSession(db, athlete.legacyCodigo, supplied.sessionId, 'finish', {
       id: turn.id, epoch: claimed.epoch, before: claimed.before, message: input.message,

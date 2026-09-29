@@ -1,5 +1,5 @@
 import { admitFinalDecision, FINAL_DECISION_INSTRUCTIONS } from './finalSessionDecision';
-import { DEVELOPMENT_INTENT_INSTRUCTION } from '../athlete/developmentAreas';
+import { DEVELOPMENT_INTENT_INSTRUCTION, validateDevelopmentIntent, developmentPlanningSnapshot } from '../athlete/developmentAreas';
 import { executableProjection } from './minimalSessionRepresentation';
 import type { SessionShapeDiagnostic } from './sessionShapeDiagnostics';
 import { openExecution, EXECUTABLE_DOSE_INSTRUCTIONS } from './sessionExecution';
@@ -126,6 +126,7 @@ Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gram�
       executions: authority.runningMethodDose.evidence.structuredMethodExecution?.records.map(({ executionId: _id, ...r }) => r),
     } : null });
   let previousErrors: string[] = [];
+  let finalDecisionRepair = '';
   if (authority.developmentAreas) prompt += '\n' + DEVELOPMENT_INTENT_INSTRUCTION;
   let shapeDetails: SessionShapeDiagnostic[] = [];
   let missingDetails: SufficiencyFailure[] = [];
@@ -135,10 +136,11 @@ Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gram�
     const duplicateCorrection = attempt && previousErrors.some(v => v.startsWith('DUPLICATE_MOVEMENT:'))
       ? `\nREPAIR_CONSTRAINTS:\n${JSON.stringify({ previousErrors: ['DUPLICATE_MOVEMENT'], scope: 'within_each_block',
         instruction: 'Cada movementId debe aparecer como máximo una vez dentro de cada bloque. Recompón la propuesta dentro del mismo contrato; no traslades ni elimines dosis automáticamente. Esta restricción no prohíbe repetir un movementId entre warmup y main con dosis apropiadas.' })}` : '';
-    try { raw = trace.completion(await complete(prompt + (attempt ? `\nLa primera propuesta fue rechazada: ${JSON.stringify(previousErrors)}. Devuelve una composición válida dentro del MISMO contrato; no repitas la propuesta rechazada.` : '') + (attempt && shapeDetails.length ? `\nREPAIR_SHAPE_DETAILS:\n${JSON.stringify(shapeDetails)}` : '') + duplicateCorrection)); }
+    try { raw = trace.completion(await complete(prompt + (attempt ? `\nLa primera propuesta fue rechazada: ${JSON.stringify(previousErrors)}. Devuelve una composición válida dentro del MISMO contrato; no repitas la propuesta rechazada.` : '') + (attempt ? finalDecisionRepair : '') + (attempt && shapeDetails.length ? `\nREPAIR_SHAPE_DETAILS:\n${JSON.stringify(shapeDetails)}` : '') + duplicateCorrection)); }
     catch { trace.emit(attempt + 1, 'provider', 'SESSION_GENERATION_FAILED', ['LLM_REQUEST_FAILED'], false, 'provider_failure_terminal'); return { ok: false as const, code: 'SESSION_GENERATION_FAILED', violations: ['LLM_REQUEST_FAILED'], diagnostics: trace.summary() }; }
     shapeDetails = [];
-    const parsed = parseStructuredSession(raw, openExecution(authority), detail => { shapeDetails.push(detail); trace.shape(attempt + 1, detail); });
+    const parsed = parseStructuredSession(raw, openExecution(authority), detail => { shapeDetails.push(detail); trace.shape(attempt + 1, detail); },
+      detail => trace.prescriptionShape(attempt + 1, detail));
     if (!parsed.ok) {
       if (authority.generatedMovementAuthority) emitSessionCoachingDiagnostic('MOVEMENT_RESOLUTION', { status: 'REJECTED', errors: movementDiagnosticCodes(parsed.violations) });
       previousErrors = parsed.violations;
@@ -169,6 +171,23 @@ Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gram�
     let proposalAuthority;
     try { proposalAuthority = freeze(admitFinalDecision(authority, parsed.proposal)); }
     catch (e: any) {
+      if (e.message === 'FINAL_SESSION_DECISION_INVALID') trace.contractRejection(attempt + 1, 'admitFinalDecision', e.message, parsed.proposal, authority);
+      if (!attempt && e.message === 'FINAL_SESSION_DECISION_INVALID'
+        && typeof parsed.proposal.finalDecision?.reason === 'string' && parsed.proposal.finalDecision.reason.length > 400
+        && !!parsed.proposal.finalDecision.reason.trim() && !/[\u0000-\u001f\u007f]/.test(parsed.proposal.finalDecision.reason)) {
+        try {
+          // Probe a copy: only focus the retry if replacing reason alone admits the decision.
+          const probe = structuredClone(parsed.proposal);
+          probe.finalDecision!.reason = 'Concise revision rationale.';
+          admitFinalDecision(authority, probe);
+          let preserveDevelopment = false;
+          try { validateDevelopmentIntent(parsed.proposal.developmentIntent, authority.developmentAreas ?? developmentPlanningSnapshot([])); preserveDevelopment = true; } catch { /* Do not claim an invalid intent is valid. */ }
+          finalDecisionRepair = '\nFINAL_DECISION_REPAIR:\n' + JSON.stringify({ field: 'finalDecision.reason', maxCharacters: 400,
+            instruction: 'Shorten finalDecision.reason to a concise non-blank string of at most 400 characters without control characters. Use the previous proposal as the correction base; preserve all other valid fields.'
+              + (preserveDevelopment ? ' Preserve developmentIntent exactly, including its absence or empty array: it is already valid.' : ''),
+            previousProposal: parsed.proposal });
+        } catch { /* Other decision failures retain generic retry feedback. */ }
+      }
       previousErrors = [e.message];
       trace.emit(attempt + 1, 'checkSessionShape', 'SESSION_CONTRACT_INVALID', previousErrors, !attempt, attempt ? 'attempt_limit' : 'contract_rule_retry');
       if (!attempt) continue;
@@ -182,6 +201,10 @@ Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gram�
         try { console.info?.('REQUIREMENT_ASSESSMENT', { planningRunId: trace.summary().planningRunId, day: authority.targetDay, attempt: attempt + 1, ...assessment }); } catch { /* Observation only. */ }
       });
     if (!validation.ok) {
+      for (const violation of validation.violations) {
+        if (violation === 'DEVELOPMENT_INTENT_INVALID' || violation === 'FINAL_SESSION_DECISION_INVALID')
+          trace.contractRejection(attempt + 1, 'validateSessionAgainstTrainingContract', violation, parsed.proposal, proposalAuthority);
+      }
       if (authority.generatedMovementAuthority) emitSessionCoachingDiagnostic('MOVEMENT_FEASIBILITY', { result: 'REJECT', errors: movementDiagnosticCodes(validation.violations) });
       if (coach) emitSessionCoachingDiagnostic('SESSION_AUTHORITY_RESOLUTION', { rejections: validation.violations });
       previousErrors = validation.violations;

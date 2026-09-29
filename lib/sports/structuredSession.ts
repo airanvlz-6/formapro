@@ -6,7 +6,7 @@ import { safeViolations } from './builderDiagnostics';
 import { minimalSessionRepresentation, executableProjection } from './minimalSessionRepresentation';
 import { assessSessionIntent } from './sessionIntentAssessment';
 import { movementShapeFailures, needsModernSessionSchema } from './sessionMovementShape';
-import { sessionShapeDiagnostic, type SessionShapeDiagnostic } from './sessionShapeDiagnostics';
+import { sessionShapeDiagnostic, type SessionShapeDiagnostic, type PrescriptionShapeDiagnostic } from './sessionShapeDiagnostics';
 import { openExecution, resolveExecutableDose, executionInstructionComplete } from './sessionExecution';
 import { calendarState } from '../planning/weeklyCalendar';
 import { validateStructureSemantics } from './structureSemantics';
@@ -46,14 +46,15 @@ export const GENERATION_SAFETY_BOUNDS: Record<string, number> = {
 };
 
 /** No extraction from prose, ID repair, aliases, fuzzy matching or extra executable fields. */
-export function checkSessionShape(value: unknown, execution = false, observeShape?: (detail: SessionShapeDiagnostic) => void): SessionValidation {
+export function checkSessionShape(value: unknown, execution = false, observeShape?: (detail: SessionShapeDiagnostic) => void,
+  observePrescriptionShape?: (detail: PrescriptionShapeDiagnostic) => void): SessionValidation {
   if (!execution) return inspectSessionRepresentation(value, false, observeShape);
   const inspected = inspectSessionRepresentation(value, true, detail => {
     const advisory = { ...detail, advisory: true };
     try { observeShape?.(advisory); } catch { /* Observation only. */ }
   });
   if (inspected.ok) return inspected;
-  const minimal = minimalSessionRepresentation(value);
+  const minimal = minimalSessionRepresentation(value, observePrescriptionShape);
   return minimal.ok ? { ...minimal, representationAdvisories: safeViolations(inspected.violations) } : minimal;
 }
 
@@ -129,12 +130,13 @@ export function inspectSessionRepresentation(value: unknown, execution = false, 
   return violations.length ? { ok: false, violations } : { ok: true, proposal: value as StructuredSessionProposal };
 }
 
-export function parseStructuredSession(raw: unknown, execution = false, observeShape?: (detail: SessionShapeDiagnostic) => void): SessionValidation {
+export function parseStructuredSession(raw: unknown, execution = false, observeShape?: (detail: SessionShapeDiagnostic) => void,
+  observePrescriptionShape?: (detail: PrescriptionShapeDiagnostic) => void): SessionValidation {
   if (typeof raw !== 'string' || raw.length > 64000) return { ok: false, violations: ['JSON_REQUIRED'] };
   let text = raw.trim();
   // Only a complete enclosing JSON fence is trivial syntax; surrounding prose is never searched.
   if (text.startsWith('```json\n') && text.endsWith('\n```')) text = text.slice(8, -4).trim();
-  try { return checkSessionShape(JSON.parse(text), execution, observeShape); }
+  try { return checkSessionShape(JSON.parse(text), execution, observeShape, observePrescriptionShape); }
   catch { return { ok: false, violations: ['JSON_INVALID'] }; }
 }
 

@@ -77,8 +77,9 @@ export const EXECUTABLE_DOSE_INSTRUCTIONS = `Devuelve SOLO JSON con schemaVersio
 The weekly intent tells you WHAT adaptation/stimulus this session should serve. YOU are responsible for deciding HOW to train it.
 Use all supplied athlete context, history, weekly availability, explicit restrictions, resources, preferences and goals.
 Libraries are knowledge and enrichment, not permission lists. Unknown movements, variants, equipment, skills, analytics and dose grammar do not prevent prescribing.
-blocks have blockType warmup/main/cooldown and movements. Include main. Each movement has movementId (a catalog ID or your readable name), optional variant, and prescription.
-Choose any useful format in structureId. Use numeric sets/reps/durationSeconds/distanceMeters/restSeconds/tempo/perSide where unambiguous; otherwise preserve the complete executable coaching instruction in doseInstruction.
+blocks have blockType warmup/main/cooldown and movements. Include main. Each movement has movementId (a catalog ID or your readable name), optional variant, and a required non-null, non-array prescription object. All movement dose fields belong inside prescription.
+Choose any useful format in structureId. Use numeric sets/reps/durationSeconds/distanceMeters/restSeconds/tempo/perSide inside prescription where unambiguous; otherwise preserve the complete executable coaching instruction in prescription.doseInstruction. doseInstruction must NOT be a sibling of movementId.
+Minimal movement JSON example: {"movementId":"muscle_snatch","prescription":{"doseInstruction":"3 series técnicas"}}
 Examples: 3x8 por lado; 3 series técnicas; 2x30s por lado; 3 carries cortos; 10 min suave; 4x400m; EMOM 12; AMRAP 15; RPE 7; deja 3 reps en recámara; carga moderada. These are examples, never required templates.
 Choose intensity with RPE/RIR or a supplied exact compatible objective reference. Never fabricate athlete RM, measured HR/pace or kg conversions. Without an RM prefer RPE/RIR; a symbolic percentage must not claim resolved kg. If repairing a missing reference, supply a usable non-reference-dependent instruction.
 Respect explicitly unavailable days/disciplines/resources and known incompatible restrictions. Unknown compatibility is not permission to claim safety: reason with the supplied restriction.

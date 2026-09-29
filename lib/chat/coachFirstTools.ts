@@ -1,14 +1,16 @@
 import { coachFirstReads, loadCoachActionContext, COACH_READ_RANGE_REASONS, type CoachReadStage } from './coachFirstReads';
 import { applyChatCoachActions } from './chatCoachActions';
 import { recordExternalExecution } from '../planning/recordCompletion';
-import { updateStructuredChatAvailability } from '../sports/chatAvailability';
+import { updateStructuredChatAvailability, readAvailabilityConfirmation } from '../sports/chatAvailability';
 import { recordReportedEvent } from './coachFirstStore';
 import type { CoachFirstCall, CoachFirstInput } from './coachFirstLoop';
 import { GENERATION_ARGUMENT_REASONS, type GenerationArgumentReason } from './coachFirstGeneration';
 import { decodeTurnPlanningIntent } from '../planning/turnPlanningIntent';
 import { mutateDevelopmentArea } from '../athlete/developmentAreaStore';
 import { executionEvidenceFailure } from './executionEvidence';
-import { resolveGenerationTarget, generationWeeks } from './generationTarget';
+import { resolveGenerationTarget } from './generationTarget';
+import { beginWeeklyGeneration } from '../planning/weeklyGeneration';
+import { resolveWeeklyGenerationPreflight } from '../planning/weeklyGenerationPreflight';
 import { samePlanData } from '../planning/planMutationValidators';
 
 export type CoachFirstPolicy = 'normal' | 'read_only';
@@ -119,7 +121,8 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
   const mode = resolveCoachFirstPolicy(policy);
   const today = new Date(input.timestamp).toLocaleDateString('en-CA', { timeZone: input.timezone });
   const reads = coachFirstReads(db, user, today);
-  const availabilityReads = new Map<string, { week: string; snapshotDigest: string; prepared?: boolean }>();
+  const availabilityReads = new Map<string, { week: string; snapshotDigest: string; prepared?: boolean;
+    preflight?: Awaited<ReturnType<typeof resolveWeeklyGenerationPreflight>> }>();
   const planningWeeks = new Set<string>();
   const sessionReads = new Map<string, any[]>();
   let preparedTarget: string | undefined;
@@ -137,7 +140,7 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
         result = { status: 'rejected', reason: 'read_only_policy', code: 'COACH_FIRST_READ_ONLY', operationId };
         return result;
       }
-      if (call.name !== 'read_context') {
+      if (call.name !== 'read_context' && call.name !== 'prepare_generation') {
         const key = JSON.stringify(call);
         if (attempted.has(key)) return { status: 'rejected', code: 'TURN_ACTION_ALREADY_ATTEMPTED' };
         attempted.add(key);
@@ -145,20 +148,41 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
       switch (call.name) {
         case 'prepare_generation': {
           authority = 'canonical_generation_target';
-          if (Object.keys(a).some(k => k !== 'period')) { result = { status: 'rejected', code: 'GENERATION_TARGET_INVALID' }; break; }
-          let week: string;
-          try { week = await resolveGenerationTarget(db, user, today, a.period); }
+          if (Object.keys(a).some(k => !['period', 'includeToday', 'turnIntent'].includes(k))
+            || a.includeToday !== undefined && typeof a.includeToday !== 'boolean') { result = { status: 'rejected', code: 'GENERATION_TARGET_INVALID' }; break; }
+          const interpreted = decodeTurnPlanningIntent(a.turnIntent);
+          if (!interpreted.ok) { result = { status: 'rejected', code: 'TURN_PLANNING_INTENT_INVALID' }; break; }
+          let week: string, presentedDigest: string | undefined;
+          try { week = await resolveGenerationTarget(db, user, today, a.period, digest => { presentedDigest = digest; }); }
           catch (e) { result = { status: 'rejected', code: e instanceof Error && ['GENERATION_TARGET_INVALID','GENERATION_PENDING_ALREADY_ATTEMPTED','GENERATION_PENDING_EXPIRED','GENERATION_PENDING_MISSING'].includes(e.message) ? e.message : 'GENERATION_TARGET_UNAVAILABLE' }; break; }
           const availability = await reads.read({ resource: 'availability', week });
           const planning = await reads.read({ resource: 'planning', week });
           if (availability.data?.ok !== true) { result = { status: 'rejected', code: 'GENERATION_AVAILABILITY_READ_REQUIRED' }; break; }
-          availabilityReads.set(operationId, { week, snapshotDigest: availability.data.snapshotDigest, prepared: true });
+          if (availability.data.weeklyOverride?.status !== 'valid') {
+            availabilityReads.set(operationId, { week, snapshotDigest: availability.data.snapshotDigest, prepared: true });
+            preparedTarget = week; planningWeeks.add(week);
+            result = { status: 'prepared', generationTarget: { weekStart: week }, targetWeekStart: week,
+              availabilityReadId: operationId, snapshotDigest: availability.data.snapshotDigest,
+              availability: availability.data, planning: planning.data, canContinue: false, includeToday: a.includeToday,
+              ...(interpreted.intent ? { turnIntent: interpreted.intent } : {}),
+              canConfirmAvailability: a.period === 'pending' && presentedDigest === availability.data.snapshotDigest,
+              requirements: { code: 'WEEKLY_AVAILABILITY_CONFIRMATION_REQUIRED', canContinue: false,
+                preflightRequirement: { kind: 'availability', targetWeekStart: week, text: availability.data.question } } };
+            break;
+          }
+          const generation = await beginWeeklyGeneration(db, user, today);
+          const preflight = await resolveWeeklyGenerationPreflight(db, user, { targetWeekStart: week, today,
+            snapshot: generation.snapshots[week], temporalIntent: a.includeToday,
+            confirmedAvailabilityDigest: availability.data.snapshotDigest, planningRunId: generation.planningRunId });
+          availabilityReads.set(operationId, { week, snapshotDigest: availability.data.snapshotDigest, prepared: true, preflight });
           preparedTarget = week;
           planningWeeks.add(week);
           result = { status: 'prepared', generationTarget: { weekStart: week }, targetWeekStart: week,
             availabilityReadId: operationId, snapshotDigest: availability.data.snapshotDigest,
             availability: availability.data, planning: planning.data,
-            includeToday: week !== generationWeeks(today).current };
+            canContinue: preflight.canContinue, requirements: preflight,
+            includeToday: preflight.temporalDecision?.includeToday,
+            ...(interpreted.intent ? { turnIntent: interpreted.intent } : {}) };
           break;
         }
         case 'propose_development_area': case 'respond_development_proposal': {
@@ -179,6 +203,7 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
           break;
         }
         case 'update_availability': {
+          if (preparedTarget && a.week !== preparedTarget) { result = { status: 'rejected', code: 'GENERATION_TARGET_MISMATCH' }; break; }
           authority = 'updateStructuredChatAvailability'; const r = await updateStructuredChatAvailability(db, user, a);
           result = { ...r, status: r.ok ? r.actualizado ? 'committed' : 'confirmed' :
             r.code === 'AVAILABILITY_WRITE_FAILED' || r.code === 'AVAILABILITY_READBACK_FAILED' ? 'unknown' :
@@ -237,7 +262,20 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
           if (a.includeToday === undefined && !selected.prepared) { result = { status: 'rejected', code: 'GENERATION_READ_ARGUMENT_INVALID' }; break; }
           if (a.snapshotDigest !== selected.snapshotDigest) { result = { status: 'rejected', code: 'GENERATION_READ_DIGEST_MISMATCH' }; break; }
           if (!planningWeeks.has(selected.week)) { result = { status: 'rejected', code: 'GENERATION_PLANNING_READ_REQUIRED' }; break; }
-          result = await generate({ week: selected.week, includeToday: a.includeToday ?? selected.week !== generationWeeks(today).current, snapshotDigest: a.snapshotDigest,
+          if (selected.preflight && !selected.preflight.canContinue) {
+            result = { status: 'rejected', requirements: selected.preflight }; break;
+          }
+          // Fresh authority check also protects callers using read_context instead of preparation.
+          const availability = await readAvailabilityConfirmation(db, user, selected.week);
+          if (!availability.ok || availability.snapshotDigest !== selected.snapshotDigest) {
+            result = { status: 'conflict', code: 'GENERATION_AVAILABILITY_CHANGED' }; break;
+          }
+          if (availability.weeklyOverride.status !== 'valid') {
+            result = { status: 'rejected', code: 'WEEKLY_AVAILABILITY_CONFIRMATION_REQUIRED' }; break;
+          }
+          const includeToday = a.includeToday ?? selected.preflight?.temporalDecision?.includeToday;
+          if (typeof includeToday !== 'boolean') { result = { status: 'rejected', code: 'GENERATION_READ_ARGUMENT_INVALID' }; break; }
+          result = await generate({ week: selected.week, includeToday, snapshotDigest: a.snapshotDigest,
             ...(interpreted.intent ? { turnIntent: interpreted.intent } : {}) },
             operationId, reason => { argumentReason = reason; });
           if (selected.prepared && result.status === 'committed') {

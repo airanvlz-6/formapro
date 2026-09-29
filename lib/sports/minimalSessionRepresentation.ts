@@ -2,6 +2,7 @@ import type { StructuredSessionProposal, SessionValidation } from './structuredS
 import { resolveExecutableDose } from './sessionExecution';
 import { MOVEMENT_LIBRARY } from './movementLibrary';
 import { DOSE_FIELDS } from './sessionDose';
+import { prescriptionShapeDiagnostic, type PrescriptionShapeDiagnostic } from './sessionShapeDiagnostics';
 
 const object = (v: unknown): v is Record<string, any> => !!v && typeof v === 'object' && !Array.isArray(v);
 const known = (v: unknown) => typeof v === 'string' && Object.hasOwn(MOVEMENT_LIBRARY, v);
@@ -9,7 +10,7 @@ const pick = (v: Record<string, any>, keys: readonly string[]) => Object.fromEnt
 
 /** Extra representation is retained in the signed proposal but never rendered as work.
  * This function establishes traversal/identity/dose objects only. It grants no safety. */
-export function minimalSessionRepresentation(value: unknown): SessionValidation {
+export function minimalSessionRepresentation(value: unknown, observePrescriptionShape?: (detail: PrescriptionShapeDiagnostic) => void): SessionValidation {
   const fail = (code: string): SessionValidation => ({ ok: false, violations: [code] });
   if (!object(value) || !Array.isArray(value.blocks) || !value.blocks.length)
     return fail('PROPOSAL_STRUCTURE_UNINTERPRETABLE');
@@ -20,7 +21,7 @@ export function minimalSessionRepresentation(value: unknown): SessionValidation 
   if (typeof p.structureId !== 'string') return fail('PROPOSAL_STRUCTURE_UNINTERPRETABLE');
   p.schemaVersion = 2;
   const seen = new Set<string>();
-  for (const b of p.blocks) {
+  for (const [blockIndex, b] of p.blocks.entries()) {
     if (object(b) && !['warmup','main','cooldown'].includes(b.blockType)) { b.title = typeof b.blockType === 'string' ? b.blockType : 'Bloque principal'; b.blockType = 'main'; }
     if (!object(b) || !['warmup','main','cooldown'].includes(b.blockType)
       || !Array.isArray(b.movements) || !b.movements.length) return fail('BLOCK_STRUCTURE_UNINTERPRETABLE');
@@ -32,11 +33,15 @@ export function minimalSessionRepresentation(value: unknown): SessionValidation 
         delete b.formatDose[key];
       }
     }
-    for (const e of b.movements) {
+    for (const [movementIndex, e] of b.movements.entries()) {
       if (!object(e)) return fail('MOVEMENT_OBJECT_INVALID');
       if (e.prescription === undefined && (object(e.dose) || typeof e.dose === 'string')) { e.prescription = e.dose; delete e.dose; }
       if (typeof e.prescription === 'string' && e.prescription.trim()) e.prescription = { doseInstruction: e.prescription };
-      if (!object(e.prescription)) return fail('MOVEMENT_PRESCRIPTION_SHAPE_INVALID');
+      if (!object(e.prescription)) {
+        try { observePrescriptionShape?.(prescriptionShapeDiagnostic(value.blocks[blockIndex].movements[movementIndex],
+          e.prescription, blockIndex, b.blockType, movementIndex)); } catch { /* Observation cannot change rejection. */ }
+        return fail('MOVEMENT_PRESCRIPTION_SHAPE_INVALID');
+      }
       if (typeof e.prescription.intensity === 'string') {
         e.prescription.doseInstruction = [e.prescription.doseInstruction,e.prescription.intensity].filter(Boolean).join(' · ');
         delete e.prescription.intensity;

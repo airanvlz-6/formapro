@@ -78,6 +78,7 @@ export async function loadCoreAthleteContext(db: Database, userCodigo: string, r
     : !validSources ? unknown('disciplines', 'INVALID_TRAINING_SOURCE')
       : known('prescriptionScope/athlete_training_sources', { entries: [...declared, ...inferredOwnership],
         profileDisciplines, scopeStatus: scope?.ok ? 'resolved' as const : 'unresolved' as const,
+        scope: scope?.ok ? scope.scope : null,
         diagnostics: scope && !scope.ok ? scope.errors : scope ? [] : ['PROFILE_UNAVAILABLE'] });
   const disciplineIds = [...new Set([...profileDisciplines, ...declared.map(s => s.discipline)])];
   const availability = Object.fromEntries(disciplineIds.map(discipline => {

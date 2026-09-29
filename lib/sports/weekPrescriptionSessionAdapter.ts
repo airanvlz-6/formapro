@@ -118,7 +118,7 @@ export async function materializeWeekPrescriptionSession(input: WeekPrescription
   const adapted = adaptWeekPrescriptionSession(input);
   if (!adapted.ok) return adapted;
   const expected = structuredClone(adapted);
-  const result = await generateContractSession(adapted.contract, history, complete);
+  const result = await generateContractSession(adapted.contract, history, complete, '', undefined, 'legacy', true);
   if (!result.ok) return result;
   const fidelity = checkWeekPrescriptionSessionFidelity(expected, result);
   if (!fidelity.ok) return fidelity;

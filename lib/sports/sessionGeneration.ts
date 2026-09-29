@@ -27,7 +27,7 @@ const movementDiagnosticCodes = (errors: readonly string[]) => errors.map(error 
 });
 /** One private immutable snapshot for prompt, both attempts, validation and rendering. */
 export async function generateContractSession(contract: AllowedTrainingContract, history: SesionParaComparar[],
-  complete: (prompt: string) => Promise<string | BuilderCompletion>, context = '', planningRunId?: string, presentationVersion: PresentationVersion = 'legacy') {
+  complete: (prompt: string) => Promise<string | BuilderCompletion>, context = '', planningRunId?: string, presentationVersion: PresentationVersion = 'legacy', preserveCoachPurpose = false) {
   let authority = freeze(structuredClone(contract));
   const coach = authority.doseContext?.sessionDecisionAuthority === 'coach';
   const preflight = validateAllowedTrainingContract(authority);
@@ -109,7 +109,14 @@ En coach-executable-v1, UNKNOWN de equipo, skill o capability es una falta de co
 Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gramática representable, blocks y explanation breve. Mantén el schema de dosis descrito abajo.\n` : '';
   let prompt = `${openInstructions}${coach ? instructions.replace('La explicación y el objetivo se derivan por código, no los escribas.', 'El objetivo se deriva del intent.') + decisionInstruction : instructions}${timeInstruction}${representationInstruction}${intensityInstruction}${methodInstruction}${coach ? '' : doseInstruction + compositionInstruction}${variantInstruction}\nCONTRACT:\n${JSON.stringify(authority)}${intentInstruction}\nContexto no autoritativo:\n${context}\nOpciones ejecutables por alcance (preparationOnly nunca amplía main):\n${JSON.stringify(builderOptions)}\nHistorial para evitar duplicación:\n${JSON.stringify(recent)}`;
   if (openExecution(authority)) prompt = `${EXECUTABLE_DOSE_INSTRUCTIONS}\nCONTRACT:\n${JSON.stringify(authority)}\nContexto no autoritativo:\n${context}\nHistorial:\n${JSON.stringify(recent)}`;
-  if (authority.contractVersion === 5) prompt = prompt.replace('The weekly intent tells you WHAT adaptation/stimulus this session should serve. YOU are responsible for deciding HOW to train it.', FINAL_DECISION_INSTRUCTIONS);
+  if (authority.contractVersion === 5) {
+    const decisionInstructions = preserveCoachPurpose
+      ? 'The Coach purpose in CONTRACT.stimulusId is immutable. You materialize HOW, not WHAT or WHY. Return finalDecision as your explicit declaration of the purpose materialized: {kind:"session_decision",version:1,stimulus:CONTRACT.stimulusId}. Copy the exact purpose, without trimming or rewriting, into both stimulusId and finalDecision.stimulus. Do not add a different adaptation, method, pattern or role. Never change discipline, dates, frequency, WeekIntent, WeekPrescription or factual constraints.'
+      : FINAL_DECISION_INSTRUCTIONS;
+    prompt = prompt.replace('The weekly intent tells you WHAT adaptation/stimulus this session should serve. YOU are responsible for deciding HOW to train it.', decisionInstructions);
+    // An explicit envelope complements the prose; no provider response is filled in locally.
+    prompt += '\nV5_REQUIRED_OUTPUT: Return one JSON object with schemaVersion:2, stimulusId, structureId, blocks AND finalDecision. finalDecision is REQUIRED, not optional.\n' + decisionInstructions;
+  }
   if (authority.contractVersion === 4) prompt = prompt.replace('Los canónicos de allowedMovementIds tienen material y nivel resueltos; cada variante requiere validación propia.', 'Cada propuesta requiere validación propia de material y nivel.')
     .replace('allowedMovementIds son candidatos canónicos confiables, preferibles cuando encajan, no todos los ejercicios posibles.', 'allowedMovementIds son ejemplos canónicos, no todos los ejercicios posibles ni permisos sobre el atleta.');
   if (authority.generatedMovementAuthority) emitSessionCoachingDiagnostic('SESSION_MOVEMENT_COACH_INPUT', {
@@ -136,7 +143,7 @@ Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gram�
     const duplicateCorrection = attempt && previousErrors.some(v => v.startsWith('DUPLICATE_MOVEMENT:'))
       ? `\nREPAIR_CONSTRAINTS:\n${JSON.stringify({ previousErrors: ['DUPLICATE_MOVEMENT'], scope: 'within_each_block',
         instruction: 'Cada movementId debe aparecer como máximo una vez dentro de cada bloque. Recompón la propuesta dentro del mismo contrato; no traslades ni elimines dosis automáticamente. Esta restricción no prohíbe repetir un movementId entre warmup y main con dosis apropiadas.' })}` : '';
-    try { raw = trace.completion(await complete(prompt + (attempt ? `\nLa primera propuesta fue rechazada: ${JSON.stringify(previousErrors)}. Devuelve una composición válida dentro del MISMO contrato; no repitas la propuesta rechazada.` : '') + (attempt ? finalDecisionRepair : '') + (attempt && shapeDetails.length ? `\nREPAIR_SHAPE_DETAILS:\n${JSON.stringify(shapeDetails)}` : '') + duplicateCorrection)); }
+    try { raw = trace.completion(await complete(prompt + (attempt ? `\nLa primera propuesta fue rechazada: ${JSON.stringify(previousErrors)}. ${finalDecisionRepair ? 'Corrige el campo indicado en la propuesta anterior; conserva los demás campos válidos y el MISMO contrato.' : 'Devuelve una composición válida dentro del MISMO contrato; no repitas la propuesta rechazada.'}` : '') + (attempt ? finalDecisionRepair : '') + (attempt && shapeDetails.length ? `\nREPAIR_SHAPE_DETAILS:\n${JSON.stringify(shapeDetails)}` : '') + duplicateCorrection)); }
     catch { trace.emit(attempt + 1, 'provider', 'SESSION_GENERATION_FAILED', ['LLM_REQUEST_FAILED'], false, 'provider_failure_terminal'); return { ok: false as const, code: 'SESSION_GENERATION_FAILED', violations: ['LLM_REQUEST_FAILED'], diagnostics: trace.summary() }; }
     shapeDetails = [];
     const parsed = parseStructuredSession(raw, openExecution(authority), detail => { shapeDetails.push(detail); trace.shape(attempt + 1, detail); },
@@ -172,6 +179,13 @@ Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gram�
     try { proposalAuthority = freeze(admitFinalDecision(authority, parsed.proposal)); }
     catch (e: any) {
       if (e.message === 'FINAL_SESSION_DECISION_INVALID') trace.contractRejection(attempt + 1, 'admitFinalDecision', e.message, parsed.proposal, authority);
+      if (!attempt && e.message === 'FINAL_SESSION_DECISION_INVALID') {
+        finalDecisionRepair = '\nFINAL_DECISION_REPAIR:\n' + JSON.stringify({ field: 'finalDecision',
+          issue: parsed.proposal.finalDecision === undefined ? 'MISSING_REQUIRED_FIELD' : 'INVALID_FIELD_OR_STIMULUS_MISMATCH',
+          instruction: 'Add or correct the required finalDecision object: kind must be "session_decision", version must be 1, stimulus must be non-blank and equal stimulusId. Follow V5_REQUIRED_OUTPUT. Use previousProposal as the correction base; preserve all other valid fields, discipline and factual constraints.'
+            + (preserveCoachPurpose ? ' Both stimulus fields must equal the original CONTRACT.stimulusId exactly; do not choose a new purpose.' : ''),
+          previousProposal: parsed.proposal });
+      }
       if (!attempt && e.message === 'FINAL_SESSION_DECISION_INVALID'
         && typeof parsed.proposal.finalDecision?.reason === 'string' && parsed.proposal.finalDecision.reason.length > 400
         && !!parsed.proposal.finalDecision.reason.trim() && !/[\u0000-\u001f\u007f]/.test(parsed.proposal.finalDecision.reason)) {
@@ -186,7 +200,7 @@ Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gram�
             instruction: 'Shorten finalDecision.reason to a concise non-blank string of at most 400 characters without control characters. Use the previous proposal as the correction base; preserve all other valid fields.'
               + (preserveDevelopment ? ' Preserve developmentIntent exactly, including its absence or empty array: it is already valid.' : ''),
             previousProposal: parsed.proposal });
-        } catch { /* Other decision failures retain generic retry feedback. */ }
+        } catch { /* Other decision failures retain the field-specific repair above. */ }
       }
       previousErrors = [e.message];
       trace.emit(attempt + 1, 'checkSessionShape', 'SESSION_CONTRACT_INVALID', previousErrors, !attempt, attempt ? 'attempt_limit' : 'contract_rule_retry');

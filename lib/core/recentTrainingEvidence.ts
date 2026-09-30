@@ -1,6 +1,9 @@
+import { readCurrentExecutionRows } from '../execution/workoutReads';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { canonicalDigest } from '../execution/executionIntegrity';
+import { currentWorkouts } from '../execution/workoutIntegrity';
+import { projectWorkoutPlans, managedPrescriptionKeys } from '../execution/workoutProjections';
 
 type Row = Record<string, unknown>;
 type Quantity = { value: number; unit: string; source: string };
@@ -91,7 +94,8 @@ export async function loadRecentTrainingEvidence(db: Pick<SupabaseClient, 'from'
       if (single && data == null) { result.coverage.limitations.push('WORKOUT_HISTORY_NOT_RECORDED'); status.recordsFound = 0; return []; }
       if (!Array.isArray(data) || data.some(v => !v || typeof v !== 'object' || Array.isArray(v))) throw new Error('INVALID_STORED_DATA');
       status.recordsFound = data.length;
-      if (data.length > 1000) throw new Error('SOURCE_READ_CAP_EXCEEDED');
+      // JSON profile arrays are one row, not a PostgREST row-limited result.
+      if (!single && source !== 'running_execution_records' && data.length >= 1000) throw new Error('SOURCE_READ_CAP_EXCEEDED');
       return data as Row[];
     } catch (e) {
       status.status = 'failed';
@@ -100,12 +104,11 @@ export async function loadRecentTrainingEvidence(db: Pick<SupabaseClient, 'from'
     }
   }
   const [plans, legacy, modern, modifications] = await Promise.all([
-    read('weekly_plan', () => db.from('weekly_plan').select('week_start,sessions').eq('user_codigo', athlete)
+    read('weekly_plan', () => db.from('weekly_plan').select('id,week_start,sessions').eq('user_codigo', athlete)
       .gte('week_start', monday).lte('week_start', referenceDate).order('week_start', { ascending: false }).limit(1001)),
     read('usuarios.workout_history', () => db.from('usuarios').select('workout_history').eq('codigo', athlete).maybeSingle(), true),
-    // Read all bounded versions before windowing so a conflicting date cannot hide identity conflicts.
-    read('running_execution_records', () => db.from('running_execution_records').select('record,signature,content_digest')
-      .eq('user_codigo', athlete).order('created_at', { ascending: false }).limit(1001)),
+    // Current revisions, keyset-paged; retain v1 conflict evidence before windowing.
+    read('running_execution_records', async () => ({data:await readCurrentExecutionRows(db,athlete),error:null})),
     read('session_modification_events', () => db.from('session_modification_events')
       .select('id,week_start,dia,trigger_type,reason_code,created_at').eq('user_codigo', athlete)
       .gte('week_start', monday).lte('week_start', referenceDate).order('created_at', { ascending: false }).limit(1001)),
@@ -118,10 +121,14 @@ export async function loadRecentTrainingEvidence(db: Pick<SupabaseClient, 'from'
     return false;
   }
   function add(i: RecentTrainingItem) { result.items.push(i); }
-  plans.forEach((p, pi) => {
+  let workouts: ReturnType<typeof currentWorkouts> = [];
+  try { workouts = currentWorkouts(athlete, modern); }
+  catch { result.coverage.sourceFailures.push({source:'running_execution_records',reason:'INTEGRITY_INVALID'}); }
+  const managed = managedPrescriptionKeys(workouts);
+  projectWorkoutPlans(plans, workouts).forEach((p, pi) => {
     if (civil(p.week_start)) result.coverage.weeksFound.push(p.week_start as string);
     if (!Array.isArray(p.sessions)) { result.coverage.limitations.push('INVALID_PLAN_SESSIONS'); return; }
-    p.sessions.forEach((raw, si) => {
+    p.sessions.forEach((raw: unknown, si: number) => {
       const s = row(raw), date = slotDate(p.week_start, s.dia);
       const includeSlot = inWindow(date, 'weekly_plan');
       const i = item('weekly_plan', `${pi}.${si}`, date ?? '');
@@ -130,8 +137,9 @@ export async function loadRecentTrainingEvidence(db: Pick<SupabaseClient, 'from'
       const proposal = row(row(s.structuredPrescription).proposal);
       const prescribed = !['descanso', 'external_blocked', 'sin_registrar', 'unavailable'].includes(String(s.tipo)) && !!(text(s.titulo) || text(s.descripcion) || Object.keys(proposal).length);
       if (prescribed) i.prescribed = { state: 'PRESCRIBED', discipline: text(s.tipo), title: clip(s.titulo, i), stimulus: text(proposal.stimulusId ?? s.stimulusId) };
-      i.state = s.completada === true ? 'REPORTED_EXECUTED' : prescribed ? 'PLANNED_ONLY' : 'NO_EXECUTION_RECORDED';
-      i.confidence = s.completada === true ? 'COMPLETION_FLAG' : 'STORED_PRESCRIPTION';
+      const completed = s.completada === true && !managed.has(`${p.id}:${s.session_id}`);
+      i.state = completed ? 'REPORTED_EXECUTED' : prescribed ? 'PLANNED_ONLY' : 'NO_EXECUTION_RECORDED';
+      i.confidence = completed ? 'COMPLETION_FLAG' : 'STORED_PRESCRIPTION';
       if (s.completada === true) {
         i.description = clip(s.descripcion_real ?? s.titulo_real, i);
         i.uncertainty.push('COMPLETION_DOES_NOT_ATTEST_QUANTITY_OR_DISCIPLINE');
@@ -163,7 +171,29 @@ export async function loadRecentTrainingEvidence(db: Pick<SupabaseClient, 'from'
       });
     });
   });
+  // Narrow copy of runningExecutionStore's factual envelope verification. Importing its
+  // reader would also import running validators, method catalogs and plan mutation authority.
+  // Never apply those admission rules, infer a method, or classify unknown running as easy.
+  const verified: Row[] = [];
+  try {
+    for (const envelope of modern) {
+      if (row(envelope.record).version === 2) continue;
+      const r = row(envelope.record), key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!key) throw new Error('VERIFICATION_UNAVAILABLE');
+      const expected = Buffer.from(createHmac('sha256', key).update('forge-execution-v1:' + canonicalDigest([athlete, r])).digest('hex'));
+      const actual = Buffer.from(typeof envelope.signature === 'string' ? envelope.signature : '');
+      if (expected.length !== actual.length || !timingSafeEqual(expected, actual) || r.version !== 1
+        || r.athleteScope !== canonicalDigest(athlete) || envelope.content_digest !== canonicalDigest(r)) throw new Error('INTEGRITY_INVALID');
+      verified.push(r);
+    }
+  } catch (error) {
+    verified.length = 0;
+    result.coverage.sourcesRead.find(s => s.source === 'running_execution_records')!.status = 'failed';
+    result.coverage.sourceFailures.push({ source: 'running_execution_records', reason: error instanceof Error ? error.message : 'INTEGRITY_INVALID' });
+  }
   legacy.forEach((r, index) => {
+    if (workouts.some(w => w.executionId === r.executionId || w.executionId === r.workout_id)
+      || verified.some(w => w.executionId === r.executionId || w.executionId === r.workout_id)) return;
     const date = reportDate(r.fecha);
     if (!inWindow(date, 'usuarios.workout_history')) return;
     const i = item('usuarios.workout_history', String(index), date);
@@ -187,25 +217,6 @@ export async function loadRecentTrainingEvidence(db: Pick<SupabaseClient, 'from'
     if (text(r.source)) i.uncertainty.push(`STORED_SOURCE:${text(r.source)!.slice(0, 80)}`);
     add(i);
   });
-  // Narrow copy of runningExecutionStore's factual envelope verification. Importing its
-  // reader would also import running validators, method catalogs and plan mutation authority.
-  // Never apply those admission rules, infer a method, or classify unknown running as easy.
-  const verified: Row[] = [];
-  try {
-    for (const envelope of modern) {
-      const r = row(envelope.record), key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      if (!key) throw new Error('VERIFICATION_UNAVAILABLE');
-      const expected = Buffer.from(createHmac('sha256', key).update('forge-execution-v1:' + canonicalDigest([athlete, r])).digest('hex'));
-      const actual = Buffer.from(typeof envelope.signature === 'string' ? envelope.signature : '');
-      if (expected.length !== actual.length || !timingSafeEqual(expected, actual) || r.version !== 1
-        || r.athleteScope !== canonicalDigest(athlete) || envelope.content_digest !== canonicalDigest(r)) throw new Error('INTEGRITY_INVALID');
-      verified.push(r);
-    }
-  } catch (error) {
-    verified.length = 0;
-    result.coverage.sourcesRead.find(s => s.source === 'running_execution_records')!.status = 'failed';
-    result.coverage.sourceFailures.push({ source: 'running_execution_records', reason: error instanceof Error ? error.message : 'INTEGRITY_INVALID' });
-  }
   const versions = new Map<string, Set<string>>();
   for (const r of verified) if (text(r.executionId)) {
     const id = r.executionId as string, group = versions.get(id) ?? new Set<string>();
@@ -235,6 +246,18 @@ export async function loadRecentTrainingEvidence(db: Pick<SupabaseClient, 'from'
     }
     add(i);
   });
+  for (const r of workouts.filter(w => !w.deletedAt)) {
+    if (!inWindow(r.data.executedOn, 'running_execution_records')) continue;
+    const i = item('running_execution_records', r.executionId, r.data.executedOn);
+    i.sourceIdentity = r.executionId; i.discipline = r.data.discipline; i.confidence = r.verification; i.state = 'REPORTED_EXECUTED';
+    i.prescriptionReference = r.data.prescription?.sessionId ?? null; i.association = i.prescriptionReference ? 'FORGE_PLAN' : 'UNKNOWN';
+    i.description = clip([r.data.title,r.data.description,r.data.result].join('\n'), i);
+    i.responses = [r.data.observations,r.data.sensations,r.data.discomfort].flatMap(v => {const t = clip(v,i);return t ? [t] : [];});
+    quantity(i,'duration',r.data.durationSeconds ?? r.structuredRunning?.quantities.totalDurationSeconds,'seconds',i.source);
+    quantity(i,'distance',r.data.distanceMeters ?? r.structuredRunning?.quantities.totalDistanceMeters,'meters',i.source);
+    quantity(i,'rpe',r.data.rpe ?? r.structuredRunning?.intensityObservation?.value,'rpe_0_10',i.source);
+    i.completeness = r.structuredRunning?.completeness ?? 'UNKNOWN'; add(i);
+  }
   modifications.forEach((r, index) => {
     const date = slotDate(r.week_start, r.dia);
     if (!inWindow(date, 'session_modification_events')) return;

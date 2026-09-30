@@ -1,0 +1,312 @@
+{
+  "version": 1,
+  "purpose": "Reviewed CORE-REG overlay and validation inputs; NOT a standalone deployable archive",
+  "baseHead": "403784414a380807f69e7a6778408b4585cfe444",
+  "baseHeadRequiresReview": true,
+  "remoteOperationsAuthorized": false,
+  "groups": {
+    "runtime": [
+      {
+        "path": "app/FormaPro.tsx",
+        "sha256": "6ec646bcf2a69aa8b0c8f36932bbd75f8c418d8f4ef47679d5cd6492dc4505c6"
+      },
+      {
+        "path": "app/api/chat/route.ts",
+        "sha256": "9f6c4739910de68c1d6b8190a3916e76d538a2bfc887baedd56c49c61ccc6134"
+      },
+      {
+        "path": "app/auth/AuthenticatedSurface.tsx",
+        "sha256": "06fd15465f61307cc62ac66f7094e69909337f25862f664f207f7e03f9889680"
+      },
+      {
+        "path": "app/historia/page.tsx",
+        "sha256": "a9bbf123c3437ac865752888f48e0396b8882e46504db19ddc7567366124140c"
+      },
+      {
+        "path": "app/hoy/page.tsx",
+        "sha256": "e65a0e336c3cf983b7e31aaa4c48e041bfe95d72099d3ec125362fa3dd772a3a"
+      },
+      {
+        "path": "lib/athlete/loadAthletePrescriptionContext.ts",
+        "sha256": "d31cafea5ac1c8c09c3971e9e2ddb2a7e8e312f75fab73945940e837c4d70796"
+      },
+      {
+        "path": "lib/chat/chatCoachActions.ts",
+        "sha256": "f694f3c5d45fd36b24431e967448eaf8ce5eb010d511fb2cdd40d12f41171171"
+      },
+      {
+        "path": "lib/chat/coachFirstLoop.ts",
+        "sha256": "a129566ecb4250b5beb29722246a55d9c20cd3de3cf3fbe38bf8d7b9af2facea"
+      },
+      {
+        "path": "lib/chat/coachFirstOutput.ts",
+        "sha256": "10629917a50d1bdd85126d1fff2275935577d62c483d51469ac609f24a9a8358"
+      },
+      {
+        "path": "lib/chat/coachFirstReads.ts",
+        "sha256": "e63faec9d9c4ec44ae17eefdfa81adbdf1495ee9b9f5fe5a578ed33334055a9e"
+      },
+      {
+        "path": "lib/chat/coachFirstTools.ts",
+        "sha256": "c446eacc3ba167181fd81486f04403e11b48525ec5db945b56e31406e5d36578"
+      },
+      {
+        "path": "lib/chat/coachMutationProtocol.ts",
+        "sha256": "4a1059e77fd47d42df3c722c97a291b46958a03ce006060aef8decffacc4cf15"
+      },
+      {
+        "path": "lib/chat/groundedCoach.ts",
+        "sha256": "04f4ff6cf4d8bed840eea742949be3fb3295e3500f94d1b7efd718ae20a695d9"
+      },
+      {
+        "path": "lib/chat/longitudinalContext.ts",
+        "sha256": "67680496c736ccf615d0bfb0f3c188f7d5fdddf1d8efdc8157af192649772c7b"
+      },
+      {
+        "path": "lib/chat/runChatCoach.ts",
+        "sha256": "8b7fd7d9c14920ae5fa40e18f207e9b7522657a786aa5bd05cd71c6555095601"
+      },
+      {
+        "path": "lib/core/recentTrainingEvidence.ts",
+        "sha256": "913c3747360bbbdbeb86df768550846cd7e4bca940ac3895f6d9fa81bae85584"
+      },
+      {
+        "path": "lib/diagnostics/groundingTrace.ts",
+        "sha256": "be60d3b18c74503999101cd9f17b6bbb24dd03d2e486cc707a36d9d3a9cbfa24"
+      },
+      {
+        "path": "lib/execution/runningExecutionStore.ts",
+        "sha256": "97ee8db7c043cbfdaaec3f0f16e9e51d6741e122116c9f3ecd9ee3894501bda7"
+      },
+      {
+        "path": "lib/planning/recordCompletion.ts",
+        "sha256": "d7f68fbf46e5c9f0ac9e3e04df018b33a530477ffd3521a566a1c2f1670e665b"
+      },
+      {
+        "path": "lib/trainingLoad/loadTrainingLoad.ts",
+        "sha256": "e6b3d0f64093509c3e7c6730b0ef8ba7d739411ea1df9cfbf293c0094e1fa324"
+      },
+      {
+        "path": "app/api/workouts/route.ts",
+        "sha256": "24165bc6e7666624b4edd88973b2a39a02865e0e30550bec34d8409f08e8056b"
+      },
+      {
+        "path": "app/entrenamientos/registrar/page.tsx",
+        "sha256": "75e723d7783251f0fef35fbbb59c2f84a946139e9e6958c156b508afde5b945e"
+      },
+      {
+        "path": "components/WorkoutForm.tsx",
+        "sha256": "b482c04d69813e7373894fc9dda8ebe0871794bb60a418d9896b0cf0d60a9835"
+      },
+      {
+        "path": "components/WorkoutRegisterButton.tsx",
+        "sha256": "1885d29ca5b401601e7e23d5ba810a3019c30a8995cfdb7d5c77cba0ffbf0ff0"
+      },
+      {
+        "path": "lib/execution/workoutClient.ts",
+        "sha256": "fae1f3227437422bd20923c15e625f4ba38b55fa717f65a579edadfbdf1488b3"
+      },
+      {
+        "path": "lib/execution/workoutContracts.ts",
+        "sha256": "aa5309e867c1c8c84c443b98be7e393bf11aa65fde1f2d3c6e716b77f176761f"
+      },
+      {
+        "path": "lib/execution/workoutHandler.ts",
+        "sha256": "180714959fda2177e91d01bc1cbf002d78a638bb85427fcdebffc79c8c52d682"
+      },
+      {
+        "path": "lib/execution/workoutHistory.ts",
+        "sha256": "2163f1e03f569f42abefc32ea9411936a7ed299a2c0921772a00f16ba764b78b"
+      },
+      {
+        "path": "lib/execution/workoutIntegrity.ts",
+        "sha256": "156976de63f2038c985dd2144ce8ca67d45d1bee3da5517dccda6b0a9177c48f"
+      },
+      {
+        "path": "lib/execution/workoutProjections.ts",
+        "sha256": "19f47cfb4189e5ceb17ed93311baaabb548ecc476bb84db97442afca5666d1bb"
+      },
+      {
+        "path": "lib/execution/workoutReads.ts",
+        "sha256": "cbae7f5ea54c15e35eecbfe77e85423f87a4c392acc7d83be601646bd118ceef"
+      },
+      {
+        "path": "lib/execution/workoutRegistry.ts",
+        "sha256": "3d20fd4d79fa45d387da477d90a3538b5ad059c553c29da02cfb6a561c8d4a66"
+      },
+      {
+        "path": "lib/execution/workoutRunningAdapter.ts",
+        "sha256": "8f3b9e5fd9a2cba8885403935c228fb436008632a05dc4ceec1b0ed6b19db523"
+      }
+    ],
+    "validation": [
+      {
+        "path": "lib/athlete/athletePrescriptionContext.test.mjs",
+        "sha256": "e74a26b374561023402161ac2dc16c5b0ba03830cc538f40089e247ecd353893"
+      },
+      {
+        "path": "lib/auth/productAccess.test.mjs",
+        "sha256": "cb958424603b186ecfad9e0dd235f8d65e98c77e88667d311958faa0e436335e"
+      },
+      {
+        "path": "lib/chat/coachFirst.test.mjs",
+        "sha256": "e503fe447ba69e0fad180ef2f36070b36cb21909d0bc27e6f3ff15cb9671e5cd"
+      },
+      {
+        "path": "lib/chat/groundedCoach.test.mjs",
+        "sha256": "627ab5f30a1fcb178ed02c352bd4641451a467b2d1eaa6306fe33d47cc0c7aae"
+      },
+      {
+        "path": "lib/core/recentTrainingEvidence.test.mjs",
+        "sha256": "e66a2049704079400236d5e6f31d7cdbe02dc1ccd672680fd14d4b7fb6c80bd9"
+      },
+      {
+        "path": "lib/execution/reportExecutionDate.test.mjs",
+        "sha256": "e67284b0095683f42d3317219a8945532b4b985094d728813b5281292b824936"
+      },
+      {
+        "path": "lib/execution/runningExecution.test.mjs",
+        "sha256": "b321c21fc505f738c28c56e1d208f89db44011d30e4100ded05e006d94a46cdd"
+      },
+      {
+        "path": "lib/planning/recordCompletion.test.mjs",
+        "sha256": "b7edddf857eabd2dc52cb019d81ce5d8feaafa9e455ba4ff23bc3c683d278afc"
+      },
+      {
+        "path": "lib/planning/writerConvergence.test.mjs",
+        "sha256": "101d6323aa592681da302c22f963c130bc61d5b80833e2b1055b74238051e545"
+      },
+      {
+        "path": "lib/sports/trainingContractTestRuntime.mjs",
+        "sha256": "1a1dfb42a81a78dce8da4032a34a352bb1eea4ff5b5fa1ba4e3adc9c8f0515c8"
+      },
+      {
+        "path": "lib/trainingLoad/loadTrainingLoad.test.mjs",
+        "sha256": "a1002fcfd90a0c87eda222ffab7e3ac096b37e45a8474dd8aa5339a96f722f45"
+      },
+      {
+        "path": "lib/execution/workoutChatBoundary.test.mjs",
+        "sha256": "b692bca234e2da85f629a9b8ec4380629b05b245d3ef0ede9f386f11279589ba"
+      },
+      {
+        "path": "lib/execution/workoutForm.test.mjs",
+        "sha256": "e1f022ca8d19ac81e318bd7d58cd550e09f507593a3fb398f46b87ac709c767c"
+      },
+      {
+        "path": "lib/execution/workoutRegistry.test.mjs",
+        "sha256": "5a3f567bb51b5d884f2a0bddfc58b0504a0163ca41c63dfc2db960c2c4b31802"
+      },
+      {
+        "path": "lib/execution/workoutPagination.test.mjs",
+        "sha256": "87f5c41a0905e8d56ef56d50a29077a4bce4ea05a41c71ae53b5e22b83e260b7"
+      },
+      {
+        "path": "lib/execution/workoutSqlTestDatabase.mjs",
+        "sha256": "5078a3e0815c7c1d0f9f7264d5e3c51772118eb1c4770d01ed02e5c2244a31a6"
+      }
+    ],
+    "operations": [
+      {
+        "path": "scripts/core-reg-concurrency.mjs",
+        "sha256": "59c0ad29276ed105094ca4a9e9bc9ce0acc5dd60bd674d1ca343ffb2f0843d97"
+      },
+      {
+        "path": "docs/sql/core-reg-1-workouts.sql",
+        "sha256": "3f610185bcf8dc87928bbb52988a3d0ce9e3e24ffdb8f7d5835a6e860a94fa2d"
+      },
+      {
+        "path": "docs/sql/core-reg-pagination.sql",
+        "sha256": "21849ce89d0a4690b7ad58ce06ad9c9564d3530f91826679a0c0ff95c05f1137"
+      },
+      {
+        "path": "docs/sql/core-reg-preflight.sql",
+        "sha256": "8aff37d23b28c44fb175c034e8307c9ee49fe6b59376034d9bf2ad63559bd7ae"
+      },
+      {
+        "path": "docs/sql/core-reg-postflight.sql",
+        "sha256": "5a010c33d6c89e4461d12a9a4ee24d3b37a57d2167f31523c829e8c0aa42e0e8"
+      }
+    ],
+    "unchangedPrerequisites": [
+      {
+        "path": "package.json",
+        "sha256": "fc47655db44c6fe1873b770499a6e3cce663498f70b7e81dfccd5a86f8cf468e"
+      },
+      {
+        "path": "package-lock.json",
+        "sha256": "abdb031cd76825ba2f4df721898696c27388918f66f46ad20020238c2aac74d7"
+      },
+      {
+        "path": "next.config.ts",
+        "sha256": "11179dea72363bdc1039e4e76506b059b57ffa076267734714e978903e8e45ac"
+      },
+      {
+        "path": "tsconfig.json",
+        "sha256": "be18523b23b78b6e1a876ddd107d330f0168bddf09d751b57e0b5edce69c66f3"
+      },
+      {
+        "path": "postcss.config.mjs",
+        "sha256": "dfac7ac2d86d326a0e5adb024e7943c181393ed17a5fcb8f0315b24c7da6ddde"
+      },
+      {
+        "path": "lib/auth/supabaseServer.ts",
+        "sha256": "f4f9642b4a27bd63e47550b443c8c2beafa1b8a782c36b4a211b2d0acd450412"
+      },
+      {
+        "path": "lib/auth/supabaseBrowser.ts",
+        "sha256": "cc9826b4e6897ecdad20668739c0c67897e0c812efce926a731ff11eb809ef8c"
+      },
+      {
+        "path": "lib/auth/athleteIdentity.ts",
+        "sha256": "c861e2aa7806d1fac12b628ad5d39c8332d2e9494845f0154629f997f0e9e6a3"
+      },
+      {
+        "path": "lib/auth/identityHandler.ts",
+        "sha256": "ecf8636573e2d7e80314a0ab3884c3666b9babc903382ca92f9fea8397a9d7cb"
+      },
+      {
+        "path": "lib/auth/webAuthFlow.ts",
+        "sha256": "0cf6fd2ba2cac221b1b31f22718619319dac7e37a1519985b9c47f0e287b3298"
+      },
+      {
+        "path": "docs/sql/b32c-running-execution-records.sql",
+        "sha256": "391d5954b3cc689da5b53b3ff85699aec132257b2a99342149cb93e243b1935c"
+      }
+    ]
+  },
+  "dependencies": {
+    "install": "npm ci including devDependencies for tests/concurrency; not executed in staging preparation",
+    "newPackages": [],
+    "versions": {
+      "next": "16.2.6",
+      "react": "19.2.4",
+      "@supabase/supabase-js": "2.105.4",
+      "@electric-sql/pglite": "0.5.8",
+      "typescript": "5.9.3"
+    },
+    "external": [
+      "Node compatible with lockfile (local 24.20.0)",
+      "PostgreSQL >=15",
+      "psql on PATH",
+      "two simultaneous database sessions",
+      "separate Supabase Auth/PostgREST test project for application E2E"
+    ]
+  },
+  "exclude": [
+    ".env*",
+    ".vercel/**",
+    ".next/**",
+    "node_modules/**",
+    "*.log",
+    ".core-reg-*",
+    "docs/*live*",
+    "docs/semantic-intake-*",
+    "lib/chat/evaluateSemanticIntake.mjs",
+    "lib/chat/semanticEvaluationClassification*",
+    "lib/chat/semanticIntakeLiveCorpus.mjs",
+    "lib/chat/summarizeSemanticIntakeLive.mjs",
+    "lib/planning/runCoachWeekLive.mjs",
+    "lib/sports/runWeekPrescriptionLive.mjs"
+  ],
+  "vercelJson": "Tracked baseline has a founders cron. Do not activate it in staging; operator must review/remove it in an isolated staging artifact. Working copy unchanged."
+}

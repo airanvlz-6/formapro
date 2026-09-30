@@ -6,11 +6,9 @@ import { coachFirstEnabled } from '@/lib/chat/coachFirstFlag';
 import { authenticatedFetch } from '@/lib/auth/authenticatedFetch';
 import { getBrowserAuth } from '@/lib/auth/supabaseBrowser';
 import { athleteStatePresentation } from '@/lib/athlete/athleteStatePresentation';
-import { splitExecutionReports } from '@/lib/execution/reportExecutionDate';
 import { RunningHrBootstrap } from '@/components/RunningHrBootstrap';
 import { HeartRateProfile } from '@/components/HeartRateProfile';
 import { TargetEventForm } from '@/components/TargetEventForm';
-import { RunningExecutionReport } from '@/components/RunningExecutionReport';
 import { captureAthleteTestFacts } from '@/lib/athlete/testCapture';
 import { captureOnboardingGoal } from '@/lib/athlete/onboardingGoal';
 import { planBlockLabel } from '@/lib/sports/planPresentation';
@@ -313,8 +311,8 @@ FLUJO DE ESTADOS DE DESARROLLO — SEGUIMIENTO OBLIGATORIO: Cada área de desarr
 Cuando detectes avance en una debilidad ya registrada, añade: [ACTUALIZAR_DEBILIDAD:{"indicador":"nombre exacto ya registrado","estado":"en_intervencion|en_progreso|validando|resuelta","progreso":número 0-100 estimado según cuánto ha mejorado,"confianza":número actualizado,"nueva_evidencia":"qué demuestra el cambio de estado"}]. Sé conservador — es mejor progreso lento y real que optimista y falso. Genera este tag cuando detectes o el atleta mencione una debilidad, limitación técnica, o área a mejorar. 
 Cuando detectes que una debilidad ya registrada ha MEJORADO significativamente (marca superada, mayor volumen tolerado, mejor técnica reportada), añade: [ACTUALIZAR_DEBILIDAD:{"indicador":"nombre exacto ya registrado","estado":"en_progreso|resuelta","confianza":número actualizado,"nueva_evidencia":"qué demuestra la mejora"}].
 SIEMPRE que planifiques sesiones futuras, revisa las debilidades activas del atleta (verás "DEBILIDADES DEL ATLETA" en tu contexto) e incorpora trabajo específico coherente con el bloque actual — no las ignores tras varios mensajes.
-BENCHMARKS CROSSFIT — DOBLE REGISTRO SEGÚN CORRESPONDA: Si el atleta reporta haber completado un benchmark conocido de CrossFit (Fran, Murph, Cindy, Grace, Helen, Diane, Jackie, Angie, Annie, DT, Eva, Chelsea, Nancy, Amanda, Elizabeth, Kelly, Karen, Isabel, Linda, Mary, Barbara, o cualquier WOD nombrado con mayúscula que sea benchmark reconocido): 1) SIEMPRE añade [SESION:] normal para que quede registrado como entrenamiento (aparecerá en el filtro "Entrenamientos"). 2) ADEMÁS, consulta el HISTORIAL DE MARCAS en tu contexto para ver si ya existe un resultado previo de ESE MISMO benchmark. SOLO SI es la PRIMERA vez que completa ese benchmark, O el nuevo resultado es una MEJORA clara (más rondas/reps, o menos tiempo), añade TAMBIÉN [EVENTO:{"date":"YYYY-MM-DD","type":"pr","title":"nombre benchmark: resultado (ej: Cindy: 22 rondas, mejora de X)","data":{"ejercicio":"benchmark_nombreminusculas","valor":"resultado con unidad"}}] — esto hará que también aparezca en el filtro "Récords". Si el resultado es IGUAL o PEOR que un intento anterior, NO generes el EVENTO tipo "pr", solo queda como entrenamiento normal.
-GESTIÓN DE SESIONES — DETECCIÓN ESTRICTA: SOLO genera el tag [SESION:] cuando el atleta use frases de FINALIZACIÓN clara SOBRE UN ENTRENAMIENTO: "he terminado", "completé", "ya entrené", "acabo de hacer", "WOD completado", "entreno realizado", "hice el entreno". NUNCA lo generes si: (a) el atleta solo pregunta sobre una sesión futura, (b) pide detalles, (c) menciona la palabra "sesión" sin confirmar que la completó, (d) el mensaje es exclusivamente un reporte de MÉTRICAS DE SUEÑO/RECUPERACIÓN NOCTURNA sin mención de entrenamiento. Un mensaje que solo hable de sueño, HRV nocturna, FC reposo NUNCA debe generar [SESION:]. Formato: [SESION:{"tipo":"tipo de sesión","fecha":"YYYY-MM-DDThh:mm:ss.000Z — usa SIEMPRE la fecha de HOY (la indicada en [Fecha actual del sistema]) salvo que el atleta mencione explícitamente otra fecha","notas":"resumen breve","duracion":null,"sensacion":"buena|normal|mala","analisis":"UNA frase breve con tu análisis técnico"}].
+BENCHMARKS CROSSFIT: Puedes comentar el resultado reportado. Registrar el entrenamiento requiere el formulario Registrar entreno; no generes tags de entrenamiento ni afirmes que lo has guardado.
+REGISTRO DE ENTRENAMIENTOS: Comenta los reportes sin guardarlos. Ofrece [Registrar entreno](/entrenamientos/registrar). No generes [SESION:] ni [BORRAR_SESION:], ni extraigas campos para rellenar el formulario. Edición y eliminación se realizan desde Historial.
 RESPUESTA TRAS REPORTAR SESIÓN — FORMATO OBLIGATORIO BREVE: Cuando el atleta reporte una sesión completada, tu respuesta debe ser SOLO: 1) Una frase breve de feedback sobre lo reportado (máx 2 líneas). 2) Invita a revisar la sesión de mañana en Mi Plan, ejemplo: "Revisa mañana en Mi Plan — ¿tienes alguna duda?". NUNCA repitas el contenido completo de la siguiente sesión (calentamiento, bloque principal, etc.) — esa información ya vive en Mi Plan. Si el atleta pregunta específicamente por detalles de la sesión de mañana, ahí sí puedes explicarla.
 CIERRE DE SEMANA — "FORGE INSIGHTS", FLUJO DIVIDIDO EN 2 PASOS — NUNCA generes el plan detallado de la semana siguiente en este mismo mensaje, eso ocurre en un paso separado después: Si la sesión que el atleta acaba de reportar es la ÚLTIMA sesión planificada de la semana Y NO has generado ya un resumen en esta conversación, haz SOLO esto: 1) Feedback breve. 2) RESUMEN CONECTADO (máximo 6-7 líneas) que incluya: sesiones completadas vs planificadas, tendencia fisiológica, Y OBLIGATORIO — si alguna de las "DEBILIDADES DEL ATLETA" mejoró o se resolvió esta semana, menciónalo explícitamente. Termina con el AJUSTE CONCRETO que aplicarás la semana siguiente en UNA frase (ej: "aumentaremos el volumen de halterofilia un 10%"), SIN listar día por día. 3) Tag [RESUMEN_SEMANA:{"week_start":"YYYY-MM-DD","resumen":"...","adherencia":"X/Y"}]. 4) Pregunta "¿Confirmas que generemos ya la semana siguiente con este enfoque?" NUNCA generes el tag [PLAN:] en este mismo mensaje — eso se hace en el siguiente turno cuando el usuario confirme, con una llamada dedicada solo a eso. NUNCA repitas el tag [RESUMEN_SEMANA:] para la misma semana si ya se generó antes en la conversación.
 CIERRE DE BLOQUE — MEMORIA METODOLÓGICA: Cuando detectes que el bloque actual ha terminado (última semana del bloque completada, o el atleta confirma pasar a un nuevo bloque tipo acumulación/intensificación/realización/deload), además del resumen semanal normal, añade: [BLOCK_OUTCOME:{"tipo_bloque":"nombre del bloque que termina","duracion_semanas":número,"objetivo":"objetivo que tenía este bloque","adherencia":número 0-100,"fatiga_media":"baja|media|alta","sesiones_completadas":número,"pr_obtenidos":número de nuevos PRs durante el bloque,"debilidades_resueltas":número de áreas de desarrollo resueltas durante el bloque,"lesiones":true|false,"resultado_global":"excelente|bueno|regular|deficiente","fecha_inicio":"YYYY-MM-DD","fecha_fin":"YYYY-MM-DD"}].
@@ -322,7 +320,7 @@ ANTES de diseñar un nuevo bloque, SIEMPRE revisa la sección "HISTORIAL DE BLOQ
 CORRECCIÓN DE DISPONIBILIDAD — OBLIGATORIO: cuando preguntes "¿sigue igual tu disponibilidad?" antes de generar la semana, si el atleta responde con un CAMBIO real (no una simple confirmación) — por ejemplo "no generes el jueves", "ahora puedo también los domingos", "cambia mi duración a 45 min" — DEBES generar en tu respuesta el tag [DISPONIBILIDAD_ACTUALIZADA:{"descripcion":"descripción breve y clara de la disponibilidad YA CORREGIDA, incorporando el cambio pedido"}] antes de continuar. Esto es OBLIGATORIO siempre que detectes un cambio real, nunca lo omitas — sin este tag, el cambio pedido por el atleta NUNCA se aplicará a la semana que estás a punto de generar.
 INTERVENCIONES ESPECÍFICAS: Cuando detectes un problema puntual (ej: fatiga alta un día concreto) y apliques una solución específica (ej: mover una sesión), y MÁS TARDE confirmes que esa solución funcionó (HRV recuperado, adherencia mejorada), añade: [INTERVENTION:{"problema":"descripción breve del problema detectado","accion":"qué hiciste para solucionarlo","resultado":"qué pasó después","efectividad":"alta|media|baja"}].
 REGLA DE CAPAS — NUNCA VIOLAR: Los principios científicos fijos (periodización, sobrecarga progresiva, deload, zonas de entrenamiento, recuperación) NUNCA cambian por resultados de un solo atleta o bloque. Lo que SÍ puede adaptarse con la memoria metodológica es: duración de bloques, distribución semanal, volumen, tipo de WOD, orden de ejercicios, y qué intervenciones funcionan mejor para corregir debilidades específicas de este atleta.
-Si el usuario reporta métricas fisiológicas pasadas con fecha (HRV, sueño, FC reposo de días anteriores), añade: [METRICA:{"fecha":"YYYY-MM-DD","hrv":null,"sueno":null,"rhr":null}]. Si el usuario pide borrar una sesión por fecha, añade: [BORRAR_SESION:{"fecha":"YYYY-MM-DD","tipo":"tipo mencionado"}].
+Si el usuario reporta métricas fisiológicas pasadas con fecha (HRV, sueño, FC reposo de días anteriores), añade: [METRICA:{"fecha":"YYYY-MM-DD","hrv":null,"sueno":null,"rhr":null}]. Si pide borrar un entrenamiento, remítelo a Historial para abrir el registro exacto y confirmar su eliminación.
 HISTORIA DEPORTIVA — OBLIGATORIO: SIEMPRE que el atleta reporte un nuevo récord personal (RM, mejor tiempo, mejor marca en cualquier ejercicio), DEBES añadir AL FINAL de tu respuesta, sin excepción: [EVENTO:{"date":"YYYY-MM-DD","type":"pr","title":"Nombre del ejercicio + valor","data":{"ejercicio":"nombre_normalizado","valor":"valor con unidad"}}]. Esto aplica también a competiciones, lesiones, enfermedades, cambios de objetivo, viajes. NUNCA omitas este tag cuando confirmes haber "registrado" o "guardado" algo en el progreso del atleta.
 PLAN SEMANAL — FLUJO OBLIGATORIO:
 1. Cuando el usuario pida la planificación semanal, muestra PRIMERO un resumen breve de cada día (máx 2 líneas por sesión) y pregunta: "¿Confirmas esta distribución?"
@@ -1245,7 +1243,6 @@ const abortControllerRef=useRef<AbortController|null>(null);
   const [alturaViewport,setAlturaViewport]=useState<number>(0);
 const [mostrarSugerencias,setMostrarSugerencias]=useState(false);
 const [mostrarMenu,setMostrarMenu]=useState(false);
-const [sesionPendiente,setSesionPendiente]=useState<any>(null);
 const [mostrarConjunto,setMostrarConjunto]=useState(false);
 const [codigoConjuntoInput,setCodigoConjuntoInput]=useState("");
 const [codigoTempGenerado,setCodigoTempGenerado]=useState("");
@@ -1726,6 +1723,7 @@ const forgeValidator=(texto:string):string=>{
       }
     });
     await procesarTag("[EVENTO:",8,async(data)=>{
+      if(data.type === "workout") return; // Training requires the canonical confirmation form.
       const resEvento=await apiCall({action:"registrar_evento",codigo:codigoUsuario,datos:{evento:data}});
       // FORGE CARDS — fuente FIABLE de PR: el tag [EVENTO:] del Coach, no el extractor Haiku posterior
       if(resEvento?.nuevoPrDetectado){
@@ -1735,41 +1733,7 @@ const forgeValidator=(texto:string):string=>{
     await procesarTag("[METRICA:",9,async(data)=>{
       await apiCall({action:"registrar_metrica_pasada",codigo:codigoUsuario,datos:{...data,mensajeUsuario:mensajeUsuarioOriginal}});
     });
-    await procesarTag("[BORRAR_SESION:",15,async(data)=>{
-      await apiCall({action:"borrar_sesion_fecha",codigo:codigoUsuario,datos:data});
-    });
-
-    // SESION es especial: no se guarda automáticamente, se muestra el banner
-    // FORGE VALIDATOR: si el mensaje del usuario fue clasificado como sueño, NUNCA mostrar el banner de sesión aunque el modelo lo haya generado por error
-    const sesionStart=texto.indexOf("[SESION:");
-    if(sesionStart>=0){
-      const {json,endIdx}=extraerJSON(texto,sesionStart,8);
-      if(json && !esMensajeDeSueno){
-        try{
-          const sesionParsed=JSON.parse(json);
-          const reports=splitExecutionReports(mensajeUsuarioOriginal,new Date().toLocaleDateString('en-CA',{timeZone:'Atlantic/Canary'}));
-          // Multiple reports are recorded independently by the server report flow.
-          if(reports.length!==1 || !reports[0].date) throw new Error('EXECUTION_DATE_UNRESOLVED');
-          sesionParsed.fecha=reports[0].date;
-          sesionParsed.reportText=mensajeUsuarioOriginal;
-          const fechaSesionCheck=new Date(sesionParsed.fecha+'T12:00:00Z');
-          const diaSemCheck=fechaSesionCheck.getUTCDay()||7;
-          const lunesSemCheck=new Date(fechaSesionCheck);
-          lunesSemCheck.setUTCDate(fechaSesionCheck.getUTCDate()-diaSemCheck+1);
-          const weekStartCheck=lunesSemCheck.toISOString().split('T')[0];
-          const DIAS_CHECK=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
-          const diaCheck=DIAS_CHECK[fechaSesionCheck.getUTCDay()].normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-          const workoutIdCheck=`${weekStartCheck}_${diaCheck}`;
-          const yaExisteCheck=planSemanal?.sessions?.find((s:any)=>s.dia.normalize("NFD").replace(/[\u0300-\u036f]/g,"")===diaCheck)?.completada;
-          setSesionPendiente({...sesionParsed,workout_id:workoutIdCheck,yaExiste:!!yaExisteCheck});
-        }catch{}
-      }
-      const tagEndBracket=texto.indexOf("]",endIdx>=0?endIdx:sesionStart);
-      const antes=texto.substring(0,sesionStart).trim();
-      const despues=tagEndBracket>=0?texto.substring(tagEndBracket+1).trim():"";
-      texto=(antes+(despues?" "+despues:"")).trim();
-    }
-
+    // Retired workout tags are stripped below; they never trigger extraction or persistence.
     // RED DE SEGURIDAD GENERICA: elimina cualquier tag con formato [NOMBRE_EN_MAYUSCULAS:{...}] que el
     // modelo haya podido inventar y que no exista en nuestra lista de tags conocidos y procesados arriba.
     // Esto evita que tags inventados (ej: [MODIFICAR_DISPONIBILIDAD:...]) queden visibles como texto roto.
@@ -2056,14 +2020,7 @@ const forgeValidator=(texto:string):string=>{
           }
         });
 
-        // FORGE SESSION VISION EXTRACTION — en paralelo, verificar si la imagen es un entreno
-        // completado. Nunca depende de que el Coach genere [SESION:] al ver la imagen — elimina
-        // la vulnerabilidad confirmada hoy (Coach interpreta correctamente pero no genera el tag).
-        apiCall({action:"extraer_sesion_imagen",codigo:codigoUsuario,datos:{imagenBase64:base64Solo,tipoImagen:primeraImagen.tipo}}).then((resSesionImg:any)=>{
-          if(resSesionImg?.esEntreno && resSesionImg?.sesion && !sesionPendiente){
-            setSesionPendiente(resSesionImg.sesion);
-          }
-        });
+
       }
     }
     const nuevoHist=[...historial,{role:"user",content:contenidoUsuario}];
@@ -2131,28 +2088,7 @@ const forgeValidator=(texto:string):string=>{
           }
         });
       }
-      // FORGE SESSION COMPLETION SAFETY NET — mismo patron robusto que modificaciones/PRs/sueno.
-      // Nunca depende del tag [SESION:] generado por el Coach — analiza el mensaje del usuario
-      // directamente y guarda el reporte de entreno de forma determinista.
       if(codigoUsuario && texto.trim().length>=10){
-        apiCall({action:"verificar_sesion_completada_deterministico",codigo:codigoUsuario,datos:{mensaje:texto}}).then((resSesionDet:any)=>{
-          if(resSesionDet?.clarificationRequired){
-            setMensajes(prev=>[...prev,{role:"assistant",content:resSesionDet.message}]);
-          }
-          if(resSesionDet?.partial){
-            setMensajes(prev=>[...prev,{role:"assistant",content:"⚠️ Entrenamiento guardado en el historial, pero no se pudo confirmar el cambio en Mi Plan. No repitas el registro automáticamente; requiere revisión."}]);
-          } else if(resSesionDet?.detectado && resSesionDet.ok){
-            if(resSesionDet.planCompleted) cargarPlanSemanal(codigoUsuario);
-            console.log("Session safety net:",resSesionDet.status);
-          }
-        });
-        // FORGE FOCUS — detecta reportes de carga externa (disciplina que Forge NO gestiona) y los
-        // guarda deterministicamente. Solo actua si el atleta esta en modo Focus.
-        apiCall({action:"verificar_carga_externa_deterministico",codigo:codigoUsuario,datos:{mensaje:texto}}).then((resCargaExt:any)=>{
-          if(resCargaExt?.detectado&&resCargaExt?.guardado){
-            console.log("🛡️ Focus external load: carga externa registrada -",resCargaExt.disciplina);
-          }
-        });
         // FORGE MODE CHANGE — si estamos en medio de un flujo de cambio de modo, intenta capturar
         // los datos que el usuario acaba de dar y ejecutar el cambio real si ya esta todo completo.
         if(modeChangeEnCurso){
@@ -3805,74 +3741,7 @@ ${testStr}`}]});
                   )}
                 </button>
               </div>
-              <RunningExecutionReport />
-              {sesionPendiente&&(
-                <div style={{background:"#1A2A1A",border:"1px solid #4CAF50",borderRadius:12,padding:"12px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
-                  <div>
-                    <p style={{color:"#4CAF50",fontSize:12,fontWeight:700,marginBottom:2}}>✅ Sesión detectada</p>
-                    <p style={{color:"#9A9590",fontSize:11}}>{sesionPendiente.tipo} · {new Date(sesionPendiente.fecha).toLocaleDateString("es-ES")}</p>
-                  </div>
-                  <div style={{display:"flex",gap:6}}>
-                    <button onClick={async()=>{
-                      const res=await apiCall({action:"registrar_sesion",codigo:codigoUsuario,datos:{sesion:sesionPendiente}});
-                      if(!res?.ok || !res.historyRecorded){
-                        setMensajes(prev=>[...prev,{role:"assistant",content:res?.historyRecorded
-                          ? "⚠️ El historial se guardó parcialmente. No se ha solicitado completar el plan; requiere revisión."
-                          : "No se pudo confirmar el registro del entrenamiento. No se ha solicitado completar el plan."}]);
-                        if(res?.historyRecorded) setSesionPendiente(null);
-                        return;
-                      }
-                      const completion=await apiCall({action:"marcar_sesion_completada",codigo:codigoUsuario,datos:{fecha:sesionPendiente.fecha,sesion:sesionPendiente}});
-                      if(!completion?.ok){
-                        setMensajes(prev=>[...prev,{role:"assistant",content:"⚠️ Registro parcial: entrenamiento guardado en el historial, pero no se pudo confirmar el cambio en Mi Plan. No repitas el registro automáticamente; requiere revisión."}]);
-                        setSesionPendiente(null);
-                        return;
-                      }
-                      if(completion.planCompleted) cargarPlanSemanal(codigoUsuario);
-                      setMensajes(prev=>[...prev,{role:"assistant",content:completion.historyOnly
-                        ? "Entrenamiento registrado solo en el historial: no hay una sesión compatible que completar en Mi Plan."
-                        : completion.corrected ? "Datos de la sesión realizada actualizados en Mi Plan."
-                        : completion.alreadyCompleted ? "La sesión ya estaba completada con estos datos; Mi Plan no se ha modificado."
-                        : "Entrenamiento registrado y sesión completada en Mi Plan."}]);
-                      if(res.warnings?.length) setMensajes(prev=>[...prev,{role:"assistant",content:"El entrenamiento se guardó, pero no se pudo registrar su evento para el contexto del Coach."}]);
-                      // FORGE SHARE CARDS — tras registrar con exito, ofrecer compartir. Los datos
-                      // numericos (distancia/tiempo/ritmo/resultado) no siempre vienen estructurados
-                      // del extractor todavia — el usuario puede completarlos en la propia Card si faltan.
-                      setSesionParaCompartir(sesionPendiente);
-                      setSesionPendiente(null);
-                      if(res?.esPrimeraSesion){
-                        setMensajes(prev=>[...prev,{role:"assistant",content:"🎉 **¡Primer entrenamiento registrado!**\n\nYa has empezado a construir tu historial. A partir de ahora Forge aprenderá de cada sesión para adaptar las siguientes.\n\nRevisa tu evolución en **Mi Historia** cuando quieras."}]);
-                      } else {
-                        // FORGE DISCOVERY ENGINE — se ejecuta en segundo plano tras cada entreno reportado
-                        // (no bloquea al usuario, no espera respuesta). Con suficientes datos, puede
-                        // generar un descubrimiento que se mostrara la proxima vez que abra el chat.
-                        apiCall({action:"ejecutar_discovery_engine",codigo:codigoUsuario});
-                      }
-                    }} style={{background:"#4CAF50",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}}>
-                      {sesionPendiente.yaExiste ? "Actualizar" : "Registrar"}
-                    </button>
-                    {sesionPendiente.yaExiste && (
-                      <button onClick={async()=>{
-                        const sesionSegunda={...sesionPendiente,workout_id:`${sesionPendiente.workout_id}_2`};
-                        const res=await apiCall({action:"registrar_sesion",codigo:codigoUsuario,datos:{sesion:sesionSegunda}});
-                        if(!res?.ok || !res.historyRecorded){
-                          setMensajes(prev=>[...prev,{role:"assistant",content:"No se pudo confirmar el registro de la segunda sesión."}]);
-                          return;
-                        }
-                        setMensajes(prev=>[...prev,{role:"assistant",content:res.warnings?.length
-                          ? "Segunda sesión guardada solo en el historial; no se pudo registrar su evento para el Coach."
-                          : "Segunda sesión registrada solo en el historial. Mi Plan no se ha modificado."}]);
-                        setSesionPendiente(null);
-                      }} style={{background:"none",color:"#4CAF50",border:"1px solid #4CAF50",borderRadius:8,padding:"6px 10px",fontSize:11,cursor:"pointer"}}>
-                        2ª sesión
-                      </button>
-                    )}
-                    <button onClick={()=>setSesionPendiente(null)} style={{background:"none",color:"#9A9590",border:"1px solid #2A2A2A",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer"}}>
-                      Ignorar
-                    </button>
-                  </div>
-                </div>
-              )}
+              <a href="/entrenamientos/registrar" style={{display:'inline-block',background:'#a84100',color:'#fff',padding:'12px 18px',borderRadius:10,margin:'12px 0'}}>Registrar entreno</a>
 
               {mensajes.length>0&&!cargando&&(
                 <div style={{marginTop:8}}>

@@ -1,6 +1,8 @@
+import { readCurrentExecutionRows } from './workoutReads';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { canonicalDigest, ExecutionError } from './executionIntegrity';
 import { validateRunningExecution, reconcileRunningExecutions, type RunningExecutionRecord } from './runningExecution';
+import { currentWorkouts, recordWorkout, type WorkoutDatabase } from './workoutRegistry';
 
 type Result = { data?: unknown; error: { code?: string } | null };
 interface Query extends PromiseLike<Result> {
@@ -23,27 +25,36 @@ export function sealRunningExecution(athlete: string, input: unknown, today: str
 }
 /** No request may supply record, provenance or signature. Only this server writer seals validated reports. */
 export async function writeRunningExecution(db: ExecutionDatabase, athlete: string, input: unknown, today: string) {
-  const row = sealRunningExecution(athlete, input, today);
-  if (!row.execution_id) throw new ExecutionError('EXECUTION_IDENTITY_AMBIGUOUS');
-  const result = await db.from('running_execution_records').insert(row);
-  if (result.error && result.error.code !== '23505') throw new ExecutionError('EXECUTION_WRITE_FAILED', 503);
-  // Immutable append: contradictory facts remain visible; no last-wins overwrite, even concurrently.
-  const evidence = await readRunningExecutions(db, athlete);
-  if (evidence.conflicts.includes(row.execution_id)) return { ok: false, recorded: true, code: 'EXECUTION_CONFLICT', executionId: row.execution_id };
-  if (!evidence.records.some(r => r.executionId === row.execution_id && canonicalDigest(r) === row.content_digest)) throw new ExecutionError('EXECUTION_WRITE_UNCONFIRMED', 503);
-  return { ok: true, recorded: true, code: result.error ? 'EXECUTION_ALREADY_RECORDED' : 'EXECUTION_RECORDED', executionId: row.execution_id };
+  const r = validateRunningExecution(input, athlete, today);
+  const original = input as Record<string, unknown>;
+  if (!r.executionId) throw new ExecutionError('EXECUTION_IDENTITY_AMBIGUOUS');
+  const legacy = {data:await readCurrentExecutionRows(db,athlete)};
+  if (legacy.data.some((row:any) => row.record?.version === 1 && row.record.executionId === r.executionId)) {
+    const verified = await readRunningExecutions(db,athlete);
+    if (verified.conflicts.includes(r.executionId) || !verified.records.some(old => canonicalDigest(old) === canonicalDigest(r)))
+      throw new ExecutionError('EXECUTION_CONFLICT',409);
+    return {ok:true,recorded:true,code:'EXECUTION_ALREADY_RECORDED',executionId:r.executionId};
+  }
+  if (r.planAssociation) throw new ExecutionError('WORKOUT_EXACT_PRESCRIPTION_REQUIRED');
+  const {sourceActivityId: _source, occurredAt: _date, ...running} = original;
+  const result = await recordWorkout(db as unknown as WorkoutDatabase, athlete, {requestId:`running:${r.executionId}`,
+    confirmed:true, workout:{executedOn:r.occurredAt, discipline:'carrera', title:'Carrera', description:'Registro estructurado de carrera',
+      result:r.completeness, running}}, today);
+  return {ok:!result.record.deletedAt, recorded:!result.record.deletedAt,
+    code:result.record.deletedAt ? 'WORKOUT_DELETED' : result.status === 'already_applied' ? 'EXECUTION_ALREADY_RECORDED' : 'EXECUTION_RECORDED', executionId:result.record.executionId};
 }
-/** Bounded read fails closed rather than silently dropping conflicts/older records. No log of payloads. */
+/** Keyset read of current revisions and immutable v1 evidence. No log of payloads. */
 export async function readRunningExecutions(db: ExecutionDatabase, athlete: string, window?: {startDate:string;endDate:string}) {
   return (await readRunningExecutionViews(db, athlete, window)).window;
 }
 /** Same verified read, two projections: existing B3 window and historical continuity. */
 export async function readRunningExecutionViews(db: ExecutionDatabase, athlete: string, window?: {startDate:string;endDate:string}) {
-  const result = await db.from('running_execution_records').select('record,signature,content_digest').eq('user_codigo', athlete)
-    .order('created_at', { ascending: false }).limit(1001);
-  if (result.error || !Array.isArray(result.data)) throw new ExecutionError('EXECUTION_READ_FAILED', 503);
-  if (result.data.length > 1000) throw new ExecutionError('EXECUTION_READ_CAP_EXCEEDED', 503);
-  const records = result.data.map(raw => {
+  return projectRunningExecutionViews(athlete, await readCurrentExecutionRows(db,athlete), window);
+}
+export function projectRunningExecutionViews(athlete: string, rows: any[], window?: {startDate:string;endDate:string}) {
+  const result = {data:rows};
+  const current = currentWorkouts(athlete, result.data);
+  const records = result.data.filter(raw => (raw as any).record?.version !== 2).map(raw => {
     const row = raw as { record: RunningExecutionRecord; signature: string; content_digest: string };
     try {
       const expected = Buffer.from(signature(athlete, row.record)), actual = Buffer.from(row.signature);
@@ -51,10 +62,10 @@ export async function readRunningExecutionViews(db: ExecutionDatabase, athlete: 
         || row.record.athleteScope !== canonicalDigest(athlete) || row.content_digest !== canonicalDigest(row.record)) throw new Error();
       return row.record;
     } catch { throw new ExecutionError('EXECUTION_STORED_INTEGRITY_INVALID', 503); }
-  });
+  }).concat(current.filter(r => !r.deletedAt && r.structuredRunning).map(r => r.structuredRunning!));
   // If any version intersects the window, compare every version of that identity. A conflicting
   // date cannot hide a contradiction; unrelated old executions do not block the current window.
   const relevantIds = window ? new Set(records.filter(r => r.occurredAt >= window.startDate && r.occurredAt <= window.endDate).map(r=>r.executionId)) : null;
   return { window: reconcileRunningExecutions(relevantIds ? records.filter(r=>relevantIds.has(r.executionId)) : records),
-    history: reconcileRunningExecutions(records) };
+    history: reconcileRunningExecutions(records), workouts:current };
 }

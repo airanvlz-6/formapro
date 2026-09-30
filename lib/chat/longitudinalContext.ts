@@ -6,17 +6,19 @@ export function projectChatLongitudinal(profile: any, history: any, message: str
   const query = terms(message);
   const entries: { source: string; kind: string; date: string | null; value: unknown;
     provenance?: { source: string; index: number }; temporal?: ReturnType<typeof contextualConversation>[number]['temporal'] }[] = [];
+  for (const w of profile.canonicalWorkouts ?? []) entries.push({source:w.source, kind:'CURRENT_WORKOUT_EVIDENCE', date:w.executedOn, value:w});
   for (const m of contextualConversation(profile.historial)) {
     entries.push({ source: `usuarios.historial.${m.role}`, kind: m.role === 'user' ? 'USER_REPORTED_EVIDENCE' : 'COACH_INTERPRETATION',
       date: m.temporal.timestamp, value: m.content, provenance: m.provenance, temporal: m.temporal });
   }
   for (const w of Array.isArray(profile.workout_history) ? profile.workout_history.slice(-60) : []) {
+    if (profile.canonicalExecutionIds?.includes(w.executionId)) continue;
     const date = typeof w?.fecha === 'string' && /^\d{4}-\d{2}-\d{2}/.test(w.fecha) ? w.fecha.slice(0, 10) : null;
     if (date && date > today) continue;
     // Legacy records may have been extracted: keep storage provenance without declaring human verification.
     entries.push({ source: 'usuarios.workout_history', kind: 'LEGACY_RECORDED_EVIDENCE', date, value: w });
   }
-  for (const w of history?.completedSessions ?? []) entries.push({ source: 'weekly_plan.sessions',
+  for (const w of (history?.completedSessions ?? []).filter((s:any) => s.source !== 'running_execution_records.v2')) entries.push({ source: 'weekly_plan.sessions',
     kind: 'RECORDED_EXECUTION', date: w.date ?? null, value: w });
   const ranked = entries.map((entry, index) => ({ entry, index,
     score: [...terms(JSON.stringify(entry.value))].filter(t => query.has(t)).length }));
@@ -44,5 +46,6 @@ export function projectChatPlanSession(s: any) {
       titulo: pickText(s.chatPrescriptionHistory[0].original?.titulo), tipo: s.chatPrescriptionHistory[0].original?.tipo,
       descripcion: pickText(s.chatPrescriptionHistory[0].original?.descripcion) } : null,
     reportedExecution: Array.isArray(s.chatExecutionEvidence) ? s.chatExecutionEvidence.slice(-8) : [],
+    ...(s.canonicalExecutions ? {canonicalExecutions:s.canonicalExecutions} : {}),
     projection: { textLimit: 1800, executionLimit: 8, fullStoredContractOmitted: true } };
 }

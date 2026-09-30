@@ -11,6 +11,9 @@ import { resolveCompletionDate } from '../planning/recordCompletion';
 import { loadWeeklyCoachingSupplement } from '../planning/weeklyCoachingContext';
 import { projectChatLongitudinal, projectChatPlanSession } from './longitudinalContext';
 import { CHAT_ACTION_CONTRACT } from './chatCoachActions';
+import { readWorkoutHistory } from '../execution/workoutHistory';
+import { readWorkouts } from '../execution/workoutRegistry';
+import { projectWorkoutPlans } from '../execution/workoutProjections';
 
 export const chatToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Atlantic/Canary' });
 export type ChatCompletion = (system: string, messages: { role: 'user' | 'assistant'; content: string }[], observation?: ProviderObservation) => Promise<string>;
@@ -28,7 +31,7 @@ export async function loadChatGrounding(db: any, user: string, today = chatToday
       if (!result) throw new Error('CHAT_DATE_INVALID');
       return result;
     });
-    const [athlete, profile, plans, sources, event, advisory] = await Promise.all([
+    const [athlete, profile, plans, sources, event, advisory, workouts, workoutRecords] = await Promise.all([
       trace.async('loadAthletePrescriptionContext', () => loadAthletePrescriptionContext(db, user, { asOfDate: today }, trace)),
       trace.async('profile.read', () => db.from('usuarios').select('historial,perfil,distribucion_semanal,modo_entrada,categoria,especialidad,workout_history,ciclo_actual').eq('codigo', user).single(), true),
       trace.async('plans.read', () => db.from('weekly_plan').select('*').eq('user_codigo', user).gte('week_start', week.weekStart)
@@ -36,6 +39,8 @@ export async function loadChatGrounding(db: any, user: string, today = chatToday
       trace.async('sources.read', () => db.from('athlete_training_sources').select('disciplina,owner,activo,dias').eq('user_codigo', user).eq('activo', true), true),
       trace.async('loadEventContext', () => loadEventContext(db, user, today)),
       trace.async('loadWeeklyCoachingSupplement', () => loadWeeklyCoachingSupplement(db, user, today)),
+      trace.async('workouts.read', () => readWorkoutHistory(db, user, {limit:60})),
+      readWorkouts(db,user,true),
     ]);
     trace.sync('validateReadResults', () => {
       if (profile.error || !profile.data || plans.error || !Array.isArray(plans.data) || sources.error || !Array.isArray(sources.data)) throw new Error('CHAT_CONTEXT_READ_FAILED');
@@ -46,20 +51,23 @@ export async function loadChatGrounding(db: any, user: string, today = chatToday
       return scope;
     });
     const facts = trace.sync('buildFacts', () => ({
+      workouts,
       today, goal: athlete.goals, cycle: athlete.cycle, restrictions: athlete.restrictions.value,
       physiology: athlete.physiology, readiness: athlete.readiness, development: athlete.development,
       references: trace.sync('buildSessionDoseContext', () => buildSessionDoseContext(athlete).references), referenceResolution: { strength: athlete.strength, running: athlete.running },
       equipmentCapabilities: athlete.prescriptionSignals, coachingKnowledge: trace.sync('projectCoachingKnowledge', () => (profile.data.perfil?.coaching_knowledge ?? []).slice(-64)), event: event.authority,
       availability: { habitual: profile.data.distribucion_semanal, sources: sources.data, dateAccess: profile.data.perfil?.prescription_access ?? {} },
       ownership: scope.scope,
-      plan: trace.sync('projectPlans', () => plans.data.map((p: any) => ({ weekStart: p.week_start, revision: p.revision, objective: p.week_objective, sessions: p.sessions.map(projectChatPlanSession) }))),
+      plan: trace.sync('projectPlans', () => projectWorkoutPlans(plans.data,workoutRecords).map((p: any) => ({ weekStart: p.week_start, revision: p.revision, objective: p.week_objective, sessions: p.sessions.map(projectChatPlanSession) }))),
       history: trace.sync('projectHistory', () => ({ ...athlete.history, completedSessions: athlete.history.completedSessions.slice(0, 14).map(s => ({ ...s,
         actualDescription: typeof s.actualDescription === 'string' ? s.actualDescription.slice(0, 1800) : s.actualDescription })),
         prescriptions: athlete.history.prescriptions.slice(0, 14) })), runningExecution: athlete.runningHistory,
       projectionLimits: { completedSessions: 14, prescriptions: 14, knowledge: 64, textCharacters: 1800,
         completedSessionCount: athlete.history.completedSessions.length, prescriptionCount: athlete.history.prescriptions.length,
         knowledgeCount: (profile.data.perfil?.coaching_knowledge ?? []).length },
-      longitudinal: trace.sync('projectChatLongitudinal', () => projectChatLongitudinal(profile.data, athlete.history, message, today)),
+      longitudinal: trace.sync('projectChatLongitudinal', () => projectChatLongitudinal({...profile.data,
+        canonicalWorkouts:workouts.records.filter(r => r.source === 'running_execution_records.v2'),
+        canonicalExecutionIds:workoutRecords.map(r => r.executionId)}, athlete.history, message, today)),
     }));
     return { facts, advisory, athlete, profile: profile.data, plans: plans.data, scope: scope.scope,
       planRead: { status: 'SUCCESS' as const, weekStart: week.weekStart },

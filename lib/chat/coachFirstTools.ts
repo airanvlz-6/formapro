@@ -1,6 +1,5 @@
 import { coachFirstReads, loadCoachActionContext, COACH_READ_RANGE_REASONS, type CoachReadStage } from './coachFirstReads';
 import { applyChatCoachActions } from './chatCoachActions';
-import { recordExternalExecution } from '../planning/recordCompletion';
 import { updateStructuredChatAvailability, readAvailabilityConfirmation } from '../sports/chatAvailability';
 import { recordReportedEvent } from './coachFirstStore';
 import type { CoachFirstCall, CoachFirstInput } from './coachFirstLoop';
@@ -211,41 +210,17 @@ export function coachFirstTools(db: any, user: string, input: CoachFirstInput, t
         }
         case 'record_athlete_data': authority = 'reported_events_profile_cas';
           result = await recordReportedEvent(db, user, a, { operationId, messageId: input.messageId, message: input.message, timestamp: input.timestamp }); break;
-        case 'update_session': case 'record_execution': {
-          const execution = call.name === 'record_execution';
-          if (execution) authority = 'record_execution/evidence_validation';
-          const allowed = execution ? ['date','description','discipline','durationMinutes','rpe','sessionId','expectedRevision','associationConfirmed','externalConfirmed','quote','responseQuotes']
-            : ['date','sessionId','expectedRevision','reason','state','discipline','intent','proposal','maximumSeconds'];
-          if (Object.keys(a).some(k => !allowed.includes(k))) throw new Error('TOOL_ARGUMENT_INVALID');
-          if (execution) evidenceFailure = executionEvidenceFailure(input.message, a.quote, a.responseQuotes);
-          if (evidenceFailure) {
-            result = { status: 'rejected', code: 'EXECUTION_EVIDENCE_INVALID' }; break;
-          }
-          if (execution && (!sessionReads.has(a.date) || a.sessionId !== undefined && !sessionReads.get(a.date)!.some(s => s.sessionId === a.sessionId && s.expectedRevision === a.expectedRevision))) {
-            result = { status: 'rejected', code: 'EXECUTION_SESSION_READ_REQUIRED' }; break;
-          }
-          if (execution && a.sessionId === undefined) {
-            if (a.externalConfirmed !== true) { result = { status: 'rejected', code: 'EXECUTION_EXTERNAL_ASSOCIATION_REQUIRED' }; break; }
-            authority = 'recordExternalExecution';
-            result = await recordExternalExecution(db, user, a, { operationId, messageId: input.messageId, message: input.message }, today);
-            if (['committed','already_applied'].includes(result.status)) result = { ...result,
-              receipt: { verified: true, kind: 'external_execution', date: a.date, operationId } };
-            break;
-          }
-          if (execution && a.associationConfirmed !== true) { result = { status: 'rejected', code: 'EXECUTION_ASSOCIATION_REQUIRED' }; break; }
-          if (execution && (typeof a.description !== 'string' || !a.description.trim() || a.description.length > 3000
-            || a.durationMinutes !== undefined && (!Number.isFinite(a.durationMinutes) || a.durationMinutes < 0)
-            || a.rpe !== undefined && (!Number.isFinite(a.rpe) || a.rpe < 0 || a.rpe > 10))) throw new Error('EXECUTION_ARGUMENT_INVALID');
-          authority = 'chatCoachActions/validatePlanMutation/mutatePlanWithCAS';
-          const action = execution ? { kind: 'record_performed', date: a.date, sessionId: a.sessionId,
-            discipline: a.discipline, quote: a.quote, responseQuotes: a.responseQuotes ?? [] } : { ...a, kind: 'adapt_session' };
-          const results = await applyChatCoachActions(db, user, input.message, [action], async () => { throw new Error('REVIEW_NOT_ALLOWED'); }, today, '',
-            { loadContext: date => loadCoachActionContext(db, user, date), expectedRevision: a.expectedRevision, maximumSeconds: a.maximumSeconds,
-              ...(execution ? { reportedExecution: { operationId, messageId: input.messageId, description: a.description,
-                ...(a.durationMinutes === undefined ? {} : { durationMinutes: a.durationMinutes }), ...(a.rpe === undefined ? {} : { rpe: a.rpe }) } } : {}) });
-          result = results[0] ?? { status: 'rejected', code: 'ACTION_NO_RESULT' }; break;
+        case 'record_execution': {
+          result = {status:'form_available', code:'WORKOUT_FORM_REQUIRED', url:'/entrenamientos/registrar', message:'Abre Registrar entreno para revisar y confirmar los datos.'}; break;
         }
-        case 'transition_restriction': authority = 'transitionAthleteState/protected_ui';
+        case 'update_session': {
+          const allowed = ['date','sessionId','expectedRevision','reason','state','discipline','intent','proposal','maximumSeconds'];
+          if (Object.keys(a).some(k => !allowed.includes(k))) throw new Error('TOOL_ARGUMENT_INVALID');
+          authority = 'chatCoachActions/validatePlanMutation/mutatePlanWithCAS';
+          const results = await applyChatCoachActions(db, user, input.message, [{...a,kind:'adapt_session'}], async () => {throw new Error('REVIEW_NOT_ALLOWED');}, today, '',
+            {loadContext:date => loadCoachActionContext(db,user,date),expectedRevision:a.expectedRevision,maximumSeconds:a.maximumSeconds});
+          result = results[0] ?? {status:'rejected',code:'ACTION_NO_RESULT'}; break;
+        }        case 'transition_restriction': authority = 'transitionAthleteState/protected_ui';
           result = { status: 'confirmation_required', code: 'PROTECTED_RESTRICTION_FLOW_REQUIRED',
             message: 'La resolución requiere el flujo explícito de restricción y reevaluación; el chat no da el alta.' }; break;
         case 'generate_week': {

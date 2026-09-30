@@ -11,6 +11,9 @@ import { readCoachProfile, reportedEventProjection } from './coachFirstStore';
 import type { ChatActionContext } from './chatCoachActions';
 import { loadTrainingLoad } from '../trainingLoad/loadTrainingLoad';
 import { readDevelopmentAreas } from '../athlete/developmentAreaStore';
+import { readWorkoutHistory } from '../execution/workoutHistory';
+import { readWorkouts } from '../execution/workoutRegistry';
+import { projectWorkoutPlans } from '../execution/workoutProjections';
 
 /** Action-local authority context: no longitudinal/history/recovery loader. */
 export async function loadCoachActionContext(db: any, user: string, date: string): Promise<ChatActionContext> {
@@ -49,23 +52,25 @@ export function coachFirstReads(db: any, user: string, today: string) {
     }
     const limit = a.limit ?? 14;
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 60) throw new Error('READ_LIMIT_INVALID');
-    const key = JSON.stringify(a); if (cache.has(key)) return cache.get(key);
+    const key = JSON.stringify(a); if (!['history','week','session','load'].includes(a.resource) && cache.has(key)) return cache.get(key);
     let data: any;
     onStage?.('canonical_read');
     switch (a.resource) {
       case 'development': data = await readDevelopmentAreas(db, user); break;
       case 'session': {
         const c = await loadCoachActionContext(db, user, date);
-        const rows = c.plans.flatMap((p: any) => p.sessions.filter((s: any) => a.sessionId ? s.session_id === a.sessionId :
+        const projectedPlans = projectWorkoutPlans(c.plans, await readWorkouts(db,user,true));
+        const rows = projectedPlans.flatMap((p: any) => p.sessions.filter((s: any) => a.sessionId ? s.session_id === a.sessionId :
           calendarKey(s.dia) === calendarKey(civil.day))
           .map((s: any) => ({ ...projectChatPlanSession(s), sessionId: s.session_id, expectedRevision: p.revision })));
         data = { sessions: rows, scope: c.scope, restrictions: c.facts.restrictions,
           dose: buildSessionDoseContext(c.athlete, undefined, null, [], true, 'coach'), status: rows.length ? 'available' : 'unknown' }; break;
       }
       case 'week': {
-        const r = await db.from('weekly_plan').select('week_start,revision,sessions,week_objective').eq('user_codigo', user).eq('week_start', civil.weekStart).maybeSingle();
+        const r = await db.from('weekly_plan').select('id,week_start,revision,sessions,week_objective').eq('user_codigo', user).eq('week_start', civil.weekStart).maybeSingle();
         if (r.error) throw new Error('READ_UNAVAILABLE');
-        data = r.data ? { ...r.data, sessions: r.data.sessions.map(projectChatPlanSession) } : { status: 'unknown' }; break;
+        const projected = r.data ? projectWorkoutPlans([r.data],await readWorkouts(db,user,true))[0] : null;
+        data = projected ? { ...projected, sessions: projected.sessions.map(projectChatPlanSession) } : { status: 'unknown' }; break;
       }
       case 'availability': data = await readAvailabilityConfirmation(db, user, civil.weekStart); break;
       case 'restrictions': data = await getCanonicalRestrictions(db, user); break;
@@ -77,10 +82,7 @@ export function coachFirstReads(db: any, user: string, today: string) {
           : { mode: r.data.modo_entrada, specialty: r.data.especialidad, cycle: r.data.ciclo_actual ?? null, restrictions: await getCanonicalRestrictions(db, user) }; break;
       }
       case 'history': {
-        const r = await db.from('usuarios').select('workout_history').eq('codigo', user).single();
-        if (r.error || !r.data) throw new Error('READ_UNAVAILABLE');
-        const rows = Array.isArray(r.data.workout_history) ? r.data.workout_history : [];
-        data = { records: rows.slice(-limit), truncated: rows.length > limit, semantics: 'LEGACY_RECORDED_NOT_VERIFIED' }; break;
+        data = await readWorkoutHistory(db, user, {limit}); break;
       }
       case 'load': {
         const from = new Date(Date.parse(date) - (limit - 1) * 86400000).toISOString().slice(0, 10);

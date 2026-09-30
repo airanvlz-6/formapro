@@ -64,15 +64,17 @@ export async function runChatCoach(db: any, user: string, message: string, compl
       : await attempt('actions', () => applyChatCoachActions(db, user, message, decision.actions, complete, today, decision.answer),
       [{ kind: 'unknown', date: today, status: 'unknown', code: 'CHAT_ACTION_UNAVAILABLE' }]);
     pipeline.mutationAttempted ||= actions.length > 0;
-    if (actions.some(a => !['committed', 'already_applied'].includes(a.status))) pipeline.failures.push('actions');
+    if (actions.some(a => !['committed', 'already_applied','form_available'].includes(a.status))) pipeline.failures.push('actions');
     if (actions.some(a => a.kind === 'adapt_session' && a.status === 'committed')) adaptation = { status: 'adapted', weeks: actions };
     const prescriptions = actions.flatMap(a => a.session ? [a.date + '\n' + a.session.descripcion
       + (a.status === 'committed' ? '\nPrescripción actualizada en Mi Plan.' : '\nEsta alternativa sigue visible, pero su guardado en Mi Plan no está confirmado.')] : []);
     const confirmationNotice = actions.some(a => a.status === 'confirmation_required')
       ? '\n\nLa propuesta entra en conflicto con disponibilidad o restricciones vigentes y no se ha aplicado. ¿Confirmas que quieres solicitar este cambio? La confirmación requiere volver a verificar el contexto y las autorizaciones; no modifica por sí sola una restricción.' : '';
-    const actionNotice = actions.some(a => !a.session && !['committed', 'already_applied'].includes(a.status))
+    const actionNotice = actions.some(a => !a.session && !['committed', 'already_applied','form_available'].includes(a.status))
       ? '\n\nNo se ha confirmado el guardado de la acción propuesta.' : '';
-    const answer = [decision.answer, ...prescriptions].join('\n\n') + actionNotice + confirmationNotice;
+    const coachingAnswer = actions.some(a=>a.status==='form_available')
+      ? 'El chat no guarda ni modifica entrenamientos. Abre [Registrar entreno](/entrenamientos/registrar) para guardarlo, o [Historial](/historia) para editar uno registrado.' : decision.answer;
+    const answer = [coachingAnswer, ...prescriptions].join('\n\n') + actionNotice + confirmationNotice;
 
     // Optional learning AFTER coaching. Exact reported observations, never canonical state updates.
     const quotes = [...new Set(decision.evidence.map(e => e.quote))].filter(q => q.length <= 1600 && !candidates.some(f => f.quote === q)).slice(0, 8);

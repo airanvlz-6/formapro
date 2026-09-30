@@ -44,6 +44,24 @@ export function preserveWorkWithoutReference(c: AllowedTrainingContract, p: Stru
 
 /** The modern admission boundary is positive and factual. It does not run sporting
  * validators and then try to maintain an ever-growing list of exempt error codes. */
+function cardiacTextErrors(text: string, references: NonNullable<ReturnType<typeof doseReference>>[]): string[] {
+  const refs = references.filter(r => r.unit === 'bpm');
+  const zone = (r: typeof refs[number]) => r.intensityEvidence?.zoneCompatibility?.sourceZone?.toLowerCase() ?? r.metric;
+  const errors: string[] = [];
+  // Bounded numeric notation only, not a parser of coaching language. A block can
+  // describe several linked references; a movement can use only its own reference.
+  for (const m of text.matchAll(/(?:\bZ([1-5])\s*[:=·]?\s*)?(\d+(?:\.\d+)?)(?:\s*[-–—]\s*(\d+(?:\.\d+)?))?\s*(?:ppm|bpm)\b/gi)) {
+    const lower = Number(m[2]), upper = Number(m[3] ?? m[2]);
+    if (!refs.some(r => {
+      const range = typeof r.value === 'number' ? { min: r.value, max: r.value } : r.value;
+      return (!m[1] || zone(r) === `z${m[1]}`) && lower >= range.min && upper <= range.max && upper >= lower;
+    })) errors.push('NUMERIC_TRUTH:HR_REFERENCE_REQUIRED');
+  }
+  if (refs.length) for (const m of text.matchAll(/\bZ([1-5])\b/gi)) {
+    if (!refs.some(r => zone(r) === `z${m[1]}`)) errors.push('NUMERIC_TRUTH:HR_ZONE_MISMATCH');
+  }
+  return errors;
+}
 export function validateCoachExecution(c: AllowedTrainingContract, p: StructuredSessionProposal,
   observe?: (assessment: { blockIndex: number; movementOrdinal: number; family: string | null; category: string; state: string; evidenceSource: string }) => void) {
   const errors: string[] = [];
@@ -77,6 +95,11 @@ export function validateCoachExecution(c: AllowedTrainingContract, p: Structured
     if (errors.includes('EXECUTION_INTENSITY_INVALID')) continue;
     if (i && Object.keys(i).some(k => !['kind','referenceId','value','max'].includes(k)) || i?.kind === 'reference' && ('value' in i || 'max' in i)) errors.push('NUMERIC_TRUTH:UNSUPPORTED_OBJECTIVE_VALUE');
     const ref = doseReference(c, i);
+    // Numeric cardiac assertions must use the supplied athlete reference, also in prose.
+    // This is factual binding only; no zone percentages or sports selection live here.
+    errors.push(...cardiacTextErrors([d.doseInstruction, coachMovementName(m)].filter(readable).join(' '), ref ? [ref] : []));
+    if (index === 0) errors.push(...cardiacTextErrors([b.title, b.formatInstruction].filter(readable).join(' '),
+      b.movements.flatMap(entry => { const r = doseReference(c, entry.prescription.intensity); return r ? [r] : []; })));
     if (expression?.reference?.kind === 'percent_1rm' && i?.kind === 'percent_1rm' && expression.reference.value !== i.value) errors.push('NUMERIC_TRUTH:REFERENCE_EXPRESSION_CONFLICT');
     errors.push(...referenceCompatibilityErrors(c,m,i));
     // A missing RM may remain a symbolic percentage. A bare missing reference has

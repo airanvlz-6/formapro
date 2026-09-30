@@ -1372,6 +1372,14 @@ if (action === "verificar_cambio_modo") {
       }
       delete profilePatch.perfil.hrZoneBootstrap;
       if (current.data.perfil?.hrZoneBootstrap !== undefined) profilePatch.perfil.hrZoneBootstrap = current.data.perfil.hrZoneBootstrap;
+      for (const field of ['fc_max', 'fc_reposo', 'umbral_fc']) {
+        if (current.data.perfil?.[field]?.source === 'profile_editor') profilePatch.perfil[field] = current.data.perfil[field];
+        else if (profilePatch.perfil[field]?.source === 'profile_editor') delete profilePatch.perfil[field].source;
+      }
+      if (current.data.perfil?.fc_max?.source === 'profile_editor') {
+        delete profilePatch.perfil.fc_maxima;
+        profilePatch.perfil.fc_max_metodo = current.data.perfil.fc_max_metodo;
+      }
       delete profilePatch.perfil.targetEvent;
       if (current.data.perfil?.targetEvent !== undefined) profilePatch.perfil.targetEvent = current.data.perfil.targetEvent;
     }

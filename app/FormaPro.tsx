@@ -8,6 +8,7 @@ import { getBrowserAuth } from '@/lib/auth/supabaseBrowser';
 import { athleteStatePresentation } from '@/lib/athlete/athleteStatePresentation';
 import { splitExecutionReports } from '@/lib/execution/reportExecutionDate';
 import { RunningHrBootstrap } from '@/components/RunningHrBootstrap';
+import { HeartRateProfile } from '@/components/HeartRateProfile';
 import { TargetEventForm } from '@/components/TargetEventForm';
 import { RunningExecutionReport } from '@/components/RunningExecutionReport';
 import { captureAthleteTestFacts } from '@/lib/athlete/testCapture';
@@ -3367,7 +3368,6 @@ ${testStr}`}]});
             <div style={{borderTop:`1px solid ${C.border}`,paddingTop:12}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                 <p style={{color:C.ink,fontSize:13,fontWeight:600}}>Datos del perfil</p>
-                {categoria === 'carrera' && <button onClick={() => setHrBootstrapUser(codigoUsuario)}>Revisar zonas de FC</button>}
                 <button onClick={() => setTargetEventUser(codigoUsuario)}>Fecha de mi prueba</button>
                 <button onClick={()=>{setEditandoPerfil(!editandoPerfil);setPerfilEdit({...respuestas as Record<string,string>});}} style={{background:"none",border:`1px solid ${C.border}`,borderRadius:8,padding:"4px 10px",fontSize:12,color:C.muted,cursor:"pointer"}}>
                   {editandoPerfil?"Cancelar":"Editar"}
@@ -3428,6 +3428,7 @@ ${testStr}`}]});
               )}
             </div>
 
+            <HeartRateProfile key={codigoUsuario} request={datos => apiCall({ action: 'hr_zone_bootstrap', codigo: codigoUsuario, datos })} />
             {errorPerfil&&<p style={{color:C.warm,fontSize:12}}>{errorPerfil}</p>}
             {mensajePerfil&&<p style={{color:C.success,fontSize:12,fontWeight:600}}>{mensajePerfil}</p>}
 

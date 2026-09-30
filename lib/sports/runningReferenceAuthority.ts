@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { admittedHrZones, type HrZoneSystem } from '../athlete/hrZoneBootstrap';
+import { admittedHrZones, hrZoneInputsStale, validHrZoneSystem, type HrZoneSystem } from '../athlete/hrZoneBootstrap';
 import type { Evidence, Resolution, RunningReference } from '../athlete/athletePrescriptionContext';
 import type { IntensityEvidence } from './methodIntensityAuthority';
 import type { DoseReference } from './sessionDoseContext';
@@ -35,14 +35,28 @@ export function resolveRunningReferences(input: Input): RunningReferenceAuthorit
       evidence: e ? directEvidence(e, type === 'maxHr' && input.prescriptionSignals.maxHrMethod === 'estimated') : null };
   });
   const hrZoneSystem = admittedHrZones(input.running, input.hrZoneBootstrap);
+  if (!hrZoneSystem && hrZoneInputsStale(input.running, input.hrZoneBootstrap)) {
+    for (const entry of entries) if (/^z[1-5]$/.test(entry.type)) {
+      entry.status = 'UNRESOLVED'; entry.value = null; entry.unit = null; entry.evidence = null;
+    }
+  }
   const references = compileReferences(entries, hrZoneSystem ?? undefined);
+  // Explicit snapshots supersede old zone declarations also in the evidence presented
+  // to Builder. The persisted legacy fields remain intact, not a second current authority.
+  if (hrZoneSystem && validHrZoneSystem(hrZoneSystem)) for (const entry of entries) {
+    if (!/^z[1-5]$/.test(entry.type)) continue;
+    const ref = references.find(r => r.id === `running:${entry.type}`)!;
+    entry.status = 'RESOLVED'; entry.value = ref.value; entry.unit = 'bpm';
+    entry.observedAt = ref.observedAt ?? null; entry.evidence = ref.intensityEvidence!;
+  }
   return { version: 1, policy: 'running_reference_v1', entries, references, sourceDigest: hash(entries),
     ...(hrZoneSystem ? { hrZoneSystem } : {}),
     limitations: ['race_recency_and_current_vs_personal_best_not_established', 'no_race_prediction_policy',
       'hrr_requires_confirmed_zone_system', 'no_hrmax_estimation', 'economy_requires_execution_guidance'] };
 }
-function compileReferences(entries: RunningReferenceEntry[], system?: HrZoneSystem): DoseReference[] {
+function compileReferences(entries: RunningReferenceEntry[], system?: HrZoneSystem, exposeZones = true): DoseReference[] {
   const refs: DoseReference[] = entries.flatMap(e => {
+    if (system && exposeZones && /^z[1-5]$/.test(e.type)) return [];
     if (e.status !== 'RESOLVED' || !e.evidence || e.value === null || e.performanceRole === 'TARGET_PERFORMANCE') return [];
     const distance = distances[e.type];
     if (distance && e.unit === 'seconds' && typeof e.value === 'number') {
@@ -55,6 +69,16 @@ function compileReferences(entries: RunningReferenceEntry[], system?: HrZoneSyst
     if (!executableMetrics.has(e.type) || !['bpm', 'seconds_per_km'].includes(e.unit!)) return [];
     return [{ id: `running:${e.type}`, kind: 'running' as const, metric: e.type, value: e.value,
       unit: e.unit as 'bpm' | 'seconds_per_km', source: e.evidence.source, observedAt: e.observedAt, intensityEvidence: e.evidence }];
+  });
+  if (system && exposeZones) for (const zone of system.zones) refs.push({
+    id: `running:${zone.id.toLowerCase()}`, kind: 'running', metric: zone.id.toLowerCase(),
+    value: { min: zone.lower, max: zone.upper }, unit: 'bpm',
+    source: `hr_zone_system:${system.origin}:${system.proposalDigest}`, observedAt: system.confirmedAt,
+    intensityEvidence: { kind: system.containsEstimatedData ? 'ESTIMATED' : 'DIRECT', resolution: 'RESOLVED',
+      confidence: system.containsEstimatedData ? 'estimated' : 'declared',
+      measurementBasis: system.containsEstimatedData ? 'ESTIMATED' : 'DECLARED', source: system.origin,
+      inputs: [{ referenceId: system.zoneSystemId, source: system.inputDigest, containsEstimatedData: system.containsEstimatedData }],
+      algorithm: null, containsEstimatedData: system.containsEstimatedData },
   });
   // Explicit running_base compatibility; generic Z2 is never renamed easyHr.
   if (system) refs.push({ id: 'running:confirmedBaseZone', kind: 'running', metric: 'confirmedBaseZone', unit: 'bpm',
@@ -73,7 +97,9 @@ export function validRunningReferenceAuthority(a: RunningReferenceAuthority, ref
     if (!Array.isArray(a.entries) || a.entries.some(e => !e)) return false;
     const running = { byMetric: Object.fromEntries(a.entries.map(e => [e.type, { reason: e.status === 'RESOLVED' ? 'resolved' : 'unknown',
       resolved: e.evidence ? { value: { value: e.value }, source: e.evidence.source } : null }])) };
-    const admitted = admittedHrZones(running, a.hrZoneSystem);
+    const admitted = validHrZoneSystem(a.hrZoneSystem) && a.hrZoneSystem.confirmation === 'USER_CONFIRMED'
+      ? hrZoneInputsStale(running, a.hrZoneSystem) ? null : a.hrZoneSystem
+      : admittedHrZones(running, a.hrZoneSystem);
     if (!admitted || JSON.stringify(admitted) !== JSON.stringify(a.hrZoneSystem)) return false;
   }
   return !!a && a.version === 1 && a.policy === 'running_reference_v1' && Array.isArray(a.entries)
@@ -81,6 +107,9 @@ export function validRunningReferenceAuthority(a: RunningReferenceAuthority, ref
     && a.entries.every((e, i) => e.type === RUNNING_REFERENCE_METRICS[i] && e.referenceId === `running:evidence:${e.type}`
       && ['RESOLVED', 'UNRESOLVED', 'CONFLICT'].includes(e.status)
       && (e.status === 'RESOLVED' ? !!e.evidence && e.value !== null : e.evidence === null && e.value === null))
-    && a.sourceDigest === hash(a.entries) && JSON.stringify(a.references) === JSON.stringify(compileReferences(a.entries, a.hrZoneSystem))
+    && a.sourceDigest === hash(a.entries)
+    && (JSON.stringify(a.references) === JSON.stringify(compileReferences(a.entries, a.hrZoneSystem))
+      // Existing signed snapshots keep their original reference vocabulary.
+      || JSON.stringify(a.references) === JSON.stringify(compileReferences(a.entries, a.hrZoneSystem, false)))
     && JSON.stringify(references.filter(r => r.kind === 'running')) === JSON.stringify(a.references);
 }

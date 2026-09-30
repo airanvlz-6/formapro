@@ -1,5 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
-import { estimateHrrZones, validHrZones, HRR_POLICY, type HrZone } from '../sports/hrrZonePolicy';
+import { estimateHrrZones, validHrZones, validDeclaredHrZones, HRR_POLICY, type HrZone } from '../sports/hrrZonePolicy';
 import { estimateHrZoneProposal, type HrZoneEstimation } from './hrZoneEstimationAuthority';
 
 const hash = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex');
@@ -20,11 +20,11 @@ function inputs(running: Running) {
 }
 const body = (s: HrZoneSystem) => ({ zoneSystemId: s.zoneSystemId, policy: s.policy, domain: s.domain, zones: s.zones,
   origin: s.origin, inputs: s.inputs, inputDigest: s.inputDigest,
-  ...(s.estimation ? { estimation: s.estimation } : { generatedAt: s.generatedAt }), containsEstimatedData: s.containsEstimatedData });
+  ...(s.estimation ? { estimation: s.estimation, ...(s.declarationSources ? { declarationSources: s.declarationSources } : {}) } : { generatedAt: s.generatedAt }), containsEstimatedData: s.containsEstimatedData });
 // Read compatibility for previously persisted systems; never rewrites their ranges or metadata.
 function legacyHrZoneProposal(running: Running, generatedAt: string, declared?: HrZone[]): HrZoneSystem | null {
   const i = declared ? null : inputs(running), zones = declared ?? (i && estimateHrrZones(i.maxHr, i.restingHr));
-  if (!validHrZones(zones) || !Number.isFinite(Date.parse(generatedAt))) return null;
+  if (!zones || !(declared ? validDeclaredHrZones(zones) : validHrZones(zones)) || !Number.isFinite(Date.parse(generatedAt))) return null;
   const s: HrZoneSystem = { zoneSystemId: declared ? 'user_declared_5_zone_v1' : HRR_POLICY.id,
     policy: declared ? { id: 'user_declared_5_zone_v1', version: 1 } : { id: HRR_POLICY.id, version: HRR_POLICY.version },
     domain: 'heart_rate', zones, origin: declared ? 'USER_DECLARED' : 'FORGE_ESTIMATED_HRR', inputs: i,
@@ -35,7 +35,7 @@ function legacyHrZoneProposal(running: Running, generatedAt: string, declared?: 
 const snapshotPayload = (s: HrZoneSystem) => JSON.stringify({ purpose: 'hr-zone-snapshot-v2', ...body(s),
   proposalDigest: s.proposalDigest, generatedAt: s.generatedAt, confirmation: s.confirmation, confirmedAt: s.confirmedAt });
 function seal(s: HrZoneSystem): HrZoneSystem { return { ...s, snapshotSignature: mac(snapshotPayload(s)) }; }
-export function hrZoneProposal(running: Running, generatedAt: string, declared?: HrZone[]): HrZoneSystem | null {
+export function hrZoneProposal(running: Running, generatedAt: string, declared?: HrZone[], explicitRecalculation = false): HrZoneSystem | null {
   if (declared) return legacyHrZoneProposal(running, generatedAt, declared);
   const i = inputs(running);
   if (!i || !Number.isFinite(Date.parse(generatedAt))) return null;
@@ -44,13 +44,14 @@ export function hrZoneProposal(running: Running, generatedAt: string, declared?:
   const s: HrZoneSystem = { zoneSystemId: estimation.policyId, policy: { id: estimation.policyId, version: estimation.policyVersion },
     domain: 'heart_rate', zones: structuredClone(estimation.zones), origin: estimation.origin, inputs: i,
     inputDigest: hash(i), generatedAt, confirmation: 'PROPOSED', confirmedAt: null,
-    containsEstimatedData: true, estimation, proposalDigest: '' };
+    containsEstimatedData: true, estimation, proposalDigest: '',
+    ...(explicitRecalculation ? { declarationSources: ['profile:explicit_recalculation'] } : {}) };
   s.proposalDigest = hash(body(s));
   return seal(s);
 }
 export function validHrZoneSystem(s: HrZoneSystem): boolean {
   try {
-  if (!s || !validHrZones(s.zones) || !['PROPOSED', 'USER_CONFIRMED'].includes(s.confirmation)
+  if (!s || !(s.origin === 'USER_DECLARED' ? validDeclaredHrZones(s.zones) : validHrZones(s.zones)) || !['PROPOSED', 'USER_CONFIRMED'].includes(s.confirmation)
     || (s.confirmation === 'USER_CONFIRMED' ? !s.confirmedAt || !Number.isFinite(Date.parse(s.confirmedAt)) : s.confirmedAt !== null)) return false;
   if (s.estimation) {
     // Authenticate the exact immutable result. Do not invoke HRR on admission/reload.
@@ -76,11 +77,14 @@ export function hrZoneInputsStale(running: Running, stored: unknown): boolean {
 export function admittedHrZones(running: Running, stored: unknown): HrZoneSystem | null {
   if (stored && typeof stored === 'object' && Object.hasOwn(stored, 'declinedAt')) return null;
   const s = stored as HrZoneSystem;
-  if (validHrZoneSystem(s) && s.confirmation === 'USER_CONFIRMED' && s.origin === 'USER_DECLARED') return s;
+  if (validHrZoneSystem(s) && s.confirmation === 'USER_CONFIRMED'
+    && (s.origin === 'USER_DECLARED' || s.declarationSources?.includes('profile:explicit_recalculation'))) {
+    return s.origin === 'FORGE_ESTIMATED_HRR' && s.inputDigest !== hash(inputs(running)) ? null : s;
+  }
   const legacy = [1, 2, 3, 4, 5].map(n => running.byMetric[`z${n}`]);
   const zones = legacy.map((r, i) => { const v = r?.resolved?.value.value as { min?: number; max?: number };
     return { id: `Z${i + 1}`, lower: v?.min, upper: v?.max }; });
-  if (legacy.every(r => r?.reason === 'resolved') && validHrZones(zones)) {
+  if (legacy.every(r => r?.reason === 'resolved') && validDeclaredHrZones(zones)) {
     const s = hrZoneProposal(running, '1970-01-01T00:00:00.000Z', zones)!;
     // No invented declaration date: legacy confirmation is represented by the complete declared set.
     s.generatedAt = null;

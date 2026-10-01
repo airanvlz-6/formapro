@@ -21,8 +21,8 @@ Cada adaptación: {kind:"adapt_session",date:"YYYY-MM-DD",sessionId:ID exacto de
 intent:{kind:"open_coach",version:1,discipline,adaptationId:identificador snake_case,stimulusId:identificador snake_case,pattern:patrón del catálogo,role:"PRIMARY"|"SUPPORTING"|"MAINTENANCE"|"OPTIONAL",method:{kind:"coach_defined",label:nombre}},
 proposal:{schemaVersion:2,stimulusId:mismo estímulo,structureId:formato libre,blocks:[{blockType:"main",movements:[{movementId:nombre o ID,prescription:{doseInstruction:instrucción completa ejecutable}}]}]}}.
 REST no necesita intent ni proposal. TRAIN puede incluir warmup/cooldown, dosis numéricas cuando sean inequívocas y RPE/RIR o referencias compatibles. Movimientos/material/analítica/gramática desconocidos no vetan: respeta negativos explícitos, disponibilidad y límite de tiempo real. No inventes referencias.
-Si el atleta confirma ejecución, puedes emitir {kind:"record_performed",date,sessionId:ID exacto,quote:cita literal del reporte actual que confirma trabajo realizado, responseQuotes:[citas literales de respuesta durante/después],discipline:disciplina realmente realizada}. No completes sesiones desde el plan ni desde una propuesta; no uses el reporte de una sesión externa para completar la sesión de Forge. Si la asociación es ambigua, pregunta.
-Para una respuesta posterior a una ejecución ya registrada: {kind:"record_response",date:fecha de esa ejecución,sessionId,quote:cita literal de la respuesta posterior}. La fecha de declaración la añade el servidor; no inventes fecha de ejecución.
+Si el atleta describe una ejecución, coméntala sin guardarla ni emitir record_performed. Ofrece [Registrar entreno](/entrenamientos/registrar) para revisar y confirmar un formulario. No extraigas campos para rellenarlo ni solicites una confirmación por chat. No completes sesiones desde el plan ni desde una propuesta.
+Para corregir o añadir observaciones a un entrenamiento registrado, dirige al atleta a [Historial](/historia). No emitas record_response ni modifiques evidencia de ejecución desde el chat.
 Las acciones son candidatas: no afirmar que quedaron guardadas. Describe tu prescripción en answer de forma natural. El backend muestra la representación ejecutable y el estado de guardado aparte.
 `;
 
@@ -106,6 +106,10 @@ export async function applyChatCoachActions(db: any, user: string, message: stri
     let writeAttempted = false;
     try {
       if (!a || !['adapt_session','record_performed','record_response'].includes(a.kind)) fail('CHAT_ACTION_KIND_INVALID');
+      if (a.kind === 'record_performed' || a.kind === 'record_response') {
+        results.push({kind:a.kind, date:a.date, status:'form_available', code:'WORKOUT_FORM_REQUIRED'});
+        continue;
+      }
       if (touched.has(a.sessionId)) fail('CHAT_ACTION_DUPLICATE_TARGET');
       touched.add(a.sessionId);
       const context = execution ? await execution.loadContext(a.date) : await loadChatGrounding(db, user, today, message);

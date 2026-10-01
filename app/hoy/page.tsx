@@ -2,6 +2,7 @@
 import AuthenticatedSurface from '../auth/AuthenticatedSurface';
 import { useState, useEffect } from "react";
 import { authenticatedFetch } from '@/lib/auth/authenticatedFetch';
+import WorkoutRegisterButton from '@/components/WorkoutRegisterButton';
 
 export default function Hoy() {
   return <AuthenticatedSurface>{codigo => <HoyContent codigo={codigo} />}</AuthenticatedSurface>;
@@ -90,6 +91,7 @@ function HoyContent({ codigo }: { codigo: string }) {
         </div>
 
         {/* FORGE READINESS CHECKIN — un toque, sin friccion. Solo se muestra si aun no respondio hoy. */}
+        <WorkoutRegisterButton athlete={codigo} />
         {readinessCargado && readinessHoy === null && (
           <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "18px", marginBottom: 14 }}>
             <p style={{ color: C.muted, fontSize: 13, fontWeight: 600, marginBottom: 12, textAlign: "center" }}>¿Cómo te has levantado hoy?</p>

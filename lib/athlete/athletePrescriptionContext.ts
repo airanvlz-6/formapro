@@ -196,7 +196,13 @@ export function projectAthletePrescriptionProfile(user: Row, asOfDate?: string, 
       return [id, resolution];
     }));
   const runningByMetric = Object.fromEntries([...new Set(running.map(r => r.value.metric))]
-    .map(metric => [metric, resolveEvidence(running.filter(r => r.value.metric === metric))]));
+    .map(metric => {
+      const candidates = running.filter(r => r.value.metric === metric);
+      // An explicit profile edit supersedes old declarations without deleting their evidence.
+      const edited = ['maxHr', 'restingHr', 'thresholdHr'].includes(metric)
+        ? candidates.filter(r => r.source.startsWith('usuarios.perfil.') && record(r.raw).source === 'profile_editor') : [];
+      return [metric, resolveEvidence(edited.length ? edited : candidates)];
+    }));
   const development = Array.isArray(user.athlete_development) ? user.athlete_development.map((raw, i) => {
     const d = record(raw);
     const movementId = resolveReferenceMovement(d.movementId ?? d.movement_id ?? d.indicador);

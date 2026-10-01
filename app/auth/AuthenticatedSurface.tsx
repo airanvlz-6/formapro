@@ -5,19 +5,20 @@ import { authenticatedIdentityRequest, authOrigin } from '@/lib/auth/webAuthFlow
 import { Logout } from './Logout';
 
 /** UI gate only. Every data request is independently authorized by the server. */
-export default function AuthenticatedSurface({ children }: { children: (codigo: string) => ReactNode }) {
+export default function AuthenticatedSurface({ children, unauthenticated }: { children: (codigo: string) => ReactNode; unauthenticated?: ReactNode }) {
   const [codigo, setCodigo] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [guest,setGuest] = useState(false);
   useEffect(() => {
     let active = true;
     let revision = 0;
     let authUserId: string | undefined;
     let subscription: { unsubscribe(): void } | undefined;
-    const entry = () => window.location.replace(`${authOrigin(window.location.origin)}/`);
+    const entry = () => {if(unauthenticated)setGuest(true);else window.location.replace(`${authOrigin(window.location.origin)}/`);};
     const clear = () => { revision++; setCodigo(null); };
     async function verify() {
       const current = ++revision;
-      setCodigo(null); setError('');
+      setCodigo(null); setError('');setGuest(false);
       try {
         const result = await authenticatedIdentityRequest(getBrowserAuth());
         if (!active || current !== revision) return;
@@ -55,6 +56,7 @@ export default function AuthenticatedSurface({ children }: { children: (codigo: 
       window.removeEventListener('pageshow', restore);
     };
   }, []);
+  if (!codigo && guest && unauthenticated) return <>{unauthenticated}</>;
   if (!codigo) return <main style={{ padding: 32 }} role="status">
     {error || 'Comprobando acceso…'} {error && <a href="/">Volver al acceso</a>}
   </main>;

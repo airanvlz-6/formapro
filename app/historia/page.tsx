@@ -1,9 +1,11 @@
 'use client';
 import AuthenticatedSurface from '../auth/AuthenticatedSurface';
 import { authenticatedFetch } from '@/lib/auth/authenticatedFetch';
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import WorkoutShareCard from "@/components/WorkoutShareCard";
+import WorkoutForm from '@/components/WorkoutForm';
+import WorkoutRegisterButton from '@/components/WorkoutRegisterButton';
 
 const TIPO_CONFIG: Record<string, {emoji:string;label:string;color:string}> = {
   forge_insight: { emoji:"🧠", label:"Forge Insight", color:"#4CAF50" },
@@ -49,6 +51,7 @@ function HistoriaContent({ codigo }: { codigo: string }) {
   const [ejercicioSeleccionado, setEjercicioSeleccionado] = useState<string>("");
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>("Todos");
   const [workoutHistory, setWorkoutHistory] = useState<any[]>([]);
+  const [editingWorkout,setEditingWorkout] = useState<string|null>(null);
   const [mesActual, setMesActual] = useState(new Date());
   const [diaSeleccionado, setDiaSeleccionado] = useState<any>(null);
   const [decisionDia, setDecisionDia] = useState<any>(null);
@@ -57,6 +60,33 @@ function HistoriaContent({ codigo }: { codigo: string }) {
   const [menuEventoAbierto, setMenuEventoAbierto] = useState<string|null>(null);
   const [historialFisiologico, setHistorialFisiologico] = useState<any[]>([]);
   const [modoEntradaUsuario, setModoEntradaUsuario] = useState<string>("planificacion");
+
+  const workoutRead = useRef(0);
+  const [workoutError,setWorkoutError] = useState('');
+  const cargarWorkouts = async(month=mesActual)=>{
+    const read = ++workoutRead.current;
+    setWorkoutError('');
+    const prefix = `${month.getFullYear()}-${String(month.getMonth()+1).padStart(2,'0')}`;
+    const lastDay = new Date(month.getFullYear(),month.getMonth()+1,0).getDate();
+    for (let attempt=0;attempt<3;attempt++) {
+      const workouts: any[] = [];
+      let cursor: string | null = null, stale = false;
+      do {
+        const response = await authenticatedFetch(`/api/workouts?limit=200&fromDate=${prefix}-01&toDate=${prefix}-${lastDay}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,{cache:'no-store'});
+        const page = await response.json();
+        if (read !== workoutRead.current) return;
+        if (response.status===409 && page.code==='WORKOUT_CURSOR_STALE') { stale=true;break; }
+        if (!response.ok) throw new Error('WORKOUT_HISTORY_UNAVAILABLE');
+        workouts.push(...page.records); cursor = page.nextCursor;
+      } while (cursor);
+      if (!stale) {setWorkoutHistory(workouts);return;}
+    }
+    throw new Error('WORKOUT_HISTORY_UNAVAILABLE');
+  };
+  const cambiarMes = (month:Date)=>{
+    setMesActual(month);setDiaSeleccionado(null);setWorkoutHistory([]);
+    void cargarWorkouts(month).catch(()=>setWorkoutError('No se pudieron cargar los entrenamientos de este mes.'));
+  };
 
   const cargarDatos = async(cod:string)=>{
     setCargando(true);
@@ -69,7 +99,7 @@ function HistoriaContent({ codigo }: { codigo: string }) {
       const dataUser = await resUser.json();
       setBloques(dataUser?.data?.analisis_bloques||[]);
       setHistorialMarcas(dataUser?.data?.historial_marcas||[]);
-      setWorkoutHistory(dataUser?.data?.workout_history||[]);
+      await cargarWorkouts();
       setHistorialFisiologico(dataUser?.data?.historial_fisiologico||[]);
       setModoEntradaUsuario(dataUser?.data?.modo_entrada||"planificacion");
       authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"calcular_logros",codigo:cod})})
@@ -133,6 +163,10 @@ function HistoriaContent({ codigo }: { codigo: string }) {
           </a>
         </div>
 
+        <WorkoutRegisterButton athlete={codigo} onSaved={async()=>{setDiaSeleccionado(null);await cargarWorkouts();}} />
+        {workoutError&&<p role="alert">{workoutError} <button onClick={()=>cambiarMes(mesActual)}>Reintentar</button></p>}
+        {editingWorkout&&<WorkoutForm key={`${codigo}:${editingWorkout}`} athlete={codigo} executionId={editingWorkout}
+          onClose={()=>setEditingWorkout(null)} onSaved={async()=>{setDiaSeleccionado(null);await cargarWorkouts();}} />}
         {/* Formulario añadir/editar evento */}
         {mostrarFormulario&&(
           <div style={{background:C.card,border:`1px solid ${C.accent}`,borderRadius:16,padding:"16px 18px",marginBottom:16}}>
@@ -190,7 +224,8 @@ function HistoriaContent({ codigo }: { codigo: string }) {
 
           const eventosPorDia: Record<string, any[]> = {};
           workoutHistory.forEach((w:any) => {
-            const key = new Date(w.fecha).toISOString().split('T')[0];
+            const key = w.executedOn;
+            if (typeof key !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(key)) return;
             if(!eventosPorDia[key]) eventosPorDia[key]=[];
             eventosPorDia[key].push({...w, esWorkout:true});
           });
@@ -232,9 +267,9 @@ function HistoriaContent({ codigo }: { codigo: string }) {
           return (
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 16 }}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-                <button onClick={()=>setMesActual(new Date(anio,mes-1,1))} style={{background:"none",border:"none",color:C.muted,fontSize:18,cursor:"pointer"}}>‹</button>
+                <button onClick={()=>cambiarMes(new Date(anio,mes-1,1))} style={{background:"none",border:"none",color:C.muted,fontSize:18,cursor:"pointer"}}>‹</button>
                 <p style={{color:C.ink,fontSize:14,fontWeight:700,textTransform:"capitalize"}}>{mesActual.toLocaleDateString("es-ES",{month:"long",year:"numeric"})}</p>
-                <button onClick={()=>setMesActual(new Date(anio,mes+1,1))} style={{background:"none",border:"none",color:C.muted,fontSize:18,cursor:"pointer"}}>›</button>
+                <button onClick={()=>cambiarMes(new Date(anio,mes+1,1))} style={{background:"none",border:"none",color:C.muted,fontSize:18,cursor:"pointer"}}>›</button>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:8}}>
                 {["L","M","X","J","V","S","D"].map(d=>(
@@ -249,7 +284,7 @@ function HistoriaContent({ codigo }: { codigo: string }) {
                   const iconos = getIconosDia(items);
                   const esHoy = new Date().toISOString().split('T')[0]===fechaKey;
                   return (
-                    <div key={i} onClick={()=>{
+                    <button key={i} type="button" aria-label={`Ver registros del ${fechaKey}`} disabled={!items} onClick={()=>{
                       if(items){
                         setDiaSeleccionado({fecha:fechaKey,items});
                         authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"obtener_plan_por_fecha",codigo,datos:{fecha:fechaKey}})})
@@ -263,7 +298,7 @@ function HistoriaContent({ codigo }: { codigo: string }) {
                           {iconos.map((ic:string,idx:number)=><span key={idx} style={{fontSize:iconos.length>1?9:12}}>{ic}</span>)}
                         </div>
                       )}
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -322,6 +357,8 @@ function HistoriaContent({ codigo }: { codigo: string }) {
                       </div>
                       <p style={{color:C.ink,fontSize:14,fontWeight:600,marginBottom:6,textTransform:"capitalize"}}>{item.tipo?.replace(/_/g,' ')}</p>
                       <p style={{color:C.muted,fontSize:12,lineHeight:1.6}}>{item.notas}</p>
+                      {item.source==='running_execution_records.v2'&&<button onClick={()=>{setEditingWorkout(item.executionId);setDiaSeleccionado(null);window.scrollTo({top:0,behavior:'smooth'});}}
+                        style={{background:C.accent,color:'#fff',border:0,borderRadius:8,padding:'8px 12px',marginTop:10,cursor:'pointer'}}>Abrir / editar / eliminar</button>}
                       {item.sensacion && <span style={{color:C.accent,fontSize:11,marginTop:6,display:"inline-block"}}>● Sensación: {item.sensacion}</span>}
                       {sesionParaCompartirHistoria && sesionParaCompartirHistoria.fecha===diaSeleccionado.fecha && sesionParaCompartirHistoria.notas===item.notas && (()=>{
                         const textoFuente=`${sesionParaCompartirHistoria.notas||""}`;
@@ -377,7 +414,7 @@ function HistoriaContent({ codigo }: { codigo: string }) {
                 </div>
               ))}
             </div>
-            <p style={{color:C.accent,fontSize:13,fontWeight:600}}>Todo se registrará automáticamente. Tú solo tendrás que entrenar.</p>
+            <p style={{color:C.accent,fontSize:13,fontWeight:600}}>Usa «Registrar entreno» para guardar lo que has realizado.</p>
           </div>
         ) : eventosFiltrados.length === 0 ? (
           <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"28px 24px",textAlign:"center",marginBottom:16}}>

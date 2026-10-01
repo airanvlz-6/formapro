@@ -15,6 +15,7 @@ import { resolvePlanningStrategy } from './strategyResolution';
 import { projectRunningDoseBaseline } from './runningDoseEvidence';
 import { admitRunningDoseEvidence } from '../sports/runningDoseEvidenceAuthority';
 import { readRunningExecutionViews } from '../execution/runningExecutionStore';
+import { managedPrescriptionKeys, projectWorkoutPlans } from '../execution/workoutProjections';
 import { mergeRunningHistory } from '../execution/historicalRunning';
 import { RUNNING_DOSE_WINDOWS } from './runningDoseBaseline';
 import { readPrescriptionInputs } from './readPrescriptionInputs';
@@ -51,9 +52,11 @@ export async function loadAthletePrescriptionContext(db: any, userCodigo: string
     trace.async('readRunningExecutionViews', () => readRunningExecutionViews(db, userCodigo, {startDate:new Date(Date.parse(options.asOfDate) - (RUNNING_DOSE_WINDOWS[1] - 1) * 86400000).toISOString().slice(0,10),endDate:options.asOfDate})),
   ]);
   const profile = record(user);
+  const workouts = executions.workouts ?? [];
+  const managed = managedPrescriptionKeys(workouts);
   const completedSessions = trace.sync('projectCompletedSessions', () => (plans as unknown[]).flatMap(raw => {
     const plan = record(raw);
-    return (Array.isArray(plan.sessions) ? plan.sessions : []).filter(s => record(s).completada === true).map(rawSession => {
+    return (Array.isArray(plan.sessions) ? plan.sessions : []).filter(s => record(s).completada === true && !managed.has(`${plan.id}:${record(s).session_id}`)).map(rawSession => {
       const s = record(rawSession), day = typeof s.dia === 'string' ? s.dia.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() : '';
       const index = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'].indexOf(day);
       const week = typeof plan.week_start === 'string' ? resolveCompletionDate(plan.week_start) : null;
@@ -66,14 +69,21 @@ export async function loadAthletePrescriptionContext(db: any, userCodigo: string
         modified: s.modificado ?? null, modificationReason: s.motivo_modificacion ?? null };
     });
   }).filter(s => s.date === null || s.date <= options.asOfDate));
+  completedSessions.push(...workouts.filter(w => !w.deletedAt && w.data.executedOn <= options.asOfDate).map(w => ({
+    source:'running_execution_records.v2', weekStart:resolveCompletionDate(w.data.executedOn)!.weekStart, date:w.data.executedOn,
+    sessionId:w.executionId, type:w.data.discipline, title:w.data.title, actualDescription:w.data.description,
+    modified:null, modificationReason:null })));
   const exposureInput = trace.sync('projectExposureInput', () => completedSessions.filter(s => s.date && typeof s.actualDescription === 'string' && s.actualDescription)
     .map(s => ({ fecha: s.date!, tipo: String(s.type ?? ''), titulo: String(s.title ?? ''), descripcionReal: String(s.actualDescription) })));
-  const history = Array.isArray(profile.workout_history) ? profile.workout_history : [];
+  const history = [...(Array.isArray(profile.workout_history) ? profile.workout_history.filter((r:any) => !workouts.some(w => w.executionId === r.executionId)) : []),
+    ...workouts.filter(w => !w.deletedAt).map(w => ({fecha:w.data.executedOn}))];
   const fromDate = new Date(Date.parse(options.asOfDate) - 6 * 86400000).toISOString().slice(0, 10);
   const datedHistory = trace.sync('projectDatedHistory', () => history.map(raw => ({ raw, effective: resolveCompletionDate(record(raw).fecha) })));
   const signals = recovery.objective;
   const projected = trace.sync('projectAthletePrescriptionProfile', () => projectAthletePrescriptionProfile(profile, options.prescriptionDate || options.asOfDate, options.sessionEnvironment));
-  const runningDoseBaseline = trace.sync('projectRunningDoseBaseline', () => projectRunningDoseBaseline(profile, plans as unknown[], projected.running.references, options.asOfDate));
+  const evidencePlans = (plans as any[]).map(p => ({...p, sessions:p.sessions.map((s:any) => managed.has(`${p.id}:${s.session_id}`)
+    ? {...s,completada:false,chatExecutionEvidence:[],titulo_real:null,descripcion_real:null} : s)}));
+  const runningDoseBaseline = trace.sync('projectRunningDoseBaseline', () => projectRunningDoseBaseline(profile, evidencePlans, projected.running.references, options.asOfDate));
   runningDoseBaseline.structuredExecutions = { ...executions.window, records: executions.window.records.filter(r =>
     r.occurredAt >= runningDoseBaseline.coverage.startDate && r.occurredAt <= options.asOfDate) };
   const habitualConfirmation = trace.sync('readRunningHabitualConfirmation', () => readRunningHabitualConfirmation(record(profile.perfil).runningHabitualConfirmation, userCodigo, options.runningHabitualInteraction, runningDoseBaseline.habitualDeclarations?.facts ?? []));
@@ -90,7 +100,7 @@ export async function loadAthletePrescriptionContext(db: any, userCodigo: string
     readiness: options.readiness ? { status: 'available' as const, ...options.readiness }
       : { status: 'unknown' as const, source: 'canonical_readiness_engine', result: null, reason: 'not_prepared_no_recalculation' },
     restrictions: { source: 'getCanonicalRestrictions', value: restrictions },
-    history: { completedSessions, prescriptions: trace.sync('prescriptionHistorySummary', () => prescriptionHistorySummary(plans as unknown[], options.asOfDate)),
+    history: { completedSessions, prescriptions: trace.sync('prescriptionHistorySummary', () => prescriptionHistorySummary(projectWorkoutPlans(plans as any[],workouts), options.asOfDate)),
       exposure: { source: 'buildExposureReport', byDiscipline: Object.fromEntries(['box', 'carrera', 'fuerza'].map(d => [d, trace.sync('buildExposureReport', () => buildExposureReport(exposureInput, d))])),
         limitations: ['last_four_weekly_rows_not_exact_window', 'textual_report_matching', 'no_intra_week_reservations', 'unknown_dates_excluded'] },
       recentFrequency: { source: 'usuarios.workout_history', fromDate, toDate: options.asOfDate,

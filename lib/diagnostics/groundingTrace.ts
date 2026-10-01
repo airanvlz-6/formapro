@@ -1,6 +1,6 @@
 /** Diagnostic-only boundaries. Never serialize inputs, results, messages or stacks. */
 const stages = [
-  'loadChatGrounding', 'resolveDate', 'profile.read', 'plans.read', 'sources.read', 'validateReadResults',
+  'loadChatGrounding', 'resolveDate', 'profile.read', 'plans.read', 'sources.read', 'workouts.read', 'validateReadResults',
   'resolveScope', 'buildFacts', 'buildSessionDoseContext', 'projectCoachingKnowledge', 'projectPlans',
   'projectHistory', 'projectChatLongitudinal', 'projectConversation', 'loadEventContext', 'loadWeeklyCoachingSupplement',
   'loadAthletePrescriptionContext', 'athlete.usuarios', 'athlete.weekly_plan', 'athlete.session_modification_events',
@@ -18,6 +18,8 @@ const codes = new Set([
   'RESTRICTIONS_INVALID_STATE', 'RESTRICTIONS_INVALID_VALID_UNTIL', 'RESTRICTIONS_NOTES_READ_FAILED',
   'RESTRICTIONS_STATE_READ_FAILED', 'RESTRICTIONS_READ_FAILED', 'EVENT_CONTEXT_READ_FAILED', 'EVENT_SCOPE_UNRESOLVED',
   'EXECUTION_READ_FAILED', 'EXECUTION_READ_CAP_EXCEEDED', 'EXECUTION_STORED_INTEGRITY_INVALID',
+  'WORKOUT_READ_FAILED', 'WORKOUT_READ_CAP_EXCEEDED', 'WORKOUT_STORED_INTEGRITY_INVALID', 'WORKOUT_HISTORY_READ_FAILED',
+  'WORKOUT_CURSOR_STALE', 'WORKOUT_CURSOR_NOT_ADVANCING', 'WORKOUT_CURSOR_INVALID',
   'EXECUTION_VERIFICATION_UNAVAILABLE', 'HISTORICAL_RUNNING_INPUT_INVALID', 'HISTORICAL_RUNNING_ATHLETE_MISMATCH',
   'SESSION_TIME_BUDGET_CONFLICT', 'SESSION_GOAL_CONTEXT_CHANGED', 'SESSION_WEAKNESS_CONTEXT_CHANGED',
   '42703', '42P01', '42501', '57014', 'PGRST116', 'PGRST204', 'PGRST205',

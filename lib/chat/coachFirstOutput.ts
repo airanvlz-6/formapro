@@ -9,7 +9,7 @@ export const COACH_FIRST_OUTPUT_TOOL = {
   input_schema: {
     type: 'object', additionalProperties: false, required: ['answer', 'calls', 'mutationIntents', 'clarification'],
     properties: {
-      mutationIntents: { type: 'array', maxItems: 3, uniqueItems: true, items: { type: 'string', enum: ['record_execution', 'propose_development_area', 'respond_development_proposal'] }, description: 'Mandatory semantic classification. Reported training requires record_execution; a longitudinal proposal or candidate response requires its development action. [] only when none applies. Retain pending intents across rounds.' },
+      mutationIntents: { type: 'array', maxItems: 3, uniqueItems: true, items: { type: 'string', enum: ['propose_development_area', 'respond_development_proposal'] }, description: 'Mandatory semantic classification. Training reports use the registration form, without a mutation intent. A longitudinal proposal or candidate response requires its development action. [] only when none applies. Retain pending intents across rounds.' },
       clarification: { anyOf: [{ type: 'string', minLength: 1, maxLength: 800 }, { type: 'null' }], description: 'Only a necessary question to resolve ambiguous association or missing information. Never a state claim. Normally null.' },
       answer: { anyOf: [{ type: 'string', maxLength: 16000 }, { type: 'null' }] },
       calls: { type: 'array', maxItems: 8, items: {

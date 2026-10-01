@@ -1,8 +1,10 @@
-import { readRunningExecutions } from '../execution/runningExecutionStore';
+import { readRunningExecutionViews } from '../execution/runningExecutionStore';
 import { runningActualLoad } from './runningActualLoad';
 import { resolveCompletionDate } from '../planning/recordCompletion';
 import { plannedPrescriptionLoad, externalActualLoad, summarizeLoad } from './prescriptionLoadAdapter';
 import { resolveSessionLoad, unknownQuantity, type SessionLoad } from './trainingLoad';
+import { quantity } from './trainingLoad';
+import { projectWorkoutPlans } from '../execution/workoutProjections';
 
 /** Read-only backend boundary. Missing deployment schemas are never guessed or queried as if present. */
 export async function loadTrainingLoad(db:any,userCodigo:string,fromDate:string,toDate:string){
@@ -18,18 +20,19 @@ export async function loadTrainingLoad(db:any,userCodigo:string,fromDate:string,
     }
     throw new Error('TRAINING_LOAD_READ_LIMIT');
   };
-  const [profile,plans,external,modifications,runningEvidence]=await Promise.all([
+  const [profile,plans,external,modifications,views]=await Promise.all([
     rows(db.from('usuarios').select('workout_history,ciclo_actual').eq('codigo',userCodigo).single(),true),
     pages(()=>db.from('weekly_plan').select('id,week_start,sessions').eq('user_codigo',userCodigo).gte('week_start',from.weekStart).lte('week_start',to.weekStart)),
     pages(()=>db.from('external_training_records').select('id,fecha,disciplina,duracion,intensidad_percibida,source,load_quality').eq('user_codigo',userCodigo).gte('fecha',fromDate).lte('fecha',toDate)),
     pages(()=>db.from('session_modification_events').select('id,week_start,dia,original_tipo,modified_tipo').eq('user_codigo',userCodigo).gte('week_start',from.weekStart).lte('week_start',to.weekStart)),
-    readRunningExecutions(db,userCodigo,{startDate:fromDate,endDate:toDate}),
+    readRunningExecutionViews(db,userCodigo,{startDate:fromDate,endDate:toDate}),
   ]);
+  const runningEvidence=views.window, workouts=views.workouts;
   if(profile.workout_history!=null&&!Array.isArray(profile.workout_history))throw new Error('TRAINING_LOAD_HISTORY_INVALID');
   const within=(date:string)=>date>=fromDate&&date<=toDate;
   const days=['lunes','martes','miercoles','jueves','viernes','sabado','domingo'];
   const planned:SessionLoad[]=[], completedFlags:{id:string;date:string;completed:boolean}[]=[];
-  for(const [pi,p] of plans.entries()){
+  for(const [pi,p] of projectWorkoutPlans(plans,workouts).entries()){
     if(!resolveCompletionDate(p.week_start)||!Array.isArray(p.sessions))throw new Error('TRAINING_LOAD_PLAN_INVALID');
     for(const [si,s] of p.sessions.entries()){
       const index=days.indexOf(String(s?.dia||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase());if(index<0)throw new Error('TRAINING_LOAD_PLAN_DAY_INVALID');
@@ -40,6 +43,9 @@ export async function loadTrainingLoad(db:any,userCodigo:string,fromDate:string,
   }
   const history:SessionLoad[]=[],externalSessions:SessionLoad[]=[],excluded:string[]=[];
   for(const [i,w] of (profile.workout_history||[]).entries()){
+    const identities=[w.executionId,w.workout_id].filter((id):id is string=>typeof id==='string');
+    if(workouts.some(r=>identities.includes(r.executionId)) || views.history.records.some(r=>r.executionId&&identities.includes(r.executionId))
+      || views.history.conflicts.some(id=>identities.includes(id)))continue;
     const date=resolveCompletionDate(w.fecha)?.date;if(!date){excluded.push(`history:${i}:date_unknown`);continue;}if(!within(date))continue;
     // Existing workout duration accepts arbitrary legacy values and has no validated unit. Keep as unknown.
     history.push(resolveSessionLoad({id:`history:${w.workout_id||i}`,date,kind:'actual',discipline:typeof w.tipo==='string'?w.tipo:null,
@@ -50,6 +56,13 @@ export async function loadTrainingLoad(db:any,userCodigo:string,fromDate:string,
     const date=resolveCompletionDate(r.fecha)?.date;if(!date){excluded.push(`external:${i}:date_unknown`);continue;}if(within(date))externalSessions.push(externalActualLoad({...r,fecha:date},`external:${r.id||i}`));
   }
   const running=runningEvidence.records.filter(r=>within(r.occurredAt)).map(runningActualLoad);
+  for(const w of workouts.filter(r=>!r.deletedAt&&!r.structuredRunning&&within(r.data.executedOn))){
+    const s=resolveSessionLoad({id:w.executionId,date:w.data.executedOn,kind:'actual',discipline:w.data.discipline,
+      source:'running_execution_records.v2',segments:[],executionStatus:'reported',
+      duration:w.data.durationSeconds===undefined?unknownQuantity('s'):quantity(w.data.durationSeconds,'s',w.executionId),sessionRpe:w.data.rpe});
+    if(w.data.distanceMeters!==undefined)s.vector.distanceMeters=quantity(w.data.distanceMeters,'m',w.executionId);
+    history.push(s);
+  }
   const sourcesPresent=[history.length,externalSessions.length,running.length].filter(Boolean).length;
   const weekReports=(sessions:SessionLoad[])=>Object.fromEntries([...new Set(sessions.map(s=>resolveCompletionDate(s.date)!.weekStart))].sort()
     .map(week=>[week,summarizeLoad(sessions.filter(s=>resolveCompletionDate(s.date)!.weekStart===week))]));

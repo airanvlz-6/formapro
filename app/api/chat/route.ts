@@ -5,6 +5,8 @@ import { weeklyGuidanceTool, readWeeklyGuidanceOutput, WEEKLY_GUIDANCE_MAX_TOKEN
 import { conversationSession } from '@/lib/chat/conversationSession';
 import { authorizeChatRequest } from '@/lib/auth/chatIdentity';
 import { identityDependencies } from '@/lib/auth/supabaseServer';
+import { readWorkouts } from '@/lib/execution/workoutRegistry';
+import { projectWorkoutPlans } from '@/lib/execution/workoutProjections';
 import { IdentityError } from '@/lib/auth/athleteIdentity';
 import { coachFirstEnabled, legacyConversationOperations } from '@/lib/chat/coachFirstFlag';
 import { handleCoachFirst } from '@/lib/chat/coachFirstHandler';
@@ -4019,7 +4021,16 @@ Menciona el numero exacto de dias en la frase.`;
     }
     const currentWeekStart = lunes.toISOString().split('T')[0];
     const weekStart = requestedWeek ?? currentWeekStart;
-    const { data: plan } = await supabase.from("weekly_plan").select("*").eq("user_codigo", codigo).eq("week_start", weekStart).single();
+    let { data: plan } = await supabase.from("weekly_plan").select("*").eq("user_codigo", codigo).eq("week_start", weekStart).single();
+
+    if (plan) {
+      try {
+        // Include tombstones so removed/relinked executions cannot leave stale legacy completion flags.
+        plan = projectWorkoutPlans([plan], await readWorkouts(supabase, codigo, true))[0];
+      } catch {
+        return NextResponse.json({ ok: false, code: 'WORKOUT_READ_FAILED', error: 'No se pudo consultar la ejecución de las sesiones.' }, { status: 503 });
+      }
+    }
 
     // FIX ARQUITECTONICO: cada sesion se marca explicitamente como historica o futura respecto a
     // HOY — corrige un bug real donde el Coach confundia dias ya transcurridos de la semana con

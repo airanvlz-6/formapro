@@ -79,6 +79,15 @@ export async function handleCoachFirst(request: Request,
       || (!supplied.message.trim() && !supplied.attachments?.length)
       || typeof supplied.messageId !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(supplied.messageId))
       return respond({ route: 'coach_first', code: 'INPUT_INVALID', retryable: false }, 400);
+    // FORGE NEXT ACTION (2026-10-01) — structured intent from Today/Plan's "Preparar mi semana"
+    // CTA. The ONLY value accepted today is 'PREPARE_WEEK'; anything else is ignored (never
+    // silently coerced into free-text interpretation). This is NOT a second planning entry point:
+    // below it is passed as `forcedPeriod` into canonicalWeeklyRequest, the EXACT SAME parameter
+    // already used when the LLM itself issues a prepare_generation/generate_week tool call
+    // (see the second canonicalWeeklyRequest call further down this file). Every guard
+    // (availability confirmation, generation limits, Focus, existing-plan check, CAS,
+    // modo_entrada/prescriptionAllowed) runs identically regardless of how forcedPeriod was set.
+    const structuredIntent: 'current_week' | undefined = supplied.intent === 'PREPARE_WEEK' ? 'current_week' : undefined;
     // Only UUIDs are safe to echo; other accepted client IDs use the server claim digest.
     if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(supplied.messageId)) messageId = supplied.messageId;
     // Client conversation is intentionally ignored. Only persisted history feeds the Coach.
@@ -104,7 +113,7 @@ export async function handleCoachFirst(request: Request,
       .map((m: any) => ({ role: m.role, content: m.content }));
     input.conversation = conversation;
     const today = new Date(input.timestamp).toLocaleDateString('en-CA', { timeZone: input.timezone });
-    const canonical = policy === 'normal' ? await canonicalWeeklyRequest(db, athlete.legacyCodigo, input.message, today, turn.id, input.timestamp, undefined, () => receipts.push({ tool: 'canonical_week', status: 'attempted', pending: null })) : null;
+    const canonical = policy === 'normal' ? await canonicalWeeklyRequest(db, athlete.legacyCodigo, input.message, today, turn.id, input.timestamp, structuredIntent, () => receipts.push({ tool: 'canonical_week', status: 'attempted', pending: null })) : null;
     if (canonical) {
       receipts.push(...canonical.receipts);
       const finished = await conversationSession(db, athlete.legacyCodigo, supplied.sessionId, 'finish', {

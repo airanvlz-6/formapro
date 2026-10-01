@@ -39,6 +39,7 @@ import { updateChatAvailability, readAvailabilityConfirmation } from "@/lib/spor
 import { confirmCoachOwnership, persistTrainingSources } from "@/lib/sports/coachOwnership";
 import { normalizeAvailabilityForStorage } from "@/lib/sports/trainingAvailability";
 import { disabledLegacyOperation, projectLegacyCreate, projectLegacyUpdate } from "@/lib/auth/legacyContainment";
+import { resolveCurrentWeekState } from "@/lib/planning/resolveCurrentWeekState";
 import { getCanonicalPhysiologyHistory } from "@/lib/physiology/getCanonicalPhysiology";
 import { prepareRecoveryContext, assertRecoveryIdentity, RecoveryReadError, type RecoveryContext } from "@/lib/physiology/recoveryContext";
 import { prepareCanonicalReadiness } from "@/lib/readiness/prepareCanonicalReadiness";
@@ -3634,8 +3635,14 @@ Mensaje: "${mensaje}"
     // undefined y TODAY mostraba "sin sesion programada" aunque si existiera una sesion real.
     const normalizarDiaTodayState = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
     const diaSemanaToday = normalizarDiaTodayState(new Date().toLocaleDateString("es-ES", { weekday: "long", timeZone: "Europe/Madrid" }));
-    const { data: planTodayState } = await supabase.from("weekly_plan").select("sessions").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(1).maybeSingle();
-    const sesionHoyTodayState = (planTodayState?.sessions || []).find((s: any) => normalizarDiaTodayState(s.dia).includes(diaSemanaToday));
+    // FORGE NEXT ACTION (2026-10-01) \u2014 MISMO resolver que obtener_plan_semana_v2
+    // (resolveCurrentWeekState), para que Today y Plan nunca calculen el estado de la semana por
+    // separado ni con criterios distintos. Sustituye el "ORDER BY week_start DESC LIMIT 1" previo,
+    // que podia devolver la sesion de una semana historica como si fuese la de hoy.
+    const hoyWeekStateToday = new Date().toLocaleDateString('en-CA', { timeZone: 'Atlantic/Canary' });
+    const { data: usuarioModoTodayState } = await supabase.from("usuarios").select("modo_entrada").eq("codigo", codigo).single();
+    const weekStateToday = await resolveCurrentWeekState(supabase, codigo, hoyWeekStateToday, usuarioModoTodayState?.modo_entrada ?? null);
+    const sesionHoyTodayState = (weekStateToday.sessions || []).find((s: any) => normalizarDiaTodayState(s.dia).includes(diaSemanaToday));
     const intensidadTodayState = contextualSessionIntensity(sesionHoyTodayState);
     const decisionTodayState = evaluarRelevanciaContextual(resultadoReadinessToday, intensidadTodayState);
 
@@ -3691,6 +3698,11 @@ Mensaje: "${mensaje}"
         titulo: ultimaActividadReal.titulo, tipo: ultimaActividadReal.tipo, dia: ultimaActividadReal.dia,
       } : null,
       checkinDisponible: checkinTodayData?.readiness_score === undefined || checkinTodayData?.readiness_score === null,
+      // FORGE NEXT ACTION (2026-10-01) — aditivo. Un cliente que ignore estos dos campos sigue
+      // funcionando exactamente igual que antes. TodayScreen.tsx nunca debe inferir estado de
+      // planificacion de "todaySession === null" en solitario — debe leer weekState/nextAction.
+      weekState: weekStateToday.weekState,
+      nextAction: weekStateToday.nextAction,
     };
 
     return NextResponse.json({ ...todayState, physiology: preparedToday.physiology });
@@ -4783,10 +4795,23 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
     // NUNCA inferido de debilidad_relacionada ni de palabras en la descripcion. Solo se rellenaria
     // cuando exista un evento real y estructurado de decision explicita de Forge (pendiente de
     // conectar con session_modification_events/pending_actions en el futuro).
-    const { data: planV2 } = await supabase.from("weekly_plan").select("sessions,week_start").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(1).maybeSingle();
-    if (!planV2) return NextResponse.json({ ok: true, weekStart: null, sessions: [] });
+    //
+    // FORGE NEXT ACTION (2026-10-01) — weekState/nextAction resueltos por el MISMO resolver
+    // determinista que obtener_today_state, resolveCurrentWeekState(), que ya corrige el bug de
+    // "ORDER BY week_start DESC LIMIT 1" (podia devolver una semana historica como si fuese la
+    // actual). Ambos campos son aditivos: un cliente que los ignore sigue viendo exactamente el
+    // contrato anterior (weekStart/sessions). El frontend NUNCA debe derivar estado de
+    // sessions.length — solo leer weekState/nextAction ya resueltos aqui.
+    const hoyPlanV2 = new Date().toLocaleDateString('en-CA', { timeZone: 'Atlantic/Canary' });
+    const { data: usuarioModoPlanV2 } = await supabase.from("usuarios").select("modo_entrada").eq("codigo", codigo).single();
+    const weekStatePlanV2 = await resolveCurrentWeekState(supabase, codigo, hoyPlanV2, usuarioModoPlanV2?.modo_entrada ?? null);
 
-    const sessionsConContexto = (planV2.sessions || []).map((s: any) => ({
+    if (weekStatePlanV2.weekState === 'NO_PLAN_FOUND' || weekStatePlanV2.weekState === 'LOAD_ERROR') {
+      return NextResponse.json({ ok: true, weekStart: null, sessions: [],
+        weekState: weekStatePlanV2.weekState, nextAction: weekStatePlanV2.nextAction });
+    }
+
+    const sessionsConContexto = (weekStatePlanV2.sessions || []).map((s: any) => ({
       dia: s.dia,
       titulo: s.titulo,
       tipo: s.tipo,
@@ -4798,7 +4823,8 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
       },
     }));
 
-    return NextResponse.json({ ok: true, weekStart: planV2.week_start, sessions: sessionsConContexto });
+    return NextResponse.json({ ok: true, weekStart: weekStatePlanV2.weekStart, sessions: sessionsConContexto,
+      weekState: weekStatePlanV2.weekState, nextAction: weekStatePlanV2.nextAction });
   }
 
   if (action === "obtener_physiology_records_recientes") {

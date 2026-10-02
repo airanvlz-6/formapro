@@ -9,6 +9,7 @@ import type { SessionEnvironmentInput } from '../sports/sessionTrainingEnvironme
 import { buildExposureReport } from '../sports/exposureEngine';
 import { legacySessionView } from '../sports/sessionPresentation';
 import { EXPOSURE_LIMITATIONS } from '../sports/allowedTrainingContract';
+import { canonicalDiscipline } from '../sports/prescriptionScope';
 import type { SesionParaComparar } from '../validators/sessionDuplicationValidator';
 
 const known = <T>(source: string, value: T): CoreFact<T> => ({ status: 'known', source, value });
@@ -53,8 +54,13 @@ export async function loadBuilderFacts(db: Parameters<typeof loadCoreAthleteCont
         .select('fecha,disciplina,duracion,intensidad_percibida,fatiga_post').eq('user_codigo', user).order('fecha', { ascending: false }).limit(90)
         : { data: [], error: null };
       if (result.error || !Array.isArray(result.data)) throw Error('BUILDER_EXTERNAL_READ_FAILED');
+      // scope.externalDisciplines (used by trainingFeasibility's EXTERNAL_CONTEXT_OUTSIDE_SCOPE
+      // check) is always canonicalized; the raw persisted row is not. Canonicalize disciplina
+      // here, exactly like prepareSessionTrainingContract.ts already does for its own sibling
+      // read, so equivalent values (e.g. "CrossFit" vs "box") do not falsely conflict.
       externalLoad = known('Core.externalDisciplines/availability+external_training_records', {
-        source: 'server_training_sources_and_records', policy: 'read_only_context', activities, records: result.data });
+        source: 'server_training_sources_and_records', policy: 'read_only_context', activities,
+        records: result.data.map((r: any) => ({ ...r, disciplina: canonicalDiscipline(r.disciplina) })) });
       if (activities.some(a => a.days.includes(day)) || result.data.some(r => r.fecha === date)) protection = 'protected';
     } else protection = protection === 'protected' ? protection : 'unknown';
   } else protection = protection === 'protected' ? protection : 'unknown';

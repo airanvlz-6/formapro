@@ -106,6 +106,17 @@ function parseRunning(value: unknown, metric: string, unit: RunningReference['un
     const seconds = Number(clock[1] || 0) * 3600 + Number(clock[2]) * 60 + Number(clock[3]);
     return seconds > 0 ? { metric, value: seconds, unit } : null;
   }
+  // Historical open-ended Z1 only (e.g. "hasta 136"): a declared ceiling with no floor.
+  // min:1 is a technical normalization of "no floor", never a measured/derived value
+  // (no fc_reposo/fc_max/HRR). Exclusive to z1/bpm: Z2-Z5 and other metrics keep requiring
+  // an explicit min-max range.
+  if (metric === 'z1' && unit === 'bpm') {
+    const open = s.match(/^hasta\s+(\d+(?:[.,]\d+)?)\s*(bpm|ppm)?$/);
+    if (open) {
+      const upper = Number(open[1].replace(',', '.'));
+      return upper > 0 ? { metric, value: { min: 1, max: upper }, unit } : null;
+    }
+  }
   const match = s.match(/^(\d+(?:[.,]\d+)?)(?:\s*[-–—]\s*(\d+(?:[.,]\d+)?))?\s*(bpm|ppm|km|ml\/kg\/min)?$/);
   if (!match || (match[3] && !(unit === 'bpm' ? ['bpm', 'ppm'].includes(match[3]) : match[3] === unit))) return null;
   const min = Number(match[1].replace(',', '.')), max = match[2] ? Number(match[2].replace(',', '.')) : null;

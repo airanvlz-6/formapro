@@ -27,6 +27,7 @@ export default function Plan() {
 function PlanContent({ codigo }: { codigo: string }) {
   const [autenticado, setAutenticado] = useState(false);
   const [plan, setPlan] = useState<any>(null);
+  const [nextAction, setNextAction] = useState<any>(null);
   const [objetivoPrincipal, setObjetivoPrincipal] = useState<any>(null);
   const [progresoObjetivoPlan, setProgresoObjetivoPlan] = useState<{percentage:number}|null>(null);
   const [weekStart, setWeekStart] = useState("");
@@ -52,6 +53,7 @@ function PlanContent({ codigo }: { codigo: string }) {
       const data = await res.json();
       if(data.error){ setError(data.error==="INVALID_WEEK_START" ? "Semana no válida" : "No se pudieron cargar tus datos"); return; }
       setPlan(data.plan);
+      setNextAction(data.nextAction ?? null);
       setWeekStart(data.weekStart);
       setAutenticado(true);
       authenticatedFetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"recuperar_usuario",codigo:cod})})
@@ -113,14 +115,22 @@ function PlanContent({ codigo }: { codigo: string }) {
         </div>
 
         {!plan ? (
-          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"40px",textAlign:"center"}}>
-            <p style={{fontSize:40,marginBottom:12}}>📅</p>
-            <p style={{color:C.ink,fontSize:16,fontWeight:600,marginBottom:8}}>Sin plan esta semana</p>
-            <p style={{color:C.muted,fontSize:13,marginBottom:20}}>Pídele al coach que genere tu planificación semanal y aparecerá aquí automáticamente.</p>
-            <a href={`/app?codigo=${codigo}`} style={{background:C.accent,color:"#fff",borderRadius:10,padding:"10px 20px",fontSize:13,fontWeight:600,textDecoration:"none"}}>
-              💬 Ir al coach
-            </a>
-          </div>
+          nextAction?.type === "PREPARE_WEEK" ? (
+            <div style={{background:C.card,border:`1px solid ${C.accent}50`,borderRadius:16,padding:"40px",textAlign:"center"}}>
+              <p style={{fontSize:40,marginBottom:12}}>📅</p>
+              <p style={{color:C.ink,fontSize:16,fontWeight:600,marginBottom:8}}>Tu semana aún no está planificada</p>
+              <p style={{color:C.muted,fontSize:13,marginBottom:20}}>Forge preparará contigo la semana según tu disponibilidad y tu contexto actual.</p>
+              <a href="/app/chat?intent=PREPARE_WEEK" style={{background:C.accent,color:"#fff",borderRadius:10,padding:"10px 20px",fontSize:13,fontWeight:600,textDecoration:"none"}}>
+                Preparar mi semana
+              </a>
+            </div>
+          ) : (
+            <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:"40px",textAlign:"center"}}>
+              <p style={{fontSize:40,marginBottom:12}}>📅</p>
+              <p style={{color:C.ink,fontSize:16,fontWeight:600,marginBottom:8}}>No hay un plan disponible para esta semana</p>
+              <p style={{color:C.muted,fontSize:13}}>No hay una planificación semanal disponible en este momento.</p>
+            </div>
+          )
         ) : (
           <>
             {/* Objetivo principal */}

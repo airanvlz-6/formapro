@@ -665,6 +665,7 @@ export default function Forge({ authenticatedCodigo }: { authenticatedCodigo?: s
   const [verificandoSesion,setVerificandoSesion]=useState(true);
   const [errorSesion,setErrorSesion]=useState("");
   const escritorListoRef=useRef(false);
+  const prepareWeekIntentConsumedRef=useRef(false);
   const aplicarHistorialCanonico=(history:any[])=>{
     setHistorial(history);
     setMensajes(history.slice(-6).map((m:any)=>typeof m.content==="string"?{...m,content:m.content.replace(/\n*\[Fecha actual del sistema:[\s\S]*?\]/,"").replace(/\n*\[Contexto temporal del mensaje:[\s\S]*?\]/,"").trim()}:m));
@@ -1822,7 +1823,10 @@ const forgeValidator=(texto:string):string=>{
     } finally { setGenerandoSemana(false); }
   };
 
-  const enviar=async(texto:string=input)=>{
+  const enviar=async(
+  texto:string=input,
+  intent?:'PREPARE_WEEK'
+)=>{
     console.log("=== ENTRA A FUNCION enviar() ===");
     if((!texto.trim()&&imagenesAdjuntas.length===0)||cargando||bloqueado||!escritorListoRef.current||verificandoSesion||mostrarConflictoSesion||pestanaBloqueada) return;
     if (coachFirstEnabled()) {
@@ -1842,7 +1846,7 @@ const forgeValidator=(texto:string):string=>{
         const attachments = imagenesAdjuntas.map(img => ({ ...img, base64: img.base64.split(',')[1] }));
         coachFirstStage = "build_payload";
         const payload = { action: "coach_first", codigo: codigoUsuario, message: texto, messageId,
-            sessionId: sessionIdRef.current, attachments,
+            sessionId: sessionIdRef.current, attachments, ...(intent ? { intent } : {}),
             pending: { goal: pendingGoalQuestion ? { kind: 'primary_goal', includeToday: pendingGoalQuestion.empezarHoy } : null,
               habitual: pendingRunningHabitualQuestion ? { kind: 'running_habitual', field: pendingRunningHabitualQuestion.field,
                 expectedDurationMinutes: pendingRunningHabitualQuestion.expectedDurationMinutes,
@@ -2407,6 +2411,43 @@ const registrarMarca=async()=>{
     if(codigoUsuario) await apiCall({action:"actualizar_usuario",codigo:codigoUsuario,datos:{marcas:nuevasMarcas}});
     enviar(`He registrado una nueva marca: ${nueva.valor}. Analiza este progreso y ajusta mi programacion si es necesario.`);
   };
+
+    useEffect(()=>{
+    if(
+      prepareWeekIntentConsumedRef.current ||
+      !codigoUsuario ||
+      pantalla!=="chat" ||
+      verificandoSesion ||
+      mostrarConflictoSesion ||
+      pestanaBloqueada ||
+      cargando ||
+      bloqueado ||
+      !escritorListoRef.current
+    ) return;
+
+    const params=new URLSearchParams(window.location.search);
+    if(params.get("intent")!=="PREPARE_WEEK") return;
+
+    prepareWeekIntentConsumedRef.current=true;
+
+    params.delete("intent");
+    const query=params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`
+    );
+
+    void enviar("Preparar mi semana","PREPARE_WEEK");
+  },[
+    codigoUsuario,
+    pantalla,
+    verificandoSesion,
+    mostrarConflictoSesion,
+    pestanaBloqueada,
+    cargando,
+    bloqueado
+  ]);
 
   const handleKey=(e:React.KeyboardEvent)=>{if(e.key==="Enter"&&e.shiftKey){e.preventDefault();enviar();}};
   const stopEnvio=()=>{

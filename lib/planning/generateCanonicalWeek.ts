@@ -62,9 +62,11 @@ export type CanonicalWeekProviders = {
   builder: (date: string, discipline: string, prompt: string) => ReturnType<Parameters<typeof materializeWeekPrescriptionSession>[2]>;
 };
 // FORGE WEEKLY DIAGNOSTICS (2026-10-02) — single, non-sensitive log on every FAILED boundary.
-// Purely additive: `failed()` still returns the exact same object it always did.
-const failed = (boundary: 'INTAKE' | 'COACH' | 'BUILDER' | 'PLAN_MUTATION', code: string, date?: string) => {
-  try { console.info('WEEKLY_GENERATION_FAILED', { boundary, code }); } catch { /* Observation only. */ }
+// Purely additive: `failed()` still returns the exact same object it always did, plus the
+// already-computed `errors` subcodes (catalog codes only, never prose/restrictions/LLM output)
+// when the caller has them, so a BUILDER_CONTRACT_CONFLICT is no longer opaque in the log.
+const failed = (boundary: 'INTAKE' | 'COACH' | 'BUILDER' | 'PLAN_MUTATION', code: string, date?: string, errors?: readonly string[]) => {
+  try { console.info('WEEKLY_GENERATION_FAILED', { boundary, code, ...(errors?.length ? { errors } : {}) }); } catch { /* Observation only. */ }
   return { status: 'FAILED' as const, boundary, code, ...(date ? { date } : {}) };
 };
 
@@ -111,7 +113,7 @@ export async function generateCanonicalWeek(input: CanonicalWeekGenerationInput,
       const built = await materializeWeekPrescriptionSession({ prescription: coach.prescription, weekIntent: coach.week,
         date: slot.date, core: data.context.athlete, scheduling: facts[0].scheduling, technical: facts[0].technical },
       facts[0].history, prompt => providers.builder(slot.date, slot.discipline, prompt));
-      if (!built.ok) return failed('BUILDER', built.code, slot.date);
+      if (!built.ok) return failed('BUILDER', built.code, slot.date, 'errors' in built ? built.errors : undefined);
       materialized.push(built);
     } catch { return failed('BUILDER', 'BUILDER_INVOCATION_FAILED', slot.date); }
   }

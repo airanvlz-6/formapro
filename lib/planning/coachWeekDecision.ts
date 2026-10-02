@@ -177,7 +177,8 @@ export async function decideCoachWeek(context: CoachWeekContext, provider: Provi
           return reject('COACH_AVAILABILITY_CONFLICT', { weekStart, date: d.date, discipline: d.discipline,
             expectedAvailability: c.intake.availability.days.find(a => a.date === d.date && a.discipline === d.discipline)?.status });
         days.push(d as WeekPrescriptionDay);
-      } else return reject('COACH_DAY_INVALID', { weekStart, date: d?.date, state: d?.state, discipline: d?.discipline });
+      } else return reject('COACH_DAY_INVALID', { weekStart, date: d?.date, state: d?.state, discipline: d?.discipline,
+        receivedKeys: object(d) ? Object.keys(d) : [] });
     }
     const week: WeekIntent = { weekStart: c.intake.targetWindow.startDate, revision: q.weekRevision,
       blockIntentReference: { blockId: block.blockId, revision: block.revision },

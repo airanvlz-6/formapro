@@ -21,6 +21,17 @@ export type CoachWeekContext = {
 };
 type ProviderOptions = { apiKey: string; transport?: Parameters<typeof requestWeeklyProvider>[2] };
 const fail = (code: string, details: string[] = []) => ({ ok: false as const, code, details });
+// FORGE WEEKLY DIAGNOSTICS (2026-10-02) — read-only observability for the rejection branches
+// AFTER the provider response is received. Never changes which branch is taken or what `fail()`
+// returns (same code/details every time) — `reject()` only adds a non-sensitive log line before
+// returning the identical `fail(...)` result, so this is purely additive for diagnosis of why
+// decideCoachWeek rejected a given provider response. No prompt text, no full model output, no
+// API key/Authorization header is ever included in `extra`.
+function reject(code: string, extra: Record<string, unknown> = {}, details: string[] = []) {
+  try { console.info('WEEKLY_COACH_DECISION_REJECTED',
+    { code, ...extra, ...(details.length ? { validationErrors: details } : {}) }); } catch { /* Observation only. */ }
+  return fail(code, details);
+}
 const object = (v: unknown): v is Record<string, any> => !!v && typeof v === 'object' && !Array.isArray(v);
 const shape = (v: unknown, keys: string[]): v is Record<string, any> => object(v)
   && Object.keys(v).length === keys.length && keys.every(k => Object.hasOwn(v, k));
@@ -129,13 +140,15 @@ export async function decideCoachWeek(context: CoachWeekContext, provider: Provi
       max_tokens: 4096, messages: [{ role: 'user', content: prompt }], tools: [TOOL],
       tool_choice: { type: 'tool', name: TOOL.name, disable_parallel_tool_use: true } }) }, 'weekly', provider.transport);
   } catch { return fail('COACH_PROVIDER_FAILED'); }
+  const weekStart = c.intake.targetWindow.startDate;
   try {
     const tools = Array.isArray(output?.content) ? output.content.filter((b: any) => b?.type === 'tool_use') : [];
-    if (output.stop_reason !== 'tool_use' || tools.length !== 1 || tools[0].name !== TOOL.name) return fail('COACH_OUTPUT_INVALID');
+    if (output.stop_reason !== 'tool_use' || tools.length !== 1 || tools[0].name !== TOOL.name)
+      return reject('COACH_OUTPUT_INVALID', { weekStart });
     const decision = tools[0].input;
     if (!shape(decision, ['blockDecision', 'week']) || !shape(decision.week, ['purpose', 'contributionToBlock', 'days'])
       || !text(decision.week.purpose) || !text(decision.week.contributionToBlock)
-      || !Array.isArray(decision.week.days) || decision.week.days.length !== 7) return fail('COACH_OUTPUT_INVALID');
+      || !Array.isArray(decision.week.days) || decision.week.days.length !== 7) return reject('COACH_OUTPUT_INVALID', { weekStart });
     const b = decision.blockDecision, previous = c.longitudinal.block, q = c.issuance;
     let block: BlockIntent;
     if (shape(b, ['action']) && b.action === 'keep' && previous && sameRef(previous.goalReference, q.goalReference)) block = previous;
@@ -143,22 +156,28 @@ export async function decideCoachWeek(context: CoachWeekContext, provider: Provi
       && (b.action === 'create' && !previous || b.action === 'revise' && previous)) {
       block = { blockId: previous?.blockId ?? q.newBlockId, revision: previous ? previous.revision + 1 : 1,
         goalReference: q.goalReference, purpose: b.purpose, provenance };
-    } else return fail('COACH_BLOCK_DECISION_INVALID');
+    } else return reject('COACH_BLOCK_DECISION_INVALID', { weekStart });
     const days: WeekPrescriptionDay[] = [];
     for (const [n, d] of decision.week.days.entries()) {
-      if (!object(d) || d.date !== dates[n]) return fail('COACH_DATE_MISMATCH');
+      if (!object(d) || d.date !== dates[n])
+        return reject('COACH_DATE_MISMATCH', { weekStart, date: object(d) ? d.date : undefined, expectedDate: dates[n] });
       if (forcedUnavailable.has(d.date)) {
-        if (!shape(d, ['date', 'state']) || d.state !== 'UNAVAILABLE') return fail('COACH_UNAVAILABLE_CONFLICT');
+        if (!shape(d, ['date', 'state']) || d.state !== 'UNAVAILABLE')
+          return reject('COACH_UNAVAILABLE_CONFLICT', { weekStart, date: d.date, state: d.state });
         days.push({ date: d.date, state: 'UNAVAILABLE', factualReference: {
           source: 'ResolvedWeekIntake.availability', reference: `${q.sourceReference}:${d.date}` } });
       } else if (shape(d, ['date', 'state']) && d.state === 'REST') days.push(d as WeekPrescriptionDay);
       else if (shape(d, ['date', 'state', 'discipline', 'purpose']) && d.state === 'TRAIN' && text(d.purpose)) {
-        if (!managed.includes(d.discipline)) return fail('COACH_DISCIPLINE_CONFLICT');
-        if (c.intake.eligibility[n].status !== 'ELIGIBLE') return fail('COACH_ELIGIBILITY_CONFLICT');
+        if (!managed.includes(d.discipline))
+          return reject('COACH_DISCIPLINE_CONFLICT', { weekStart, date: d.date, discipline: d.discipline, managed });
+        if (c.intake.eligibility[n].status !== 'ELIGIBLE')
+          return reject('COACH_ELIGIBILITY_CONFLICT', { weekStart, date: d.date, discipline: d.discipline,
+            expectedEligibility: c.intake.eligibility[n].status });
         if (!c.intake.availability.days.some(a => a.date === d.date && a.discipline === d.discipline && a.status === 'AVAILABLE'))
-          return fail('COACH_AVAILABILITY_CONFLICT');
+          return reject('COACH_AVAILABILITY_CONFLICT', { weekStart, date: d.date, discipline: d.discipline,
+            expectedAvailability: c.intake.availability.days.find(a => a.date === d.date && a.discipline === d.discipline)?.status });
         days.push(d as WeekPrescriptionDay);
-      } else return fail('COACH_DAY_INVALID');
+      } else return reject('COACH_DAY_INVALID', { weekStart, date: d?.date, state: d?.state, discipline: d?.discipline });
     }
     const week: WeekIntent = { weekStart: c.intake.targetWindow.startDate, revision: q.weekRevision,
       blockIntentReference: { blockId: block.blockId, revision: block.revision },
@@ -167,11 +186,19 @@ export async function decideCoachWeek(context: CoachWeekContext, provider: Provi
         && c.longitudinal.week.blockIntentReference.revision === block.revision ? c.longitudinal.week.positionInBlock : null,
       purpose: decision.week.purpose, contributionToBlock: decision.week.contributionToBlock, provenance };
     const canonical = projectLongitudinalIntent({ block, week });
-    if (canonical.block.status !== 'known' || canonical.week.status !== 'known') return fail('COACH_LONGITUDINAL_INVALID');
+    if (canonical.block.status !== 'known' || canonical.week.status !== 'known') return reject('COACH_LONGITUDINAL_INVALID', { weekStart });
     const prescription = validateWeekPrescription({ version: 1, weekStart: week.weekStart, revision: q.prescriptionRevision,
       weekIntentReference: { weekStart: week.weekStart, revision: week.revision, blockIntentReference: week.blockIntentReference },
       provenance, days }, week);
-    if (!prescription.ok) return fail('COACH_PRESCRIPTION_INVALID', prescription.errors);
+    if (!prescription.ok) return reject('COACH_PRESCRIPTION_INVALID', { weekStart }, prescription.errors);
     return { ok: true as const, block: canonical.block.value, week: canonical.week.value, prescription: prescription.prescription };
-  } catch { return fail('COACH_OUTPUT_INVALID'); }
+  } catch (error) {
+    const e = error as any;
+    const safeNames = ['Error', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError'];
+    const safeMessages = ['WEEK_CONFIRMATION_INVALID', 'WEEK_CONFIRMATION_INCOMPLETE'];
+    try { console.info('WEEKLY_COACH_DECISION_REJECTED', { code: 'COACH_OUTPUT_INVALID',
+      errorName: typeof e?.name === 'string' && safeNames.includes(e.name) ? e.name : 'UnknownError',
+      errorMessage: typeof e?.message === 'string' && safeMessages.includes(e.message) ? e.message : '[redacted]' }); } catch { /* Observation only. */ }
+    return fail('COACH_OUTPUT_INVALID');
+  }
 }

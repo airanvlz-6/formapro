@@ -61,8 +61,12 @@ export type CanonicalWeekProviders = {
   coach: Parameters<typeof decideCoachWeek>[1];
   builder: (date: string, discipline: string, prompt: string) => ReturnType<Parameters<typeof materializeWeekPrescriptionSession>[2]>;
 };
-const failed = (boundary: 'INTAKE' | 'COACH' | 'BUILDER' | 'PLAN_MUTATION', code: string, date?: string) =>
-  ({ status: 'FAILED' as const, boundary, code, ...(date ? { date } : {}) });
+// FORGE WEEKLY DIAGNOSTICS (2026-10-02) — single, non-sensitive log on every FAILED boundary.
+// Purely additive: `failed()` still returns the exact same object it always did.
+const failed = (boundary: 'INTAKE' | 'COACH' | 'BUILDER' | 'PLAN_MUTATION', code: string, date?: string) => {
+  try { console.info('WEEKLY_GENERATION_FAILED', { boundary, code }); } catch { /* Observation only. */ }
+  return { status: 'FAILED' as const, boundary, code, ...(date ? { date } : {}) };
+};
 
 /** Application sequencing only. No sports decisions, no persistence. All facts
  * and snapshots must be supplied in one authenticated athlete scope by the caller.

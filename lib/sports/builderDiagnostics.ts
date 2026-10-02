@@ -26,7 +26,7 @@ export type BuilderCompletion = { text: string; planningRunId?: string; metadata
 export function safeViolations(values: readonly string[]) {
   return values.map(v => { const [rule, field] = v.split(':');
     const safeRule = /^[A-Z][A-Z_]+$/.test(rule) ? rule : 'UNKNOWN_VIOLATION';
-    return field && /^(sets|reps|durationSeconds|distanceMeters|restSeconds|\d{1,2})$/.test(field) ? `${safeRule}:${field}` : safeRule;
+    return field && /^(sets|reps|durationSeconds|distanceMeters|restSeconds|\d{1,2}|HR_REFERENCE_REQUIRED|HR_ZONE_MISMATCH|UNSUPPORTED_OBJECTIVE_VALUE|REFERENCE_EXPRESSION_CONFLICT)$/.test(field) ? `${safeRule}:${field}` : safeRule;
   });
 }
 type DiagnosticShape = 'scalar' | { fields: Record<string, DiagnosticShape> } | { items: DiagnosticShape };

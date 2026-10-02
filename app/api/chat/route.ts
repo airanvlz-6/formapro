@@ -39,7 +39,7 @@ import { updateChatAvailability, readAvailabilityConfirmation } from "@/lib/spor
 import { confirmCoachOwnership, persistTrainingSources } from "@/lib/sports/coachOwnership";
 import { normalizeAvailabilityForStorage } from "@/lib/sports/trainingAvailability";
 import { disabledLegacyOperation, projectLegacyCreate, projectLegacyUpdate } from "@/lib/auth/legacyContainment";
-import { resolveCurrentWeekState } from "@/lib/planning/resolveCurrentWeekState";
+import { resolveCurrentWeekState, type NextAction } from "@/lib/planning/resolveCurrentWeekState";
 import { getCanonicalPhysiologyHistory } from "@/lib/physiology/getCanonicalPhysiology";
 import { prepareRecoveryContext, assertRecoveryIdentity, RecoveryReadError, type RecoveryContext } from "@/lib/physiology/recoveryContext";
 import { prepareCanonicalReadiness } from "@/lib/readiness/prepareCanonicalReadiness";
@@ -4059,7 +4059,33 @@ Menciona el numero exacto de dias en la frase.`;
       });
     }
 
-    return NextResponse.json({ plan: plan || null, weekStart });
+    let weekState = null;
+    let nextAction: NextAction = { type: "NONE" };
+
+    if (weekStart === currentWeekStart) {
+      const { data: usuarioModoPlan } = await supabase
+        .from("usuarios")
+        .select("modo_entrada")
+        .eq("codigo", codigo)
+        .single();
+
+      const resolvedWeekState = await resolveCurrentWeekState(
+        supabase,
+        codigo,
+        currentWeekStart,
+        usuarioModoPlan?.modo_entrada ?? null
+      );
+
+      weekState = resolvedWeekState.weekState;
+      nextAction = resolvedWeekState.nextAction;
+    }
+
+    return NextResponse.json({
+      plan: plan || null,
+      weekStart,
+      weekState,
+      nextAction
+    });
   }
 
   if (action === "guardar_block_outcome") {
@@ -4115,6 +4141,13 @@ if (action === "obtener_daily_briefing") {
     const { data: usuarioModoBriefing } = await supabase.from("usuarios").select("modo_entrada,workout_history").eq("codigo", codigo).single();
     const recovery = await prepareRecoveryContext(supabase, codigo, physiologyToday());
     const modoEntradaBriefing = usuarioModoBriefing?.modo_entrada || "planificacion";
+    const hoyWeekStateBriefing = new Date().toLocaleDateString('en-CA', { timeZone: 'Atlantic/Canary' });
+    const weekStateBriefing = await resolveCurrentWeekState(
+      supabase,
+      codigo,
+      hoyWeekStateBriefing,
+      modoEntradaBriefing
+    );
 
     if (modoEntradaBriefing === "supervision" || modoEntradaBriefing === "consulta") {
       const workoutHistoryBriefing = usuarioModoBriefing?.workout_history || [];
@@ -4162,7 +4195,9 @@ if (action === "obtener_daily_briefing") {
         progresoObjetivo: knowledge.objectiveProgress,
         evolucionDestacada,
         ultimoInsight: knowledge.latestInsight
-      }
+      },
+      weekState: weekStateBriefing.weekState,
+      nextAction: weekStateBriefing.nextAction
     });
   }
 

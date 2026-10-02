@@ -12,6 +12,7 @@ function HoyContent({ codigo }: { codigo: string }) {
   const [autenticado, setAutenticado] = useState(false);
   const [datos, setDatos] = useState<any>(null);
   const [briefing, setBriefing] = useState<any>(null);
+  const [nextAction, setNextAction] = useState<any>(null);
   const [cargando, setCargando] = useState(true);
   const [iniciado, setIniciado] = useState(false);
   const [error, setError] = useState("");
@@ -41,6 +42,7 @@ function HoyContent({ codigo }: { codigo: string }) {
       const resBriefing = await authenticatedFetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "obtener_daily_briefing", codigo: cod }) });
       const dataBriefing = await resBriefing.json();
       if (dataBriefing?.briefing) setBriefing(dataBriefing.briefing);
+      setNextAction(dataBriefing?.nextAction ?? null);
 
       // FORGE READINESS — verificar si ya respondio hoy, para no volver a preguntar
       const resReadiness = await authenticatedFetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "obtener_readiness_hoy", codigo: cod }) });
@@ -195,17 +197,37 @@ function HoyContent({ codigo }: { codigo: string }) {
         )}
 
         {!(briefing?.modoEntrada==="supervision"||briefing?.modoEntrada==="consulta") && (
-        <a href={`/plan?codigo=${codigo}`} style={{ display: "block", textDecoration: "none", background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}>
-          <p style={{ color: C.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>🔥 Hoy toca</p>
-          {briefing?.sesionHoy ? (
-            <>
-              <p style={{ color: C.ink, fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{briefing.sesionHoy.titulo}</p>
-              {briefing.sesionHoy.por_que && <p style={{ color: C.muted, fontSize: 12, lineHeight: 1.5 }}>{briefing.sesionHoy.por_que}</p>}
-            </>
+          nextAction?.type === "PREPARE_WEEK" ? (
+            <div style={{ background: C.card, border: `1px solid ${C.accent}50`, borderRadius: 16, padding: "18px", marginBottom: 14 }}>
+              <p style={{ color: C.accent, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>
+                Tu semana
+              </p>
+              <p style={{ color: C.ink, fontSize: 16, fontWeight: 700, marginBottom: 6 }}>
+                Tu semana aún no está planificada
+              </p>
+              <p style={{ color: C.muted, fontSize: 13, lineHeight: 1.5, marginBottom: 14 }}>
+                Forge preparará contigo la semana según tu disponibilidad y tu contexto actual.
+              </p>
+              <a
+                href="/app/chat?intent=PREPARE_WEEK"
+                style={{ display: "inline-block", textDecoration: "none", background: C.accent, color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontWeight: 700 }}
+              >
+                Preparar mi semana
+              </a>
+            </div>
           ) : (
-            <p style={{ color: C.muted, fontSize: 13 }}>Sin sesión programada para hoy en Mi Plan.</p>
-          )}
-        </a>
+            <a href={`/plan?codigo=${codigo}`} style={{ display: "block", textDecoration: "none", background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}>
+              <p style={{ color: C.muted, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>🔥 Hoy toca</p>
+              {briefing?.sesionHoy ? (
+                <>
+                  <p style={{ color: C.ink, fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{briefing.sesionHoy.titulo}</p>
+                  {briefing.sesionHoy.por_que && <p style={{ color: C.muted, fontSize: 12, lineHeight: 1.5 }}>{briefing.sesionHoy.por_que}</p>}
+                </>
+              ) : (
+                <p style={{ color: C.muted, fontSize: 13 }}>Sin sesión programada para hoy en Mi Plan.</p>
+              )}
+            </a>
+          )
         )}
 
         {briefing?.evolucionDestacada && (

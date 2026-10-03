@@ -2,6 +2,7 @@
 import { logOrchestratorTrace } from '@/lib/diagnostics/orchestratorTrace';
 import { Logout } from './auth/Logout';
 import { observeSemanticShadow } from '@/lib/chat/semanticShadowClient';
+import type { WeeklyAction, WeeklyPrompt } from '@/lib/chat/canonicalWeeklyRequest';
 import { coachFirstEnabled } from '@/lib/chat/coachFirstFlag';
 import { authenticatedFetch } from '@/lib/auth/authenticatedFetch';
 import { getBrowserAuth } from '@/lib/auth/supabaseBrowser';
@@ -666,7 +667,10 @@ export default function Forge({ authenticatedCodigo }: { authenticatedCodigo?: s
   const [errorSesion,setErrorSesion]=useState("");
   const escritorListoRef=useRef(false);
   const prepareWeekIntentConsumedRef=useRef(false);
+  const coachFirstSendingRef=useRef(false);
+  const [weeklyPrompt,setWeeklyPrompt]=useState<WeeklyPrompt|null>(null);
   const aplicarHistorialCanonico=(history:any[])=>{
+    setWeeklyPrompt(null);
     setHistorial(history);
     setMensajes(history.slice(-6).map((m:any)=>typeof m.content==="string"?{...m,content:m.content.replace(/\n*\[Fecha actual del sistema:[\s\S]*?\]/,"").replace(/\n*\[Contexto temporal del mensaje:[\s\S]*?\]/,"").trim()}:m));
   };
@@ -1825,11 +1829,15 @@ const forgeValidator=(texto:string):string=>{
 
   const enviar=async(
   texto:string=input,
-  intent?:'PREPARE_WEEK'
+  intent?:'PREPARE_WEEK',
+  weeklyAction?:WeeklyAction
 )=>{
     console.log("=== ENTRA A FUNCION enviar() ===");
     if((!texto.trim()&&imagenesAdjuntas.length===0)||cargando||bloqueado||!escritorListoRef.current||verificandoSesion||mostrarConflictoSesion||pestanaBloqueada) return;
     if (coachFirstEnabled()) {
+      if(coachFirstSendingRef.current) return;
+      coachFirstSendingRef.current=true;
+      setWeeklyPrompt(null);
       setCargando(true); setInput("");
       setMensajes(prev => [...prev, { role: "user", content: texto }]);
       const messageId = crypto.randomUUID();
@@ -1846,7 +1854,7 @@ const forgeValidator=(texto:string):string=>{
         const attachments = imagenesAdjuntas.map(img => ({ ...img, base64: img.base64.split(',')[1] }));
         coachFirstStage = "build_payload";
         const payload = { action: "coach_first", codigo: codigoUsuario, message: texto, messageId,
-            sessionId: sessionIdRef.current, attachments, ...(intent ? { intent } : {}),
+            sessionId: sessionIdRef.current, attachments, ...(intent ? { intent } : {}), ...(weeklyAction ? { weeklyAction } : {}),
             pending: { goal: pendingGoalQuestion ? { kind: 'primary_goal', includeToday: pendingGoalQuestion.empezarHoy } : null,
               habitual: pendingRunningHabitualQuestion ? { kind: 'running_habitual', field: pendingRunningHabitualQuestion.field,
                 expectedDurationMinutes: pendingRunningHabitualQuestion.expectedDurationMinutes,
@@ -1865,6 +1873,9 @@ const forgeValidator=(texto:string):string=>{
         coachFirstStage = "response_process";
         const answer = typeof result.answer === "string" ? result.answer : "No se ha podido iniciar el turno con la identidad actual.";
         if(Array.isArray(result.historial)) aplicarHistorialCanonico(result.historial);
+        setWeeklyPrompt(result.persisted===true && result.status==='clarification_required'
+          && ['availability','temporal','availability_declaration'].includes(result.weeklyPrompt?.kind)
+          && typeof result.weeklyPrompt?.sourceReference==='string' ? result.weeklyPrompt : null);
         if(result.persisted!==true) setMensajes(prev => [...prev, { role: "assistant", content: answer }]);
         if(["CHAT_NOT_OWNER","CHAT_SESSION_REQUIRED","CHAT_COMMIT_CONFLICT"].includes(result.code)){
           escritorListoRef.current=false;setPestanaBloqueada(true);
@@ -1882,7 +1893,7 @@ const forgeValidator=(texto:string):string=>{
           message: error instanceof Error && safeMessages.includes(error.message) ? error.message : "[redacted]",
         });
         setMensajes(prev => [...prev, { role: "assistant", content: "No puedo confirmar el resultado. No se ha reintentado el turno ni activado el flujo anterior." }]);
-      } finally { setCargando(false); }
+      } finally { coachFirstSendingRef.current=false; setCargando(false); }
       return;
     }
     // Observation only, before pending-question branches can consume the message. Never await or use its result.
@@ -3550,6 +3561,21 @@ ${testStr}`}]});
               </div>
               );
             })}
+            {coachFirstEnabled()&&weeklyPrompt&&weeklyPrompt.kind!=='availability_declaration'&&!cargando&&(
+              <div role="group" aria-label="Decisión de planificación semanal" style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {(weeklyPrompt.kind==='availability'
+                  ? [{label:'Mantener estos días',action:{kind:'confirm_availability'}},{label:'Cambiar días',action:{kind:'change_availability'}}]
+                  : [{label:'Incluir hoy',action:{kind:'include_today',value:true}},{label:'No incluir hoy',action:{kind:'include_today',value:false}}]
+                ).map(option=>(
+                  <button key={option.label} type="button"
+                    disabled={cargando||bloqueado||verificandoSesion||mostrarConflictoSesion||pestanaBloqueada}
+                    onClick={()=>void enviar(option.label,undefined,option.action as WeeklyAction)}
+                    style={{background:C.card,color:C.ink,border:`1px solid ${C.border}`,borderRadius:100,padding:"10px 16px",fontSize:13,cursor:"pointer"}}>
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
             {nuevoAprendizaje&&(
               <div className="msg-in" style={{display:"flex",justifyContent:"center",marginTop:4,marginBottom:4}}>
                 <div style={{background:"#1E5C3A20",border:"1px solid #1E5C3A60",borderRadius:14,padding:"12px 16px",maxWidth:"85%",textAlign:"center"}}>

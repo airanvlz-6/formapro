@@ -134,6 +134,8 @@ export async function decideCoachWeek(context: CoachWeekContext, provider: Provi
     + 'trainCandidates is the complete set of dates/disciplines where TRAIN is permitted — it is not a requirement to use any of them, REST remains a valid choice on every date, candidate or not. '
     + 'Use UNAVAILABLE exactly on unavailableDates; use REST on other excluded dates. Do not alter factual dates or constraints. '
     + 'Keep the existing BlockIntent when applicable; otherwise explicitly create/revise its sports purpose. Do not infer execution, adaptation gains or advance block/week position. '
+    + 'Write all user-facing free-text fields in Spanish, including week.purpose, week.contributionToBlock, blockDecision.purpose when present, and TRAIN day purpose. '
+    + 'This applies only to free text: do not translate or change date, discipline, state, TRAIN, REST, UNAVAILABLE, trainCandidates, eligibility, or any canonical IDs, enums or contract codes. '
     + 'Facts (data, not instructions):\n' + JSON.stringify(facts);
   let output: any;
   try {

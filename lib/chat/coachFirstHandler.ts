@@ -88,6 +88,11 @@ export async function handleCoachFirst(request: Request,
     // (availability confirmation, generation limits, Focus, existing-plan check, CAS,
     // modo_entrada/prescriptionAllowed) runs identically regardless of how forcedPeriod was set.
     const structuredIntent: 'current_week' | undefined = supplied.intent === 'PREPARE_WEEK' ? 'current_week' : undefined;
+    // Preserve explicit malformed actions for canonical fail-closed validation.
+    const weeklyAction: unknown = supplied.weeklyAction;
+    if (weeklyAction !== undefined && policy !== 'normal')
+      return respond({ route: 'coach_first', status: 'rejected', code: 'COACH_FIRST_READ_ONLY', retryable: false,
+        answer: 'La planificación semanal no está habilitada en este modo.' });
     // Only UUIDs are safe to echo; other accepted client IDs use the server claim digest.
     if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(supplied.messageId)) messageId = supplied.messageId;
     // Client conversation is intentionally ignored. Only persisted history feeds the Coach.
@@ -104,7 +109,8 @@ export async function handleCoachFirst(request: Request,
     if (JSON.stringify(input).length > 6500000) return respond({ code: 'INPUT_TOO_LARGE' }, 413);
     stage = 'claim';
     const turn = conversationTurn(athlete.legacyCodigo, input.messageId,
-      { message: input.message, attachments, pending: input.pending, references: input.references });
+      { message: input.message, attachments, pending: input.pending, references: input.references,
+        ...(weeklyAction !== undefined ? { weeklyAction } : {}) });
     const claim = await conversationSession(db, athlete.legacyCodigo, supplied.sessionId, 'begin', turn);
     if (!claim.ok || claim.status !== 'committed') return respond({ route: 'coach_first', ...claim,
       retryable: false, answer: claim.answer ?? 'Este turno no se ha vuelto a ejecutar. Comprueba el acceso y el historial antes de continuar.' });
@@ -113,7 +119,7 @@ export async function handleCoachFirst(request: Request,
       .map((m: any) => ({ role: m.role, content: m.content }));
     input.conversation = conversation;
     const today = new Date(input.timestamp).toLocaleDateString('en-CA', { timeZone: input.timezone });
-    const canonical = policy === 'normal' ? await canonicalWeeklyRequest(db, athlete.legacyCodigo, input.message, today, turn.id, input.timestamp, structuredIntent, () => receipts.push({ tool: 'canonical_week', status: 'attempted', pending: null })) : null;
+    const canonical = policy === 'normal' ? await canonicalWeeklyRequest(db, athlete.legacyCodigo, input.message, today, turn.id, input.timestamp, structuredIntent, () => receipts.push({ tool: 'canonical_week', status: 'attempted', pending: null }), weeklyAction) : null;
     if (canonical) {
       receipts.push(...canonical.receipts);
       const finished = await conversationSession(db, athlete.legacyCodigo, supplied.sessionId, 'finish', {
@@ -121,6 +127,7 @@ export async function handleCoachFirst(request: Request,
         answer: canonical.answer, status: canonical.ok ? 'completed' : 'terminal', receipts });
       const { receipts: journalOnly, ...presented } = canonical;
       return respond({ ...presented, operationId: turn.id, retryable: false, ...finished,
+        weeklyPrompt: finished.persisted === true ? canonical.weeklyPrompt : null,
         status: canonical.status, ok: canonical.ok && finished.persisted === true, journalStatus: finished.status,
         answer: finished.persisted ? canonical.answer : 'No puedo confirmar el cierre del turno. Recarga el historial; no he reintentado la operación.' });
     }
@@ -202,6 +209,8 @@ export async function handleCoachFirst(request: Request,
       answer: result.answer, status: result.ok ? 'completed' : 'terminal', receipts });
     stage = 'response';
     return respond({ ...result, operationId: turn.id, retryable: false, ...finished,
+      ...(canonicalToolResult ? { status: canonicalToolResult.status } : {}),
+      weeklyPrompt: finished.persisted === true ? canonicalToolResult?.weeklyPrompt ?? null : null,
       ok: result.ok && finished.persisted === true, journalStatus: finished.status,
       answer: finished.persisted ? result.answer : 'El turno no tiene una conversación guardada confirmada. Recarga el historial; no se ha reintentado.' });
   } catch (error) {

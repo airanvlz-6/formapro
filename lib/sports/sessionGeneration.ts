@@ -11,6 +11,7 @@ import { parseStructuredSession, validateSessionAgainstTrainingContract, renderC
 import { detectarSesionDuplicada, type SesionParaComparar } from '../validators/sessionDuplicationValidator';
 import { STRUCTURED_DOSE_INSTRUCTIONS } from './sessionProfessionalRenderer';
 import { prescriptionGenerationOptions } from './prescriptionDataSufficiency';
+import { hrReferenceRepairFeedback } from './hrReferenceRepair';
 import { emitSessionDoseAuthority, emitSessionCoachingDiagnostic, sessionCoachingHistoryDiagnostic } from './sessionDoseDiagnostics';
 import { calculatedLoad } from './sessionDose';
 import type { PresentationVersion } from './sessionPresentation';
@@ -136,6 +137,9 @@ Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gram�
   let finalDecisionRepair = '';
   if (authority.developmentAreas) prompt += '\n' + DEVELOPMENT_INTENT_INSTRUCTION;
   let shapeDetails: SessionShapeDiagnostic[] = [];
+  // Heart-rate Numeric Truth feedback for the retry: locates failing fields and lists executable
+  // referenceIds per movement. Prompt-only; the validator is not consulted differently or relaxed.
+  let hrRepair = '';
   let missingDetails: SufficiencyFailure[] = [];
   for (let attempt = 0; attempt < 2; attempt++) {
     trace.beginAttempt();
@@ -143,7 +147,7 @@ Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gram�
     const duplicateCorrection = attempt && previousErrors.some(v => v.startsWith('DUPLICATE_MOVEMENT:'))
       ? `\nREPAIR_CONSTRAINTS:\n${JSON.stringify({ previousErrors: ['DUPLICATE_MOVEMENT'], scope: 'within_each_block',
         instruction: 'Cada movementId debe aparecer como máximo una vez dentro de cada bloque. Recompón la propuesta dentro del mismo contrato; no traslades ni elimines dosis automáticamente. Esta restricción no prohíbe repetir un movementId entre warmup y main con dosis apropiadas.' })}` : '';
-    try { raw = trace.completion(await complete(prompt + (attempt ? `\nLa primera propuesta fue rechazada: ${JSON.stringify(previousErrors)}. ${finalDecisionRepair ? 'Corrige el campo indicado en la propuesta anterior; conserva los demás campos válidos y el MISMO contrato.' : 'Devuelve una composición válida dentro del MISMO contrato; no repitas la propuesta rechazada.'}` : '') + (attempt ? finalDecisionRepair : '') + (attempt && shapeDetails.length ? `\nREPAIR_SHAPE_DETAILS:\n${JSON.stringify(shapeDetails)}` : '') + duplicateCorrection)); }
+    try { raw = trace.completion(await complete(prompt + (attempt ? `\nLa primera propuesta fue rechazada: ${JSON.stringify(previousErrors)}. ${finalDecisionRepair ? 'Corrige el campo indicado en la propuesta anterior; conserva los demás campos válidos y el MISMO contrato.' : 'Devuelve una composición válida dentro del MISMO contrato; no repitas la propuesta rechazada.'}` : '') + (attempt ? finalDecisionRepair + hrRepair : '') + (attempt && shapeDetails.length ? `\nREPAIR_SHAPE_DETAILS:\n${JSON.stringify(shapeDetails)}` : '') + duplicateCorrection)); }
     catch { trace.emit(attempt + 1, 'provider', 'SESSION_GENERATION_FAILED', ['LLM_REQUEST_FAILED'], false, 'provider_failure_terminal'); return { ok: false as const, code: 'SESSION_GENERATION_FAILED', violations: ['LLM_REQUEST_FAILED'], diagnostics: trace.summary() }; }
     shapeDetails = [];
     const parsed = parseStructuredSession(raw, openExecution(authority), detail => { shapeDetails.push(detail); trace.shape(attempt + 1, detail); },
@@ -222,6 +226,11 @@ Devuelve schemaVersion:2, stimulusId exacto del intent, structureId de una gram�
       if (authority.generatedMovementAuthority) emitSessionCoachingDiagnostic('MOVEMENT_FEASIBILITY', { result: 'REJECT', errors: movementDiagnosticCodes(validation.violations) });
       if (coach) emitSessionCoachingDiagnostic('SESSION_AUTHORITY_RESOLUTION', { rejections: validation.violations });
       previousErrors = validation.violations;
+      hrRepair = hrReferenceRepairFeedback(validation.violations, parsed.proposal, movementId => {
+        const sufficiency = authority.doseContext?.sufficiency;
+        return sufficiency ? prescriptionGenerationOptions(sufficiency, authority.doseContext!.references, [movementId], authority.discipline, {}, authority.contractVersion === 4)
+          .flatMap(o => o.executableReferenceIds) : [];
+      });
       const retry = !attempt && (coach || validation.violations.some(v => v.startsWith('RUNNING_METHOD_DOSE_') || v.startsWith('PRESCRIPTION_DATA_') || v.startsWith('DOSE_') || v.startsWith('STRUCTURE_') || v.startsWith('SESSION_DOSE_') || v.startsWith('SESSION_BUDGET_') || v.startsWith('SESSION_DURATION_')));
       trace.emit(attempt + 1, contractFailureStage(validation.violations), 'SESSION_CONTRACT_INVALID', validation.violations, !!retry, retry ? 'contract_rule_retry' : attempt ? 'attempt_limit' : 'contract_rule_not_retryable', missingDetails);
       if (retry) continue;

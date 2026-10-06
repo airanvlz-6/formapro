@@ -7,6 +7,8 @@ import { authorizeChatRequest } from '@/lib/auth/chatIdentity';
 import { identityDependencies } from '@/lib/auth/supabaseServer';
 import { readWorkouts } from '@/lib/execution/workoutRegistry';
 import { projectWorkoutPlans } from '@/lib/execution/workoutProjections';
+import { addCivilDays, civilWeekStart } from '@/lib/planning/civilCalendar';
+import { combineActualActivity, currentExecutions, describeDayActivity, describeWeekActivity, prescribedAdherence, prescribedSessionDate } from '@/lib/execution/workoutActivity';
 import { IdentityError } from '@/lib/auth/athleteIdentity';
 import { coachFirstEnabled, legacyConversationOperations } from '@/lib/chat/coachFirstFlag';
 import { handleCoachFirst } from '@/lib/chat/coachFirstHandler';
@@ -1359,8 +1361,19 @@ if (action === "verificar_cambio_modo") {
       asOfDate: recovery.objective.effectiveDate, toDate: recovery.objective.effectiveDate, limit: 60,
     });
     if (!canonicalHistory.ok) throw new RecoveryReadError(canonicalHistory);
+    // CANONICAL ACTIVITY TOTALS (aditivo): el total real no depende solo de workout_history legacy.
+    // workout_history se devuelve sin cambios para consumidores existentes. Si la lectura canonica
+    // falla NO se inventa un total: canonical_activity=null y el error queda explicito.
+    let canonicalActivity: Record<string, unknown> | null = null, canonicalActivityError: string | null = null;
+    try {
+      const combined = combineActualActivity(await readWorkouts(supabase, codigo, false), data?.workout_history);
+      canonicalActivity = { totalSessions: combined.totalExecutions, canonicalExecutions: combined.canonical.length,
+        legacyOnlyEntries: combined.legacyUnique.length,
+        canonicalTrainedDays: new Set(combined.canonical.map(r => r.data.executedOn)).size };
+    } catch { canonicalActivityError = 'WORKOUT_READ_FAILED'; }
     return NextResponse.json({ data: {
       ...data,
+      canonical_activity: canonicalActivity, canonical_activity_error: canonicalActivityError,
       canonical_physiology: { current: recovery.objective, subjective: recovery.subjective,
         trends: recovery.trends, history: canonicalHistory.snapshots },
     } });
@@ -3619,9 +3632,14 @@ Mensaje: "${mensaje}"
     // FASE 3 — FIX: eliminado el placeholder 0.5 hardcoded, conectado a la señal real ya construida
     // (calcularFrecuenciaRealRelativa, misma que alimenta el Training Frequency Safety Net) —
     // sesiones completadas ultimos 7 dias / dias declarados, dato 100% objetivo y determinista.
+    // CANONICAL EXECUTION vs PRESCRIPTION (2026-10-06) — la frecuencia real cuenta TODA ejecucion
+    // canonica vigente (vinculada o libre) + legacy no duplicado; usuarios.workout_history esta congelado.
+    let workoutRecordsToday: Awaited<ReturnType<typeof readWorkouts>>;
+    try { workoutRecordsToday = await readWorkouts(supabase, codigo, true); }
+    catch { return NextResponse.json({ ok: false, code: 'WORKOUT_READ_FAILED', error: 'No se pudo consultar la ejecución de entrenamientos.' }, { status: 503 }); }
     const { data: usuarioParaFrecuenciaToday } = await supabase.from("usuarios").select("perfil,workout_history").eq("codigo", codigo).single();
     const diasDeclaradosToday = parseInt(usuarioParaFrecuenciaToday?.perfil?.dias || "0") || 0;
-    const frecuenciaRealTodayState = calcularFrecuenciaRealRelativa(usuarioParaFrecuenciaToday?.workout_history || [], diasDeclaradosToday) ?? 0.5;
+    const frecuenciaRealTodayState = calcularFrecuenciaRealRelativa(combineActualActivity(workoutRecordsToday, usuarioParaFrecuenciaToday?.workout_history).history, diasDeclaradosToday) ?? 0.5;
     const resultadoReadinessToday = calcularReadiness(preparedToday.points, frecuenciaRealTodayState, preparedToday.baselines);
     const forgeStateToday = scoreAForgeState(resultadoReadinessToday.score);
 
@@ -3634,7 +3652,10 @@ Mensaje: "${mensaje}"
     // tilde en weekly_plan, coherente con el resto del sistema), asi que .find() siempre devolvia
     // undefined y TODAY mostraba "sin sesion programada" aunque si existiera una sesion real.
     const normalizarDiaTodayState = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-    const diaSemanaToday = normalizarDiaTodayState(new Date().toLocaleDateString("es-ES", { weekday: "long", timeZone: "Europe/Madrid" }));
+    // El dia de hoy es el dia CIVIL del atleta (Atlantic/Canary), el mismo que fecha `activity`; antes el
+    // dia de la semana salia de Europe/Madrid y diferia una hora al dia (23:00-24:00 Canarias).
+    const hoyCivilTodayState = new Date().toLocaleDateString('en-CA', { timeZone: 'Atlantic/Canary' });
+    const diaSemanaToday = normalizarDiaTodayState(new Date(hoyCivilTodayState + 'T12:00:00Z').toLocaleDateString("es-ES", { weekday: "long", timeZone: "UTC" }));
     // FORGE NEXT ACTION (2026-10-01) \u2014 MISMO resolver que obtener_plan_semana_v2
     // (resolveCurrentWeekState), para que Today y Plan nunca calculen el estado de la semana por
     // separado ni con criterios distintos. Sustituye el "ORDER BY week_start DESC LIMIT 1" previo,
@@ -3642,7 +3663,13 @@ Mensaje: "${mensaje}"
     const hoyWeekStateToday = new Date().toLocaleDateString('en-CA', { timeZone: 'Atlantic/Canary' });
     const { data: usuarioModoTodayState } = await supabase.from("usuarios").select("modo_entrada").eq("codigo", codigo).single();
     const weekStateToday = await resolveCurrentWeekState(supabase, codigo, hoyWeekStateToday, usuarioModoTodayState?.modo_entrada ?? null);
-    const sesionHoyTodayState = (weekStateToday.sessions || []).find((s: any) => normalizarDiaTodayState(s.dia).includes(diaSemanaToday));
+    // PLAN layer: `completada` = "la sesion PRESCRITA fue realizada" (solo ejecucion vinculada performed),
+    // proyectada en lectura; weekly_plan no se escribe. Nunca significa "el atleta entreno hoy".
+    const projectedSessionsToday = projectWorkoutPlans([{ id: weekStateToday.planId, sessions: weekStateToday.sessions ?? [] }], workoutRecordsToday)[0].sessions;
+    const sesionHoyTodayState = projectedSessionsToday.find((s: any) => normalizarDiaTodayState(s.dia).includes(diaSemanaToday));
+    // EXECUTION layer: hecho factual del dia civil, de TODAS las ejecuciones canonicas vigentes.
+    const activityToday = describeDayActivity({ date: hoyWeekStateToday, records: workoutRecordsToday,
+      prescribed: sesionHoyTodayState ? [{ planId: String(weekStateToday.planId), sessionId: sesionHoyTodayState.session_id ?? null, tipo: sesionHoyTodayState.tipo }] : [] });
     const intensidadTodayState = contextualSessionIntensity(sesionHoyTodayState);
     const decisionTodayState = evaluarRelevanciaContextual(resultadoReadinessToday, intensidadTodayState);
 
@@ -3651,11 +3678,11 @@ Mensaje: "${mensaje}"
     // FIX: la actividad reciente debe ser la sesion completada REALMENTE mas reciente por fecha,
     // no la primera que aparezca en el array — antes mezclaba semanas sin ordenar por fecha real,
     // mostrando una sesion antigua en vez de la genuinamente mas reciente.
-    const { data: planesRecientesActividad } = await supabase.from("weekly_plan").select("sessions,week_start").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(2);
+    const { data: planesRecientesActividad } = await supabase.from("weekly_plan").select("id,sessions,week_start").eq("user_codigo", codigo).order("week_start", { ascending: false }).limit(2);
     const ORDEN_DIAS_ACTIVIDAD = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"];
     const normalizarDiaActividad = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
     const todasLasSesionesActividad: any[] = [];
-    (planesRecientesActividad || []).forEach((p: any) => {
+    projectWorkoutPlans(planesRecientesActividad || [], workoutRecordsToday).forEach((p: any) => {
       const weekStartDate = new Date(p.week_start);
       (p.sessions || []).filter((s: any) => s.completada).forEach((s: any) => {
         const idxDia = ORDEN_DIAS_ACTIVIDAD.indexOf(normalizarDiaActividad(s.dia));
@@ -3665,7 +3692,16 @@ Mensaje: "${mensaje}"
       });
     });
     todasLasSesionesActividad.sort((a, b) => b._fechaRealCalculada - a._fechaRealCalculada);
-    const ultimaActividadReal = todasLasSesionesActividad[0] || null;
+    const ultimaPlanActividad = todasLasSesionesActividad[0] || null;
+    // Ultima actividad REAL: la ejecucion canonica mas reciente (vinculada o libre) gana al
+    // completado legacy del plan cuando es igual o posterior.
+    const ultimaCanonica = currentExecutions(workoutRecordsToday)
+      .reduce((best: any, r: any) => !best || r.data.executedOn > best.data.executedOn ? r : best, null);
+    const ultimaCanonicaMs = ultimaCanonica ? Date.parse(ultimaCanonica.data.executedOn + 'T00:00:00Z') : null;
+    const ultimaActividadReal = ultimaCanonica && (!ultimaPlanActividad || ultimaCanonicaMs! >= ultimaPlanActividad._fechaRealCalculada)
+      ? { titulo: ultimaCanonica.data.title, tipo: ultimaCanonica.data.discipline, fecha: ultimaCanonica.data.executedOn,
+          dia: ORDEN_DIAS_ACTIVIDAD[(new Date(ultimaCanonica.data.executedOn + 'T00:00:00Z').getUTCDay() + 6) % 7] }
+      : ultimaPlanActividad;
 
     const todayState = {
       readiness: {
@@ -3688,7 +3724,9 @@ Mensaje: "${mensaje}"
       },
       todaySession: sesionHoyTodayState ? {
         titulo: sesionHoyTodayState.titulo, tipo: sesionHoyTodayState.tipo,
-        completada: !!sesionHoyTodayState.completada,
+        completada: !!sesionHoyTodayState.completada, // PLAN: sesion prescrita realizada (performed vinculada)
+        planId: weekStateToday.planId ?? null,
+        sessionId: sesionHoyTodayState.session_id ?? null,
         // FIX: extraer del TITULO (ej: "...60min"), no de la descripcion completa que
         // contiene multiples menciones de minutos (calentamiento, bloque, vuelta a la calma)
         // y capturaba incorrectamente la primera (ej: "10 min" del calentamiento)
@@ -3696,7 +3734,14 @@ Mensaje: "${mensaje}"
       } : null,
       recentActivity: ultimaActividadReal ? {
         titulo: ultimaActividadReal.titulo, tipo: ultimaActividadReal.tipo, dia: ultimaActividadReal.dia,
+        ...(ultimaActividadReal.fecha ? { fecha: ultimaActividadReal.fecha } : {}),
       } : null,
+      // EXECUTION: que hizo realmente el atleta hoy (aditivo, independiente de todaySession.completada).
+      activity: {
+        date: activityToday.date, dayTrained: activityToday.dayTrained, executionCount: activityToday.executionCount,
+        prescribedSessionPerformed: activityToday.prescribedSessionPerformed, unplannedTraining: activityToday.unplannedTraining,
+        restDay: activityToday.restDay, executions: activityToday.executions,
+      },
       checkinDisponible: checkinTodayData?.readiness_score === undefined || checkinTodayData?.readiness_score === null,
       // FORGE NEXT ACTION (2026-10-01) — aditivo. Un cliente que ignore estos dos campos sigue
       // funcionando exactamente igual que antes. TodayScreen.tsx nunca debe inferir estado de
@@ -3715,9 +3760,12 @@ Mensaje: "${mensaje}"
     if (!preparedReadiness.ok) return NextResponse.json({ ok: false, error: preparedReadiness.error, reason: preparedReadiness.reason },
       { status: preparedReadiness.error === "invalid_input" ? 400 : 503 });
     // FASE 3 — FIX: eliminado el placeholder 0.5 hardcoded, conectado a calcularFrecuenciaRealRelativa
+    let workoutRecordsReadiness: Awaited<ReturnType<typeof readWorkouts>>;
+    try { workoutRecordsReadiness = await readWorkouts(supabase, codigo, false); }
+    catch { return NextResponse.json({ ok: false, code: 'WORKOUT_READ_FAILED', error: 'No se pudo consultar la ejecución de entrenamientos.' }, { status: 503 }); }
     const { data: usuarioParaFrecuenciaCalculado } = await supabase.from("usuarios").select("perfil,workout_history").eq("codigo", codigo).single();
     const diasDeclaradosCalculado = parseInt(usuarioParaFrecuenciaCalculado?.perfil?.dias || "0") || 0;
-    const frecuenciaRealCalculado = calcularFrecuenciaRealRelativa(usuarioParaFrecuenciaCalculado?.workout_history || [], diasDeclaradosCalculado) ?? 0.5;
+    const frecuenciaRealCalculado = calcularFrecuenciaRealRelativa(combineActualActivity(workoutRecordsReadiness, usuarioParaFrecuenciaCalculado?.workout_history).history, diasDeclaradosCalculado) ?? 0.5;
     const resultadoReadiness = calcularReadiness(preparedReadiness.points, frecuenciaRealCalculado, preparedReadiness.baselines);
     const forgeState = scoreAForgeState(resultadoReadiness.score);
 
@@ -4842,11 +4890,30 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
     const weekStatePlanV2 = await resolveCurrentWeekState(supabase, codigo, hoyPlanV2, usuarioModoPlanV2?.modo_entrada ?? null);
 
     if (weekStatePlanV2.weekState === 'NO_PLAN_FOUND' || weekStatePlanV2.weekState === 'LOAD_ERROR') {
-      return NextResponse.json({ ok: true, weekStart: null, sessions: [],
+      return NextResponse.json({ ok: true, weekStart: null, planId: null, sessions: [],
         weekState: weekStatePlanV2.weekState, nextAction: weekStatePlanV2.nextAction });
     }
 
-    const sessionsConContexto = (weekStatePlanV2.sessions || []).map((s: any) => ({
+    // CANONICAL EXECUTION PROJECTION (2026-10-05) — weekly_plan sigue siendo PRESCRIPCION pura;
+    // running_execution_records es la EJECUCION FACTUAL. Proyectamos aqui, en lectura, exactamente
+    // con la misma funcion que ya usa obtener_plan_semana (no v2) — projectWorkoutPlans/readWorkouts,
+    // SIN reimplementar la logica ni escribir nunca sessions[].completada en weekly_plan.
+    let projectedSessionsPlanV2: any[];
+    let weekActivityPlanV2: ReturnType<typeof describeWeekActivity>;
+    try {
+      const planShapedPlanV2 = { id: weekStatePlanV2.planId, sessions: weekStatePlanV2.sessions ?? [] };
+      const workoutRecordsPlanV2 = await readWorkouts(supabase, codigo, true);
+      projectedSessionsPlanV2 = projectWorkoutPlans([planShapedPlanV2], workoutRecordsPlanV2)[0].sessions;
+      // EXECUTION layer, separada: actividad factual por dia civil de la semana (incluye ejecuciones libres
+      // y dias sin sesion). No altera forge_context.execution, que sigue siendo estado de la sesion prescrita.
+      weekActivityPlanV2 = describeWeekActivity({ weekStart: weekStatePlanV2.weekStart, plans: [planShapedPlanV2], records: workoutRecordsPlanV2 });
+    } catch {
+      return NextResponse.json({ ok: false, code: 'WORKOUT_READ_FAILED', error: 'No se pudo consultar la ejecución de las sesiones.' }, { status: 503 });
+    }
+
+    const sessionsConContexto = projectedSessionsPlanV2.map((s: any) => ({
+      session_id: s.session_id,
+      date: prescribedSessionDate(weekStatePlanV2.weekStart, s.dia),
       dia: s.dia,
       titulo: s.titulo,
       tipo: s.tipo,
@@ -4858,7 +4925,9 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
       },
     }));
 
-    return NextResponse.json({ ok: true, weekStart: weekStatePlanV2.weekStart, sessions: sessionsConContexto,
+    return NextResponse.json({ ok: true, weekStart: weekStatePlanV2.weekStart, planId: weekStatePlanV2.planId, sessions: sessionsConContexto,
+      weekActivity: weekActivityPlanV2.map(d => ({ date: d.date, dayTrained: d.dayTrained, executionCount: d.executionCount,
+        prescribedSessionPerformed: d.prescribedSessionPerformed, unplannedTraining: d.unplannedTraining, restDay: d.restDay })),
       weekState: weekStatePlanV2.weekState, nextAction: weekStatePlanV2.nextAction });
   }
 
@@ -5294,9 +5363,38 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
     const { data: usuario } = await supabase.from("usuarios").select("perfil,workout_history,ciclo_actual").eq("codigo", codigo).single();
     if (!usuario) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
 
-    const workouts = usuario.workout_history || [];
     const perfil = usuario.perfil || {};
     const ciclo = usuario.ciclo_actual || {};
+
+    // CANONICAL EVIDENCE MIGRATION (2026-10-05) — running_execution_records es la fuente factual;
+    // usuarios.workout_history esta CONGELADO (ningun escritor activo desde antes del 2026-09-30,
+    // ver verificar_sesion_completada_deterministico retirado y actualizar_usuario que descarta
+    // workout_history de cualquier patch generico). Aun asi NO se elimina su lectura todavia: las
+    // ventanas 7/28 dias de HOY pueden contener ejecuciones legacy anteriores a CORE-REG. Leemos
+    // ambas fuentes y las combinamos sin doble conteo, exactamente con el mismo criterio de
+    // deduplicacion por executionId/workout_id/operationId ya usado en
+    // lib/core/recentTrainingEvidence.ts (una ejecucion legacy que ya tiene representacion
+    // canonica se descarta). Esto es una transicion de LECTURA, no una migracion de BD: no se
+    // escribe nada, no se borra workout_history, no se reintroduce ningun escritor legacy.
+    let canonical: Awaited<ReturnType<typeof readWorkouts>> = [];
+    let allWorkoutRecordsAdherencia: Awaited<ReturnType<typeof readWorkouts>> = [];
+    try {
+      // includeDeleted=true: la proyeccion de adherencia prescrita necesita las tombstones; la actividad real las filtra.
+      allWorkoutRecordsAdherencia = await readWorkouts(supabase, codigo, true);
+      canonical = currentExecutions(allWorkoutRecordsAdherencia);
+    } catch {
+      return NextResponse.json({ ok: false, code: 'WORKOUT_READ_FAILED', error: 'No se pudo consultar la ejecución de entrenamientos.' }, { status: 503 });
+    }
+    const canonicalIds = new Set(canonical.map((r: any) => r.executionId));
+    const legacyWorkouts = Array.isArray(usuario.workout_history) ? usuario.workout_history : [];
+    const legacyUnique = legacyWorkouts.filter((w: any) =>
+      !canonicalIds.has(w?.operationId) && !canonicalIds.has(w?.workout_id));
+
+    // Fechas realizadas combinadas: canonical (data.executedOn, civil) + legacy no duplicado (fecha).
+    const fechasRealizadas: Date[] = [
+      ...canonical.map((r: any) => new Date(r.data.executedOn)),
+      ...legacyUnique.map((w: any) => new Date(w.fecha)),
+    ].filter((d) => !Number.isNaN(d.getTime()));
 
     const diasStr = perfil.dias || "3 dias";
     const diasSemana = parseInt(diasStr) || 3;
@@ -5305,24 +5403,43 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
     const hace7 = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000);
     const hace28 = new Date(ahora.getTime() - 28 * 24 * 60 * 60 * 1000);
 
-    const sesiones7 = workouts.filter((w: any) => new Date(w.fecha) >= hace7).length;
-    const sesiones28 = workouts.filter((w: any) => new Date(w.fecha) >= hace28).length;
+    const sesiones7 = fechasRealizadas.filter((f) => f >= hace7).length;
+    const sesiones28 = fechasRealizadas.filter((f) => f >= hace28).length;
 
     const planificadas7 = diasSemana;
     const planificadas28 = diasSemana * 4;
 
     const semanasCiclo = ciclo.semana || 1;
-    const sesionesBloque = workouts.filter((w: any) => {
-      const fechaInicioCiclo = new Date(ahora.getTime() - (semanasCiclo * 7 * 24 * 60 * 60 * 1000));
-      return new Date(w.fecha) >= fechaInicioCiclo;
-    }).length;
+    const fechaInicioCiclo = new Date(ahora.getTime() - (semanasCiclo * 7 * 24 * 60 * 60 * 1000));
+    const sesionesBloque = fechasRealizadas.filter((f) => f >= fechaInicioCiclo).length;
     const planificadasBloque = diasSemana * semanasCiclo;
 
     const adherencia7 = Math.min(100, Math.round((sesiones7 / planificadas7) * 100));
     const adherencia28 = Math.min(100, Math.round((sesiones28 / planificadas28) * 100));
     const adherenciaBloque = Math.min(100, Math.round((sesionesBloque / planificadasBloque) * 100));
 
-    return NextResponse.json({ adherencia7, adherencia28, adherenciaBloque, diasSemana });
+    // PLAN vs EXECUTION (2026-10-06). Los campos historicos adherencia7/28/Bloque NO cambian de valor ni
+    // de significado (actividad real contra dias declarados, todas las ejecuciones). Se anaden, aditivos y
+    // separados: `activity` (dias entrenados y ejecuciones reales, incluidas las libres) y `prescribed`
+    // (sesiones prescritas vencidas vs realizadas con ejecucion performed vinculada). Una ejecucion libre
+    // o sustitutiva cuenta como actividad, nunca como cumplimiento prescrito.
+    const hoyAdherencia = ahora.toLocaleDateString('en-CA', { timeZone: 'Atlantic/Canary' });
+    const diasActividad = (n: number) => new Set([
+      ...canonical.map((r: any) => r.data.executedOn),
+      ...legacyUnique.map((w: any) => String(w.fecha ?? '').slice(0, 10)),
+    ].filter((d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= addCivilDays(hoyAdherencia, 1 - n) && d <= hoyAdherencia)).size;
+    let prescribed: Record<string, unknown> | null = null;
+    try {
+      const { data: planesAdherencia, error: planesAdherenciaError } = await supabase.from("weekly_plan").select("id,sessions,week_start")
+        .eq("user_codigo", codigo).gte("week_start", civilWeekStart(addCivilDays(hoyAdherencia, -27))).limit(20);
+      if (planesAdherenciaError || !Array.isArray(planesAdherencia)) throw new Error('PLAN_READ_FAILED');
+      const projectedPlansAdherencia = projectWorkoutPlans(planesAdherencia, allWorkoutRecordsAdherencia);
+      prescribed = { last7: prescribedAdherence({ today: hoyAdherencia, windowDays: 7, projectedPlans: projectedPlansAdherencia }),
+        last28: prescribedAdherence({ today: hoyAdherencia, windowDays: 28, projectedPlans: projectedPlansAdherencia }) };
+    } catch { prescribed = null; }
+    return NextResponse.json({ adherencia7, adherencia28, adherenciaBloque, diasSemana,
+      activity: { trainedDays7: diasActividad(7), trainedDays28: diasActividad(28), executions7: sesiones7, executions28: sesiones28 },
+      prescribed });
   }
 
 

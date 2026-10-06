@@ -30,6 +30,9 @@ export interface ResolvedCurrentWeekState {
   nextAction: NextAction;
   /** Present only when weekState === 'PLAN_ACTIVE' | 'PLAN_EMPTY'. */
   sessions: any[] | null;
+  /** weekly_plan.id for the resolved row, or null when no row exists (NO_PLAN_FOUND/LOAD_ERROR).
+   * Additive field: existing consumers that destructure only the fields above are unaffected. */
+  planId: string | null;
 }
 
 /** Intentionally loose: the real caller is a Supabase client whose query builder is thenable,
@@ -69,19 +72,19 @@ export async function resolveCurrentWeekState(
   modoEntrada: string | null | undefined,
 ): Promise<ResolvedCurrentWeekState> {
   if (!isCivilDate(referenceDate)) {
-    return { weekStart: referenceDate, weekState: 'LOAD_ERROR', nextAction: { type: 'NONE' }, sessions: null };
+    return { weekStart: referenceDate, weekState: 'LOAD_ERROR', nextAction: { type: 'NONE' }, sessions: null, planId: null };
   }
   const weekStart = civilWeekStart(referenceDate);
 
   let row: { data: any; error: any };
   try {
-    row = await db.from('weekly_plan').select('sessions,week_start')
+    row = await db.from('weekly_plan').select('id,sessions,week_start')
       .eq('user_codigo', userCodigo).eq('week_start', weekStart).maybeSingle();
   } catch {
-    return { weekStart, weekState: 'LOAD_ERROR', nextAction: { type: 'NONE' }, sessions: null };
+    return { weekStart, weekState: 'LOAD_ERROR', nextAction: { type: 'NONE' }, sessions: null, planId: null };
   }
   if (row.error) {
-    return { weekStart, weekState: 'LOAD_ERROR', nextAction: { type: 'NONE' }, sessions: null };
+    return { weekStart, weekState: 'LOAD_ERROR', nextAction: { type: 'NONE' }, sessions: null, planId: null };
   }
 
   const planningAllowed = !PLANNING_PROHIBITED_MODES.has(String(modoEntrada));
@@ -92,6 +95,7 @@ export async function resolveCurrentWeekState(
       weekState: 'NO_PLAN_FOUND',
       nextAction: planningAllowed ? { type: 'PREPARE_WEEK', reason: 'no_plan_found' } : { type: 'NONE' },
       sessions: null,
+      planId: null,
     };
   }
 
@@ -106,5 +110,6 @@ export async function resolveCurrentWeekState(
     weekState: sessions.length > 0 ? 'PLAN_ACTIVE' : 'PLAN_EMPTY',
     nextAction: { type: 'NONE' },
     sessions,
+    planId: row.data.id != null ? String(row.data.id) : null,
   };
 }

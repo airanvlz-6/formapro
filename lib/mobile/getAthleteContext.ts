@@ -4,6 +4,8 @@
 // Contrato de equivalencia documentado en FORGE_BUILDPROMPT_CONTRATO_EQUIVALENCIA.md
 
 import { createClient } from "@supabase/supabase-js";
+import { readWorkouts } from "@/lib/execution/workoutRegistry";
+import { projectWorkoutPlans } from "@/lib/execution/workoutProjections";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -60,7 +62,14 @@ export async function getAthleteContext(codigo: string) {
   lunesCtx.setDate(hoyCtxFecha.getDate() - diaSemCtx + 1);
   const weekStartCtx = lunesCtx.toISOString().split('T')[0];
   const { data: planSemanaData } = await supabase.from("weekly_plan").select("*").eq("user_codigo", codigo).eq("week_start", weekStartCtx).single();
-  const planSemanal = planSemanaData || null;
+  // CANONICAL EXECUTION PROJECTION (2026-10-05) — misma resolucion/proyeccion canonica que
+  // obtener_plan_semana_v2: reutiliza projectWorkoutPlans/readWorkouts (ninguna tercera
+  // implementacion de "resolucion de semana + lectura de plan + proyeccion de ejecucion").
+  // weekly_plan sigue siendo PRESCRIPCION pura; esto solo proyecta en lectura. Tras un
+  // recordWorkout vinculado, el Coach ve la sesion como completada sin que el LLM escriba nada.
+  const planSemanal = planSemanaData
+    ? projectWorkoutPlans([planSemanaData], await readWorkouts(supabase, codigo, true))[0]
+    : null;
 
   // blockOutcomes — replica EXACTA de la accion obtener_block_outcomes ya existente
   const { data: blockOutcomesData } = await supabase.from("block_outcomes").select("*").eq("user_codigo", codigo).order("fecha_fin", { ascending: false }).limit(10);

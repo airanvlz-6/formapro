@@ -4933,11 +4933,20 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
 
   if (action === "obtener_physiology_records_recientes") {
     const effectiveDate = physiologyToday();
-    const history = await getCanonicalPhysiologyHistory(supabase, codigo, {
-      asOfDate: effectiveDate, toDate: effectiveDate, limit: 7,
-    });
+    // Optional range (datos.fromDate / datos.toDate / datos.limit). Without any of them the call is the original
+    // "7 most recent up to today". Validation of civil dates, fromDate <= toDate and 1..1000 limit is owned by
+    // getCanonicalPhysiologyHistory (invalid_input -> 400); nothing is coerced here, so null/"" are rejected, not defaulted.
+    const rangeInput: Record<string, unknown> = datos && typeof datos === "object" && !Array.isArray(datos) ? datos : {};
+    const rangeRequested = ["fromDate", "toDate", "limit"].some(key => rangeInput[key] !== undefined);
+    const historyOptions: Record<string, unknown> = rangeRequested
+      ? { asOfDate: effectiveDate, toDate: rangeInput.toDate === undefined ? effectiveDate : rangeInput.toDate,
+          ...(rangeInput.fromDate === undefined ? {} : { fromDate: rangeInput.fromDate }),
+          ...(rangeInput.limit === undefined ? {} : { limit: rangeInput.limit }) }
+      : { asOfDate: effectiveDate, toDate: effectiveDate, limit: 7 };
+    const history = await getCanonicalPhysiologyHistory(supabase, codigo, historyOptions);
     if (!history.ok) return NextResponse.json(history, { status: history.error === "invalid_input" ? 400 : 503 });
-    return NextResponse.json({ ok: true, effectiveDate, order: "desc", records: history.snapshots });
+    return NextResponse.json({ ok: true, effectiveDate, order: "desc", records: history.snapshots,
+      ...(rangeRequested ? { range: { fromDate: history.fromDate, toDate: history.toDate, limit: history.limit } } : {}) });
   }
 
   if (action === "sincronizar_healthkit_real") {

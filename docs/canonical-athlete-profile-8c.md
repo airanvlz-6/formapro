@@ -110,8 +110,20 @@ asks the Coach to derive the requirements of that objective (capacities, test/ev
 terrain) marking undeclared data as unknown, and to combine the available means. The LLM interprets and plans; it is not an
 authority over profile truths. There is no per-objective strategy or keyword logic: new objectives need no code.
 Availability, duration, restrictions, references and dose parameters already travel in the weekly contract/coaching context.
-`strategyId` stays the deterministic spine (`GOAL_DEMANDS`, methods, admission); a specialty with no strategy family and a custom
-objective is still stopped by the existing `STRATEGY_UNSUPPORTED` admission gate (goal preserved) — see known limits.
+`strategyId` stays the deterministic spine (`GOAL_DEMANDS`, methods, admission). When neither the objective nor the specialty maps
+to a strategy family, the technical id `general_goal_driven` is the spine (see "Universal goal-driven path"); nothing is blocked
+for lack of a family.
+
+## Universal goal-driven path
+
+Fallback order: 1 `EXACT_GOAL` → 2 `STRUCTURED_EVENT` → 3 `GENERAL_GOAL_DRIVEN` → 4 error only if the objective is missing
+(`GOAL_MISSING`), conflicting primary goals, or the profile fails existing validation. A specialty family (crossfit/hyrox/
+running_general) remains the programming base (`SPECIALTY_FALLBACK`/`GENERAL_FALLBACK` metadata) when it exists; it is not required.
+`general_goal_driven` is a technical id, not a discipline or objective: its `GOAL_DEMANDS` carry only generic SUPPORTING/OPTIONAL
+capacities (no PRIMARY, no objective-specific demand), so the Coach orders the week from `goalRequirements`
+(`universalPath: true`, `trainingContext.category/level`; level read from `declaredLevel`). Restrictions, availability, session
+duration, equipment (explicit unavailable overrides defaults), prescription parameters and admission/materialization checks apply
+unchanged. The LLM never writes the profile.
 
 ## Goal authority vs strategy support
 
@@ -120,14 +132,14 @@ strategy derived from the specialty (`c.recognizedId ?? fallback`) and present i
 with CrossFit specialty was planned and rendered as "Preparación de CrossFit"). Now the result separates:
 
 * `goalAuthority` — `origin: EXPLICIT_OBJECTIVE|NONE`, `objectiveRecognized`, `recognizedGoalId` (the objective text is never rewritten).
-* `strategySupport` — `EXACT_GOAL | STRUCTURED_EVENT | SPECIALTY_FALLBACK | GENERAL_FALLBACK | NONE`.
+* `strategySupport` — `EXACT_GOAL | STRUCTURED_EVENT | SPECIALTY_FALLBACK | GENERAL_FALLBACK | GENERAL_GOAL_DRIVEN | NONE`.
 * `fallback` — non-null exactly when the programming strategy is a specialty-derived fallback (`kind`, `strategyId`, `basedOn`, `reason: EXPLICIT_OBJECTIVE_NOT_SPECIALISED`).
 
 `CanonicalWeekStrategy.goal.fallback` carries it into the planner and both week-objective renderers say "programación base …
 (objetivo declarado sin estrategia específica)" instead of presenting the fallback as the athlete's goal. No keyword matching:
 recognition is the existing catalog (`resolveGoalId`), so a future uncatalogued objective behaves the same. Without a declared
-objective nothing is invented from the specialty (`GOAL_MISSING`); with no strategy family for the specialty the result stays
-`STRATEGY_UNSUPPORTED`. The Mobile `objective` stays a string.
+objective nothing is invented from the specialty (`GOAL_MISSING`); with no strategy family for the specialty the explicit objective
+plans through `general_goal_driven`. The Mobile `objective` stays a string.
 
 ## Free → planning
 

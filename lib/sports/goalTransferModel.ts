@@ -7,7 +7,10 @@ import { STRUCTURES_BY_STIMULUS, WORKOUT_STRUCTURE_LIBRARY } from './workoutStru
  */
 export type AdaptationRole = 'PRIMARY' | 'SUPPORTING' | 'MAINTENANCE' | 'OPTIONAL';
 export type TransferRole = 'DIRECT' | 'SUPPORTING' | 'MAINTENANCE' | 'CONDITIONAL';
-export type GoalId = 'half_marathon' | '10k' | 'crossfit' | 'max_strength' | 'hyrox' | 'running_general';
+/** `general_goal_driven` is technical infrastructure, NOT a discipline or an objective: the universal planning path used when the
+ * athlete's explicit objective has no specialised strategy. It never replaces the objective; the Coach derives the requirements from it. */
+export type GoalId = 'half_marathon' | '10k' | 'crossfit' | 'max_strength' | 'hyrox' | 'running_general' | 'general_goal_driven';
+export const GENERAL_GOAL_DRIVEN: GoalId = 'general_goal_driven';
 export type GoalDemand = { adaptationId: string; role: AdaptationRole };
 const demand = (adaptationId: string, role: AdaptationRole): GoalDemand => ({ adaptationId, role });
 const endurance = [demand('base_aerobica', 'PRIMARY'), demand('umbral', 'PRIMARY'), demand('resistencia_especifica', 'PRIMARY'),
@@ -17,6 +20,11 @@ export const GOAL_DEMANDS: Record<GoalId, readonly GoalDemand[]> = {
   running_general: [demand('base_aerobica', 'PRIMARY'), demand('umbral', 'SUPPORTING'),
     demand('economia_carrera', 'SUPPORTING'), demand('fuerza_general', 'SUPPORTING'),
     demand('vo2max', 'OPTIONAL'), demand('potencia', 'OPTIONAL'), demand('cadena_posterior', 'OPTIONAL')],
+  // Universal path: objective-agnostic broad capacities, no PRIMARY (priority comes from the objective's requirements, derived by the Coach).
+  // Every existing method stays authorizable; the weekly Coach (weeklyDecisionAuthority) orders them. No objective-specific demand lives here.
+  general_goal_driven: [demand('fuerza_general', 'SUPPORTING'), demand('base_aerobica', 'SUPPORTING'), demand('fuerza_maxima', 'OPTIONAL'),
+    demand('potencia', 'OPTIONAL'), demand('capacidad_glucolitica', 'OPTIONAL'), demand('gimnasticos', 'OPTIONAL'), demand('umbral', 'OPTIONAL'),
+    demand('vo2max', 'OPTIONAL'), demand('economia_carrera', 'OPTIONAL'), demand('cadena_posterior', 'OPTIONAL')],
   half_marathon: endurance, '10k': [...endurance.filter(d => d.adaptationId !== 'resistencia_especifica'), demand('vo2max', 'SUPPORTING')],
   crossfit: [demand('fuerza_maxima', 'PRIMARY'), demand('potencia', 'PRIMARY'), demand('gimnasticos', 'PRIMARY'),
     demand('capacidad_glucolitica', 'PRIMARY'), demand('base_aerobica', 'SUPPORTING'), demand('halterofilia_tecnica', 'SUPPORTING')],
@@ -29,6 +37,7 @@ export const GOAL_DEMANDS: Record<GoalId, readonly GoalDemand[]> = {
  * New domains extend definitions, demands and transfer methods, never the shared admission engine. */
 export const GOAL_DEFINITIONS: Record<GoalId, { label: string; kind: 'event' | 'activity_performance' | 'performance_target' | 'general_training' }> = {
   running_general: { label: 'Carrera general (sin preparación específica de distancia)', kind: 'general_training' },
+  general_goal_driven: { label: 'Planificación dirigida por tu objetivo declarado', kind: 'general_training' },
   half_marathon: { label: 'Media maratón', kind: 'event' },
   '10k': { label: '10K', kind: 'event' },
   crossfit: { label: 'CrossFit', kind: 'activity_performance' },

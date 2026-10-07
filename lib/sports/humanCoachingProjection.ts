@@ -23,7 +23,8 @@ export function humanWeeklyObjective(strategy: CanonicalWeekStrategy): string {
     : support.length ? `${sentence(join(support))} en la planificación de esta semana.` : '',
     maintenance.length ? `Trabajo de mantenimiento: ${join(maintenance)}.` : '',
     optional.length ? `Trabajo opcional: ${join(optional)}.` : ''].filter(Boolean).join(' ') || 'Consulta las sesiones programadas para esta semana.';
-  return strategy.goal.id === 'running_general' ? `Carrera general, sin preparación específica de distancia. ${summary}`
+  return strategy.goal.id === 'general_goal_driven' ? `Semana orientada a tu objetivo declarado. ${summary}`
+    : strategy.goal.id === 'running_general' ? `Carrera general, sin preparación específica de distancia. ${summary}`
     : strategy.goal.id && Object.hasOwn(goalLabels, strategy.goal.id)
       ? (strategy.goal.fallback ? `Semana orientada a tu objetivo declarado, con ${goalLabels[strategy.goal.id]} como base de entrenamiento (sin estrategia específica propia para ese objetivo). ${summary}`
         : `Preparación de ${goalLabels[strategy.goal.id]}. ${summary}`) : summary;

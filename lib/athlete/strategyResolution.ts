@@ -1,14 +1,14 @@
 import type { projectAthletePrescriptionProfile } from './athletePrescriptionContext';
 import { resolveGoalAuthority } from './goalResolution';
 import { declaredSportStrategy, structuredEventStrategy, generalSportStrategy } from '../sports/declaredSportStrategy';
-import { GOAL_DEFINITIONS, type GoalId } from '../sports/goalTransferModel';
+import { GOAL_DEFINITIONS, GENERAL_GOAL_DRIVEN, type GoalId } from '../sports/goalTransferModel';
 
 type Profile = ReturnType<typeof projectAthletePrescriptionProfile>;
 type Context = Pick<Profile, 'goals'> & Partial<Pick<Profile, 'athlete'>>;
 export type StrategyResolutionResult = {
   status: 'STRATEGY_RESOLVED' | 'STRATEGY_UNSUPPORTED' | 'GOAL_MISSING' | 'GOAL_CONFLICT';
   strategyId: GoalId | null;
-  source: 'exact_primary_goal' | 'structured_event' | 'declared_sport' | 'general_declared_sport' | null;
+  source: 'exact_primary_goal' | 'structured_event' | 'declared_sport' | 'general_declared_sport' | 'general_goal_driven' | null;
   strategySpecificity: 'SPECIFIC' | 'GENERAL' | null;
   sources: string[];
   goal: ReturnType<typeof resolveGoalAuthority>;
@@ -16,7 +16,7 @@ export type StrategyResolutionResult = {
   /** GOAL AUTHORITY: what the athlete declared. Never replaced by the specialty/category-derived strategy. */
   goalAuthority: { origin: 'EXPLICIT_OBJECTIVE' | 'NONE'; objectiveRecognized: boolean; recognizedGoalId: GoalId | null };
   /** STRATEGY SUPPORT: how (and how specifically) the planner can program for that goal. */
-  strategySupport: 'EXACT_GOAL' | 'STRUCTURED_EVENT' | 'SPECIALTY_FALLBACK' | 'GENERAL_FALLBACK' | 'NONE';
+  strategySupport: 'EXACT_GOAL' | 'STRUCTURED_EVENT' | 'SPECIALTY_FALLBACK' | 'GENERAL_FALLBACK' | 'GENERAL_GOAL_DRIVEN' | 'NONE';
   /** Present exactly when the programming strategy is a fallback and NOT the athlete's goal. Serializable, no athlete prose. */
   fallback: StrategyFallback | null;
 };
@@ -32,18 +32,22 @@ export function resolvePlanningStrategy(context: Context): StrategyResolutionRes
   const event = structuredEventStrategy(sport?.value, distance?.value);
   const family = declaredSportStrategy(sport?.value);
   const fallback = event ?? family ?? generalSportStrategy(sport?.value);
-  const ids = goal.candidates.map(c => c.recognizedId ?? fallback);
+  // Order: 1 exact goal, 2 structured event, 3 specialty programming base (when the specialty has a family), 4 GENERAL_GOAL_DRIVEN.
+  // A declared objective is planned even when neither the objective nor the specialty has a strategy family; only a primary-goal
+  // CONFLICT (or a missing objective) stops planning. The universal path never reads category/specialty.
+  const universal = goal.status === 'GOAL_UNSUPPORTED' ? GENERAL_GOAL_DRIVEN : null;
+  const ids = goal.candidates.map(c => c.recognizedId ?? fallback ?? universal);
   const distinct = new Set(ids);
   const status = !ids.length ? 'GOAL_MISSING' : distinct.size > 1 ? 'GOAL_CONFLICT'
     : ids[0] ? 'STRATEGY_RESOLVED' : goal.status === 'GOAL_CONFLICT' ? 'GOAL_CONFLICT' : 'STRATEGY_UNSUPPORTED';
   const source = status !== 'STRATEGY_RESOLVED' ? null : goal.candidates.every(c => c.recognizedId)
-    ? 'exact_primary_goal' : event ? 'structured_event' : family ? 'declared_sport' : 'general_declared_sport';
+    ? 'exact_primary_goal' : ids[0] === GENERAL_GOAL_DRIVEN && !fallback ? 'general_goal_driven' : event ? 'structured_event' : family ? 'declared_sport' : 'general_declared_sport';
   const strategyId = status === 'STRATEGY_RESOLVED' ? ids[0] : null;
   // The explicit objective is ALWAYS the goal. The strategy derived from the specialty only supports programming when the
   // objective has no specialised strategy of its own; that is reported as a fallback, never as the athlete's goal.
   const objectiveRecognized = goal.candidates.length > 0 && goal.candidates.every(c => c.recognizedId);
   const strategySupport: StrategyResolutionResult['strategySupport'] = !strategyId ? 'NONE' : objectiveRecognized ? 'EXACT_GOAL'
-    : source === 'structured_event' ? 'STRUCTURED_EVENT' : source === 'declared_sport' ? 'SPECIALTY_FALLBACK' : 'GENERAL_FALLBACK';
+    : source === 'structured_event' ? 'STRUCTURED_EVENT' : source === 'declared_sport' ? 'SPECIALTY_FALLBACK' : source === 'general_goal_driven' ? 'GENERAL_GOAL_DRIVEN' : 'GENERAL_FALLBACK';
   const strategyFallback: StrategyFallback | null = strategyId && (strategySupport === 'SPECIALTY_FALLBACK' || strategySupport === 'GENERAL_FALLBACK')
     ? { kind: strategySupport === 'SPECIALTY_FALLBACK' ? 'DECLARED_SPORT_FAMILY' : 'GENERAL_DECLARED_SPORT', strategyId,
       basedOn: [sport!.source], reason: 'EXPLICIT_OBJECTIVE_NOT_SPECIALISED' } : null;

@@ -84,7 +84,7 @@ export function buildCanonicalWeekStrategy(context: AthletePrescriptionContext, 
   const methods = TRANSFER_METHODS.filter(m => scope.managedDisciplines.includes(m.discipline)
     && adaptations.some(a => a.id === m.adaptationId)
     // Mixed-modal aerobic work is conditional: not a replacement for distance-running demands in v1.
-    && (m.role !== 'CONDITIONAL' || goalId === 'crossfit' || goalId === 'hyrox')).map(m => m.id);
+    && (m.role !== 'CONDITIONAL' || goalId === 'crossfit' || goalId === 'hyrox' || goalId === 'general_goal_driven')).map(m => m.id);
   if (!goalId) diagnostics.push({ code: 'STRATEGY_FALLBACK', reason: 'insufficient_goal_mapping' });
   diagnostics.push({ code: 'CANONICAL_WEEK_STRATEGY', reason: phase }, { code: 'ADAPTATION_PRIORITY', reason: 'discrete_goal_roles_and_canonical_weakness' },
     { code: 'TRANSFER_RESOLUTION', reason: 'managed_scope_intersection' },

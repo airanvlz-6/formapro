@@ -254,6 +254,8 @@ export function projectAthletePrescriptionProfile(user: Row, asOfDate?: string, 
     sessionTimeBudget: resolveEvidence(times), strength: { references: strength, byMovement: strengthByMovement },
     running: { references: running, byMetric: runningByMetric }, development,
     developmentAreas: developmentPlanningSnapshot(user.athlete_development),
+    declaredLevel: (() => { const key = ['nivel', 'nivel_cf', 'nivel_hyrox', 'nivel_ocr', 'nivel_carrera', 'experiencia_fuerza']
+        .find(k => typeof (profile as any)[k] === 'string' && (profile as any)[k].trim()); return evidence(key ? (profile as any)[key].trim() : null, `usuarios.perfil.${key ?? 'nivel'}`, key ? (profile as any)[key] : null); })(),
     declaredLimitations: evidence(profile.lesiones ?? null, 'usuarios.perfil.lesiones', profile.lesiones ?? null),
     cycle: { block: field('bloque'), week: field('semana'), totalWeeks: field('totalSemanas'), objective: field('objetivo') },
     legacyDevelopment: { weaknesses: evidence(user.debilidades ?? null, 'usuarios.debilidades', user.debilidades ?? null),

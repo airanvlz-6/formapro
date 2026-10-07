@@ -25,7 +25,7 @@ export function humanWeeklyObjective(strategy: CanonicalWeekStrategy): string {
     optional.length ? `Trabajo opcional: ${join(optional)}.` : ''].filter(Boolean).join(' ') || 'Consulta las sesiones programadas para esta semana.';
   return strategy.goal.id === 'running_general' ? `Carrera general, sin preparación específica de distancia. ${summary}`
     : strategy.goal.id && Object.hasOwn(goalLabels, strategy.goal.id)
-      ? (strategy.goal.fallback ? `Programación base de ${goalLabels[strategy.goal.id]}; tu objetivo declarado aún no tiene una estrategia específica. ${summary}`
+      ? (strategy.goal.fallback ? `Semana orientada a tu objetivo declarado, con ${goalLabels[strategy.goal.id]} como base de entrenamiento (sin estrategia específica propia para ese objetivo). ${summary}`
         : `Preparación de ${goalLabels[strategy.goal.id]}. ${summary}`) : summary;
 }
 

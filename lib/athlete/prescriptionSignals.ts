@@ -25,7 +25,7 @@ export function projectPrescriptionSignals(raw: unknown, asOfDate?: string, sess
     if (signalIds.includes(id)) signals[id] = { state, source, updatedAt };
   };
   for (const id of signalIds) signals[id] = { state: 'unknown', source: null, updatedAt: null };
-  const environment = session ? resolveSessionTrainingEnvironment(profile, session) : resolveTrainingEnvironment(profile);
+  const environment = session ? resolveSessionTrainingEnvironment(profile, session, { specialty }) : resolveTrainingEnvironment(profile, { specialty });
   const materials = Array.isArray(profile.material) ? profile.material : typeof profile.material === 'string' ? [profile.material] : [];
   for (const value of materials) if (typeof value === 'string') {
     const key = normalized(value);

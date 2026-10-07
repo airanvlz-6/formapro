@@ -3,6 +3,7 @@ import { resolveEventAuthority, type EventAuthority } from '../athlete/eventAuth
 import type { AthletePrescriptionContext } from '../athlete/loadAthletePrescriptionContext';
 import { GOAL_DEMANDS, GOAL_DEFINITIONS, TRANSFER_METHODS, type GoalId, type AdaptationRole, type StrategicIntent } from '../sports/goalTransferModel';
 import { resolvePlanningStrategy } from '../athlete/strategyResolution';
+import { buildGoalRequirements, type GoalRequirements } from './goalRequirements';
 import { STIMULUS_LIBRARY, type PatronMovimiento } from '../sports/movementLibrary';
 import type { PrescriptionScope } from '../sports/prescriptionScope';
 
@@ -13,6 +14,8 @@ export type CanonicalWeekStrategy = {
   /** Weekly priorities/coverage are advice; session IDs and dose authorities remain binding. */
   weeklyDecisionAuthority?: 'coach';
   eventAuthority?: EventAuthority;
+  /** The explicit objective stays the goal; this carries it (plus training means/context) to the Coach for requirement derivation. */
+  goalRequirements?: GoalRequirements;
   version: 1; policy: 'goal-transfer-v1'; goal: { id: GoalId | null; sources: string[]; evidenceDigest: string;
     /** Set only when `id` is a programming fallback derived from the declared sport, NOT the athlete's declared objective. */
     fallback?: { kind: 'DECLARED_SPORT_FAMILY' | 'GENERAL_DECLARED_SPORT'; strategyId: GoalId; reason: 'EXPLICIT_OBJECTIVE_NOT_SPECIALISED' } };
@@ -91,7 +94,8 @@ export function buildCanonicalWeekStrategy(context: AthletePrescriptionContext, 
     { code: 'TRANSFER_RESOLUTION', reason: 'interday_interference_not_established_by_structure_metadata' });
   const resolved = resolvePlanningStrategy(context);
   if (resolved.fallback) diagnostics.push({ code: 'STRATEGY_FALLBACK', reason: resolved.fallback.reason, reference: resolved.fallback.kind });
-  return { version: 1, policy: 'goal-transfer-v1', weeklyDecisionAuthority: 'coach', goal: { id: goalId, sources: resolved.sources, evidenceDigest: digest(resolved),
+  const goalRequirements = buildGoalRequirements(context, resolved, scope, maxDays);
+  return { version: 1, policy: 'goal-transfer-v1', weeklyDecisionAuthority: 'coach', ...(goalRequirements ? { goalRequirements } : {}), goal: { id: goalId, sources: resolved.sources, evidenceDigest: digest(resolved),
       ...(resolved.fallback ? { fallback: { kind: resolved.fallback.kind, strategyId: resolved.fallback.strategyId, reason: resolved.fallback.reason } } : {}) },
     ...(context.asOfDate ? { eventAuthority: resolveEventAuthority(context.eventInput ?? {}, goalId, scope, context.asOfDate, context.userCodigo) } : {}),
     block: { phase, week: typeof context.cycle.week.value === 'number' ? context.cycle.week.value : null,

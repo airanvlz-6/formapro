@@ -9,6 +9,6 @@ export function renderWeekObjective(strategy: CanonicalWeekStrategy): string {
   const base = GOAL_DEFINITIONS[strategy.goal.id].kind === 'general_training'
     ? GOAL_DEFINITIONS[strategy.goal.id].label : strategy.goal.id.replaceAll('_', ' ');
   // A fallback strategy is the programming base, never presented as the athlete's declared goal.
-  const title = strategy.goal.fallback && GOAL_DEFINITIONS[strategy.goal.id].kind !== 'general_training' ? `programación base ${base} (objetivo declarado sin estrategia específica)` : base;
+  const title = strategy.goal.fallback && GOAL_DEFINITIONS[strategy.goal.id].kind !== 'general_training' ? `objetivo declarado · base de entrenamiento ${base} (sin estrategia específica)` : base;
   return `${title} · ${strategy.block.phase}: ${labels || 'adaptaciones pendientes de un método compatible'}.`;
 }

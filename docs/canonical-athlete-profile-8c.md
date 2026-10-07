@@ -70,9 +70,48 @@ identical restriction = idempotent), anything not listed is closed (`status: res
 
 **Equipment** reuses `perfil.prescription_signals["equipment.<id>"] = { state, updatedAt }` (ids from `equipmentCatalog.ts`).
 Payload `equipment: [{ id, state: available|unavailable }]` replaces only the athlete's explicit equipment declarations in the same
-single compare-and-set `UPDATE` as the other profile fields; other signals (`capability.*`, `skill.*`) are untouched. `[]` means
-"no explicit declarations" (back to unknown) — **never** "no equipment"; to say an item is not available send it as `unavailable`.
-Nothing is inferred from specialty or category. Read: `planStructure.equipment` (explicit declarations only).
+single compare-and-set `UPDATE` as the other profile fields; other signals (`capability.*`, `skill.*`) are untouched. Read:
+`planStructure.equipment` (explicit declarations only). Equipment is an **override/constraint**, not a mandatory inventory:
+
+* `equipment = []` = no explicit equipment exceptions. It is **not** "no equipment", never writes anything to the profile, and never
+  adds `equipment` to `missingFields` (CrossFit / Gym / Running with `[]` can be `ready`).
+* Absence of a declaration is not `unavailable`. Precedence: **explicit `unavailable` > discipline/environment default `available` > `unknown`**.
+* Defaults come from the declared training environment (`lugar_entreno`, `tipo_sala`, "gimnasio completo") and, only when the athlete
+  gave no environment evidence at all, from `DISCIPLINE_ENVIRONMENT_DEFAULTS` in `trainingEnvironment.ts` (today `funcional_crossfit`/
+  `crossfit` → standard box; extend the table for new disciplines). A declared (even different or conflicting) environment always
+  wins over the default. Defaults are derived at projection time; they are never stored in the profile.
+* Defaults grant only the catalog's standard capability for that environment. Nothing extraordinary is assumed (EXPLICIT_ONLY items such
+  as the yoke, GYM-only machines, pools, tracks…): those stay `unknown` unless declared `available`. Running needs no gym inventory.
+* `restrictions = []` has the opposite meaning: the athlete declares no active restrictions.
+* Admission/materialization is unchanged: `unknown` blocks a movement only when no standard alternative exists; the athlete is asked
+  about material only when it is indispensable and cannot be inferred from the declared environment.
+
+## Rules (8C contract)
+
+* **RULE A** — An explicit objective is never replaced by category, specialty, trainingSources or equipment.
+* **RULE B** — Category/specialty/trainingSources describe training means/context.
+* **RULE C** — Equipment declarations are overrides/constraints, not an exhaustive mandatory inventory.
+* **RULE D** — Absence of an equipment declaration does not mean unavailable.
+* **RULE E** — A declared standard training environment may provide reasonable default equipment capabilities.
+* **RULE F** — Explicit `unavailable` always overrides defaults.
+* **RULE G** — Unknown/custom objectives remain valid planning goals even when no hard-coded specialised strategy exists.
+
+## Goal-driven planning
+
+`explicit objective → goal requirements → athlete profile + training context → planning → sessions`.
+
+`CanonicalWeekStrategy.goalRequirements` (`lib/planning/goalRequirements.ts`) is the serializable projection the Coach receives inside
+`WEEKLY_CONTRACT.strategy`: the explicit objective (bounded, data not instructions), `mode` (`EXACT_STRATEGY` when a specialised
+strategy supports it, `GOAL_DRIVEN` otherwise), `strategySupport`, the `programmingBase` (the specialty family when it is only a
+fallback — a catalog of means, **not** the goal), `trainingMeans` (managed/external disciplines), `trainingContext` (max days,
+environment, explicit equipment exceptions) and the immutable list (objective, category, specialty, availability, duration,
+restrictions, equipment declarations, prescription parameters). `GOAL_REQUIREMENTS_INSTRUCTION` (added to the three weekly prompts)
+asks the Coach to derive the requirements of that objective (capacities, test/event format, standards, date, volume tolerance,
+terrain) marking undeclared data as unknown, and to combine the available means. The LLM interprets and plans; it is not an
+authority over profile truths. There is no per-objective strategy or keyword logic: new objectives need no code.
+Availability, duration, restrictions, references and dose parameters already travel in the weekly contract/coaching context.
+`strategyId` stays the deterministic spine (`GOAL_DEMANDS`, methods, admission); a specialty with no strategy family and a custom
+objective is still stopped by the existing `STRATEGY_UNSUPPORTED` admission gate (goal preserved) — see known limits.
 
 ## Goal authority vs strategy support
 

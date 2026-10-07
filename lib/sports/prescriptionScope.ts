@@ -29,7 +29,10 @@ export function resolveProfileDisciplines(profile: { especialidad?: string; cate
 }
 
 export function buildPrescriptionScope(input: { mode: unknown; sources: readonly TrainingSource[]; profileDisciplines?: readonly string[] }): ScopeResult {
-  const mode = input.mode === 'planificacion' ? 'coach' : input.mode === 'consulta' ? 'supervision' : input.mode;
+  // 'consulta' y 'free' (cuenta solo con identidad, BUILD 8A) nunca prescriben: se resuelven al alcance
+  // NO prescriptivo de supervision. El modo almacenado sigue siendo el original; esto solo evita que un
+  // modo sin planificacion rompa la lectura de contexto (Coach/chat) y mantiene prescriptionAllowed:false.
+  const mode = input.mode === 'planificacion' ? 'coach' : input.mode === 'consulta' || input.mode === 'free' ? 'supervision' : input.mode;
   if (!['supervision', 'focus', 'coach'].includes(String(mode))) return { ok: false, errors: ['SCOPE_MODE_UNRESOLVED'] };
   const active = input.sources.filter(s => s.activo === true);
   if (active.some(s => !['forge', 'external'].includes(s.owner) || typeof s.disciplina !== 'string' || !s.disciplina.trim()))

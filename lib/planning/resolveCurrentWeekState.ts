@@ -45,14 +45,14 @@ type WeekPlanDb = any;
 /**
  * `modo_entrada` values that can never receive a PREPARE_WEEK suggestion —
  * mirrors the write-side authorization in `buildPrescriptionScope`
- * (lib/sports/prescriptionScope.ts: mode 'supervision' and 'consulta' both
+ * (lib/sports/prescriptionScope.ts: mode 'supervision', 'consulta' and 'free' all
  * resolve to prescriptionAllowed:false). This is a UX-presentation mirror,
  * NOT the authorization boundary itself — the real boundary stays exactly
  * where it already is, inside canonicalWeeklyRequest's scope check. Even if
  * this mirror were ever wrong, the backend write path independently refuses
  * to generate for these modes.
  */
-const PLANNING_PROHIBITED_MODES = new Set(['supervision', 'consulta']);
+const PLANNING_PROHIBITED_MODES = new Set(['supervision', 'consulta', 'free']);
 
 /**
  * Resolves WeekFactualState + NextAction for the athlete's CURRENT week

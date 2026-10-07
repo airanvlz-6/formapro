@@ -25,6 +25,7 @@ import { eventAuthorityText, boundEventAnalysis } from '@/lib/athlete/eventAutho
 import { saveHabitualRunningAnswer, type HabitualRunningProfileStore } from '@/lib/athlete/runningHabitualDeclarations';
 import { issueEnvironmentConfirmation, readEnvironmentConfirmation, ENVIRONMENT_CONFIRMATION_COOKIE, ENVIRONMENT_CONFIRMATION_TTL_SECONDS } from '@/lib/planning/sessionEnvironmentConfirmation';
 import { ensurePlanningSpecialty, hasCanonicalSpecialty, requiresPlanningSpecialty } from '@/lib/sports/canonicalSpecialty';
+import { computeOnboardingFields, legacyOnboardingCompleted, resolvePlanningProfileStatus } from '@/lib/athlete/planningProfileStatus';
 import { weeklySaveAdmission } from "@/lib/planning/weeklyCalendarAuthority";
 import { planBoundedWeek } from "@/lib/planning/prepareAllowedWeeklyPlanContract";
 import { admittedWeekObjective } from "@/lib/planning/weeklyCalendarAuthority";
@@ -429,7 +430,7 @@ async function forgeContextBuilder(supabase: any, codigo: string, eventoActivoAc
   const instruccionLenguajeSinPlan = `\nLENGUAJE: NUNCA digas "hoy toca..." ni menciones ninguna sesion planificada por Forge (no existe). En su lugar, cuando sea relevante, usa un lenguaje orientado a la espera de datos, por ejemplo: "cuando registres tu proximo entreno analizare recuperacion, carga y progresion" o "cuentame como fue tu ultima sesion y te doy mi valoracion".`;
     if (usuarioModo?.modo_entrada === "supervision") {
     partes.push(`MODO DE ENTRADA: SUPERVISION EXTERNA (restriccion maxima prioridad, nunca la ignores).\nEste atleta tiene su PROPIA planificacion o entrenador externo. NUNCA generes, sugieras cambiar, ni propongas una planificacion semanal completa — ni aunque el atleta lo pida directamente ("genera mi semana", "hazme un plan"). Si lo pide, explica amablemente que en este modo no generas planificaciones, pero que puedes ayudarle a analizar/adaptar UNA sesion puntual si la comparte contigo. Tu rol es: registrar entrenos, responder dudas tecnicas, dar opinion sobre sesiones concretas que el atleta comparta, y avisar si detectas señales de fatiga/riesgo.${instruccionLenguajeSinPlan}`);
-  } else if (usuarioModo?.modo_entrada === "consulta") {
+  } else if (usuarioModo?.modo_entrada === "consulta" || usuarioModo?.modo_entrada === "free") {
     partes.push(`MODO DE ENTRADA: SOLO CONSULTA (prioridad alta). Este atleta no tiene planificacion formal todavia y no la ha pedido. NO generes una planificacion semanal completa por iniciativa propia — solo si el atleta la pide explicitamente. Tu rol principal es ir conociendolo a traves de la conversacion, registrar lo que comparta, y responder dudas puntuales.${instruccionLenguajeSinPlan}`);
   }
 
@@ -956,55 +957,29 @@ async function handlePost(req: NextRequest, coachFirstPlanning?: CoachFirstPlann
   // FORGE MOBILE — DIAGNOSTICO TEMPORAL: verifica que getAthleteContext() construye correctamente
   // el contexto antes de conectar nada mas. Se eliminara una vez confirmada la prueba de equivalencia.
   if (action === "verificar_onboarding_completado") {
-    // Consulta minima y rapida, solo lectura, para que el movil sepa si mostrar Onboarding u Home.
-    const { data: usuarioOnb } = await supabase.from("usuarios").select("onboarding_completado").eq("codigo", codigo).single();
-    return NextResponse.json({ completado: !!usuarioOnb?.onboarding_completado });
+    // Solo lectura, para que el movil sepa si mostrar Onboarding u Home. BUILD 8A: `completado` se DERIVA
+    // del estado canonico (resolvePlanningProfileStatus); `usuarios.onboarding_completado` ya no es
+    // autoridad (no tiene escritor desde que completar_onboarding se desactivo). Contrato legacy intacto
+    // ({ completado }) mas `planningProfileStatus` para clientes que lo entiendan.
+    const { data: usuarioOnb } = await supabase.from("usuarios").select("modo_entrada,perfil,categoria,especialidad,objetivo_principal,distribucion_semanal").eq("codigo", codigo).maybeSingle();
+    if (!usuarioOnb) return NextResponse.json({ completado: false, planningProfileStatus: null });
+    const { data: fuentesVerificar } = await supabase.from("athlete_training_sources").select("owner,dias,activo").eq("user_codigo", codigo).eq("activo", true);
+    const planningProfileStatus = resolvePlanningProfileStatus({ ...usuarioOnb, trainingSources: fuentesVerificar || [] });
+    return NextResponse.json({ completado: legacyOnboardingCompleted(planningProfileStatus), planningProfileStatus });
   }
 
 
 
-  // FORGE ONBOARDING STATE MACHINE — define, por modo, los campos OBLIGATORIOS del nucleo comun
-// + especificos de cada modo. Es la unica fuente de verdad de "que hace falta" — nunca el LLM.
-const CAMPOS_REQUERIDOS_POR_MODO: Record<string, string[]> = {
-  supervision: ["categoria", "objetivo", "edad", "nivel"],
-  coach: ["categoria", "objetivo", "edad", "nivel", "disponibilidad", "duracion_sesion"],
-  focus: ["categoria", "objetivo", "edad", "nivel", "duracion_sesion", "disciplina_forge", "dias_forge", "disciplina_externa", "dias_externos", "fc_max_o_metodo"],
-};
+  // FORGE ONBOARDING STATE MACHINE — los campos OBLIGATORIOS por modo (CAMPOS_REQUERIDOS_POR_MODO) y su calculo
+// puro viven en lib/athlete/planningProfileStatus.ts (BUILD 8A) para que este motor y el estado derivado
+// compartan UNA sola implementacion. Es la unica fuente de verdad de "que hace falta" — nunca el LLM.
 
 // FORGE ONBOARDING STATE MACHINE — calcula el estado REAL consultando las tablas canonicas
 // (usuarios, athlete_training_sources), nunca confiando en lo que el LLM "cree" completado.
 async function calcularEstadoOnboarding(supabase: any, codigo: string, mode: string) {
   const { data: usuarioOnb } = await supabase.from("usuarios").select("perfil,categoria,especialidad,objetivo_principal,distribucion_semanal").eq("codigo", codigo).maybeSingle();
   const { data: fuentesOnb } = await supabase.from("athlete_training_sources").select("*").eq("user_codigo", codigo).eq("activo", true);
-
-  const perfilOnb = usuarioOnb?.perfil || {};
-  const completedFields: Record<string, boolean> = {};
-  completedFields.categoria = !!usuarioOnb?.categoria;
-  if (requiresPlanningSpecialty(mode)) completedFields.especialidad = hasCanonicalSpecialty(usuarioOnb?.especialidad);
-  completedFields.objetivo = !!(usuarioOnb?.objetivo_principal?.descripcion || perfilOnb.objetivo_detalle);
-  completedFields.edad = !!perfilOnb.edad;
-  // FIX: distintas categorias usan IDs de campo distintos para "nivel" (nivel, nivel_cf,
-  // nivel_hyrox, nivel_ocr, nivel_carrera, experiencia_fuerza, etc) — reconocer cualquier
-  // variante real, no solo el ID literal "nivel".
-  completedFields.nivel = !!(perfilOnb.nivel || perfilOnb.nivel_cf || perfilOnb.nivel_hyrox || perfilOnb.nivel_ocr || perfilOnb.nivel_carrera || perfilOnb.experiencia_fuerza);
-  completedFields.disponibilidad = !!usuarioOnb?.distribucion_semanal;
-  completedFields.duracion_sesion = !!perfilOnb.duracion;
-  completedFields.disciplina_forge = !!(fuentesOnb || []).find((f: any) => f.owner === "forge");
-  completedFields.dias_forge = !!(fuentesOnb || []).find((f: any) => f.owner === "forge" && f.dias?.length > 0);
-  completedFields.disciplina_externa = !!(fuentesOnb || []).find((f: any) => f.owner === "external");
-  completedFields.dias_externos = !!(fuentesOnb || []).find((f: any) => f.owner === "external" && f.dias?.length > 0);
-  // FIX: fc_max ahora se captura DIRECTAMENTE en el formulario (pregunta condicional, solo si
-  // tiene pulsometro/reloj), no en una pantalla separada tras la bienvenida. Si el usuario no
-  // tiene dispositivo, la pregunta ni siquiera se muestra — se usara formula por edad siempre,
-  // asi que el campo se considera "completado" en cuanto el formulario general esta terminado
-  // (perfil.edad existe), sin exigir un dato que puede legitimamente no aplicar.
-  completedFields.fc_max_o_metodo = !!perfilOnb.edad;
-
-  const baseFields = CAMPOS_REQUERIDOS_POR_MODO[mode] || CAMPOS_REQUERIDOS_POR_MODO.supervision;
-  const camposRequeridos = requiresPlanningSpecialty(mode) ? [...baseFields, 'especialidad'] : baseFields;
-  const missingFields = camposRequeridos.filter(c => !completedFields[c]);
-
-  return { completedFields, missingFields, camposRequeridos };
+  return computeOnboardingFields({ ...(usuarioOnb || {}), trainingSources: fuentesOnb || [] }, mode);
 }
 
 if (action === "verificar_datos_cambio_modo_deterministico") {
@@ -4197,7 +4172,7 @@ if (action === "obtener_daily_briefing") {
       modoEntradaBriefing
     );
 
-    if (modoEntradaBriefing === "supervision" || modoEntradaBriefing === "consulta") {
+    if (modoEntradaBriefing === "supervision" || modoEntradaBriefing === "consulta" || modoEntradaBriefing === "free") {
       const workoutHistoryBriefing = usuarioModoBriefing?.workout_history || [];
       const ultimoEntreno = workoutHistoryBriefing[workoutHistoryBriefing.length - 1] || null;
       return NextResponse.json({
@@ -4449,7 +4424,7 @@ if (action === "obtener_daily_briefing") {
     // "consulta" NUNCA puede persistir un weekly_plan — el modo determina la capacidad, no la peticion.
     const { data: usuarioGuardPlan, error: errorUsuarioGuardPlan } = await supabase.from("usuarios").select("modo_entrada").eq("codigo", codigo).single();
     if (errorUsuarioGuardPlan || !usuarioGuardPlan) return NextResponse.json({ ok: false, error: "WEEK_USER_READ_FAILED", retryable: false });
-    if (usuarioGuardPlan?.modo_entrada === "supervision" || usuarioGuardPlan?.modo_entrada === "consulta") {
+    if (usuarioGuardPlan?.modo_entrada === "supervision" || usuarioGuardPlan?.modo_entrada === "consulta" || usuarioGuardPlan?.modo_entrada === "free") {
       console.error(`🚨 BLOCKED guardar_plan_semana — usuario ${codigo} en modo_entrada=${usuarioGuardPlan.modo_entrada}, no tiene capacidad can_generate_plan`);
       return NextResponse.json({ error: "Este modo no permite generar planificacion", blocked: true, reason: "SUPERVISION_NO_PLANNING" }, { status: 403 });
     }

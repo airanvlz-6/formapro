@@ -17,6 +17,9 @@ import { PROFILE_READ_COLUMNS, PROFILE_SOURCE_COLUMNS, buildResultingProfile, pr
 import type { ProfileError } from './canonicalProfile';
 import { executeAthleteModeChange } from './modeChange';
 import { persistTrainingSources } from '../sports/coachOwnership';
+import { getCanonicalRestrictions } from './getCanonicalRestrictions';
+import type { CanonicalRestrictions } from './getCanonicalRestrictions';
+import { applyRestrictionPlan, planRestrictionChange } from './restrictionEditor';
 
 export type ServiceResult = { status: number; body: Record<string, unknown> };
 export type AthleteRef = { athleteId: string; legacyCodigo: string };
@@ -36,13 +39,18 @@ async function readSnapshot(db: any, codigo: string): Promise<{ row: Record<stri
   if (!read.data) return fail(404, 'ATHLETE_NOT_LINKED');
   return { row: read.data, sources: Array.isArray(sourcesRead.data) ? sourcesRead.data : [] };
 }
+/** Lectura canonica de restricciones. Un fallo NUNCA se presenta como "sin restricciones": devuelve null. */
+async function readRestrictions(db: any, codigo: string, now: Date): Promise<CanonicalRestrictions | null> {
+  try { return await getCanonicalRestrictions(db, codigo, now); } catch { return null; }
+}
 const isFailure = (v: unknown): v is ServiceResult => !!v && typeof v === 'object' && 'status' in (v as object) && 'body' in (v as object);
 
 /** GET: perfil canonico del atleta autenticado. */
 export async function getCanonicalProfile(db: any, athlete: AthleteRef): Promise<ServiceResult> {
   const snapshot = await readSnapshot(db, athlete.legacyCodigo);
   if (isFailure(snapshot)) return snapshot;
-  return { status: 200, body: { ok: true, profile: projectCanonicalProfile(snapshot.row, snapshot.sources) } };
+  const restrictions = await readRestrictions(db, athlete.legacyCodigo, new Date());
+  return { status: 200, body: { ok: true, profile: projectCanonicalProfile(snapshot.row, snapshot.sources, restrictions) } };
 }
 
 /** PUT/PATCH: guarda PLAN_STRUCTURE validado y, si se pide, activa supervision|focus|coach reutilizando cambiar_modo_atleta. */
@@ -63,6 +71,16 @@ export async function saveCanonicalProfile(db: any, athlete: AthleteRef, body: u
   const targetStatus = activate ? statusForSnapshot(built.resulting, built.sources, activate) : null;
   const activationReady = !!targetStatus && targetStatus.missingFields.length === 0;
 
+  // Restricciones: se planifican ANTES de cualquier escritura (id desconocido / fecha pasada / lectura no disponible => cero escrituras).
+  let restrictionPlan: ReturnType<typeof planRestrictionChange> | null = null;
+  const writeNow = new Date(clock.now());
+  if (profile.restrictions !== undefined) {
+    const current = await readRestrictions(db, codigo, writeNow);
+    if (!current) return fail(503, 'PROFILE_RESTRICTIONS_UNAVAILABLE');
+    restrictionPlan = planRestrictionChange(current, profile.restrictions, codigo, writeNow);
+    if (!restrictionPlan.ok) return fail(400, 'PROFILE_INVALID', { errors: restrictionPlan.errors });
+  }
+
   // 1) UN solo UPDATE por fila con compare-and-set sobre el estado leido (zero writes si cambio).
   if (Object.keys(built.patch).length > 0) {
     let query = db.from('usuarios').update(built.patch).eq('codigo', codigo);
@@ -81,6 +99,14 @@ export async function saveCanonicalProfile(db: any, athlete: AthleteRef, body: u
     if (saved?.error) return fail(500, 'PROFILE_PARTIAL_WRITE', { profileSaved: true, trainingSourcesSaved: false, modeChanged: false });
   }
 
+  // 2b) Restricciones (otras tablas): despues del UPDATE; orden fail-closed dentro del editor (proteger antes de liberar).
+  let restrictionsChanged = false;
+  if (restrictionPlan?.ok && restrictionPlan.plan.changed) {
+    const applied = await applyRestrictionPlan(db, codigo, restrictionPlan.plan, writeNow);
+    if (!applied.ok) return fail(500, 'PROFILE_PARTIAL_WRITE', { profileSaved: true, restrictionsSaved: false, restrictionsCode: applied.code, modeChanged: false });
+    restrictionsChanged = true;
+  }
+
   // 3) Activacion: solo con perfil persistido Y ready. Reutiliza la transicion existente (con sus propias guardas).
   let activation: Record<string, unknown> = { requested: null, status: 'NOT_REQUESTED' };
   if (activate) {
@@ -94,7 +120,7 @@ export async function saveCanonicalProfile(db: any, athlete: AthleteRef, body: u
         const fresh = await readSnapshot(db, codigo);
         return { status: change.status === 500 ? 502 : change.status, body: { ok: false, retryable: change.status === 500, code: 'MODE_CHANGE_FAILED',
           profileSaved: true, modeChanged: false, activation: { requested: activate, status: 'FAILED', detail: change.body?.missingFields ? { missingFields: change.body.missingFields } : change.body?.code ? { code: change.body.code } : null },
-          ...(isFailure(fresh) ? {} : { profile: projectCanonicalProfile(fresh.row, fresh.sources) }) } };
+          ...(isFailure(fresh) ? {} : { profile: projectCanonicalProfile(fresh.row, fresh.sources, await readRestrictions(db, codigo, new Date())) }) } };
       }
       activation = { requested: activate, status: 'ACTIVATED', missingFields: [] };
     }
@@ -103,6 +129,7 @@ export async function saveCanonicalProfile(db: any, athlete: AthleteRef, body: u
   // 4) Relectura: la respuesta refleja lo PERSISTIDO, no lo propuesto.
   const fresh = await readSnapshot(db, codigo);
   if (isFailure(fresh)) return fresh;
-  return { status: 200, body: { ok: true, saved: Object.keys(built.patch).length > 0 || built.sourceUpserts.length > 0,
-    activation, profile: projectCanonicalProfile(fresh.row, fresh.sources) } };
+  const freshRestrictions = await readRestrictions(db, codigo, new Date());
+  return { status: 200, body: { ok: true, saved: Object.keys(built.patch).length > 0 || built.sourceUpserts.length > 0 || restrictionsChanged,
+    activation, profile: projectCanonicalProfile(fresh.row, fresh.sources, freshRestrictions) } };
 }

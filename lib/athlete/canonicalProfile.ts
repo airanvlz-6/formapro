@@ -6,8 +6,11 @@
 //   PLAN_STRUCTURE           editable aqui: categoria, especialidad, objetivo, edad, nivel, disponibilidad
 //                            semanal, duracion de sesion y fuentes de entrenamiento (las que Focus exige).
 //                            Se LEEN pero no se escriben aqui: evento objetivo (lo escribe `target_event`,
-//                            sobre firmado). SIN storage canonico utilizable todavia: restricciones/lesiones
-//                            (fragmentadas), equipamiento. No se inventan campos: quedan en `unsupported`.
+//                            sobre firmado). Restricciones/lesiones y equipamiento TAMBIEN son PLAN_STRUCTURE, sobre el
+//                            almacen canonico YA existente (sin duplicarlo): restricciones en athlete_state_events +
+//                            athlete_coaching_notes (`restrictionEditor.ts`), equipamiento en
+//                            perfil.prescription_signals["equipment.<id>"]. Ambos son OPCIONALES: no forman parte de
+//                            `planningProfileStatus` (PLAN_STRUCTURE != REQUIRED) y `[]` es un valor valido.
 //   PRESCRIPTION_PARAMETERS  solo lectura y PRESERVADOS: marcas/RM, FCmax, FC reposo de referencia, umbral FC,
 //                            ritmo umbral. Su edicion es 8C-E. Guardar PLAN_STRUCTURE no los toca.
 //   CONTEXT_ONLY             nombre, altura, peso, avatar (lectura).
@@ -24,6 +27,10 @@ import { projectAthletePrescriptionProfile } from './athletePrescriptionContext'
 import { readTargetEvent } from './eventAuthority';
 import { isActivatableMode } from './modeChange';
 import type { ActivatableMode } from './modeChange';
+import { validateRestrictionsInput, projectRestrictions } from './restrictionEditor';
+import type { RestrictionInput } from './restrictionEditor';
+import type { CanonicalRestrictions } from './getCanonicalRestrictions';
+import { equipmentIds } from '../sports/equipmentCatalog';
 
 type Row = Record<string, any>;
 const isRecord = (v: unknown): v is Row => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -50,7 +57,10 @@ export const TRAINING_SOURCE_OWNERS = ['forge', 'external'] as const;
 const MAX_TRAINING_SOURCES = 6;
 
 /** Campos de perfil editables. Cualquier otra clave se rechaza (nunca se ignora en silencio). */
-export const EDITABLE_PROFILE_FIELDS = ['category', 'specialty', 'objective', 'age', 'level', 'sessionDuration', 'weeklyAvailability', 'trainingSources'] as const;
+export const EDITABLE_PROFILE_FIELDS = ['category', 'specialty', 'objective', 'age', 'level', 'sessionDuration', 'weeklyAvailability', 'trainingSources', 'restrictions', 'equipment'] as const;
+export const EQUIPMENT_STATES = ['available', 'unavailable'] as const;
+export type EquipmentDeclaration = { id: string; state: (typeof EQUIPMENT_STATES)[number] };
+export const MAX_EQUIPMENT = 30;
 export const REQUEST_KEYS = ['profile', 'activate'] as const;
 
 export type ProfileError = { field: string; code: string };
@@ -58,6 +68,7 @@ export type TrainingSourceInput = { owner: 'forge' | 'external'; discipline: str
 export type ValidProfileInput = {
   category?: ProfileCategory; specialty?: string; objective?: string; age?: string; level?: string; sessionDuration?: string;
   weeklyAvailability?: { days: string[] }; trainingSources?: TrainingSourceInput[];
+  restrictions?: RestrictionInput[]; equipment?: EquipmentDeclaration[];
 };
 export type ValidRequest = { profile: ValidProfileInput; activate: ActivatableMode | null };
 
@@ -126,6 +137,24 @@ export function validateProfileRequest(body: unknown): { ok: true; value: ValidR
       }
       if (bad) errors.push({ field: 'trainingSources', code: 'TRAINING_SOURCES_INVALID' });
       else profile.trainingSources = sources;
+    }
+    if (p.restrictions !== undefined && p.restrictions !== null) {
+      const parsed = validateRestrictionsInput(p.restrictions);
+      if (parsed.ok) profile.restrictions = parsed.value; else errors.push({ field: 'restrictions', code: 'RESTRICTIONS_INVALID' });
+    }
+    if (p.equipment !== undefined && p.equipment !== null) {
+      // Lista de declaraciones EXPLICITAS {id,state}. `[]` = "sin declaraciones explicitas" (vuelve a desconocido): nunca "sin equipo".
+      const list = Array.isArray(p.equipment) && p.equipment.length <= MAX_EQUIPMENT ? p.equipment : null;
+      const seen = new Set<string>(), declarations: EquipmentDeclaration[] = [];
+      let bad = !list;
+      for (const item of list ?? []) {
+        const okShape = isRecord(item) && Object.keys(item).length === 2 && has(item, 'id') && has(item, 'state');
+        if (!okShape || typeof item.id !== 'string' || !equipmentIds.includes(item.id) || seen.has(item.id)
+          || !(EQUIPMENT_STATES as readonly string[]).includes(item.state)) { bad = true; continue; }
+        seen.add(item.id);
+        declarations.push({ id: item.id, state: item.state });
+      }
+      if (bad) errors.push({ field: 'equipment', code: 'EQUIPMENT_INVALID' }); else profile.equipment = declarations;
     }
   }
   let activate: ActivatableMode | null = null;
@@ -254,6 +283,24 @@ export function buildResultingProfile(current: ProfileRow, currentSources: reado
   if (input.age !== undefined) perfil.edad = input.age;
   if (input.level !== undefined) perfil.nivel = input.level;
   if (input.sessionDuration !== undefined) perfil.duracion = input.sessionDuration;
+  // --- equipamiento: declaraciones explicitas en perfil.prescription_signals["equipment.<id>"] (almacen canonico existente).
+  // Reemplaza SOLO las declaraciones explicitas available/unavailable; nunca toca otras senales (skill.*, capability.*) ni
+  // infiere material desde la especialidad o el entorno. Ausente = desconocido (nunca concede).
+  const sameEquipment = input.equipment !== undefined && JSON.stringify(readEquipment(perfil).map(e => [e.id, e.state]))
+    === JSON.stringify([...input.equipment].sort((x, y) => x.id < y.id ? -1 : 1).map(e => [e.id, e.state]));
+  if (input.equipment !== undefined && !sameEquipment) {
+    const stored = isRecord(perfil.prescription_signals) ? { ...perfil.prescription_signals } : {};
+    const previous = { ...stored };
+    for (const id of equipmentIds) {
+      const entry = previous[`equipment.${id}`];
+      if (isRecord(entry) && (EQUIPMENT_STATES as readonly string[]).includes(entry.state)) delete stored[`equipment.${id}`];
+    }
+    for (const d of input.equipment) {
+      const before = previous[`equipment.${d.id}`];
+      stored[`equipment.${d.id}`] = isRecord(before) && before.state === d.state && typeof before.updatedAt === 'string' ? before : { state: d.state, updatedAt: options.now };
+    }
+    if (Object.keys(stored).length) perfil.prescription_signals = stored; else delete perfil.prescription_signals;
+  }
   // --- disponibilidad habitual. Misma forma que guardar_campo_mode_change (`{ disponibilidad: [...] }`, serializado) cuando
   // no hay calendario previo; si ya existe UNA categoria de dias (p. ej. `carrera`), se reescribe ESA categoria para no
   // destruir la forma por disciplina que lee el planner; con varias categorias no se adivina cual editar (8C-C).
@@ -313,7 +360,15 @@ const metric = (running: Row, name: string) => {
     status: r?.reason ?? 'unknown' };
 };
 
-export function projectCanonicalProfile(row: Row, sources: readonly SourceRow[]) {
+/** Declaraciones explicitas de equipamiento (available/unavailable) del almacen canonico. Ausente = desconocido, no se devuelve. */
+export function readEquipment(perfil: Row): { id: string; state: string; updatedAt: string | null }[] {
+  const stored = isRecord(perfil.prescription_signals) ? perfil.prescription_signals : {};
+  return equipmentIds.flatMap(id => { const e = stored[`equipment.${id}`];
+    return isRecord(e) && (EQUIPMENT_STATES as readonly string[]).includes(e.state) ? [{ id, state: e.state as string, updatedAt: typeof e.updatedAt === 'string' ? e.updatedAt : null }] : []; });
+}
+
+/** `restrictions`: lectura canonica (getCanonicalRestrictions). `null` = lectura no disponible (nunca se presenta como "sin restricciones"). */
+export function projectCanonicalProfile(row: Row, sources: readonly SourceRow[], restrictions: CanonicalRestrictions | null = null) {
   const perfil = isRecord(row.perfil) ? row.perfil : {};
   const mode = typeof row.modo_entrada === 'string' && row.modo_entrada.trim() ? row.modo_entrada : null;
   const status = resolvePlanningProfileStatus({ ...row, trainingSources: sources } as OnboardingSnapshot);
@@ -345,6 +400,9 @@ export function projectCanonicalProfile(row: Row, sources: readonly SourceRow[])
         discipline: typeof s.disciplina === 'string' ? s.disciplina : null,
         days: Array.isArray(s.dias) ? s.dias.filter((d: unknown) => typeof d === 'string') : (typeof s.dias === 'string' && s.dias ? s.dias.split(',').map(d => d.trim()) : null) })),
       targetEvent: event,
+      restrictions: restrictions ? projectRestrictions(restrictions) : null,
+      restrictionsStatus: restrictions ? 'KNOWN' : 'UNAVAILABLE',
+      equipment: readEquipment(perfil),
     },
     prescriptionParameters: {
       marks,
@@ -356,9 +414,8 @@ export function projectCanonicalProfile(row: Row, sources: readonly SourceRow[])
     context: { displayName: text(row.nombre_mostrar), heightCm: typeof row.altura_cm === 'number' ? row.altura_cm : null,
       weightKg: typeof row.peso_kg === 'number' ? row.peso_kg : null, avatarUrl: text(row.avatar_url) },
     editableFields: [...EDITABLE_PROFILE_FIELDS],
-    // Sin storage canonico utilizable o editor todavia: no forman parte del contrato inicial.
-    unsupported: { restrictions: 'NO_CANONICAL_STORAGE', equipment: 'NO_CANONICAL_STORAGE',
-      targetEventWrite: 'USE_TARGET_EVENT_ACTION', marksWrite: 'PHASE_8C_E', hrReferencesWrite: 'PHASE_8C_E' },
+    // Todavia sin editor en este contrato.
+    unsupported: { targetEventWrite: 'USE_TARGET_EVENT_ACTION', marksWrite: 'PHASE_8C_E', hrReferencesWrite: 'PHASE_8C_E' },
   };
 }
 export { FREE_MODE };

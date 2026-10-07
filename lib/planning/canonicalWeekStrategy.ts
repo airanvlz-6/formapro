@@ -13,7 +13,9 @@ export type CanonicalWeekStrategy = {
   /** Weekly priorities/coverage are advice; session IDs and dose authorities remain binding. */
   weeklyDecisionAuthority?: 'coach';
   eventAuthority?: EventAuthority;
-  version: 1; policy: 'goal-transfer-v1'; goal: { id: GoalId | null; sources: string[]; evidenceDigest: string };
+  version: 1; policy: 'goal-transfer-v1'; goal: { id: GoalId | null; sources: string[]; evidenceDigest: string;
+    /** Set only when `id` is a programming fallback derived from the declared sport, NOT the athlete's declared objective. */
+    fallback?: { kind: 'DECLARED_SPORT_FAMILY' | 'GENERAL_DECLARED_SPORT'; strategyId: GoalId; reason: 'EXPLICIT_OBJECTIVE_NOT_SPECIALISED' } };
   block: { phase: StrategicIntent['blockPhase']; week: number | null; totalWeeks: number | null; evidenceDigest: string };
   adaptations: { id: string; role: AdaptationRole; weaknessIds: string[]; requiredPattern: PatronMovimiento | null }[];
   preferredEnvironments: string[]; methods: string[];
@@ -87,7 +89,10 @@ export function buildCanonicalWeekStrategy(context: AthletePrescriptionContext, 
     { code: 'TRANSFER_RESOLUTION', reason: 'equipment_inventory_and_all_vs_any_requirements_not_canonical' },
     { code: 'TRANSFER_RESOLUTION', reason: 'level_and_readiness_not_new_authority' },
     { code: 'TRANSFER_RESOLUTION', reason: 'interday_interference_not_established_by_structure_metadata' });
-  return { version: 1, policy: 'goal-transfer-v1', weeklyDecisionAuthority: 'coach', goal: { id: goalId, sources: resolvePlanningStrategy(context).sources, evidenceDigest: digest(resolvePlanningStrategy(context)) },
+  const resolved = resolvePlanningStrategy(context);
+  if (resolved.fallback) diagnostics.push({ code: 'STRATEGY_FALLBACK', reason: resolved.fallback.reason, reference: resolved.fallback.kind });
+  return { version: 1, policy: 'goal-transfer-v1', weeklyDecisionAuthority: 'coach', goal: { id: goalId, sources: resolved.sources, evidenceDigest: digest(resolved),
+      ...(resolved.fallback ? { fallback: { kind: resolved.fallback.kind, strategyId: resolved.fallback.strategyId, reason: resolved.fallback.reason } } : {}) },
     ...(context.asOfDate ? { eventAuthority: resolveEventAuthority(context.eventInput ?? {}, goalId, scope, context.asOfDate, context.userCodigo) } : {}),
     block: { phase, week: typeof context.cycle.week.value === 'number' ? context.cycle.week.value : null,
       totalWeeks: typeof context.cycle.totalWeeks.value === 'number' ? context.cycle.totalWeeks.value : null, evidenceDigest: digest(context.cycle) },

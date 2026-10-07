@@ -75,6 +75,7 @@ import { getResponseMode, buildStaticResponse, getCapabilities, buildCapabilityI
 import { sendEmail } from "@/lib/email/sendEmail";
 import FounderEmail from "@/lib/email/templates/FounderEmail";
 import { getCanonicalRestrictions } from "@/lib/athlete/getCanonicalRestrictions";
+import { RESTRICTION_AREA_PROHIBITIONS } from "@/lib/athlete/restrictionAreas";
 import type { CanonicalRestrictions } from "@/lib/athlete/getCanonicalRestrictions";
 import { beginWeeklyGeneration, resolveWeeklyGeneration } from "@/lib/planning/weeklyGeneration";
 import { prepareWeeklyEntries, entrySession, admitWeeklyCandidate } from "@/lib/planning/prepareWeeklyCandidate";
@@ -2867,13 +2868,7 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
         // FORGE CONSTRAINT ENGINE V2 — la restriccion se define por PROPIEDADES biomecanicas que
         // prohibe, no por una lista de palabras de ejercicios. body_area determina que propiedades
         // se activan, de forma determinista y extensible sin tocar listas de excepciones.
-        const PERFIL_PROHIBICIONES_POR_ZONA: Record<string, { impact?: boolean; jump?: boolean; axial_load?: boolean; deep_flexion?: boolean; overhead_load?: boolean }> = {
-          rodilla: { impact: true, jump: true, deep_flexion: true },
-          hombro: { overhead_load: true },
-          lumbar: { axial_load: true, deep_flexion: true },
-          tobillo: { impact: true, jump: true },
-          muñeca: { overhead_load: true },
-        };
+        const PERFIL_PROHIBICIONES_POR_ZONA = RESTRICTION_AREA_PROHIBITIONS as Record<string, { impact?: boolean; jump?: boolean; axial_load?: boolean; deep_flexion?: boolean; overhead_load?: boolean }>;
         const bodyAreaKey = (evt.body_area || "").toLowerCase();
         const prohibiciones = PERFIL_PROHIBICIONES_POR_ZONA[bodyAreaKey] || {};
 

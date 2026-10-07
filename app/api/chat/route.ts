@@ -26,6 +26,7 @@ import { saveHabitualRunningAnswer, type HabitualRunningProfileStore } from '@/l
 import { issueEnvironmentConfirmation, readEnvironmentConfirmation, ENVIRONMENT_CONFIRMATION_COOKIE, ENVIRONMENT_CONFIRMATION_TTL_SECONDS } from '@/lib/planning/sessionEnvironmentConfirmation';
 import { ensurePlanningSpecialty, hasCanonicalSpecialty, requiresPlanningSpecialty } from '@/lib/sports/canonicalSpecialty';
 import { computeOnboardingFields, legacyOnboardingCompleted, resolvePlanningProfileStatus } from '@/lib/athlete/planningProfileStatus';
+import { calculateOnboardingState, executeAthleteModeChange } from '@/lib/athlete/modeChange';
 import { weeklySaveAdmission } from "@/lib/planning/weeklyCalendarAuthority";
 import { planBoundedWeek } from "@/lib/planning/prepareAllowedWeeklyPlanContract";
 import { admittedWeekObjective } from "@/lib/planning/weeklyCalendarAuthority";
@@ -977,9 +978,8 @@ async function handlePost(req: NextRequest, coachFirstPlanning?: CoachFirstPlann
 // FORGE ONBOARDING STATE MACHINE — calcula el estado REAL consultando las tablas canonicas
 // (usuarios, athlete_training_sources), nunca confiando en lo que el LLM "cree" completado.
 async function calcularEstadoOnboarding(supabase: any, codigo: string, mode: string) {
-  const { data: usuarioOnb } = await supabase.from("usuarios").select("perfil,categoria,especialidad,objetivo_principal,distribucion_semanal").eq("codigo", codigo).maybeSingle();
-  const { data: fuentesOnb } = await supabase.from("athlete_training_sources").select("*").eq("user_codigo", codigo).eq("activo", true);
-  return computeOnboardingFields({ ...(usuarioOnb || {}), trainingSources: fuentesOnb || [] }, mode);
+  // BUILD 8C-A: implementacion unica en lib/athlete/modeChange.ts (compartida con la activacion del perfil canonico).
+  return calculateOnboardingState(supabase, codigo, mode);
 }
 
 if (action === "verificar_datos_cambio_modo_deterministico") {
@@ -1119,51 +1119,14 @@ if (action === "verificar_cambio_modo") {
   }
 
   if (action === "cambiar_modo_atleta") {
-    // FORGE MODE CHANGE — ejecucion real. Guard determinista final: nunca confia en que el frontend
-    // ya verifico missingFields, lo recalcula aqui mismo antes de construir el nuevo ciclo y llamar
-    // a la RPC transaccional change_athlete_mode (atomica: todo o nada, nunca estado intermedio).
+    // FORGE MODE CHANGE — ejecucion real. Guard determinista final: nunca confia en que el frontend ya verifico
+    // missingFields, lo recalcula en servidor (ensurePlanningSpecialty -> calculateOnboardingState -> ciclo -> RPC
+    // transaccional change_athlete_mode). BUILD 8C-A: la implementacion vive en lib/athlete/modeChange.ts para que la
+    // activacion desde el perfil canonico (PUT /api/athlete/profile) reutilice EXACTAMENTE esta transicion.
     const { targetMode, reason } = datos;
-    if (!['supervision', 'focus', 'coach'].includes(targetMode)) {
-      return NextResponse.json({ error: "Modo destino invalido" }, { status: 400 });
-    }
-    const specialtyIntegrity = await ensurePlanningSpecialty(supabase, codigo, targetMode);
-    if (!specialtyIntegrity.ok) return NextResponse.json({ ok: false, code: specialtyIntegrity.code }, { status: 422 });
-    const { missingFields } = await calcularEstadoOnboarding(supabase, codigo, targetMode);
-    if (missingFields.length > 0) {
-      return NextResponse.json({ error: "Faltan campos obligatorios para este modo", missingFields }, { status: 400 });
-    }
-
-    // Construir el nuevo ciclo — logica de planificacion, vive en TypeScript, nunca en la RPC
-    let nuevoCiclo = null;
-    if (targetMode === 'focus' || targetMode === 'coach') {
-      const { data: usuarioParaCiclo } = await supabase.from("usuarios").select("objetivo_principal,perfil").eq("codigo", codigo).single();
-      nuevoCiclo = {
-        bloque: "acumulacion",
-        semana: 1,
-        totalSemanas: 4,
-        objetivo: usuarioParaCiclo?.objetivo_principal?.descripcion || usuarioParaCiclo?.perfil?.objetivo_detalle || "Nueva planificacion"
-      };
-    }
-
-    const { data: resultadoCambio, error: errorCambio } = await supabase.rpc('change_athlete_mode', {
-      p_codigo: codigo,
-      p_target_mode: targetMode,
-      p_reason: reason || 'user_requested',
-      p_new_cycle: nuevoCiclo
-    });
-
-    if (errorCambio) {
-      console.error("Error en cambiar_modo_atleta (RPC):", errorCambio);
-      return NextResponse.json({ error: errorCambio.message }, { status: 500 });
-    }
-
-    console.log(`🔄 MODE CHANGE: ${codigo} — ${JSON.stringify(resultadoCambio)}`);
-    return NextResponse.json(resultadoCambio);
+    const cambio = await executeAthleteModeChange(supabase, codigo, targetMode, reason);
+    return NextResponse.json(cambio.body, { status: cambio.status });
   }
-
-
-
-
 
   if (action === "verificar_email_bloqueado") {
     const { email } = datos || {};
@@ -2994,6 +2957,15 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
     }
     const specialtyIntegrity = await ensurePlanningSpecialty(supabase, codigo, nuevoModo);
     if (!specialtyIntegrity.ok) return NextResponse.json({ ok: false, code: specialtyIntegrity.code }, { status: 422 });
+    // BUILD 8C-A — CONTENCION: un modo de planificacion (supervision/planificacion) exige el MISMO perfil completo que la
+    // transicion canonica. Antes un Free (o cualquier cuenta) podia persistir el modo con perfil incompleto. `consulta`
+    // no prescribe y no exige perfil. La via canonica es PUT /api/athlete/profile (activate) / cambiar_modo_atleta.
+    if (nuevoModo !== "consulta") {
+      const { missingFields: missingFieldsEntrada } = await calcularEstadoOnboarding(supabase, codigo, nuevoModo);
+      if (missingFieldsEntrada.length > 0) {
+        return NextResponse.json({ ok: false, code: "PLANNING_PROFILE_INCOMPLETE", missingFields: missingFieldsEntrada }, { status: 400 });
+      }
+    }
     await supabase.from("usuarios").update({ modo_entrada: nuevoModo }).eq("codigo", codigo);
     console.log(`MODO ENTRADA cambiado a "${nuevoModo}" para usuario ${codigo}`);
     return NextResponse.json({ ok: true, nuevoModo });

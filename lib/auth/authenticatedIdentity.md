@@ -80,6 +80,28 @@ No token is decoded locally as proof. Service-role is server-only, with no share
 mutable Auth session. Responses are no-store and contain neutral non-retryable errors.
 An unconfirmed email is rejected. A forged JSON principal cannot reach the resolver.
 
+## Identity bootstrap vs planning profile (BUILD 8A)
+
+ACCOUNT CREATED != PLANNING PROFILE READY. `POST /api/auth/athlete` has two shapes:
+
+- `{ intent: 'create_new_account' }` (no `profile`, or `profile: null`): identity-only (Free).
+  Inserts only auth_user_id, server-generated codigo, Auth email, `perfil: {}`,
+  `modo_entrada: 'free'`, `marcas: []`, `historial: []`, `admin: false`, `premium: false`.
+  categoria/especialidad/nivel/objetivo and every other planning field are not written and
+  never invented.
+- `{ intent: 'create_new_account', profile: { categoria, nivel, objetivo } }`: the historical
+  full bootstrap (`modo_entrada: 'supervision'`), unchanged. A `profile` that is present but
+  invalid is `ACCOUNT_PROFILE_INVALID`; it never degrades to identity-only.
+
+Both are idempotent: an already linked athlete is returned untouched (a later identity-only call
+never clears an existing profile) and a concurrent UNIQUE(auth_user_id) violation re-resolves.
+The response shape is unchanged. Planning readiness is derived, never persisted:
+`resolvePlanningProfileStatus` (lib/athlete/planningProfileStatus.ts) returns
+`{ mode, ready, missingFields }` and `verificar_onboarding_completado` exposes it next to the
+legacy `completado`. `usuarios.onboarding_completado` is not an authority. `free` resolves to the
+non-prescriptive scope (like `consulta`), so it can neither plan nor enter supervision/coach/focus
+implicitly.
+
 ## Setup required before live use
 
 Browser: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.

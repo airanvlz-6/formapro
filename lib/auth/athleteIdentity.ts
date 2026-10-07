@@ -5,6 +5,9 @@ export type VerifiedPrincipal = Readonly<{ authUserId: string }>;
 export type AuthenticatedAthlete = Readonly<{
   principal: VerifiedPrincipal; athleteId: string; legacyCodigo: string;
 }>;
+// Identity stays dependency-free on purpose (it is loaded in isolation by security tests). Must equal
+// FREE_MODE in lib/athlete/planningProfileStatus.ts (asserted by planningProfileStatus.test.mjs).
+const FREE_MODE = 'free';
 export class IdentityError extends Error {
   constructor(public readonly code: string, public readonly status = 403) { super(code); }
 }
@@ -62,21 +65,31 @@ export async function bootstrapNewAthlete(db: any, principal: VerifiedPrincipal,
   if (input?.intent !== 'create_new_account') throw new IdentityError('ACCOUNT_BOOTSTRAP_INTENT_REQUIRED', 400);
   try { return await resolveAuthenticatedAthlete(db, principal); }
   catch (error) { if (!(error instanceof IdentityError) || error.code !== 'ATHLETE_NOT_LINKED') throw error; }
+  // BUILD 8A: ACCOUNT CREATED != PLANNING PROFILE READY. Sin `profile` => identity bootstrap (cuenta Free,
+  // sin categoria/especialidad/nivel/objetivo inventados). Con `profile` => bootstrap completo historico.
+  // Un `profile` presente pero invalido NO degrada a identity-only: es un error del cliente.
   const profile = input?.profile;
-  if (!profile || !['funcional', 'carrera', 'fuerza', 'hibrido'].includes(profile.categoria)
+  const identityOnly = profile === undefined || profile === null;
+  if (!identityOnly && (!['funcional', 'carrera', 'fuerza', 'hibrido'].includes(profile.categoria)
     || typeof profile.objetivo !== 'string' || !profile.objetivo.trim() || profile.objetivo.length > 500
-    || !['Principiante', 'Intermedio', 'Avanzado'].includes(profile.nivel))
+    || !['Principiante', 'Intermedio', 'Avanzado'].includes(profile.nivel)))
     throw new IdentityError('ACCOUNT_PROFILE_INVALID', 400);
   // No legacy lookup, update, relink or client-supplied identity/privileges.
-  const payload = {
+  const identity = {
     auth_user_id: principal.authUserId,
     codigo: `FP-${randomBytes(10).toString('hex').toUpperCase()}`,
     email: user.email ?? null,
-    categoria: profile.categoria, especialidad: profile.categoria,
-    perfil: { objetivo_general: profile.objetivo.trim(), nivel: profile.nivel },
-    modo_entrada: 'supervision', marcas: [], historial: [],
+    marcas: [], historial: [],
     admin: false, premium: false,
   };
+  const payload = identityOnly
+    // Free: modo explicito 'free' (un null seria leido como "planificacion" por varios consumidores
+    // legacy). Campos de planificacion ausentes (null en BD); `perfil` vacio, nunca inventado.
+    ? { ...identity, perfil: {}, modo_entrada: FREE_MODE }
+    : { ...identity,
+        categoria: profile.categoria, especialidad: profile.categoria,
+        perfil: { objetivo_general: profile.objetivo.trim(), nivel: profile.nivel },
+        modo_entrada: 'supervision' };
   let result;
   try { result = await db.from('usuarios').insert(payload); }
   catch { throw new IdentityError('ACCOUNT_BOOTSTRAP_UNAVAILABLE', 503); }

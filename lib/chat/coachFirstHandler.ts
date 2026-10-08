@@ -74,7 +74,23 @@ export async function handleCoachFirst(request: Request,
     const athlete = await resolveAuthenticatedAthlete(db, principal);
     const body = await request.json();
     if (body.codigo !== undefined && body.codigo !== athlete.legacyCodigo) throw new IdentityError('ATHLETE_MISMATCH');
-    const supplied = body.action === 'enviar_mensaje_coach' ? { ...body.datos, message: body.datos?.mensaje } : body;
+    // 8D: a profile-change handoff travels through THIS protocol. The server verifies the token, REREADS the canonical profile and builds
+    // the message and the immutable context itself; nothing the client sends (message, pending, references, attachments, weeklyAction)
+    // is used as authority. Rejected before the claim so a stale/tampered handoff never consumes a turn.
+    let handoffContext: Record<string, unknown> | null = null;
+    let handoffMessage: string | null = null;
+    let blockedTools: string[] = [];
+    if (body.action === 'profile_change_handoff') {
+      // Lazy: only handoff turns need the profile service and the handoff authority.
+      const { getCanonicalProfile } = await import('../athlete/canonicalProfileService');
+      const { resolveProfileChangeHandoff, coachHandoffContext, HANDOFF_BLOCKED_TOOLS } = await import('./profileChangeHandoff');
+      const read = await getCanonicalProfile(db, athlete);
+      const resolved = resolveProfileChangeHandoff(body.datos, athlete.athleteId, read.status === 200 ? (read.body as any).profile : null);
+      if (!resolved.ok) return respond({ route: 'coach_first', code: resolved.code, retryable: resolved.status >= 500 }, resolved.status);
+      handoffContext = coachHandoffContext(resolved.context); handoffMessage = resolved.message; blockedTools = HANDOFF_BLOCKED_TOOLS;
+    }
+    const supplied = handoffMessage !== null ? { message: handoffMessage, messageId: body.messageId, sessionId: body.sessionId }
+      : body.action === 'enviar_mensaje_coach' ? { ...body.datos, message: body.datos?.mensaje } : body;
     if (typeof supplied.message !== 'string' || supplied.message.length > 16000
       || (!supplied.message.trim() && !supplied.attachments?.length)
       || typeof supplied.messageId !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(supplied.messageId))
@@ -105,11 +121,13 @@ export async function handleCoachFirst(request: Request,
     // Existing calendar authorities use Canary civil dates. Never trust a client clock as authority.
     const input: CoachFirstInput = { message: supplied.message, messageId: supplied.messageId,
       conversation, timestamp: new Date().toISOString(), timezone: 'Atlantic/Canary',
-      pending: supplied.pending ?? null, references: supplied.references ?? null, attachments };
+      pending: supplied.pending ?? null, references: supplied.references ?? null, attachments,
+      ...(handoffContext ? { profileChange: handoffContext } : {}) };
     if (JSON.stringify(input).length > 6500000) return respond({ code: 'INPUT_TOO_LARGE' }, 413);
     stage = 'claim';
     const turn = conversationTurn(athlete.legacyCodigo, input.messageId,
       { message: input.message, attachments, pending: input.pending, references: input.references,
+        ...(handoffContext ? { profileChange: handoffContext } : {}),
         ...(weeklyAction !== undefined ? { weeklyAction } : {}) });
     const claim = await conversationSession(db, athlete.legacyCodigo, supplied.sessionId, 'begin', turn);
     if (!claim.ok || claim.status !== 'committed') return respond({ route: 'coach_first', ...claim,
@@ -119,7 +137,7 @@ export async function handleCoachFirst(request: Request,
       .map((m: any) => ({ role: m.role, content: m.content }));
     input.conversation = conversation;
     const today = new Date(input.timestamp).toLocaleDateString('en-CA', { timeZone: input.timezone });
-    const canonical = policy === 'normal' ? await canonicalWeeklyRequest(db, athlete.legacyCodigo, input.message, today, turn.id, input.timestamp, structuredIntent, () => receipts.push({ tool: 'canonical_week', status: 'attempted', pending: null }), weeklyAction) : null;
+    const canonical = policy === 'normal' && !handoffContext ? await canonicalWeeklyRequest(db, athlete.legacyCodigo, input.message, today, turn.id, input.timestamp, structuredIntent, () => receipts.push({ tool: 'canonical_week', status: 'attempted', pending: null }), weeklyAction) : null;
     if (canonical) {
       receipts.push(...canonical.receipts);
       const finished = await conversationSession(db, athlete.legacyCodigo, supplied.sessionId, 'finish', {
@@ -178,6 +196,7 @@ export async function handleCoachFirst(request: Request,
     let dispatchTool: ReturnType<typeof import('./coachFirstTools')['coachFirstTools']> | undefined;
     let canonicalToolResult: Awaited<ReturnType<typeof canonicalWeeklyRequest>>;
     const dispatch = async (call: CoachFirstCall, ordinal: number) => {
+      if (handoffContext && blockedTools.includes(call.name)) return { status: 'rejected', code: 'PROFILE_HANDOFF_READ_ONLY' };
       if (['prepare_generation', 'generate_week'].includes(call.name)) {
         if (policy !== 'normal') return { status: 'rejected', code: 'COACH_FIRST_READ_ONLY' };
         canonicalToolResult = await canonicalWeeklyRequest(db, athlete.legacyCodigo, input.message, today, turn.id, input.timestamp,

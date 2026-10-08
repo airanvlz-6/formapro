@@ -1,3 +1,5 @@
+import { appendChatHistory } from './appendChatHistory';
+import { coachHandoffContext } from './profileChangeHandoff';
 import { createCoachTrace } from '../diagnostics/coachTrace';
 import { createGroundingTrace } from '../diagnostics/groundingTrace';
 import { randomUUID } from 'node:crypto';
@@ -53,7 +55,7 @@ export async function runChatCoach(db: any, user: string, message: string, compl
       ? await attempt('reload', () => loadChatGrounding(db, user, today, message, createGroundingTrace(pipeline.runId, 'reload')), null) : initial;
     const contextOperation = coachTrace.start('postGrounding.context');
     const outcome = { mutation, adaptation, knowledge,
-      ...(handoff ? { profileChange: { ...handoff, instruction: 'El perfil YA está guardado y es la fuente de verdad: el objetivo principal actual es la autoridad; el anterior es solo contexto del cambio. Las disciplinas (p. ej. CrossFit, carrera) son medios de entrenamiento, no el objetivo. No modifiques ni cuestiones campos del perfil; explica el cambio ("Tu objetivo principal ha cambiado…"), valora cómo afecta a la estrategia y propón la adaptación de la planificación.' } } : {}),
+      ...(handoff ? { profileChange: coachHandoffContext(handoff) } : {}),
       supportedAutomaticChanges: ['temporary_unavailability_explicit_weekday'],
       unsupportedAutomaticChanges: ['temporary_equipment_capacity', 'clinical_restriction', 'medical_resolution', 'goal_or_event_change'],
       instruction: 'Los estados unverified pueden representar una escritura no confirmada: no afirmar guardado ni ausencia de escritura, no repetir automáticamente. Puedes aconsejar y adaptar verbalmente sin persistencia. Explica el estado técnico solo cuando sea relevante.' };
@@ -102,18 +104,7 @@ export async function runChatCoach(db: any, user: string, message: string, compl
     } else pipeline.rejectedFactCount += quotes.length;
 
     pipeline.mutationSucceeded = pipeline.verifiedFactCount > 0 || ['committed', 'already_applied'].includes(mutation.status) || actions.some(a => a.status === 'committed');
-    const historySaved = await attempt('history', async () => {
-      const read = await db.from('usuarios').select('historial').eq('codigo', user).single();
-      if (read.error || !read.data) throw new Error('CHAT_HISTORY_READ_FAILED');
-      const before = read.data.historial, history = conversationOnly(before);
-      if (history.at(-2)?.role === 'user' && history.at(-2)?.content === message && history.at(-1)?.role === 'assistant') return true;
-      const next = [...history, { role: 'user', content: message }, { role: 'assistant', content: answer }].slice(-15);
-      let write = db.from('usuarios').update({ historial: next }).eq('codigo', user);
-      write = before == null ? write.is('historial', null) : write.eq('historial', JSON.stringify(before));
-      const saved = await write.select('codigo');
-      if (saved.error || !saved.data?.length) throw new Error('CHAT_HISTORY_WRITE_FAILED');
-      return true;
-    }, false);
+    const historySaved = await attempt('history', async () => { await appendChatHistory(db, user, message, answer); return true; }, false);
     pipeline.historySaved = historySaved;
     return { answer, grounded: true, groundingLoaded: !!current, mutation, adaptation, knowledge, actions,
       historySaved, pipeline: { ...pipeline } };

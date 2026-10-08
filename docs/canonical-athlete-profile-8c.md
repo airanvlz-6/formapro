@@ -193,16 +193,30 @@ targetEvent. Not required: age and CONTEXT_ONLY. PRESCRIPTION_PARAMETERS arrive 
 
 ## Coach handoff (8C-D)
 
-`POST /api/chat { action: 'profile_change_handoff', datos: { profileChange: { id, changedFields: [{field, previous, current}] }, token } }`
-with `Authorization: Bearer`. The athlete is the verified principal's (`authenticatedAthleteId`, server-derived; body `codigo`/`email`
-are ignored/rejected). The server verifies the HMAC token (athlete-bound, 24h, bound to the change digest so edited fields fail),
-REREADS the canonical profile and rejects with `409 PROFILE_HANDOFF_STALE` if the persisted values no longer match. It then builds a
-deterministic Spanish message plus an immutable context (new objective = authority, previous = change context, specialty/sources =
-means, availability, duration, level, restrictions, equipment, prescription parameters) and calls the existing legacy Coach path
-(`groundedReply → runChatCoach`) in read-only-profile mode (no fact extraction/knowledge/state writes; the reply is saved in
-`usuarios.historial` like any Coach turn, so the existing chat hydrates it). Response: `{ ok, delivery: 'COACH_REPLY', changeId, answer, respuesta, … }`.
-Limitation: with `NEXT_PUBLIC_FORGE_COACH_FIRST=1` the route returns `{ delivery: 'COACH_FIRST_SUBMIT', mensaje }` (verified text) for the client to
-submit through the coach-first turn; the immutable context object is only injected on the legacy path.
+`POST /api/chat { action: 'profile_change_handoff', sessionId?, messageId?, datos: { profileChange: { id, changedFields: [{field, previous, current}] }, token } }`
+with `Authorization: Bearer`. The athlete is the verified principal's (`authenticatedAthleteId` on the legacy path, the resolved athlete in
+Coach First); body `codigo`/`email`/`athleteId`/`message`/`pending`/`references`/`attachments`/`weeklyAction` are never authority. The server
+verifies the HMAC token (athlete-bound, 24h, bound to the change digest so edited fields fail), REREADS the canonical profile and rejects with
+`409 PROFILE_HANDOFF_STALE` if the persisted values no longer match (before any turn is claimed). It then builds ONE deterministic Spanish message
+and ONE immutable context (`coachHandoffContext`: new objective = authority, previous = change context, specialty/sources = means,
+availability, duration, level, restrictions, equipment, prescription parameters, plus a fixed instruction). Both Coach routes receive exactly that:
+
+* Legacy (`NEXT_PUBLIC_FORGE_COACH_FIRST` off): `groundedReply → runChatCoach(..., { profileChange })`, profile read-only (no fact extraction,
+  knowledge/state writes or learning). Response `{ ok, delivery: 'COACH_REPLY', changeId, answer, respuesta, … }`.
+* Coach First (flag on; same action, `sessionId` + `messageId` required like any Coach First turn): `handleCoachFirst` claims the normal
+  idempotent journal turn with the server message, injects the context as `profileChangeHandoff` in the turn JSON (system instruction
+  `PROFILE CHANGE HANDOFF`), skips the canonical-week pre-parser, ignores client pending/references/attachments, and refuses the tools that would
+  write profile truths (`update_availability`, `record_athlete_data`, `transition_restriction` → `PROFILE_HANDOFF_READ_ONLY`). Planning reads,
+  session adaptation and generation stay available. Response is the standard Coach First turn response (`answer`, `operationId`, `persisted`, …).
+
+Either way the exchange is stored in `usuarios.historial`, which the existing Coach screen hydrates (no second chat).
+
+## Chat history persistence (8D)
+
+Legacy `runChatCoach` appended history with `.eq('historial', JSON.stringify(before))` (the same whole-JSON compare that caused the profile false
+409). It now calls `forge_chat_history_append(p_user, p_message, p_answer)` (`docs/sql/chat-history-append.sql`): append on the CURRENT history under a row lock
+(concurrent exchanges both kept, in order; replay is a no-op; last 15 conversation turns). RPC missing → `CHAT_HISTORY_APPEND_UNAVAILABLE`, the answer is still
+returned with `historySaved:false` (fail-closed, nothing written). Coach First history is unchanged (its own session RPC).
 
 ## Legacy containment
 

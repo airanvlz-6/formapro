@@ -836,7 +836,7 @@ export async function POST(req: NextRequest) {
   if (coachFirstEnabled()) {
     const body = await req.clone().json().catch(() => null);
     if (!body) return NextResponse.json({ code: 'INPUT_INVALID' }, { status: 400 });
-    if (body.action === 'coach_first' || body.action === 'enviar_mensaje_coach') {
+    if (body.action === 'coach_first' || body.action === 'enviar_mensaje_coach' || body.action === 'profile_change_handoff') {
       return handleCoachFirst(req, async (action, datos, context) => {
         if (!['analizar_bloque_semana','planificar_semana','construir_sesion_dia','guardar_plan_semana'].includes(action))
           throw new Error('COACH_FIRST_PLANNING_OPERATION_INVALID');
@@ -1237,8 +1237,6 @@ if (action === "verificar_cambio_modo") {
       const read = await getCanonicalProfile(supabase, { athleteId: authenticatedAthleteId, legacyCodigo: codigo });
       const resolved = resolveProfileChangeHandoff(datos, authenticatedAthleteId, read.status === 200 ? (read.body as any).profile : null);
       if (!resolved.ok) return NextResponse.json({ ok: false, retryable: resolved.status >= 500, code: resolved.code }, { status: resolved.status });
-      if (coachFirstEnabled()) // Coach-first owns the conversation journal: hand the verified message back for the client to submit as the next turn.
-        return NextResponse.json({ ok: true, delivery: 'COACH_FIRST_SUBMIT', changeId: resolved.changeId, mensaje: resolved.message });
       const result = await groundedReply(resolved.message, { profileChange: resolved.context });
       return NextResponse.json({ ok: true, delivery: 'COACH_REPLY', changeId: resolved.changeId, ...result, respuesta: result.answer });
     } catch (err: any) {

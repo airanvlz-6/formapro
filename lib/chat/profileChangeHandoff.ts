@@ -39,6 +39,12 @@ function verifyToken(token: unknown, athleteId: string, now: number): { changeId
   } catch { return null; }
 }
 
+/** Single source of the Coach-facing instruction: legacy and Coach First receive the SAME text and the SAME context object. */
+export const PROFILE_CHANGE_INSTRUCTION = 'El perfil YA está guardado y es la fuente de verdad: el objetivo principal actual es la autoridad; el anterior es solo contexto del cambio. Las disciplinas (p. ej. CrossFit, carrera) son medios de entrenamiento, no el objetivo. No modifiques ni cuestiones campos del perfil; explica el cambio ("Tu objetivo principal ha cambiado…"), valora cómo afecta a la estrategia y propón la adaptación de la planificación.';
+export const coachHandoffContext = (context: Row): Row => ({ ...context, instruction: PROFILE_CHANGE_INSTRUCTION });
+/** Tools that would write profile truths (availability, reported events, restrictions) are refused during a profile-change handoff turn. */
+export const HANDOFF_BLOCKED_TOOLS = ['update_availability', 'record_athlete_data', 'transition_restriction'];
+
 const reject = (status: number, code: string): HandoffFailure => ({ ok: false, status, code });
 const LABELS: Record<string, string> = { objective: 'objetivo principal', category: 'categoría', specialty: 'especialidad', weeklyAvailability: 'disponibilidad semanal',
   sessionDuration: 'duración de sesión', trainingSources: 'fuentes de entrenamiento', restrictions: 'restricciones', equipment: 'equipamiento', level: 'nivel', targetEvent: 'evento objetivo' };

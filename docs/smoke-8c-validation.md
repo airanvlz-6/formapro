@@ -21,6 +21,7 @@ Helpers and their unit tests: `scripts/smoke8c/common.mjs`, `scripts/smoke8c/com
   `COACH_FIRST_ROUTE_REQUIRED`).
 * The migration `docs/sql/allow-null-category-for-free-users.sql` applied on that project (Free users have no category), and
   `docs/sql/drop-legacy-auth-user-trigger.sql` if you have not applied it yet.
+* The migration `docs/sql/profile-field-cas.sql` (field-scoped profile CAS RPC `forge_profile_apply`). Without it every profile PATCH that writes returns `503 PROFILE_CAS_UNAVAILABLE`.
 * Auth settings that allow `signInWithPassword` for admin-created, email-confirmed users (the default).
 
 ## Environment variables (names only)

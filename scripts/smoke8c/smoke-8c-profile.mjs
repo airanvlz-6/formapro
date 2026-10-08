@@ -137,6 +137,21 @@ try {
     return 'usuarios.objetivo_principal.descripcion';
   });
 
+  await reporter.stage('S5b objective-only PATCH on a LARGE perfil (~24KB) is 200, not a false 409; unrelated perfil preserved; profileChange returned', async () => {
+    const before = (await read(A)).row;
+    const big = { ...(before.perfil ?? {}), sentinel_large: Array.from({ length: 60 }, (_, i) => ({ i, text: 'ñ"\\'.repeat(100) })) };
+    const seeded = await admin.from('usuarios').update({ perfil: big }).eq('codigo', A.codigo).eq('auth_user_id', A.authUserId);
+    check(!seeded.error, 'could not seed large perfil');
+    const next = `${OBJECTIVE} (large)`;
+    const res = await patch(A, { profile: { objective: next } }); expectStatus(res, 200, 'objective on large perfil (a 409 here = whole-row CAS regression or RPC missing)');
+    const row = (await read(A)).row;
+    check(row.objetivo_principal?.descripcion === next, 'objective not persisted');
+    check(JSON.stringify(row.perfil.sentinel_large) === JSON.stringify(big.sentinel_large), 'large unrelated perfil changed');
+    check(res.json.profileChange?.changedFields?.[0]?.field === 'objective' && res.json.profileChange.requiresCoachReview === true, 'profileChange missing');
+    const restore = await patch(A, { profile: { objective: OBJECTIVE } }); expectStatus(restore, 200, 'restore objective');
+    return 'forge_profile_apply scoped CAS';
+  });
+
   // ------------------------------------------------------------------ 4. structure
   await reporter.stage('S6 PATCH age / level / sessionDuration / weeklyAvailability / trainingSources', async () => {
     const days = ['lunes', 'martes', 'miercoles', 'viernes', 'sabado'];

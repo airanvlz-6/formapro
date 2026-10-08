@@ -4,8 +4,8 @@
 // LIMITE DE ATOMICIDAD (explicito): el RPC `change_athlete_mode` solo cambia modo/ciclo; no recibe perfil, y no se
 // sustituye en esta fase. Por eso NO hay una transaccion unica perfil+modo. Garantias reales:
 //   1. Todo el payload se valida ANTES de escribir: payload invalido => cero escrituras.
-//   2. Las columnas de `usuarios` se escriben en UN solo UPDATE (atomico por fila) con compare-and-set sobre el
-//      estado leido: una edicion concurrente => 409 PROFILE_CHANGED_RETRY y cero escrituras.
+//   2. Las columnas de `usuarios` se escriben por AUTORIDAD en una sola llamada atomica (RPC `forge_profile_apply`, docs/sql/profile-field-cas.sql):
+//      solo se compara lo que el PATCH toca; edicion concurrente de ESA autoridad => 409 PROFILE_CHANGED_RETRY y cero escrituras.
 //   3. El modo solo cambia si el estado RESULTANTE esta `ready` para el modo destino y SIEMPRE despues de que el
 //      perfil este persistido. Nunca existe "modo nuevo + perfil invalido". Si el RPC falla, el perfil queda
 //      guardado y valido, el modo anterior intacto, y la activacion se puede reintentar (idempotente).
@@ -19,6 +19,9 @@ import { executeAthleteModeChange } from './modeChange';
 import { persistTrainingSources } from '../sports/coachOwnership';
 import { getCanonicalRestrictions } from './getCanonicalRestrictions';
 import type { CanonicalRestrictions } from './getCanonicalRestrictions';
+import { applyProfileCas, buildProfileCasScope } from './profileCas';
+import { computeProfileChange } from './profileChange';
+import { issueProfileChangeHandoff } from '../chat/profileChangeHandoff';
 import { applyRestrictionPlan, planRestrictionChange } from './restrictionEditor';
 
 export type ServiceResult = { status: number; body: Record<string, unknown> };
@@ -27,7 +30,6 @@ type Clock = { now: () => string };
 const systemClock: Clock = { now: () => new Date().toISOString() };
 const fail = (status: number, code: string, extra: Record<string, unknown> = {}): ServiceResult =>
   ({ status, body: { ok: false, retryable: false, code, ...extra } });
-const JSON_COLUMNS = new Set(['objetivo_principal', 'perfil']);
 
 async function readSnapshot(db: any, codigo: string): Promise<{ row: Record<string, any>; sources: Record<string, any>[] } | ServiceResult> {
   let read, sourcesRead;
@@ -73,24 +75,25 @@ export async function saveCanonicalProfile(db: any, athlete: AthleteRef, body: u
 
   // Restricciones: se planifican ANTES de cualquier escritura (id desconocido / fecha pasada / lectura no disponible => cero escrituras).
   let restrictionPlan: ReturnType<typeof planRestrictionChange> | null = null;
+  let previousRestrictions: CanonicalRestrictions | null = null;
   const writeNow = new Date(clock.now());
   if (profile.restrictions !== undefined) {
     const current = await readRestrictions(db, codigo, writeNow);
     if (!current) return fail(503, 'PROFILE_RESTRICTIONS_UNAVAILABLE');
+    previousRestrictions = current;
     restrictionPlan = planRestrictionChange(current, profile.restrictions, codigo, writeNow);
     if (!restrictionPlan.ok) return fail(400, 'PROFILE_INVALID', { errors: restrictionPlan.errors });
   }
 
-  // 1) UN solo UPDATE por fila con compare-and-set sobre el estado leido (zero writes si cambio).
-  if (Object.keys(built.patch).length > 0) {
-    let query = db.from('usuarios').update(built.patch).eq('codigo', codigo);
-    for (const key of ['modo_entrada', 'categoria', 'especialidad', 'objetivo_principal', 'perfil']) {
-      const value = row[key];
-      query = value == null ? query.is(key, null) : query.eq(key, JSON_COLUMNS.has(key) ? JSON.stringify(value) : value);
-    }
-    let written;
-    try { written = await query.select('codigo'); } catch { return fail(503, 'PROFILE_WRITE_UNAVAILABLE'); }
-    if (written.error || !written.data?.length) return fail(409, 'PROFILE_CHANGED_RETRY');
+  // 1) Escritura por AUTORIDAD (RPC forge_profile_apply): compara y escribe solo lo que este PATCH toca, bajo bloqueo de fila.
+  //    Un cambio concurrente en OTRA autoridad se conserva (sin falso 409); en la MISMA autoridad => 409 real, cero escrituras.
+  //    Previo: CAS sobre modo_entrada+categoria+especialidad+objetivo+perfil completo (ver docs/canonical-athlete-profile-8c.md).
+  const scope = buildProfileCasScope(row, built.resulting);
+  if (scope) {
+    const outcome = await applyProfileCas(db, codigo, scope);
+    if (outcome.kind === 'CONFLICT') return fail(409, 'PROFILE_CHANGED_RETRY', { fields: outcome.fields });
+    if (outcome.kind === 'UNAVAILABLE') return fail(503, outcome.code);
+    if (outcome.kind === 'FAILED') return fail(503, outcome.code);
   }
   // 2) Fuentes de entrenamiento (otra tabla): despues, idempotentes.
   if (built.sourceUpserts.length > 0) {
@@ -130,6 +133,16 @@ export async function saveCanonicalProfile(db: any, athlete: AthleteRef, body: u
   const fresh = await readSnapshot(db, codigo);
   if (isFailure(fresh)) return fresh;
   const freshRestrictions = await readRestrictions(db, codigo, new Date());
-  return { status: 200, body: { ok: true, saved: Object.keys(built.patch).length > 0 || built.sourceUpserts.length > 0 || restrictionsChanged,
-    activation, profile: projectCanonicalProfile(fresh.row, fresh.sources, freshRestrictions) } };
+  const profileOut = projectCanonicalProfile(fresh.row, fresh.sources, freshRestrictions);
+  // profileChange: previous canonical projection vs persisted canonical projection (never the raw payload). Restrictions are only
+  // compared when this PATCH carried them, so an unrelated concurrent restriction edit is never attributed to this change.
+  const previousProfile = projectCanonicalProfile(row, sources, previousRestrictions);
+  const profileChange = computeProfileChange(previousProfile as any, profileOut as any, {
+    restrictions: profile.restrictions !== undefined,
+    only: Object.keys(profile).flatMap(k => (k === 'category' || k === 'specialty') ? ['category', 'specialty'] : [k]) });
+  let handoff: string | null = null;
+  if (profileChange?.requiresCoachReview) { try { handoff = issueProfileChangeHandoff(athlete.athleteId, profileChange.id); } catch { handoff = null; } }
+  return { status: 200, body: { ok: true, saved: !!scope || built.sourceUpserts.length > 0 || restrictionsChanged,
+    activation, profile: profileOut,
+    ...(profileChange ? { profileChange: { ...profileChange, ...(handoff ? { handoffToken: handoff } : {}) } } : {}) } };
 }

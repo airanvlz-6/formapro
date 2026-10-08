@@ -153,11 +153,56 @@ is never written.
 ### Atomicity limit
 
 `change_athlete_mode` only changes mode/cycle and is not replaced in this phase, so profile + mode are not one transaction.
-Guarantees: validation before writes; one atomic CAS `UPDATE` for all `usuarios` columns; the mode changes only after the profile is
-persisted and ready, so "new mode + invalid profile" cannot occur; if the RPC fails the profile stays saved and valid with the previous
-mode (`502 MODE_CHANGE_FAILED`, `profileSaved:true`) and the call can be retried. Training sources live in another table and are
-written after the `UPDATE` (`500 PROFILE_PARTIAL_WRITE` if that fails; mode untouched).
-`distribucion_semanal` is not part of the CAS (its column type is not asserted here); a concurrent write to it alone is last-writer-wins.
+Guarantees: validation before writes; the `usuarios` columns and `perfil` keys this PATCH touches are written by ONE atomic call
+(`forge_profile_apply`, see below); the mode changes only after the profile is persisted and ready, so "new mode + invalid profile"
+cannot occur; if the RPC fails the profile stays saved and valid with the previous mode (`502 MODE_CHANGE_FAILED`,
+`profileSaved:true`) and the call can be retried. Training sources live in another table and are written after the profile write
+(`500 PROFILE_PARTIAL_WRITE` if that fails; mode untouched).
+
+## Concurrency: field-scoped CAS (8C-A.2)
+
+Before: `UPDATE usuarios … WHERE codigo AND modo_entrada AND categoria AND especialidad AND objetivo_principal = JSON.stringify(prev)
+AND perfil = JSON.stringify(prev)` through PostgREST `eq` filters. `usuarios` has no version/updated_at/xmin usable through PostgREST,
+and the whole `perfil` (coach_first_turns, prescription_signals, HR/marks…) was serialised into the query string and compared as text,
+so any unrelated difference — or a perfil large enough to exceed URL limits or whose JSON text differs from the stored jsonb
+(key order/whitespace/unicode) — produced a 0-row update that was reported as `409 PROFILE_CHANGED_RETRY`.
+(Root cause is an evidence-based hypothesis: it was not reproduced on a real database from this environment. Run smoke stage S5b.)
+
+After: `docs/sql/profile-field-cas.sql` defines `public.forge_profile_apply(p_user, p_expected, p_set)` (security invoker, `service_role`
+only). Under a row lock it compares ONLY the authorities this PATCH touches (`usuarios` columns `categoria`, `especialidad`,
+`objetivo_principal`, `distribucion_semanal`, and individual `perfil` paths / `prescription_signals` sub-keys), returns
+`CONFLICT` with the field names before writing anything, and otherwise applies the change on the CURRENT row, so unrelated concurrent
+edits (avatar, other perfil keys, other signals) are preserved. Real conflict (objective A read, B written by someone else, we save C)
+→ `409 PROFILE_CHANGED_RETRY` with `fields`. RPC not installed → `503 PROFILE_CAS_UNAVAILABLE` (never an unguarded write).
+**The SQL must be applied before PATCH works.**
+
+## Profile change diff (8C-D)
+
+A successful PATCH that changed something returns `profileChange` (omitted on no-ops):
+
+```
+profileChange: { version: 1, id: <24-hex digest of (field, previous, current)>, requiresCoachReview: boolean,
+  changedFields: [{ field, class: 'PLAN_STRUCTURE'|'CONTEXT_ONLY', previous, current, requiresCoachReview }],
+  handoffToken?: string }   // present only when requiresCoachReview
+```
+
+Derived from previous canonical projection vs persisted canonical projection (never the raw payload), restricted to the fields
+the PATCH addressed (a concurrent edit of another field is not attributed to it; restrictions only when the payload carried them).
+Review required: objective, category, specialty, weeklyAvailability, sessionDuration, trainingSources, restrictions, equipment, level,
+targetEvent. Not required: age and CONTEXT_ONLY. PRESCRIPTION_PARAMETERS arrive with 8C-E. PATCH generates no week and calls no LLM.
+
+## Coach handoff (8C-D)
+
+`POST /api/chat { action: 'profile_change_handoff', datos: { profileChange: { id, changedFields: [{field, previous, current}] }, token } }`
+with `Authorization: Bearer`. The athlete is the verified principal's (`authenticatedAthleteId`, server-derived; body `codigo`/`email`
+are ignored/rejected). The server verifies the HMAC token (athlete-bound, 24h, bound to the change digest so edited fields fail),
+REREADS the canonical profile and rejects with `409 PROFILE_HANDOFF_STALE` if the persisted values no longer match. It then builds a
+deterministic Spanish message plus an immutable context (new objective = authority, previous = change context, specialty/sources =
+means, availability, duration, level, restrictions, equipment, prescription parameters) and calls the existing legacy Coach path
+(`groundedReply → runChatCoach`) in read-only-profile mode (no fact extraction/knowledge/state writes; the reply is saved in
+`usuarios.historial` like any Coach turn, so the existing chat hydrates it). Response: `{ ok, delivery: 'COACH_REPLY', changeId, answer, respuesta, … }`.
+Limitation: with `NEXT_PUBLIC_FORGE_COACH_FIRST=1` the route returns `{ delivery: 'COACH_FIRST_SUBMIT', mensaje }` (verified text) for the client to
+submit through the coach-first turn; the immutable context object is only injected on the legacy path.
 
 ## Legacy containment
 

@@ -12,6 +12,8 @@ import { combineActualActivity, currentExecutions, describeDayActivity, describe
 import { IdentityError } from '@/lib/auth/athleteIdentity';
 import { coachFirstEnabled, legacyConversationOperations } from '@/lib/chat/coachFirstFlag';
 import { handleCoachFirst } from '@/lib/chat/coachFirstHandler';
+import { getCanonicalProfile } from '@/lib/athlete/canonicalProfileService';
+import { resolveProfileChangeHandoff } from '@/lib/chat/profileChangeHandoff';
 import { coachFirstPlanningText, type CoachFirstPlanning } from '@/lib/chat/coachFirstGeneration';
 import { legacyPlanningCanReadReports } from '@/lib/chat/coachFirstStore';
 import { transitionAthleteState } from '@/lib/athlete/athleteStateTransition';
@@ -857,7 +859,7 @@ export async function POST(req: NextRequest) {
 }
 
 async function handlePost(req: NextRequest, coachFirstPlanning?: CoachFirstPlanning) {
-  const { messages, system, model, max_tokens, action, codigo, datos, email, codigoConjunto, pendingId, coachGrounding, coachMessage } = await req.json();
+  const { messages, system, model, max_tokens, action, codigo, datos, email, codigoConjunto, pendingId, coachGrounding, coachMessage, authenticatedAthleteId } = await req.json();
   // Workout CRUD belongs exclusively to the authenticated deterministic form API.
   if (['registrar_sesion','borrar_ultima_sesion','borrar_sesion_fecha','verificar_carga_externa_deterministico','extraer_sesion_imagen'].includes(action))
     return NextResponse.json({ok:false,code:'WORKOUT_FORM_REQUIRED',url:'/entrenamientos/registrar',historyRecorded:false});
@@ -895,7 +897,7 @@ async function handlePost(req: NextRequest, coachFirstPlanning?: CoachFirstPlann
   if (!apiKey) {
     return NextResponse.json({ error: "API key not found" }, { status: 500 });
   }
-  const groundedReply = async (message: string) => runChatCoach(supabase, codigo, message, async (prompt, conversation, observation) => {
+  const groundedReply = async (message: string, options?: { profileChange?: Record<string, unknown> }) => runChatCoach(supabase, codigo, message, async (prompt, conversation, observation) => {
     const trace = observation?.trace, attempt = observation?.attempt;
     const kind = observation?.kind === 'review' ? 'review' : 'generation';
     const argumentsOperation = trace?.start(`${kind}.provider.requestArguments`, attempt);
@@ -915,7 +917,7 @@ async function handlePost(req: NextRequest, coachFirstPlanning?: CoachFirstPlann
     const text = output.content?.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('') || '';
     if (textOperation !== undefined) trace?.end(textOperation);
     return text;
-  });
+  }, undefined, options);
 
 
 
@@ -1224,6 +1226,24 @@ if (action === "verificar_cambio_modo") {
     } catch (err: any) {
       console.error("Error en diagnostico_athlete_context:", err);
       return NextResponse.json({ error: "Error: " + err.message }, { status: 500 });
+    }
+  }
+
+  if (action === "profile_change_handoff") {
+    // FORGE 8C-D: Mobile informs the Coach of a profile change ALREADY persisted by PATCH /api/athlete/profile. Identity comes ONLY from the
+    // verified Bearer (authorizeChatRequest overrides codigo + authenticatedAthleteId); the profile is REREAD and is never written here.
+    try {
+      if (typeof authenticatedAthleteId !== 'string' || !authenticatedAthleteId) return NextResponse.json({ ok: false, retryable: false, code: 'AUTH_REQUIRED' }, { status: 401 });
+      const read = await getCanonicalProfile(supabase, { athleteId: authenticatedAthleteId, legacyCodigo: codigo });
+      const resolved = resolveProfileChangeHandoff(datos, authenticatedAthleteId, read.status === 200 ? (read.body as any).profile : null);
+      if (!resolved.ok) return NextResponse.json({ ok: false, retryable: resolved.status >= 500, code: resolved.code }, { status: resolved.status });
+      if (coachFirstEnabled()) // Coach-first owns the conversation journal: hand the verified message back for the client to submit as the next turn.
+        return NextResponse.json({ ok: true, delivery: 'COACH_FIRST_SUBMIT', changeId: resolved.changeId, mensaje: resolved.message });
+      const result = await groundedReply(resolved.message, { profileChange: resolved.context });
+      return NextResponse.json({ ok: true, delivery: 'COACH_REPLY', changeId: resolved.changeId, ...result, respuesta: result.answer });
+    } catch (err: any) {
+      console.error("Error en profile_change_handoff:", err?.message);
+      return NextResponse.json({ ok: false, retryable: true, code: 'PROFILE_HANDOFF_UNAVAILABLE' }, { status: 503 });
     }
   }
 

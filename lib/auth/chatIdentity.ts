@@ -9,5 +9,6 @@ export async function authorizeChatRequest(request: Request, dependencies: () =>
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new IdentityError('INPUT_INVALID', 400);
   const athlete = await resolveAuthenticatedAthlete(db, principal, body.codigo);
   if (body.action === 'guardar_usuario') throw new IdentityError('AUTH_REGISTRATION_REQUIRED');
-  return { ...body, codigo: athlete.legacyCodigo };
+  // authenticatedAthleteId is server-derived and overrides any client-supplied value.
+  return { ...body, codigo: athlete.legacyCodigo, authenticatedAthleteId: athlete.athleteId };
 }

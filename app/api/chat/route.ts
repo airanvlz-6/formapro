@@ -1,3 +1,4 @@
+import { syncHealthKit } from '@/lib/physiology/healthKit';
 import { requestSessionBuilder } from '../../../lib/sports/sessionBuilderProvider';
 import { saveLegacyDevelopment } from '@/lib/athlete/developmentAreaStore';
 import { requestWeeklyProvider } from '@/lib/planning/weeklyProviderRequest';
@@ -12,6 +13,8 @@ import { combineActualActivity, currentExecutions, describeDayActivity, describe
 import { IdentityError } from '@/lib/auth/athleteIdentity';
 import { coachFirstEnabled, legacyConversationOperations } from '@/lib/chat/coachFirstFlag';
 import { handleCoachFirst } from '@/lib/chat/coachFirstHandler';
+import { getCanonicalProfile } from '@/lib/athlete/canonicalProfileService';
+import { resolveProfileChangeHandoff } from '@/lib/chat/profileChangeHandoff';
 import { coachFirstPlanningText, type CoachFirstPlanning } from '@/lib/chat/coachFirstGeneration';
 import { legacyPlanningCanReadReports } from '@/lib/chat/coachFirstStore';
 import { transitionAthleteState } from '@/lib/athlete/athleteStateTransition';
@@ -26,6 +29,7 @@ import { saveHabitualRunningAnswer, type HabitualRunningProfileStore } from '@/l
 import { issueEnvironmentConfirmation, readEnvironmentConfirmation, ENVIRONMENT_CONFIRMATION_COOKIE, ENVIRONMENT_CONFIRMATION_TTL_SECONDS } from '@/lib/planning/sessionEnvironmentConfirmation';
 import { ensurePlanningSpecialty, hasCanonicalSpecialty, requiresPlanningSpecialty } from '@/lib/sports/canonicalSpecialty';
 import { computeOnboardingFields, legacyOnboardingCompleted, resolvePlanningProfileStatus } from '@/lib/athlete/planningProfileStatus';
+import { calculateOnboardingState, executeAthleteModeChange } from '@/lib/athlete/modeChange';
 import { weeklySaveAdmission } from "@/lib/planning/weeklyCalendarAuthority";
 import { planBoundedWeek } from "@/lib/planning/prepareAllowedWeeklyPlanContract";
 import { admittedWeekObjective } from "@/lib/planning/weeklyCalendarAuthority";
@@ -47,7 +51,7 @@ import { getCanonicalPhysiologyHistory } from "@/lib/physiology/getCanonicalPhys
 import { prepareRecoveryContext, assertRecoveryIdentity, RecoveryReadError, type RecoveryContext } from "@/lib/physiology/recoveryContext";
 import { prepareCanonicalReadiness } from "@/lib/readiness/prepareCanonicalReadiness";
 import { writePhysiology, stripGenericPhysiology, contextualPhysiology, type PhysiologyResult } from "@/lib/physiology/authority";
-import { manualPatch, conversationalPatch, historicalPatch, imagePatch, healthKitPatch, physiologyToday, latestUserText } from "@/lib/physiology/adapters";
+import { manualPatch, conversationalPatch, historicalPatch, imagePatch, physiologyToday, latestUserText } from "@/lib/physiology/adapters";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { render } from "@react-email/render";
@@ -74,6 +78,7 @@ import { getResponseMode, buildStaticResponse, getCapabilities, buildCapabilityI
 import { sendEmail } from "@/lib/email/sendEmail";
 import FounderEmail from "@/lib/email/templates/FounderEmail";
 import { getCanonicalRestrictions } from "@/lib/athlete/getCanonicalRestrictions";
+import { RESTRICTION_AREA_PROHIBITIONS } from "@/lib/athlete/restrictionAreas";
 import type { CanonicalRestrictions } from "@/lib/athlete/getCanonicalRestrictions";
 import { beginWeeklyGeneration, resolveWeeklyGeneration } from "@/lib/planning/weeklyGeneration";
 import { prepareWeeklyEntries, entrySession, admitWeeklyCandidate } from "@/lib/planning/prepareWeeklyCandidate";
@@ -832,7 +837,7 @@ export async function POST(req: NextRequest) {
   if (coachFirstEnabled()) {
     const body = await req.clone().json().catch(() => null);
     if (!body) return NextResponse.json({ code: 'INPUT_INVALID' }, { status: 400 });
-    if (body.action === 'coach_first' || body.action === 'enviar_mensaje_coach') {
+    if (body.action === 'coach_first' || body.action === 'enviar_mensaje_coach' || body.action === 'profile_change_handoff') {
       return handleCoachFirst(req, async (action, datos, context) => {
         if (!['analizar_bloque_semana','planificar_semana','construir_sesion_dia','guardar_plan_semana'].includes(action))
           throw new Error('COACH_FIRST_PLANNING_OPERATION_INVALID');
@@ -855,7 +860,7 @@ export async function POST(req: NextRequest) {
 }
 
 async function handlePost(req: NextRequest, coachFirstPlanning?: CoachFirstPlanning) {
-  const { messages, system, model, max_tokens, action, codigo, datos, email, codigoConjunto, pendingId, coachGrounding, coachMessage } = await req.json();
+  const { messages, system, model, max_tokens, action, codigo, datos, email, codigoConjunto, pendingId, coachGrounding, coachMessage, authenticatedAthleteId } = await req.json();
   // Workout CRUD belongs exclusively to the authenticated deterministic form API.
   if (['registrar_sesion','borrar_ultima_sesion','borrar_sesion_fecha','verificar_carga_externa_deterministico','extraer_sesion_imagen'].includes(action))
     return NextResponse.json({ok:false,code:'WORKOUT_FORM_REQUIRED',url:'/entrenamientos/registrar',historyRecorded:false});
@@ -893,7 +898,7 @@ async function handlePost(req: NextRequest, coachFirstPlanning?: CoachFirstPlann
   if (!apiKey) {
     return NextResponse.json({ error: "API key not found" }, { status: 500 });
   }
-  const groundedReply = async (message: string) => runChatCoach(supabase, codigo, message, async (prompt, conversation, observation) => {
+  const groundedReply = async (message: string, options?: { profileChange?: Record<string, unknown> }) => runChatCoach(supabase, codigo, message, async (prompt, conversation, observation) => {
     const trace = observation?.trace, attempt = observation?.attempt;
     const kind = observation?.kind === 'review' ? 'review' : 'generation';
     const argumentsOperation = trace?.start(`${kind}.provider.requestArguments`, attempt);
@@ -913,7 +918,7 @@ async function handlePost(req: NextRequest, coachFirstPlanning?: CoachFirstPlann
     const text = output.content?.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('') || '';
     if (textOperation !== undefined) trace?.end(textOperation);
     return text;
-  });
+  }, undefined, options);
 
 
 
@@ -977,9 +982,8 @@ async function handlePost(req: NextRequest, coachFirstPlanning?: CoachFirstPlann
 // FORGE ONBOARDING STATE MACHINE — calcula el estado REAL consultando las tablas canonicas
 // (usuarios, athlete_training_sources), nunca confiando en lo que el LLM "cree" completado.
 async function calcularEstadoOnboarding(supabase: any, codigo: string, mode: string) {
-  const { data: usuarioOnb } = await supabase.from("usuarios").select("perfil,categoria,especialidad,objetivo_principal,distribucion_semanal").eq("codigo", codigo).maybeSingle();
-  const { data: fuentesOnb } = await supabase.from("athlete_training_sources").select("*").eq("user_codigo", codigo).eq("activo", true);
-  return computeOnboardingFields({ ...(usuarioOnb || {}), trainingSources: fuentesOnb || [] }, mode);
+  // BUILD 8C-A: implementacion unica en lib/athlete/modeChange.ts (compartida con la activacion del perfil canonico).
+  return calculateOnboardingState(supabase, codigo, mode);
 }
 
 if (action === "verificar_datos_cambio_modo_deterministico") {
@@ -1119,51 +1123,14 @@ if (action === "verificar_cambio_modo") {
   }
 
   if (action === "cambiar_modo_atleta") {
-    // FORGE MODE CHANGE — ejecucion real. Guard determinista final: nunca confia en que el frontend
-    // ya verifico missingFields, lo recalcula aqui mismo antes de construir el nuevo ciclo y llamar
-    // a la RPC transaccional change_athlete_mode (atomica: todo o nada, nunca estado intermedio).
+    // FORGE MODE CHANGE — ejecucion real. Guard determinista final: nunca confia en que el frontend ya verifico
+    // missingFields, lo recalcula en servidor (ensurePlanningSpecialty -> calculateOnboardingState -> ciclo -> RPC
+    // transaccional change_athlete_mode). BUILD 8C-A: la implementacion vive en lib/athlete/modeChange.ts para que la
+    // activacion desde el perfil canonico (PUT /api/athlete/profile) reutilice EXACTAMENTE esta transicion.
     const { targetMode, reason } = datos;
-    if (!['supervision', 'focus', 'coach'].includes(targetMode)) {
-      return NextResponse.json({ error: "Modo destino invalido" }, { status: 400 });
-    }
-    const specialtyIntegrity = await ensurePlanningSpecialty(supabase, codigo, targetMode);
-    if (!specialtyIntegrity.ok) return NextResponse.json({ ok: false, code: specialtyIntegrity.code }, { status: 422 });
-    const { missingFields } = await calcularEstadoOnboarding(supabase, codigo, targetMode);
-    if (missingFields.length > 0) {
-      return NextResponse.json({ error: "Faltan campos obligatorios para este modo", missingFields }, { status: 400 });
-    }
-
-    // Construir el nuevo ciclo — logica de planificacion, vive en TypeScript, nunca en la RPC
-    let nuevoCiclo = null;
-    if (targetMode === 'focus' || targetMode === 'coach') {
-      const { data: usuarioParaCiclo } = await supabase.from("usuarios").select("objetivo_principal,perfil").eq("codigo", codigo).single();
-      nuevoCiclo = {
-        bloque: "acumulacion",
-        semana: 1,
-        totalSemanas: 4,
-        objetivo: usuarioParaCiclo?.objetivo_principal?.descripcion || usuarioParaCiclo?.perfil?.objetivo_detalle || "Nueva planificacion"
-      };
-    }
-
-    const { data: resultadoCambio, error: errorCambio } = await supabase.rpc('change_athlete_mode', {
-      p_codigo: codigo,
-      p_target_mode: targetMode,
-      p_reason: reason || 'user_requested',
-      p_new_cycle: nuevoCiclo
-    });
-
-    if (errorCambio) {
-      console.error("Error en cambiar_modo_atleta (RPC):", errorCambio);
-      return NextResponse.json({ error: errorCambio.message }, { status: 500 });
-    }
-
-    console.log(`🔄 MODE CHANGE: ${codigo} — ${JSON.stringify(resultadoCambio)}`);
-    return NextResponse.json(resultadoCambio);
+    const cambio = await executeAthleteModeChange(supabase, codigo, targetMode, reason);
+    return NextResponse.json(cambio.body, { status: cambio.status });
   }
-
-
-
-
 
   if (action === "verificar_email_bloqueado") {
     const { email } = datos || {};
@@ -1260,6 +1227,22 @@ if (action === "verificar_cambio_modo") {
     } catch (err: any) {
       console.error("Error en diagnostico_athlete_context:", err);
       return NextResponse.json({ error: "Error: " + err.message }, { status: 500 });
+    }
+  }
+
+  if (action === "profile_change_handoff") {
+    // FORGE 8C-D: Mobile informs the Coach of a profile change ALREADY persisted by PATCH /api/athlete/profile. Identity comes ONLY from the
+    // verified Bearer (authorizeChatRequest overrides codigo + authenticatedAthleteId); the profile is REREAD and is never written here.
+    try {
+      if (typeof authenticatedAthleteId !== 'string' || !authenticatedAthleteId) return NextResponse.json({ ok: false, retryable: false, code: 'AUTH_REQUIRED' }, { status: 401 });
+      const read = await getCanonicalProfile(supabase, { athleteId: authenticatedAthleteId, legacyCodigo: codigo });
+      const resolved = resolveProfileChangeHandoff(datos, authenticatedAthleteId, read.status === 200 ? (read.body as any).profile : null);
+      if (!resolved.ok) return NextResponse.json({ ok: false, retryable: resolved.status >= 500, code: resolved.code }, { status: resolved.status });
+      const result = await groundedReply(resolved.message, { profileChange: resolved.context });
+      return NextResponse.json({ ok: true, delivery: 'COACH_REPLY', changeId: resolved.changeId, ...result, respuesta: result.answer });
+    } catch (err: any) {
+      console.error("Error en profile_change_handoff:", err?.message);
+      return NextResponse.json({ ok: false, retryable: true, code: 'PROFILE_HANDOFF_UNAVAILABLE' }, { status: 503 });
     }
   }
 
@@ -2904,13 +2887,7 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
         // FORGE CONSTRAINT ENGINE V2 — la restriccion se define por PROPIEDADES biomecanicas que
         // prohibe, no por una lista de palabras de ejercicios. body_area determina que propiedades
         // se activan, de forma determinista y extensible sin tocar listas de excepciones.
-        const PERFIL_PROHIBICIONES_POR_ZONA: Record<string, { impact?: boolean; jump?: boolean; axial_load?: boolean; deep_flexion?: boolean; overhead_load?: boolean }> = {
-          rodilla: { impact: true, jump: true, deep_flexion: true },
-          hombro: { overhead_load: true },
-          lumbar: { axial_load: true, deep_flexion: true },
-          tobillo: { impact: true, jump: true },
-          muñeca: { overhead_load: true },
-        };
+        const PERFIL_PROHIBICIONES_POR_ZONA = RESTRICTION_AREA_PROHIBITIONS as Record<string, { impact?: boolean; jump?: boolean; axial_load?: boolean; deep_flexion?: boolean; overhead_load?: boolean }>;
         const bodyAreaKey = (evt.body_area || "").toLowerCase();
         const prohibiciones = PERFIL_PROHIBICIONES_POR_ZONA[bodyAreaKey] || {};
 
@@ -2994,6 +2971,15 @@ Basate SOLO en los datos reales de arriba, no inventes adaptaciones que no esten
     }
     const specialtyIntegrity = await ensurePlanningSpecialty(supabase, codigo, nuevoModo);
     if (!specialtyIntegrity.ok) return NextResponse.json({ ok: false, code: specialtyIntegrity.code }, { status: 422 });
+    // BUILD 8C-A — CONTENCION: un modo de planificacion (supervision/planificacion) exige el MISMO perfil completo que la
+    // transicion canonica. Antes un Free (o cualquier cuenta) podia persistir el modo con perfil incompleto. `consulta`
+    // no prescribe y no exige perfil. La via canonica es PUT /api/athlete/profile (activate) / cambiar_modo_atleta.
+    if (nuevoModo !== "consulta") {
+      const { missingFields: missingFieldsEntrada } = await calcularEstadoOnboarding(supabase, codigo, nuevoModo);
+      if (missingFieldsEntrada.length > 0) {
+        return NextResponse.json({ ok: false, code: "PLANNING_PROFILE_INCOMPLETE", missingFields: missingFieldsEntrada }, { status: 400 });
+      }
+    }
     await supabase.from("usuarios").update({ modo_entrada: nuevoModo }).eq("codigo", codigo);
     console.log(`MODO ENTRADA cambiado a "${nuevoModo}" para usuario ${codigo}`);
     return NextResponse.json({ ok: true, nuevoModo });
@@ -4925,12 +4911,7 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
   }
 
   if (action === "sincronizar_healthkit_real") {
-    // The available contract supplies today's aggregate, not the wearable's measurement date.
-    const physiology = await writePhysiology(supabase, { operation: "observe", userCodigo: codigo,
-      fecha: physiologyToday(), source: "device_measurement", patch: healthKitPatch(datos) });
-    return NextResponse.json({ ok: physiology.ok, error: physiology.error, physiology,
-      sincronizado: physiology.ok && physiology.results.some(r => "status" in r && ["accepted", "no_op"].includes(r.status)),
-      unsupportedSignals: ["hrv_unit_unverified", "rhr_semantics_unverified"] });
+    return NextResponse.json(await syncHealthKit(supabase, codigo, datos));
   }
 
   if (action === "guardar_feedback_app") {

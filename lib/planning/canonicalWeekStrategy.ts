@@ -3,6 +3,7 @@ import { resolveEventAuthority, type EventAuthority } from '../athlete/eventAuth
 import type { AthletePrescriptionContext } from '../athlete/loadAthletePrescriptionContext';
 import { GOAL_DEMANDS, GOAL_DEFINITIONS, TRANSFER_METHODS, type GoalId, type AdaptationRole, type StrategicIntent } from '../sports/goalTransferModel';
 import { resolvePlanningStrategy } from '../athlete/strategyResolution';
+import { buildGoalRequirements, type GoalRequirements } from './goalRequirements';
 import { STIMULUS_LIBRARY, type PatronMovimiento } from '../sports/movementLibrary';
 import type { PrescriptionScope } from '../sports/prescriptionScope';
 
@@ -13,7 +14,11 @@ export type CanonicalWeekStrategy = {
   /** Weekly priorities/coverage are advice; session IDs and dose authorities remain binding. */
   weeklyDecisionAuthority?: 'coach';
   eventAuthority?: EventAuthority;
-  version: 1; policy: 'goal-transfer-v1'; goal: { id: GoalId | null; sources: string[]; evidenceDigest: string };
+  /** The explicit objective stays the goal; this carries it (plus training means/context) to the Coach for requirement derivation. */
+  goalRequirements?: GoalRequirements;
+  version: 1; policy: 'goal-transfer-v1'; goal: { id: GoalId | null; sources: string[]; evidenceDigest: string;
+    /** Set only when `id` is a programming fallback derived from the declared sport, NOT the athlete's declared objective. */
+    fallback?: { kind: 'DECLARED_SPORT_FAMILY' | 'GENERAL_DECLARED_SPORT'; strategyId: GoalId; reason: 'EXPLICIT_OBJECTIVE_NOT_SPECIALISED' } };
   block: { phase: StrategicIntent['blockPhase']; week: number | null; totalWeeks: number | null; evidenceDigest: string };
   adaptations: { id: string; role: AdaptationRole; weaknessIds: string[]; requiredPattern: PatronMovimiento | null }[];
   preferredEnvironments: string[]; methods: string[];
@@ -79,7 +84,7 @@ export function buildCanonicalWeekStrategy(context: AthletePrescriptionContext, 
   const methods = TRANSFER_METHODS.filter(m => scope.managedDisciplines.includes(m.discipline)
     && adaptations.some(a => a.id === m.adaptationId)
     // Mixed-modal aerobic work is conditional: not a replacement for distance-running demands in v1.
-    && (m.role !== 'CONDITIONAL' || goalId === 'crossfit' || goalId === 'hyrox')).map(m => m.id);
+    && (m.role !== 'CONDITIONAL' || goalId === 'crossfit' || goalId === 'hyrox' || goalId === 'general_goal_driven')).map(m => m.id);
   if (!goalId) diagnostics.push({ code: 'STRATEGY_FALLBACK', reason: 'insufficient_goal_mapping' });
   diagnostics.push({ code: 'CANONICAL_WEEK_STRATEGY', reason: phase }, { code: 'ADAPTATION_PRIORITY', reason: 'discrete_goal_roles_and_canonical_weakness' },
     { code: 'TRANSFER_RESOLUTION', reason: 'managed_scope_intersection' },
@@ -87,7 +92,11 @@ export function buildCanonicalWeekStrategy(context: AthletePrescriptionContext, 
     { code: 'TRANSFER_RESOLUTION', reason: 'equipment_inventory_and_all_vs_any_requirements_not_canonical' },
     { code: 'TRANSFER_RESOLUTION', reason: 'level_and_readiness_not_new_authority' },
     { code: 'TRANSFER_RESOLUTION', reason: 'interday_interference_not_established_by_structure_metadata' });
-  return { version: 1, policy: 'goal-transfer-v1', weeklyDecisionAuthority: 'coach', goal: { id: goalId, sources: resolvePlanningStrategy(context).sources, evidenceDigest: digest(resolvePlanningStrategy(context)) },
+  const resolved = resolvePlanningStrategy(context);
+  if (resolved.fallback) diagnostics.push({ code: 'STRATEGY_FALLBACK', reason: resolved.fallback.reason, reference: resolved.fallback.kind });
+  const goalRequirements = buildGoalRequirements(context, resolved, scope, maxDays);
+  return { version: 1, policy: 'goal-transfer-v1', weeklyDecisionAuthority: 'coach', ...(goalRequirements ? { goalRequirements } : {}), goal: { id: goalId, sources: resolved.sources, evidenceDigest: digest(resolved),
+      ...(resolved.fallback ? { fallback: { kind: resolved.fallback.kind, strategyId: resolved.fallback.strategyId, reason: resolved.fallback.reason } } : {}) },
     ...(context.asOfDate ? { eventAuthority: resolveEventAuthority(context.eventInput ?? {}, goalId, scope, context.asOfDate, context.userCodigo) } : {}),
     block: { phase, week: typeof context.cycle.week.value === 'number' ? context.cycle.week.value : null,
       totalWeeks: typeof context.cycle.totalWeeks.value === 'number' ? context.cycle.totalWeeks.value : null, evidenceDigest: digest(context.cycle) },

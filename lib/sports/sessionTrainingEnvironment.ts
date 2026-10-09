@@ -8,8 +8,8 @@ export type SessionEnvironmentInput = {
   explicitSessionEnvironment?: unknown;
 };
 export type SessionEnvironmentSource = 'DATE_OVERRIDE' | 'SESSION_EXPLICIT' | 'SESSION_ASSIGNMENT' | 'PROFILE' | 'UNKNOWN';
-export function resolveSessionTrainingEnvironment(profile: Record<string, unknown>, input: SessionEnvironmentInput): EnvironmentEvidence {
-  const habitual = resolveTrainingEnvironment(profile);
+export function resolveSessionTrainingEnvironment(profile: Record<string, unknown>, input: SessionEnvironmentInput, defaults: { specialty?: unknown } = {}): EnvironmentEvidence {
+  const habitual = resolveTrainingEnvironment(profile, defaults);
   const access = profile.prescription_access as Record<string, { environment?: unknown }> | undefined;
   const dateOverride = access && typeof access === 'object' ? access[input.date] : undefined;
   let value: unknown, source: SessionEnvironmentSource, evidenceSource: string;

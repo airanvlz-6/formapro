@@ -7,7 +7,7 @@ export type EnvironmentEvidence = {
   environment: TrainingEnvironment;
   capabilityProfile: EquipmentCapabilityProfile;
   source: string | null;
-  reason: 'catalog_selection' | 'unknown_or_mixed' | 'conflicting_selections';
+  reason: 'catalog_selection' | 'unknown_or_mixed' | 'conflicting_selections' | 'discipline_default';
   implicitEquipmentIds: readonly string[];
   inputPresence: { lugarEntreno: boolean; tipoSala: boolean; material: boolean };
   sessionEnvironmentSource?: 'DATE_OVERRIDE' | 'SESSION_EXPLICIT' | 'SESSION_ASSIGNMENT' | 'PROFILE' | 'UNKNOWN';
@@ -27,7 +27,13 @@ const rooms: Readonly<Record<string, TrainingEnvironment>> = {
   'sala de pesas completa': 'GYM', 'sala mixta (pesas + cardio)': 'GYM',
 };
 type EnvironmentInput = { lugar_entreno?: unknown; tipo_sala?: unknown; material?: unknown };
-export function resolveTrainingEnvironment(profile: EnvironmentInput): EnvironmentEvidence {
+/** DISCIPLINE DEFAULTS (rule E): a declared training discipline implies the standard environment of that discipline, so the
+ * athlete is never asked to inventory it item by item. Only used when the athlete gave NO environment evidence at all
+ * (an explicit or conflicting selection always wins) and only grants the catalog's standard capability for that environment,
+ * never extraordinary material (EXPLICIT_ONLY items, GYM-only machines, pools, tracks...). Explicit `unavailable` declarations
+ * still override it (see projectPrescriptionSignals). Extend this table to give a new discipline its default environment. */
+export const DISCIPLINE_ENVIRONMENT_DEFAULTS: Readonly<Record<string, TrainingEnvironment>> = { funcional_crossfit: 'BOX', crossfit: 'BOX' };
+export function resolveTrainingEnvironment(profile: EnvironmentInput, defaults: { specialty?: unknown } = {}): EnvironmentEvidence {
   const evidence: { environment: TrainingEnvironment; source: string }[] = [];
   const add = (value: unknown, catalog: Readonly<Record<string, TrainingEnvironment>>, source: string) => {
     if (value == null || value === '') return;
@@ -41,12 +47,15 @@ export function resolveTrainingEnvironment(profile: EnvironmentInput): Environme
   // existing multi-select option explicitly declares access to a complete gym.
   if (materials.some(value => typeof value === 'string' && key(value) === 'gimnasio completo'))
     evidence.push({ environment: 'GYM', source: 'usuarios.perfil.material' });
+  const defaultEnvironment = !evidence.length && typeof defaults.specialty === 'string' && Object.hasOwn(DISCIPLINE_ENVIRONMENT_DEFAULTS, defaults.specialty)
+    ? DISCIPLINE_ENVIRONMENT_DEFAULTS[defaults.specialty] : null;
+  if (defaultEnvironment) evidence.push({ environment: defaultEnvironment, source: 'default:discipline:usuarios.especialidad' });
   const distinct = new Set(evidence.map(e => e.environment));
   const environment = distinct.size === 1 ? evidence[0].environment : 'UNKNOWN';
   const capabilityProfile = ({ BOX: 'STANDARD_BOX', GYM: 'STANDARD_GYM', HOME: 'EXPLICIT', OUTDOOR: 'MINIMAL', UNKNOWN: 'UNKNOWN' } as const)[environment];
   return { version: 1, environment, capabilityProfile,
     source: environment === 'UNKNOWN' ? null : evidence[0].source,
-    reason: distinct.size > 1 ? 'conflicting_selections' : environment === 'UNKNOWN' ? 'unknown_or_mixed' : 'catalog_selection',
+    reason: distinct.size > 1 ? 'conflicting_selections' : environment === 'UNKNOWN' ? 'unknown_or_mixed' : defaultEnvironment ? 'discipline_default' : 'catalog_selection',
     implicitEquipmentIds: equipmentIds.filter(id => isEquipmentAvailableByEnvironment(id, environment)),
     inputPresence: { lugarEntreno: profile.lugar_entreno != null && profile.lugar_entreno !== '',
       tipoSala: profile.tipo_sala != null && profile.tipo_sala !== '',

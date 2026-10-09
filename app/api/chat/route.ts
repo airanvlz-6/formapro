@@ -1,3 +1,4 @@
+import { syncHealthKit } from '@/lib/physiology/healthKit';
 import { requestSessionBuilder } from '../../../lib/sports/sessionBuilderProvider';
 import { saveLegacyDevelopment } from '@/lib/athlete/developmentAreaStore';
 import { requestWeeklyProvider } from '@/lib/planning/weeklyProviderRequest';
@@ -50,7 +51,7 @@ import { getCanonicalPhysiologyHistory } from "@/lib/physiology/getCanonicalPhys
 import { prepareRecoveryContext, assertRecoveryIdentity, RecoveryReadError, type RecoveryContext } from "@/lib/physiology/recoveryContext";
 import { prepareCanonicalReadiness } from "@/lib/readiness/prepareCanonicalReadiness";
 import { writePhysiology, stripGenericPhysiology, contextualPhysiology, type PhysiologyResult } from "@/lib/physiology/authority";
-import { manualPatch, conversationalPatch, historicalPatch, imagePatch, healthKitPatch, physiologyToday, latestUserText } from "@/lib/physiology/adapters";
+import { manualPatch, conversationalPatch, historicalPatch, imagePatch, physiologyToday, latestUserText } from "@/lib/physiology/adapters";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { render } from "@react-email/render";
@@ -4910,12 +4911,7 @@ const focusContextValidator = await buildFocusContext(supabase, codigo);
   }
 
   if (action === "sincronizar_healthkit_real") {
-    // The available contract supplies today's aggregate, not the wearable's measurement date.
-    const physiology = await writePhysiology(supabase, { operation: "observe", userCodigo: codigo,
-      fecha: physiologyToday(), source: "device_measurement", patch: healthKitPatch(datos) });
-    return NextResponse.json({ ok: physiology.ok, error: physiology.error, physiology,
-      sincronizado: physiology.ok && physiology.results.some(r => "status" in r && ["accepted", "no_op"].includes(r.status)),
-      unsupportedSignals: ["hrv_unit_unverified", "rhr_semantics_unverified"] });
+    return NextResponse.json(await syncHealthKit(supabase, codigo, datos));
   }
 
   if (action === "guardar_feedback_app") {

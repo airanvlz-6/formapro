@@ -46,7 +46,8 @@ export const coachHandoffContext = (context: Row): Row => ({ ...context, instruc
 export const HANDOFF_BLOCKED_TOOLS = ['update_availability', 'record_athlete_data', 'transition_restriction'];
 
 const reject = (status: number, code: string): HandoffFailure => ({ ok: false, status, code });
-const LABELS: Record<string, string> = { objective: 'objetivo principal', category: 'categoría', specialty: 'especialidad', weeklyAvailability: 'disponibilidad semanal',
+// Accepted changedFields = every field computeProfileChange can emit (FIELD_EXTRACTORS minus context-only ones). `age` is a structured, editable truth.
+const LABELS: Record<string, string> = { objective: 'objetivo principal', age: 'edad', category: 'categoría', specialty: 'especialidad', weeklyAvailability: 'disponibilidad semanal',
   sessionDuration: 'duración de sesión', trainingSources: 'fuentes de entrenamiento', restrictions: 'restricciones', equipment: 'equipamiento', level: 'nivel', targetEvent: 'evento objetivo' };
 const show = (v: unknown) => v == null || v === '' ? 'sin definir' : typeof v === 'string' ? `"${v}"` : JSON.stringify(v);
 
@@ -82,6 +83,7 @@ export function resolveProfileChangeHandoff(datos: unknown, athleteId: string, p
     trainingMeans: { specialty: plan.specialty ?? null, category: plan.category ?? null, sources: plan.trainingSources ?? [], role: 'MEANS_NOT_OBJECTIVE' },
     weeklyAvailability: plan.weeklyAvailability ?? null,
     sessionDuration: plan.sessionDuration ?? null,
+    age: plan.age ?? null, // canonical stored representation (a range label), never derived or converted
     level: plan.level ?? null,
     restrictions: plan.restrictions ?? null,
     equipment: plan.equipment ?? null,

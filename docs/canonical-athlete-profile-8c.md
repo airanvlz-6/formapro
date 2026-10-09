@@ -218,6 +218,14 @@ Legacy `runChatCoach` appended history with `.eq('historial', JSON.stringify(bef
 (concurrent exchanges both kept, in order; replay is a no-op; last 15 conversation turns). RPC missing → `CHAT_HISTORY_APPEND_UNAVAILABLE`, the answer is still
 returned with `historySaved:false` (fail-closed, nothing written). Coach First history is unchanged (its own session RPC).
 
+### Age in the handoff (8D.1)
+
+`age` is a structured editable truth and a valid `changedFields` entry (stored representation: the range label, e.g. `"31-40"`; never converted,
+inferred or derived from a date). It is covered by the same change digest/HMAC, reconciled against the persisted profile, and the Coach context carries the
+canonical current `age` (immutable). An age-only change keeps `requiresCoachReview:false` (no handoff token is issued); alongside a reviewed field
+(e.g. objective) the change stays `requiresCoachReview:true` and the handoff is valid.
+Future profile model (product debt, NOT implemented): `dateOfBirth` as a stable source with `age` derived automatically; no field, migration, UI or computation exists yet.
+
 ## Legacy containment
 
 `cambiar_modo_entrada` (web banner "Pasar a modo Coach") now applies the same specialty guard and the same required fields as the
